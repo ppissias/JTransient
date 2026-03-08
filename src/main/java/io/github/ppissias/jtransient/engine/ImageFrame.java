@@ -1,4 +1,4 @@
-package io.github.pissias.jtransient.engine;
+package io.github.ppissias.jtransient.engine;
 
 public class ImageFrame {
     public final int sequenceIndex;
