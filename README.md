@@ -35,7 +35,7 @@ The `JTransientEngine` orchestrates a highly concurrent, 4-phase pipeline:
 If you are using Gradle, include JTransient in your dependencies:
 ```groovy
 dependencies {
-    implementation 'io.github.ppissias:jtransient:1.0.0' // Replace with your actual version/path
+    implementation '...' // Coming soon - will publish to maven 
 }
 ```
 
