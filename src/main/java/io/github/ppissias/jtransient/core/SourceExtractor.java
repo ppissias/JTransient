@@ -80,6 +80,17 @@ public class SourceExtractor {
         // 1. Calculate Background
         BackgroundMetrics bg = calculateBackgroundSigmaClipped(image, width, height, sigmaMultiplier, config);
 
+        // --- THE FIX: ENFORCE A MINIMUM NOISE FLOOR ---
+        // If the math says the background noise is less than 2 ADU, it's lying (quantization error).
+        // Force it to be at least 2.0 so our multipliers actually do something!
+        if (bg.sigma < 2.0) {
+            bg.sigma = 2.0;
+        }
+
+        // --- NEW DEBUG PRINT ---
+        System.out.printf("BACKGROUND STATS -> Median: %.2f | Sigma: %.2f | Seed Thresh: %.2f | Grow Thresh: %.2f%n",
+                bg.median, bg.sigma, bg.median + (bg.sigma * sigmaMultiplier), bg.median + (bg.sigma * config.growSigmaMultiplier));
+        // -----------------------
         // --- DUAL THRESHOLDS (HYSTERESIS) ---
         double seedThreshold = bg.median + (bg.sigma * sigmaMultiplier);
         double growThreshold = bg.median + (bg.sigma * config.growSigmaMultiplier);
@@ -196,6 +207,61 @@ public class SourceExtractor {
                         // RECORD THE PIXEL AREA
                         obj.pixelArea = currentBlob.size();
 
+                        // ==========================================================
+                        // --- NEW: ASCII ART DEBUGGER FOR STREAKS ---
+                        // ==========================================================
+                        if (obj.isStreak) {
+                            System.out.println("=== SUSPECT STREAK DETECTED ===");
+                            System.out.printf("Centroid: (%.1f, %.1f) | Area: %d px | Elongation: %.2f | FWHM: %.2f%n",
+                                    obj.x, obj.y, currentBlob.size(), obj.elongation, obj.fwhm);
+
+                            // 1. Find the bounding box of this blob
+                            int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE;
+                            int minY = Integer.MAX_VALUE, maxY = Integer.MIN_VALUE;
+                            for (Pixel p : currentBlob) {
+                                if (p.x < minX) minX = p.x;
+                                if (p.x > maxX) maxX = p.x;
+                                if (p.y < minY) minY = p.y;
+                                if (p.y > maxY) maxY = p.y;
+                            }
+
+                            int w = maxX - minX + 1;
+                            int h = maxY - minY + 1;
+
+                            // 2. Prevent massive console floods if it leaked across the whole image
+                            if (w <= 150 && h <= 150) {
+                                char[][] grid = new char[h][w];
+
+                                // Fill with empty space dots
+                                for (int r = 0; r < h; r++) {
+                                    for (int c = 0; c < w; c++) {
+                                        grid[r][c] = '.';
+                                    }
+                                }
+
+                                // Fill in the actual blob pixels with '#'
+                                for (Pixel p : currentBlob) {
+                                    grid[p.y - minY][p.x - minX] = '#';
+                                }
+
+                                // Mark the calculated centroid with an 'X'
+                                int cx = (int) Math.round(obj.x) - minX;
+                                int cy = (int) Math.round(obj.y) - minY;
+                                if (cx >= 0 && cx < w && cy >= 0 && cy < h) {
+                                    grid[cy][cx] = 'X';
+                                }
+
+                                // Print the grid
+                                for (int r = 0; r < h; r++) {
+                                    System.out.println(new String(grid[r]));
+                                }
+                            } else {
+                                System.out.println("[Blob too massive to print! Bounding box: " + w + "x" + h + "]");
+                            }
+                            System.out.println("================================\n");
+                        }
+                        // ==========================================================
+
                         detectedObjects.add(obj);
                     }
                 }
@@ -311,6 +377,12 @@ public class SourceExtractor {
         obj.elongation = Math.sqrt(lambda1 / lambda2);
         obj.angle = 0.5 * Math.atan2(2 * mu11, mu20 - mu02);
 
+        // --- NEW: Calculate FWHM ---
+        // FWHM approx = 2.355 * sigma.
+        // We estimate sigma from the spatial variance (sum of eigenvalues).
+        double sigmaSq = lambda1 + lambda2;
+        obj.fwhm = 2.355 * Math.sqrt(sigmaSq);
+        // ---------------------------
         // =================================================================
         // STEP 4: The Shape Filter Classification (Strict Thin Line Logic)
         // =================================================================

@@ -54,29 +54,63 @@ public class SessionEvaluator {
         for (int i = 0; i < sessionMetrics.size(); i++) {
             FrameQualityAnalyzer.FrameMetrics m = sessionMetrics.get(i);
 
+            // Pre-calculate thresholds for cleaner logic and debugging
+            double minStars = starStats[0] - (config.starCountSigmaDeviation * starStats[1]);
+            double maxFwhm = fwhmStats[0] + (config.fwhmSigmaDeviation * fwhmStats[1]);
+            double maxEcc = eccStats[0] + (config.eccentricitySigmaDeviation * eccStats[1]);
+            double maxBgDev = config.backgroundSigmaDeviation * bgStats[1];
+
+            // --- THE FIX: ENFORCE ABSOLUTE MINIMUM DEVIATIONS ---
+            // Don't let the background threshold drop below the configured minimum ADU
+            if (maxBgDev < config.minBackgroundDeviationADU) {
+                maxBgDev = config.minBackgroundDeviationADU;
+            }
+
+            // Don't let the eccentricity envelope shrink tighter than the configured minimum
+            if (maxEcc - eccStats[0] < config.minEccentricityEnvelope) {
+                maxEcc = eccStats[0] + config.minEccentricityEnvelope;
+            }
+
+            // Don't let FWHM envelope shrink tighter than the configured minimum
+            if (maxFwhm - fwhmStats[0] < config.minFwhmEnvelope) {
+                maxFwhm = fwhmStats[0] + config.minFwhmEnvelope;
+            }
+            // ----------------------------------------------------
+
             // Stars: We only care if it drops too low (clouds).
-            if (m.starCount < starStats[0] - (config.starCountSigmaDeviation * starStats[1])) {
+            if (m.starCount < minStars) {
+                System.out.printf("DEBUG REJECT [Frame %d]: Stars %.0f < Min Threshold %.2f (Median: %.2f, Sigma: %.4f)%n",
+                        i, (double)m.starCount, minStars, starStats[0], starStats[1]);
                 reject(m, "Star Count dropped anomalously low");
                 continue;
             }
 
             // FWHM: We only care if it gets too high (blurry/bad focus/wind).
-            if (m.medianFWHM > fwhmStats[0] + (config.fwhmSigmaDeviation * fwhmStats[1])) {
+            if (m.medianFWHM > maxFwhm) {
+                System.out.printf("DEBUG REJECT [Frame %d]: FWHM %.3f > Max Threshold %.3f (Median: %.3f, Sigma: %.4f)%n",
+                        i, m.medianFWHM, maxFwhm, fwhmStats[0], fwhmStats[1]);
                 reject(m, "FWHM spiked (Blurry image)");
                 continue;
             }
 
             // Eccentricity: We only care if it gets too high (tracking error, mount bump, wind).
-            if (m.medianEccentricity > eccStats[0] + (config.eccentricitySigmaDeviation * eccStats[1])) {
+            if (m.medianEccentricity > maxEcc) {
+                System.out.printf("DEBUG REJECT [Frame %d]: Eccentricity %.3f > Max Threshold %.3f (Median: %.3f, Sigma: %.4f)%n",
+                        i, m.medianEccentricity, maxEcc, eccStats[0], eccStats[1]);
                 reject(m, "Eccentricity spiked (Tracking error/Wind)");
                 continue;
             }
 
             // Background: We care if it spikes (car headlights) or drops completely.
-            if (Math.abs(m.backgroundMedian - bgStats[0]) > (config.backgroundSigmaDeviation * bgStats[1])) {
+            double currentBgDev = Math.abs(m.backgroundMedian - bgStats[0]);
+            if (currentBgDev > maxBgDev) {
+                System.out.printf("DEBUG REJECT [Frame %d]: BG Deviation %.3f > Max Allowed %.3f (Median: %.3f, Sigma: %.4f)%n",
+                        i, currentBgDev, maxBgDev, bgStats[0], bgStats[1]);
                 reject(m, "Background deviation (Clouds/Light leak)");
             }
         }
+
+
     }
 
     private static void reject(FrameQualityAnalyzer.FrameMetrics m, String reason) {

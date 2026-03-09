@@ -70,6 +70,10 @@ public class DetectionConfig {
     /** Fallback metric value assigned when a frame is completely devoid of valid stars. */
     public double errorFallbackValue = 999.0;
 
+    //Absolute Minimum Tolerances
+    public double minBackgroundDeviationADU = 10.0;
+    public double minEccentricityEnvelope = 0.10;
+    public double minFwhmEnvelope = 0.5;
 
     // =================================================================
     // 3. TRACK LINKER PARAMETERS
