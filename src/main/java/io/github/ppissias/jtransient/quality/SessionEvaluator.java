@@ -26,10 +26,11 @@ public class SessionEvaluator {
         if (sessionMetrics.size() < config.minFramesForAnalysis) return;
 
         // 1. Extract the raw numbers into lists
-        List<Double> fwhmValues = new ArrayList<>();
-        List<Double> bgValues = new ArrayList<>();
-        List<Double> starCounts = new ArrayList<>();
-        List<Double> eccValues = new ArrayList<>();
+        int count = sessionMetrics.size();
+        List<Double> fwhmValues = new ArrayList<>(count);
+        List<Double> bgValues = new ArrayList<>(count);
+        List<Double> starCounts = new ArrayList<>(count);
+        List<Double> eccValues = new ArrayList<>(count);
 
         for (FrameQualityAnalyzer.FrameMetrics m : sessionMetrics) {
             fwhmValues.add(m.medianFWHM);

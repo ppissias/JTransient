@@ -63,7 +63,6 @@ public class JTransientEngine {
 
                 // 2. Quality Metrics (Passing config down)
                 FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData, config);
-                metrics.medianEccentricity = FrameQualityAnalyzer.calculateFrameEccentricity(objectsInFrame, config);
                 metrics.filename = frame.identifier;
 
                 FrameExtractionResult result = new FrameExtractionResult();

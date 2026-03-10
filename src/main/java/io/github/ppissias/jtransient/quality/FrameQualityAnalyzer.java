@@ -41,11 +41,10 @@ public class FrameQualityAnalyzer {
         FrameMetrics metrics = new FrameMetrics();
 
         // 1. Extract sources using the strict quality-evaluation parameters from the config
-        // Note: Once we refactor SourceExtractor next, we might update this signature slightly!
         List<SourceExtractor.DetectedObject> objects =
                 SourceExtractor.extractSources(imageData, config.qualitySigmaMultiplier, config.qualityMinDetectionPixels, config);
 
-        // Calculate the background using the same strict parameter
+        // 2. Calculate the background using the same strict parameter
         SourceExtractor.BackgroundMetrics bg = SourceExtractor.calculateBackgroundSigmaClipped(
                 imageData, imageData[0].length, imageData.length, config.qualitySigmaMultiplier, config);
 
@@ -53,54 +52,45 @@ public class FrameQualityAnalyzer {
         metrics.backgroundNoise = bg.sigma;
         metrics.starCount = objects.size();
 
-        // 2. Calculate Median FWHM from ROUND stars only
-        List<Double> fwhmValues = new ArrayList<>();
-        for (SourceExtractor.DetectedObject obj : objects) {
+        // 3. One-pass extraction for both FWHM and Eccentricity
+        List<Double> fwhmValues = new ArrayList<>(objects.size());
+        List<Double> eccValues = new ArrayList<>(objects.size());
 
-            // Parameterized check: Ignore streaks and heavily distorted stars when judging focus
-            if (!obj.isStreak && obj.elongation < config.maxElongationForFwhm) {
-                fwhmValues.add(obj.fwhm);
+        for (SourceExtractor.DetectedObject obj : objects) {
+            // Only measure true point sources (ignore obvious noise and massive satellite streaks)
+            if (!obj.isStreak && !obj.isNoise) {
+                eccValues.add(obj.elongation);
+
+                // Parameterized check: Ignore heavily distorted/trailed stars when judging pure optical focus
+                if (obj.elongation < config.maxElongationForFwhm) {
+                    fwhmValues.add(obj.fwhm);
+                }
             }
         }
 
-        if (!fwhmValues.isEmpty()) {
-            Collections.sort(fwhmValues);
-            metrics.medianFWHM = fwhmValues.get(fwhmValues.size() / 2);
-        } else {
-            // Parameterized fallback: Terrible score if no round stars exist
-            metrics.medianFWHM = config.errorFallbackValue;
-        }
+        // 4. Calculate Medians (THE BUG FIX: Eccentricity is now populated!)
+        metrics.medianFWHM = calculateMedian(fwhmValues, config.errorFallbackValue);
+        metrics.medianEccentricity = calculateMedian(eccValues, config.errorFallbackValue);
 
         return metrics;
     }
 
     /**
-     * Calculates the median elongation of all valid point sources in a frame.
-     * A perfect frame is ~1.0. A bumped/trailed frame will be > 1.5.
+     * Helper to calculate a mathematically precise median.
      */
-    public static double calculateFrameEccentricity(List<SourceExtractor.DetectedObject> objectsInFrame, DetectionConfig config) {
-        List<Double> elongations = new ArrayList<>();
-
-        for (SourceExtractor.DetectedObject obj : objectsInFrame) {
-            // Only measure true point sources (ignore obvious noise and massive satellite streaks)
-            if (!obj.isNoise && !obj.isStreak) {
-                elongations.add(obj.elongation);
-            }
+    private static double calculateMedian(List<Double> values, double fallbackValue) {
+        if (values.isEmpty()) {
+            return fallbackValue;
         }
 
-        // Parameterized fallback: If the frame has no stars, it's definitely a bad frame (clouds!)
-        if (elongations.isEmpty()) {
-            return config.errorFallbackValue;
-        }
+        Collections.sort(values);
+        int middle = values.size() / 2;
 
-        // Sort to find the median
-        elongations.sort(Double::compareTo);
-
-        int middle = elongations.size() / 2;
-        if (elongations.size() % 2 == 1) {
-            return elongations.get(middle);
+        if (values.size() % 2 == 1) {
+            return values.get(middle);
         } else {
-            return (elongations.get(middle - 1) + elongations.get(middle)) / 2.0;
+            // Average the two middle values for an even-sized list
+            return (values.get(middle - 1) + values.get(middle)) / 2.0;
         }
     }
 }
