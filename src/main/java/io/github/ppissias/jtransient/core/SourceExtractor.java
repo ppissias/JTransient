@@ -26,6 +26,9 @@ public class SourceExtractor {
         public double totalFlux;
         public int pixelCount;
 
+        // --- NEW: Save the exact blob mask for UI Visualization ---
+        public List<Pixel> rawPixels = new ArrayList<>();
+
         // Size metric for TrackLinker Morphological Filtering
         public double pixelArea;
 
@@ -50,7 +53,7 @@ public class SourceExtractor {
     }
 
     public static class Pixel {
-        int x, y, value;
+        public int x, y, value;
 
         public Pixel(int x, int y, int value) {
             this.x = x;
@@ -148,6 +151,9 @@ public class SourceExtractor {
 
                         DetectedObject obj = analyzeShape(currentBlob, bg.median, config);
 
+                        // --- NEW: Attach the exact pixel mask! ---
+                        obj.rawPixels = currentBlob;
+
                         // SENSOR EDGE FILTER
                         if (obj.x < config.edgeMarginPixels || obj.x >= (width - config.edgeMarginPixels) ||
                                 obj.y < config.edgeMarginPixels || obj.y >= (height - config.edgeMarginPixels)) {
@@ -206,61 +212,6 @@ public class SourceExtractor {
 
                         // RECORD THE PIXEL AREA
                         obj.pixelArea = currentBlob.size();
-
-                        // ==========================================================
-                        // --- NEW: ASCII ART DEBUGGER FOR STREAKS ---
-                        // ==========================================================
-                        if (obj.isStreak) {
-                            System.out.println("=== SUSPECT STREAK DETECTED ===");
-                            System.out.printf("Centroid: (%.1f, %.1f) | Area: %d px | Elongation: %.2f | FWHM: %.2f%n",
-                                    obj.x, obj.y, currentBlob.size(), obj.elongation, obj.fwhm);
-
-                            // 1. Find the bounding box of this blob
-                            int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE;
-                            int minY = Integer.MAX_VALUE, maxY = Integer.MIN_VALUE;
-                            for (Pixel p : currentBlob) {
-                                if (p.x < minX) minX = p.x;
-                                if (p.x > maxX) maxX = p.x;
-                                if (p.y < minY) minY = p.y;
-                                if (p.y > maxY) maxY = p.y;
-                            }
-
-                            int w = maxX - minX + 1;
-                            int h = maxY - minY + 1;
-
-                            // 2. Prevent massive console floods if it leaked across the whole image
-                            if (w <= 150 && h <= 150) {
-                                char[][] grid = new char[h][w];
-
-                                // Fill with empty space dots
-                                for (int r = 0; r < h; r++) {
-                                    for (int c = 0; c < w; c++) {
-                                        grid[r][c] = '.';
-                                    }
-                                }
-
-                                // Fill in the actual blob pixels with '#'
-                                for (Pixel p : currentBlob) {
-                                    grid[p.y - minY][p.x - minX] = '#';
-                                }
-
-                                // Mark the calculated centroid with an 'X'
-                                int cx = (int) Math.round(obj.x) - minX;
-                                int cy = (int) Math.round(obj.y) - minY;
-                                if (cx >= 0 && cx < w && cy >= 0 && cy < h) {
-                                    grid[cy][cx] = 'X';
-                                }
-
-                                // Print the grid
-                                for (int r = 0; r < h; r++) {
-                                    System.out.println(new String(grid[r]));
-                                }
-                            } else {
-                                System.out.println("[Blob too massive to print! Bounding box: " + w + "x" + h + "]");
-                            }
-                            System.out.println("================================\n");
-                        }
-                        // ==========================================================
 
                         detectedObjects.add(obj);
                     }
