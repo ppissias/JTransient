@@ -10,6 +10,7 @@
 package io.github.ppissias.jtransient.core;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.engine.JTransientEngine;
 import io.github.ppissias.jtransient.telemetry.TrackerTelemetry;
 
 import java.util.ArrayList;
@@ -20,7 +21,6 @@ import java.util.HashSet;
 public class TrackLinker {
 
     // --- NEW: Global Debug Flag ---
-    public static boolean DEBUG = false;
 
     // =================================================================
     // DATA MODELS
@@ -54,10 +54,10 @@ public class TrackLinker {
             DetectionConfig config) {
 
         int numFrames = allFrames.size();
-        if (DEBUG) System.out.println("\nDEBUG: [START] findMovingObjects initialized with " + numFrames + " frames.");
+        if (JTransientEngine.DEBUG) System.out.println("\nDEBUG: [START] findMovingObjects initialized with " + numFrames + " frames.");
 
         if (numFrames < 3) {
-            if (DEBUG) System.out.println("DEBUG: [ABORT] Less than 3 frames provided. Cannot form point tracks.");
+            if (JTransientEngine.DEBUG) System.out.println("DEBUG: [ABORT] Less than 3 frames provided. Cannot form point tracks.");
             return new TrackingResult(new ArrayList<>(), new TrackerTelemetry());
         }
 
@@ -79,7 +79,7 @@ public class TrackLinker {
         }
 
         List<SourceExtractor.DetectedObject> validMovingStreaks = new ArrayList<>();
-        if (DEBUG) System.out.println("DEBUG: Evaluating " + rawStreaks.size() + " total streaks for sensor defects...");
+        if (JTransientEngine.DEBUG) System.out.println("DEBUG: Evaluating " + rawStreaks.size() + " total streaks for sensor defects...");
 
         for (SourceExtractor.DetectedObject candidate : rawStreaks) {
             boolean isStationaryDefect = false;
@@ -94,12 +94,12 @@ public class TrackLinker {
             if (!isStationaryDefect) validMovingStreaks.add(candidate);
         }
 
-        if (DEBUG) System.out.println("DEBUG: Purged " + (rawStreaks.size() - validMovingStreaks.size()) + " stationary hot columns.");
+        if (JTransientEngine.DEBUG) System.out.println("DEBUG: Purged " + (rawStreaks.size() - validMovingStreaks.size()) + " stationary hot columns.");
 
         // =================================================================
         // PHASE 2: LINK FAST-MOVING STREAKS
         // =================================================================
-        if (DEBUG) System.out.println("DEBUG: [PHASE 2] Linking fast-moving streaks... Candidates: " + validMovingStreaks.size());
+        if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 2] Linking fast-moving streaks... Candidates: " + validMovingStreaks.size());
         boolean[] streakMatched = new boolean[validMovingStreaks.size()];
         int streakTracksFound = 0;
 
@@ -131,7 +131,7 @@ public class TrackLinker {
             confirmedTracks.add(continuousStreakTrack);
             streakTracksFound++;
         }
-        if (DEBUG) System.out.println("DEBUG: [PHASE 2] Completed. Found " + streakTracksFound + " streak track(s).");
+        if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 2] Completed. Found " + streakTracksFound + " streak track(s).");
 
         // =================================================================
         // PHASE 3: MASTER STAR MAP
@@ -139,7 +139,7 @@ public class TrackLinker {
         List<List<SourceExtractor.DetectedObject>> transients = new ArrayList<>();
         for (int i = 0; i < numFrames; i++) transients.add(new ArrayList<>());
 
-        if (DEBUG) System.out.println("DEBUG: [PHASE 3] Building Master Star Map...");
+        if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3] Building Master Star Map...");
         TrackerTelemetry telemetry = new TrackerTelemetry();
         double expandedStarJitter = config.maxStarJitter * config.starJitterExpansionFactor;
         int totalTransientsFound = 0;
@@ -180,7 +180,7 @@ public class TrackLinker {
             stat.purgedStars = purgedCount;
             telemetry.frameStarMapStats.add(stat);
         }
-        if (DEBUG) System.out.println("DEBUG: [PHASE 3] Completed. Total pure transients across sequence: " + totalTransientsFound);
+        if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3] Completed. Total pure transients across sequence: " + totalTransientsFound);
 
         // =================================================================
         // PHASE 4: GEOMETRIC COLLINEAR LINKING
@@ -190,7 +190,7 @@ public class TrackLinker {
             minPointsRequired = config.absoluteMaxPointsRequired;
         }
 
-        if (DEBUG) {
+        if (JTransientEngine.DEBUG) {
             System.out.println("DEBUG: [PHASE 4] Applying time-agnostic geometric filter...");
             System.out.println("  -> Track confirmation threshold: " + minPointsRequired + " points.");
         }
@@ -283,7 +283,7 @@ public class TrackLinker {
         telemetry.streakTracksFound = streakTracksFound;
         telemetry.pointTracksFound = pointTracks.size();
 
-        if (DEBUG) {
+        if (JTransientEngine.DEBUG) {
             System.out.println("\n--------------------------------------------------");
             System.out.println(" PHASE 4 TELEMETRY: FILTER REJECTION STATISTICS   ");
             System.out.println("--------------------------------------------------");

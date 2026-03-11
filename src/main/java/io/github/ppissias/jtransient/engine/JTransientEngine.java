@@ -26,6 +26,9 @@ import java.util.concurrent.Future;
 
 public class JTransientEngine {
 
+    // --- NEW: Centralized Debug Flag for the entire JTransient library ---
+    public static boolean DEBUG = false;
+
     // Internal thread pool for the library
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
@@ -43,7 +46,10 @@ public class JTransientEngine {
         PipelineTelemetry telemetry = new PipelineTelemetry();
         telemetry.totalFramesLoaded = inputFrames.size();
 
-        System.out.println("\n--- JTRANSIENT: PHASE 1 (Extraction) ---");
+        if (DEBUG) {
+            System.out.println("\n--- JTRANSIENT: PHASE 1 (Extraction) ---");
+        }
+
         List<Callable<FrameExtractionResult>> tasks = new ArrayList<>();
 
         for (ImageFrame frame : inputFrames) {
@@ -98,7 +104,10 @@ public class JTransientEngine {
             telemetry.frameExtractionStats.add(stat);
         }
 
-        System.out.println("\n--- JTRANSIENT: PHASE 2 & 3 (Quality Filter) ---");
+        if (DEBUG) {
+            System.out.println("\n--- JTRANSIENT: PHASE 2 & 3 (Quality Filter) ---");
+        }
+
         // Pass the config down to the evaluator
         SessionEvaluator.rejectOutlierFrames(sessionMetrics, config);
 
@@ -118,7 +127,10 @@ public class JTransientEngine {
             }
         }
 
-        System.out.println("\n--- JTRANSIENT: PHASE 4 (Track Linking) ---");
+        if (DEBUG) {
+            System.out.println("\n--- JTRANSIENT: PHASE 4 (Track Linking) ---");
+        }
+
         TrackLinker.TrackingResult trackResult = TrackLinker.findMovingObjects(
                 cleanFramesData,
                 config

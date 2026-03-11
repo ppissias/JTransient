@@ -10,6 +10,7 @@
 package io.github.ppissias.jtransient.quality;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.engine.JTransientEngine;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -46,10 +47,12 @@ public class SessionEvaluator {
         double[] starStats = calculateMedianAndSigma(starCounts, config);
         double[] eccStats = calculateMedianAndSigma(eccValues, config);
 
-        System.out.println(String.format(
-                "Session Baseline - FWHM: %.2f, Background: %.2f, Stars: %.0f, Eccentricity: %.2f",
-                fwhmStats[0], bgStats[0], starStats[0], eccStats[0]
-        ));
+        if (JTransientEngine.DEBUG) {
+            System.out.println(String.format(
+                    "Session Baseline - FWHM: %.2f, Background: %.2f, Stars: %.0f, Eccentricity: %.2f",
+                    fwhmStats[0], bgStats[0], starStats[0], eccStats[0]
+            ));
+        }
 
         // 3. Evaluate each frame against the global session baseline
         for (int i = 0; i < sessionMetrics.size(); i++) {
@@ -80,24 +83,30 @@ public class SessionEvaluator {
 
             // Stars: We only care if it drops too low (clouds).
             if (m.starCount < minStars) {
-                System.out.printf("DEBUG REJECT [Frame %d]: Stars %.0f < Min Threshold %.2f (Median: %.2f, Sigma: %.4f)%n",
-                        i, (double)m.starCount, minStars, starStats[0], starStats[1]);
+                if (JTransientEngine.DEBUG) {
+                    System.out.printf("DEBUG REJECT [Frame %d]: Stars %.0f < Min Threshold %.2f (Median: %.2f, Sigma: %.4f)%n",
+                            i, (double)m.starCount, minStars, starStats[0], starStats[1]);
+                }
                 reject(m, "Star Count dropped anomalously low");
                 continue;
             }
 
             // FWHM: We only care if it gets too high (blurry/bad focus/wind).
             if (m.medianFWHM > maxFwhm) {
-                System.out.printf("DEBUG REJECT [Frame %d]: FWHM %.3f > Max Threshold %.3f (Median: %.3f, Sigma: %.4f)%n",
-                        i, m.medianFWHM, maxFwhm, fwhmStats[0], fwhmStats[1]);
+                if (JTransientEngine.DEBUG) {
+                    System.out.printf("DEBUG REJECT [Frame %d]: FWHM %.3f > Max Threshold %.3f (Median: %.3f, Sigma: %.4f)%n",
+                            i, m.medianFWHM, maxFwhm, fwhmStats[0], fwhmStats[1]);
+                }
                 reject(m, "FWHM spiked (Blurry image)");
                 continue;
             }
 
             // Eccentricity: We only care if it gets too high (tracking error, mount bump, wind).
             if (m.medianEccentricity > maxEcc) {
-                System.out.printf("DEBUG REJECT [Frame %d]: Eccentricity %.3f > Max Threshold %.3f (Median: %.3f, Sigma: %.4f)%n",
-                        i, m.medianEccentricity, maxEcc, eccStats[0], eccStats[1]);
+                if (JTransientEngine.DEBUG) {
+                    System.out.printf("DEBUG REJECT [Frame %d]: Eccentricity %.3f > Max Threshold %.3f (Median: %.3f, Sigma: %.4f)%n",
+                            i, m.medianEccentricity, maxEcc, eccStats[0], eccStats[1]);
+                }
                 reject(m, "Eccentricity spiked (Tracking error/Wind)");
                 continue;
             }
@@ -105,13 +114,13 @@ public class SessionEvaluator {
             // Background: We care if it spikes (car headlights) or drops completely.
             double currentBgDev = Math.abs(m.backgroundMedian - bgStats[0]);
             if (currentBgDev > maxBgDev) {
-                System.out.printf("DEBUG REJECT [Frame %d]: BG Deviation %.3f > Max Allowed %.3f (Median: %.3f, Sigma: %.4f)%n",
-                        i, currentBgDev, maxBgDev, bgStats[0], bgStats[1]);
+                if (JTransientEngine.DEBUG) {
+                    System.out.printf("DEBUG REJECT [Frame %d]: BG Deviation %.3f > Max Allowed %.3f (Median: %.3f, Sigma: %.4f)%n",
+                            i, currentBgDev, maxBgDev, bgStats[0], bgStats[1]);
+                }
                 reject(m, "Background deviation (Clouds/Light leak)");
             }
         }
-
-
     }
 
     private static void reject(FrameQualityAnalyzer.FrameMetrics m, String reason) {
