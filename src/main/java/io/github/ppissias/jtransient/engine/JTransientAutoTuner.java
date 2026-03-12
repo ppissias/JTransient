@@ -18,7 +18,38 @@ import java.util.List;
 
 public class JTransientAutoTuner {
 
+    // =========================================================================
+    // TUNABLE AUTO-TUNER CONSTRAINTS
+    // =========================================================================
+
+    // The search radius (pixels) to find matching stars across frames.
+    // Since images are pre-registered, stars should only wobble due to atmospheric seeing.
+    public static double SEARCH_RADIUS_PX = 4.0;
+
+    // The strict noise gate. The ratio of transients to total objects must be <= this value.
+    public static double MAX_TRANSIENT_RATIO = 0.05; // 5%
+
+    // The hard cap on absolute transients (noise) allowed per frame.
+    public static int MAX_ABSOLUTE_TRANSIENTS = 150;
+
+    // The absolute minimum number of stable stars required to consider the sweep valid.
+    public static int MIN_STABLE_STARS = 15;
+
+    // The parameter grid to sweep during Phase 1
+    public static double[] SIGMAS_TO_TEST = {2.5, 3.0, 3.5, 4.0, 5.0, 6.0};
+    public static int[] MIN_PIXELS_TO_TEST = {3, 5, 7};
+
+    // --- KINEMATIC TUNING LIMITS ---
+    // Minimum allowable jitter (pixels) floor to prevent suffocating faint stars.
+    public static double MIN_JITTER_FLOOR = 1.0;
+
+    // Safety multiplier applied to the measured 90th percentile jitter to account for faint star centroid errors.
+    public static double JITTER_SAFETY_MULTIPLIER = 2.0;
+
+    // =========================================================================
+
     public static class AutoTunerResult {
+        public boolean success;
         public DetectionConfig optimizedConfig;
         public String telemetryReport;
         public int bestStarCount;
@@ -40,6 +71,7 @@ public class JTransientAutoTuner {
         if (numFrames < 5) {
             report.append("Warning: Not enough frames for Auto-Tuning. Falling back to base config.\n");
             result.optimizedConfig = baseConfig;
+            result.success = false;
             result.telemetryReport = report.toString();
             return result;
         }
@@ -52,22 +84,16 @@ public class JTransientAutoTuner {
         // PHASE 1: THE SIGNAL-TO-NOISE SWEEP
         // =====================================================================
         report.append("--- PHASE 1: Detection Threshold Sweep ---\n");
-        double[] sigmasToTest = {2.5, 3.0, 3.5, 4.0, 5.0, 6.0};
-
-        // Expanded to include 7 to allow for more conservative cuts
-        int[] minPixelsToTest = {3, 5, 7};
 
         DetectionConfig bestConfig = null;
         List<List<SourceExtractor.DetectedObject>> bestExtractedFrames = null;
 
         int maxStableStars = -1;
         double bestRatio = 1.0;
-
-        // NEW: Track the best overall fitness score
         double bestScore = -Double.MAX_VALUE;
 
-        for (int minPix : minPixelsToTest) {
-            for (double sigma : sigmasToTest) {
+        for (int minPix : MIN_PIXELS_TO_TEST) {
+            for (double sigma : SIGMAS_TO_TEST) {
 
                 DetectionConfig testConfig = cloneConfig(baseConfig);
                 testConfig.detectionSigmaMultiplier = sigma;
@@ -96,7 +122,6 @@ public class JTransientAutoTuner {
 
                 int stableStars = 0;
                 int transients = 0;
-                double generousBaselineJitter = 10.0;
                 List<SourceExtractor.DetectedObject> baseFrame = extractedFrames.get(2);
 
                 for (SourceExtractor.DetectedObject candidate : baseFrame) {
@@ -107,7 +132,9 @@ public class JTransientAutoTuner {
                         for (SourceExtractor.DetectedObject other : extractedFrames.get(i)) {
                             double dx = candidate.x - other.x;
                             double dy = candidate.y - other.y;
-                            if (Math.sqrt(dx * dx + dy * dy) <= generousBaselineJitter) {
+
+                            // Use the class-level parameter for Search Radius
+                            if (Math.sqrt(dx * dx + dy * dy) <= SEARCH_RADIUS_PX) {
                                 detections++;
                                 break;
                             }
@@ -127,16 +154,12 @@ public class JTransientAutoTuner {
                 report.append(String.format("Test -> Sigma: %.1f, MinPix: %d | Stars: %d | Transients: %d | Ratio: %.1f%%%n",
                         sigma, minPix, stableStars, transients, transientRatio * 100));
 
-                // --- THE FIX: STRICTER GATES & FITNESS SCORE ---
-
-                // 1. Strict Gate: Noise ratio must be under 5% AND absolute transients under 150.
-                // We also require at least 15 stable stars to consider the map valid.
-                boolean isClean = (transientRatio <= 0.05) && (transients <= 150) && (stableStars >= 15);
+                // --- EVALUATE AGAINST CLASS-LEVEL CONSTRAINTS ---
+                boolean isClean = (transientRatio <= MAX_TRANSIENT_RATIO) &&
+                        (transients <= MAX_ABSOLUTE_TRANSIENTS) &&
+                        (stableStars >= MIN_STABLE_STARS);
 
                 if (isClean) {
-                    // 2. Fitness Score: Reward stable stars, but heavily penalize transients.
-                    // We also add a bonus to higher 'minPixels' to favor cleaner, larger shapes 
-                    // if the star count difference is negligible.
                     double score = stableStars - (transients * 10.0) + (minPix * 25.0);
 
                     if (score > bestScore) {
@@ -174,7 +197,9 @@ public class JTransientAutoTuner {
                         closestDist = dist;
                     }
                 }
-                if (closestDist < 10.0) {
+
+                // Use the configured search radius instead of hardcoded 10.0
+                if (closestDist <= SEARCH_RADIUS_PX) {
                     jitterDistances.add(closestDist);
                 }
             }
@@ -184,7 +209,8 @@ public class JTransientAutoTuner {
                 int index90th = (int) (jitterDistances.size() * 0.90);
                 double p90Jitter = jitterDistances.get(index90th);
 
-                bestConfig.maxStarJitter = Math.max(1.0, p90Jitter * 1.5);
+                // Use the configured floor and safety multiplier
+                bestConfig.maxStarJitter = Math.max(MIN_JITTER_FLOOR, p90Jitter * JITTER_SAFETY_MULTIPLIER);
                 report.append(String.format("Measured 90th Percentile Jitter: %.2f px -> Set maxStarJitter to %.2f%n", p90Jitter, bestConfig.maxStarJitter));
             }
 
@@ -208,10 +234,12 @@ public class JTransientAutoTuner {
             result.optimizedConfig = bestConfig;
             result.bestStarCount = maxStableStars;
             result.bestTransientRatio = bestRatio;
+            result.success = true;
 
         } else {
             report.append("\nFAILED TO FIND STABLE CONFIGURATION. FALLING BACK TO BASE SETTINGS.\n");
             result.optimizedConfig = baseConfig;
+            result.success = false;
         }
 
         result.telemetryReport = report.toString();
