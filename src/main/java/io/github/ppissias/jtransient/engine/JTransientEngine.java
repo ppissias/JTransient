@@ -52,6 +52,9 @@ public class JTransientEngine {
 
         List<Callable<FrameExtractionResult>> tasks = new ArrayList<>();
 
+        // Ensure input frames are sorted chronologically before processing
+        inputFrames.sort(Comparator.comparingInt(f -> f.sequenceIndex));
+
         for (ImageFrame frame : inputFrames) {
             tasks.add(() -> {
                 // 1. Extract Sources (Passing config as the 4th argument)
@@ -112,6 +115,8 @@ public class JTransientEngine {
         SessionEvaluator.rejectOutlierFrames(sessionMetrics, config);
 
         List<List<SourceExtractor.DetectedObject>> cleanFramesData = new ArrayList<>();
+        List<ImageFrame> cleanFrames = new ArrayList<>(); // Track the raw images that passed the quality check
+
         for (int i = 0; i < rawExtractedFrames.size(); i++) {
             FrameQualityAnalyzer.FrameMetrics metrics = sessionMetrics.get(i);
             if (metrics.isRejected) {
@@ -124,26 +129,64 @@ public class JTransientEngine {
             } else {
                 telemetry.totalFramesKept++;
                 cleanFramesData.add(rawExtractedFrames.get(i));
+                cleanFrames.add(inputFrames.get(i)); // Keep the actual frame for the Master Stack
             }
         }
 
+        // =================================================================
+        // PHASE 0 (Generate Deep Master Star Map)
+        // =================================================================
+        if (DEBUG) {
+            System.out.println("\n--- JTRANSIENT: PHASE 0 (Master Map Generation) ---");
+        }
+
+        // 1. Mathematically stack the surviving frames to erase transients
+        short[][] masterStackData = SourceExtractor.createMedianMasterStack(cleanFrames);
+
+        // --- ULTRA-DEEP MASTER MAP EXTRACTION ---
+        // Paint every microscopic faint star onto the Binary Mask canvas!
+        double masterSigma = 1.5;
+        int masterMinPix = 2;
+
+        if (DEBUG) {
+            System.out.printf("DEBUG: Extracting Master Map with ultra-deep parameters (Sigma: %.2f, MinPix: %d)%n",
+                    masterSigma, masterMinPix);
+        }
+
+        // 2. Extract every stable star and galaxy from the deep stack
+        List<SourceExtractor.DetectedObject> masterStars = SourceExtractor.extractSources(
+                masterStackData,
+                masterSigma,
+                masterMinPix,
+                config
+        );
+
+        if (DEBUG) {
+            System.out.println("DEBUG: Master Stack generated. Found " + masterStars.size() + " deep stationary objects.");
+        }
+
+        // =================================================================
+        // PHASE 4 (Track Linking)
+        // =================================================================
         if (DEBUG) {
             System.out.println("\n--- JTRANSIENT: PHASE 4 (Track Linking) ---");
         }
 
+        // Pass BOTH the clean frame extractions and the master stars into the Linker
         TrackLinker.TrackingResult trackResult = TrackLinker.findMovingObjects(
                 cleanFramesData,
+                masterStars,
                 config
         );
 
         // Map the track results back to our main telemetry object
         telemetry.totalMovingTargetsFound = trackResult.tracks.size();
-        telemetry.trackerTelemetry = trackResult.telemetry; // Assumes you added this field to PipelineTelemetry!
+        telemetry.trackerTelemetry = trackResult.telemetry;
 
         telemetry.processingTimeMs = System.currentTimeMillis() - startTime;
 
-        // Return the unified result!
-        return new PipelineResult(trackResult.tracks, telemetry);
+        // Return the unified result with the new Master Data payloads!
+        return new PipelineResult(trackResult.tracks, telemetry, masterStackData, masterStars);
     }
 
     /**

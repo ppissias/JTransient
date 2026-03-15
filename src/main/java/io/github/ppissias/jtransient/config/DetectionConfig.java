@@ -30,7 +30,7 @@ public class DetectionConfig {
      * algorithm expands outward, absorbing neighbors. It stops when pixel values drop below this secondary, lower threshold.
      * This prevents "region spilling" (leaking into the noise) while capturing the faint, fading edges of real streaks.
      */
-    public double growSigmaMultiplier = 1.2;
+    public double growSigmaMultiplier = 1.5;
 
     /** * The absolute physical floor. If the BFS region-growing finishes and the total blob size is
      * less than this value, it is immediately discarded as read-noise or a hot pixel.
@@ -52,7 +52,7 @@ public class DetectionConfig {
      * looks around it by this radius. If a significant portion touches the void padding, it assumes the streak
      * is an interpolation artifact and kills it.
      */
-    public int voidProximityRadius = 3;
+    public int voidProximityRadius = 20;
 
     /** * Uses Image Moments (spatial variance) to determine shape. If the square root of the ratio of its
      * eigenvalues (elongation) is greater than this value, the blob is long and thin enough to be considered
@@ -65,10 +65,6 @@ public class DetectionConfig {
      */
     public int streakMinPixels = 10;
 
-    /** * Size filter for standard point sources. If a blob fails the elongation test (it is round) but
-     * has at least this many pixels, it is tagged as a standard point source (star/asteroid).
-     */
-    public int pointSourceMinPixels = 4;
 
     /** * Number of passes used in the iterative histogram calculation to mathematically chop off
      * bright stars so they don't corrupt the background sky noise calculation.
@@ -130,6 +126,11 @@ public class DetectionConfig {
      */
     public double maxStarJitter = 3.0;
 
+    /** * Multiplier for maxStarJitter to account for long-term atmospheric wobble and slight field rotation
+     * over the entire imaging session.
+     */
+    public double starJitterExpansionFactor = 1.5;
+
     /** * Once a baseline vector is established (Points 1 and 2), Point 3 must fall within this many pixels
      * of the infinitely projected mathematical trajectory line.
      */
@@ -144,16 +145,6 @@ public class DetectionConfig {
      * less than this threshold, it is identified as a hot column/sensor defect and destroyed.
      */
     public double stationaryDefectThreshold = 5.0;
-
-    /** * How many frames an object must appear in the exact same spot to be classified as a permanent
-     * background star and purged from the transient list.
-     */
-    public int requiredDetectionsToBeStar = 2;
-
-    /** * Multiplier for maxStarJitter to account for long-term atmospheric wobble and slight field rotation
-     * over the entire imaging session.
-     */
-    public double starJitterExpansionFactor = 1.5;
 
     /** * Determines how many points are needed to confirm a track by dividing the total number of frames
      * by this ratio (e.g., 20 frames / 3.0 = ~7 points required).
@@ -227,4 +218,18 @@ public class DetectionConfig {
      * this injects a tiny value to prevent division-by-zero crashes when calculating thresholds.
      */
     public double zeroSigmaFallback = 0.001;
-}
+
+    // =================================================================
+    // 5. ANOMALY DETECTION PARAMETERS (Optical Flashes / Glints)
+    // =================================================================
+
+    /** * Enable the rescue of single-frame, ultra-bright point sources that failed to form a multi-frame track. */
+    public boolean enableAnomalyRescue = true;
+
+    /** * The minimum Peak Signal-to-Noise ratio (Sigma) a single-frame point must have to be rescued.
+     * e.g., 50.0 means the brightest pixel in the object is 50x brighter than the background noise. */
+    public double anomalyMinPeakSigma = 10.0;
+
+    /** * The minimum physical size a single-frame point must have to be rescued.
+     * Prevents single hot-pixels or cosmic rays from being flagged. */
+    public int anomalyMinPixels = 25;}

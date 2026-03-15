@@ -14,11 +14,11 @@ import io.github.ppissias.jtransient.engine.JTransientEngine;
 import io.github.ppissias.jtransient.telemetry.TrackerTelemetry;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.HashSet;
 
-public class TrackLinker {
+public class TrackLinkerBackup {
 
     // =================================================================
     // DATA MODELS
@@ -27,7 +27,6 @@ public class TrackLinker {
     public static class Track {
         public List<SourceExtractor.DetectedObject> points = new ArrayList<>();
         public boolean isStreakTrack = false;
-        public boolean isAnomaly = false; // <--- NEW
 
         public void addPoint(SourceExtractor.DetectedObject obj) {
             points.add(obj);
@@ -134,123 +133,65 @@ public class TrackLinker {
         if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 2] Completed. Found " + streakTracksFound + " streak track(s).");
 
         // =================================================================
-        // PHASE 3: BINARY MASK MASTER STAR MAP VETO
+        // PHASE 3: MASTER STAR MAP VETO (WITH GALAXY FRAGMENT TRACE)
         // =================================================================
-        if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3] Building Binary Footprint Mask from Master Map...");
+        if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3] Filtering against Deep Master Star Map...");
         TrackerTelemetry telemetry = new TrackerTelemetry();
         int totalTransientsFound = 0;
 
-        // 1. Calculate the maximum bounds of the entire dataset to size the 2D Array dynamically
-        int maxX = 0;
-        int maxY = 0;
-        for (SourceExtractor.DetectedObject mStar : masterStars) {
-            if (mStar.x > maxX) maxX = (int) mStar.x;
-            if (mStar.y > maxY) maxY = (int) mStar.y;
-            if (mStar.rawPixels != null) {
-                for (SourceExtractor.Pixel p : mStar.rawPixels) {
-                    if (p.x > maxX) maxX = p.x;
-                    if (p.y > maxY) maxY = p.y;
-                }
-            }
-        }
-        for (List<SourceExtractor.DetectedObject> frame : pointSourcesOnly) {
-            for (SourceExtractor.DetectedObject cand : frame) {
-                if (cand.x > maxX) maxX = (int) cand.x;
-                if (cand.y > maxY) maxY = (int) cand.y;
-                if (cand.rawPixels != null) {
-                    for (SourceExtractor.Pixel p : cand.rawPixels) {
-                        if (p.x > maxX) maxX = p.x;
-                        if (p.y > maxY) maxY = p.y;
-                    }
-                }
-            }
-        }
-
-        // Add a generous safety margin to prevent IndexOutOfBounds
-        maxX += 50;
-        maxY += 50;
-
-        // 2. Initialize the blazing-fast 2D Boolean Mask
-        boolean[][] masterMask = new boolean[maxY][maxX];
-        int dilationRadius = (int) Math.ceil(config.maxStarJitter); // Dilate footprint to protect against alignment drift
         double expandedStarJitter = Math.max(4.0, config.maxStarJitter * config.starJitterExpansionFactor);
-
-        // 3. Paint the Master Objects into the Mask
-        for (SourceExtractor.DetectedObject mStar : masterStars) {
-            if (mStar.rawPixels != null) {
-                for (SourceExtractor.Pixel p : mStar.rawPixels) {
-                    // Dilate outward from each pixel to create a protective buffer
-                    for (int dx = -dilationRadius; dx <= dilationRadius; dx++) {
-                        for (int dy = -dilationRadius; dy <= dilationRadius; dy++) {
-                            if (dx * dx + dy * dy <= dilationRadius * dilationRadius) {
-                                int mx = p.x + dx;
-                                int my = p.y + dy;
-                                if (mx >= 0 && mx < maxX && my >= 0 && my < maxY) {
-                                    masterMask[my][mx] = true;
-                                }
-                            }
-                        }
-                    }
-                }
-            } else {
-                // Fallback: If raw pixels are somehow missing, paint a circle around the centroid
-                int cx = (int) mStar.x;
-                int cy = (int) mStar.y;
-                int r = (int) Math.max(dilationRadius, Math.ceil(expandedStarJitter));
-                for (int dx = -r; dx <= r; dx++) {
-                    for (int dy = -r; dy <= r; dy++) {
-                        if (dx * dx + dy * dy <= r * r) {
-                            int mx = cx + dx;
-                            int my = cy + dy;
-                            if (mx >= 0 && mx < maxX && my >= 0 && my < maxY) {
-                                masterMask[my][mx] = true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        SpatialGrid masterGrid = new SpatialGrid(masterStars, expandedStarJitter);
 
         List<List<SourceExtractor.DetectedObject>> transients = new ArrayList<>();
 
-        // 4. Evaluate Transients against the Mask
         for (int i = 0; i < numFrames; i++) {
             List<SourceExtractor.DetectedObject> currentFrame = pointSourcesOnly.get(i);
             List<SourceExtractor.DetectedObject> frameTransients = new ArrayList<>();
             int purgedCount = 0;
 
+            // --- DIAGNOSTIC COUNTERS ---
+            int closeCallCount = 0;
+            int galaxyFragmentSuspects = 0;
+
             for (SourceExtractor.DetectedObject candidateObj : currentFrame) {
-                boolean isPurged = false;
 
-                // Perform the Pixel-Perfect Collision Check
-                if (candidateObj.rawPixels != null) {
-                    for (SourceExtractor.Pixel p : candidateObj.rawPixels) {
-                        if (p.x >= 0 && p.x < maxX && p.y >= 0 && p.y < maxY) {
-                            // If even ONE candidate pixel touches the painted master mask, it is destroyed!
-                            if (masterMask[p.y][p.x]) {
-                                isPurged = true;
-                                break;
-                            }
-                        }
-                    }
-                } else {
-                    int cx = (int) candidateObj.x;
-                    int cy = (int) candidateObj.y;
-                    if (cx >= 0 && cx < maxX && cy >= 0 && cy < maxY) {
-                        if (masterMask[cy][cx]) isPurged = true;
-                    }
-                }
-
-                if (isPurged) {
+                if (masterGrid.hasMatch(candidateObj.x, candidateObj.y, expandedStarJitter)) {
                     purgedCount++;
                 } else {
                     frameTransients.add(candidateObj);
+
+                    // --- GALAXY FRAGMENT RADAR ---
+                    if (JTransientEngine.DEBUG) {
+                        double minDist = Double.MAX_VALUE;
+                        SourceExtractor.DetectedObject nearestMaster = null;
+
+                        for (SourceExtractor.DetectedObject mStar : masterStars) {
+                            double d = distance(candidateObj.x, candidateObj.y, mStar.x, mStar.y);
+                            if (d < minDist) {
+                                minDist = d;
+                                nearestMaster = mStar;
+                            }
+                        }
+
+                        if (nearestMaster != null) {
+                            if (minDist <= 15.0) {
+                                closeCallCount++;
+                            }
+
+                            if (nearestMaster.pixelArea > 50) {
+                                double estimatedRadius = Math.sqrt(nearestMaster.pixelArea) / 2.0;
+                                if (minDist <= (estimatedRadius + config.maxStarJitter + 5.0)) {
+                                    galaxyFragmentSuspects++;
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
             if (JTransientEngine.DEBUG) {
-                System.out.printf("  -> Frame %d: Evaluated %d points. %d killed by Binary Mask Veto, %d transients survived.%n",
-                        i, currentFrame.size(), purgedCount, frameTransients.size());
+                System.out.printf("  -> Frame %d: Evaluated %d points. %d killed by Master Map, %d transients survived. (%d likely Galaxy/Nebula edge fragments)%n",
+                        i, currentFrame.size(), purgedCount, frameTransients.size(), galaxyFragmentSuspects);
             }
 
             transients.add(frameTransients);
@@ -325,6 +266,7 @@ public class TrackLinker {
 
                                 double jumpDist = distance(lastPoint.x, lastPoint.y, p3.x, p3.y);
 
+                                // --- FIX: Restore P3 Telemetry Here ---
                                 if (jumpDist > config.maxJumpPixels) {
                                     telemetry.countP3Jump++;
                                     continue;
@@ -419,10 +361,15 @@ public class TrackLinker {
                                                     trackStart.x, trackStart.y, currentTrack.points.size());
 
                                             if (distToMaster > 0) {
-                                                System.out.printf("            -> DIAGNOSTIC: Nearest Master Centroid is %.2f pixels away. (Veto radius was %.2f)%n",
+                                                System.out.printf("            -> DIAGNOSTIC: Nearest Master Star is %.2f pixels away. (Veto radius was %.2f)%n",
                                                         distToMaster, expandedStarJitter);
+
+                                                if (distToMaster > expandedStarJitter && distToMaster < 15.0) {
+                                                    System.out.println("            -> CONCLUSION: ALIGNMENT DRIFT! The star drifted outside the veto radius.");
+                                                }
                                             } else {
-                                                System.out.println("            -> DIAGNOSTIC: NO Master Centroid found within 30 pixels!");
+                                                System.out.println("            -> DIAGNOSTIC: NO Master Star found within 30 pixels!");
+                                                System.out.println("            -> CONCLUSION: BLIND SPOT! The Master Map extraction failed to catalog this star in Phase 0.");
                                             }
                                         }
                                     } else {
@@ -444,46 +391,6 @@ public class TrackLinker {
             }
         }
 
-        // =================================================================
-        // PHASE 5: HIGH-ENERGY ANOMALY RESCUE (GLINTS & FLASHES)
-        // =================================================================
-        int anomaliesRescued = 0;
-        if (config.enableAnomalyRescue) {
-            if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 5] Scanning discarded transients for High-Energy Anomalies...");
-
-            for (int i = 0; i < numFrames; i++) {
-                for (SourceExtractor.DetectedObject orphan : transients.get(i)) {
-                    if (!usedPoints.contains(orphan)) {
-
-                        // Check if it meets the extreme thresholds AND is safely away from the edges!
-                        if (orphan.pixelArea >= config.anomalyMinPixels && orphan.peakSigma >= config.anomalyMinPeakSigma) {
-
-                            // --- NEW: Veto the anomaly if it touched the strict boundary ---
-                            if (orphan.isNearAnomalyEdge) {
-                                if (JTransientEngine.DEBUG) {
-                                    System.out.printf("         [ANOMALY REJECTED] Massive transient at X:%.1f, Y:%.1f touches strict edge bounds.%n", orphan.x, orphan.y);
-                                }
-                                continue;
-                            }
-
-                            Track anomalyTrack = new Track();
-                            anomalyTrack.addPoint(orphan);
-                            anomalyTrack.isAnomaly = true;
-
-                            pointTracks.add(anomalyTrack);
-                            usedPoints.add(orphan);
-                            anomaliesRescued++;
-
-                            if (JTransientEngine.DEBUG) {
-                                System.out.printf("         [ANOMALY RESCUED] Huge transient found at Frame %d (X:%.1f, Y:%.1f). Area: %.1f px, Peak Sigma: %.1f%n",
-                                        orphan.sourceFrameIndex, orphan.x, orphan.y, orphan.pixelArea, orphan.peakSigma);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
         telemetry.streakTracksFound = streakTracksFound;
         telemetry.pointTracksFound = pointTracks.size();
 
@@ -497,6 +404,7 @@ public class TrackLinker {
             System.out.println("   - Morphological Size Mismatch   : " + telemetry.countBaselineSize);
             System.out.println("   - Photometric Flux Mismatch     : " + telemetry.countBaselineFlux);
 
+            // --- FIX: Output the P3 Telemetry ---
             System.out.println("\n2. Point 3+ (p3, p4...) Search Rejections:");
             System.out.println("   - Not Collinear (Off-line)      : " + telemetry.countP3NotLine);
             System.out.println("   - Wrong Direction / Angle       : " + telemetry.countP3WrongDirection);

@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Queue;
 import java.util.stream.IntStream;
 
-public class SourceExtractor {
+public class SourceExtractorOrig {
 
     // --- OPTIMIZATION: Moved directional arrays to static constants to avoid reallocation ---
     private static final int[] DX = {-1, -1, -1, 0, 0, 1, 1, 1};
@@ -33,11 +33,9 @@ public class SourceExtractor {
         public double x, y;
         public double totalFlux;
         public int pixelCount;
-        public double peakSigma; // For Anomaly Detection
+        public double peakSigma; // <--- NEW: For Anomaly Detection
 
-        public boolean isNearAnomalyEdge = false; // <--- NEW: Flag for TrackLinker Phase 5
-
-        // Save the exact blob mask for UI Visualization
+        // Save the exact blob mask for UI Visualization (Populated only if DEBUG is true)
         public List<Pixel> rawPixels = null;
 
         // Size metric for TrackLinker Morphological Filtering
@@ -83,6 +81,10 @@ public class SourceExtractor {
     // CORE EXTRACTION PIPELINE
     // =================================================================
 
+    /**
+     * Generates a Deep Median Master Stack from the sequence to erase transients and perfectly isolate the star map.
+     * Uses parallel CPU streams to perform millions of array sorts instantly.
+     */
     public static short[][] createMedianMasterStack(List<ImageFrame> frames) {
         if (frames == null || frames.isEmpty()) return null;
 
@@ -96,12 +98,16 @@ public class SourceExtractor {
             System.out.println("\n[PHASE 0] Generating Median Master Stack across " + numFrames + " frames...");
         }
 
+        // Multi-thread the row processing for maximum speed!
         IntStream.range(0, height).parallel().forEach(y -> {
             short[] pixelValues = new short[numFrames];
             for (int x = 0; x < width; x++) {
+                // Collect this specific pixel's value from every frame
                 for (int i = 0; i < numFrames; i++) {
                     pixelValues[i] = frames.get(i).pixelData[y][x];
                 }
+
+                // Sort to find the mathematical median
                 Arrays.sort(pixelValues);
                 masterMap[y][x] = pixelValues[numFrames / 2];
             }
@@ -114,12 +120,19 @@ public class SourceExtractor {
         return masterMap;
     }
 
+    /**
+     * Main method to run the detection pipeline on a single frame.
+     * Allows overriding the primary thresholds (used by FrameQualityAnalyzer).
+     */
     public static List<DetectedObject> extractSources(short[][] image, double sigmaMultiplier, int minPixels, DetectionConfig config) {
         int height = image.length;
         int width = image[0].length;
 
+
         // 1. Calculate Background
         BackgroundMetrics bg = calculateBackgroundSigmaClipped(image, width, height, sigmaMultiplier, config);
+
+
 
         if (JTransientEngine.DEBUG) {
             System.out.printf("BACKGROUND STATS -> Median: %.2f | Sigma: %.2f | Seed Thresh: %.2f | Grow Thresh: %.2f%n",
@@ -136,6 +149,7 @@ public class SourceExtractor {
         List<DetectedObject> detectedObjects = new ArrayList<>();
         boolean[][] visited = new boolean[height][width];
 
+        // --- DEBUG TELEMETRY COUNTERS ---
         int statBfsTriggers = 0;
         int statRejectedNoise = 0;
         int statRejectedEdge = 0;
@@ -181,12 +195,17 @@ public class SourceExtractor {
                     // 4. Centroiding and Filtering
                     if (currentBlob.size() >= minPixels) {
 
+                        // Pass minPixels and the full 'bg' object down so analyzeShape works properly
                         DetectedObject obj = analyzeShape(currentBlob, bg, config, minPixels);
+
+                        // --- MEMORY OPTIMIZATION ---
+                        // Only attach the raw pixels if we are debugging/tuning the UI.
+                        //if (JTransientEngine.DEBUG) {
                         obj.rawPixels = currentBlob;
-                        obj.pixelArea = currentBlob.size();
+                        //}
 
                         // ==========================================================
-                        // STANDARD FILTER 1: PHYSICAL SENSOR EDGE (Centroid based)
+                        // FILTER 1: PHYSICAL SENSOR EDGE
                         // ==========================================================
                         if (obj.x < config.edgeMarginPixels || obj.x >= (width - config.edgeMarginPixels) ||
                                 obj.y < config.edgeMarginPixels || obj.y >= (height - config.edgeMarginPixels)) {
@@ -200,7 +219,7 @@ public class SourceExtractor {
                         }
 
                         // ==========================================================
-                        // STANDARD FILTER 2: FAST VIRTUAL EDGE (Centroid based)
+                        // FILTER 2: FAST VIRTUAL EDGE (ALIGNMENT VOID) CHECK
                         // ==========================================================
                         boolean nearVirtualEdge = false;
                         int vr = config.voidProximityRadius;
@@ -231,52 +250,7 @@ public class SourceExtractor {
                             continue;
                         }
 
-                        // ==========================================================
-                        // NEW: STRICT ANOMALY BOUNDARY FLAG (Bounding Box Based)
-                        // ==========================================================
-                        // We do NOT discard the object here so it stays in the Master Map.
-                        // We just flag it so Phase 5 knows not to rescue it!
-
-                        int minX = width, maxX = 0, minY = height, maxY = 0;
-                        for (Pixel p : currentBlob) {
-                            if (p.x < minX) minX = p.x;
-                            if (p.x > maxX) maxX = p.x;
-                            if (p.y < minY) minY = p.y;
-                            if (p.y > maxY) maxY = p.y;
-                        }
-
-                        int combinedMargin = config.voidProximityRadius + +config.edgeMarginPixels + config.anomalyMinPixels + 1;
-
-
-                        // Strict Physical Edge Check
-                        boolean strictEdge = (minX < combinedMargin || maxX >= (width - combinedMargin) ||
-                                minY < combinedMargin || maxY >= (height - combinedMargin));
-
-                        boolean strictVoid = false;
-                        if (!strictEdge) {
-                            int cxBox = (minX + maxX) / 2;
-                            int cyBox = (minY + maxY) / 2;
-                            int[] apx = {minX - combinedMargin, maxX + combinedMargin, cxBox, cxBox, minX - combinedMargin, maxX + combinedMargin, minX - combinedMargin, maxX + combinedMargin};
-                            int[] apy = {cyBox, cyBox, minY - combinedMargin, maxY + combinedMargin, minY - combinedMargin, minY - combinedMargin, maxY + combinedMargin, maxY + combinedMargin};
-
-                            for (int i = 0; i < 8; i++) {
-                                int testX = apx[i];
-                                int testY = apy[i];
-
-                                if (testX < 0 || testX >= width || testY < 0 || testY >= height) {
-                                    strictVoid = true;
-                                    break;
-                                }
-                                int vValue = image[testY][testX] + 32768;
-                                if (vValue <= voidValueThreshold) {
-                                    strictVoid = true;
-                                    break;
-                                }
-                            }
-                        }
-
-                        obj.isNearAnomalyEdge = strictEdge || strictVoid;
-
+                        obj.pixelArea = currentBlob.size();
                         detectedObjects.add(obj);
                     } else {
                         statRejectedNoise++;
@@ -285,6 +259,7 @@ public class SourceExtractor {
             }
         }
 
+        // --- PRINT FINAL FRAME TELEMETRY SUMMARY ---
         if (JTransientEngine.DEBUG) {
             System.out.printf("  -> Extracted %d valid objects. [BFS Triggers: %d | Rejected Noise: %d | Rejected Edge: %d | Rejected Void: %d]%n",
                     detectedObjects.size(), statBfsTriggers, statRejectedNoise, statRejectedEdge, statRejectedVoid);
@@ -293,6 +268,9 @@ public class SourceExtractor {
         return detectedObjects;
     }
 
+    /**
+     * Fast Histogram-based background estimation using Iterative Sigma Clipping.
+     */
     public static BackgroundMetrics calculateBackgroundSigmaClipped(short[][] image, int width, int height, double sigmaMultiplier, DetectionConfig config) {
         BackgroundMetrics metrics = new BackgroundMetrics();
         int[] histogram = new int[65536];
@@ -347,16 +325,20 @@ public class SourceExtractor {
         return metrics;
     }
 
+    /**
+     * Calculates the centroid, elongation, and angle of a pixel blob using Image Moments.
+     */
     public static DetectedObject analyzeShape(List<Pixel> blob, BackgroundMetrics bg, DetectionConfig config, int minPixels) {
         DetectedObject obj = new DetectedObject(0,0,0,0);
 
-        // Calculate Peak Sigma for Anomaly Rescue
+        // --- NEW: Calculate Peak Sigma for Anomaly Rescue ---
         double maxPixelValue = 0;
         for (Pixel p : blob) {
             if (p.value > maxPixelValue) {
                 maxPixelValue = p.value;
             }
         }
+        // How many standard deviations above the median background is this object's core?
         obj.peakSigma = (maxPixelValue - bg.median) / bg.sigma;
 
         double m00 = 0;
@@ -406,6 +388,7 @@ public class SourceExtractor {
         double sigmaSq = lambda1 + lambda2;
         obj.fwhm = 2.355 * Math.sqrt(sigmaSq);
 
+        // --- STANDARD CLASSIFICATION ---
         if (obj.elongation > config.streakMinElongation && blob.size() > config.streakMinPixels) {
             obj.isStreak = true;
             obj.isNoise = false;
