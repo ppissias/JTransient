@@ -383,10 +383,10 @@ public class TrackLinker {
                                 if (stepDist > config.maxStarJitter) {
                                     prunedPoints.add(pB);
                                 } else {
-                                    if (JTransientEngine.DEBUG) {
-                                        System.out.printf("         *** PRUNING: Dropped hijacked point at frame %d. (Stalled segment: %.2f px) ***%n",
-                                                pB.sourceFrameIndex, stepDist);
-                                    }
+                                    //if (JTransientEngine.DEBUG) {
+                                        //System.out.printf("         *** PRUNING: Dropped hijacked point at frame %d. (Stalled segment: %.2f px) ***%n",
+                                        //        pB.sourceFrameIndex, stepDist);
+                                    //}
                                 }
                             }
 
@@ -400,8 +400,8 @@ public class TrackLinker {
                                     SourceExtractor.DetectedObject trackEnd = currentTrack.points.get(currentTrack.points.size() - 1);
                                     double totalDistanceMoved = distance(trackStart.x, trackStart.y, trackEnd.x, trackEnd.y);
 
-                                    System.out.printf("      -> [EVALUATING TRACK] %d clean points formed a line. Total distance moved: %.2f pixels. (Start: %.1f,%.1f)%n",
-                                            currentTrack.points.size(), totalDistanceMoved, trackStart.x, trackStart.y);
+                                    //System.out.printf("      -> [EVALUATING TRACK] %d clean points formed a line. Total distance moved: %.2f pixels. (Start: %.1f,%.1f)%n",
+                                    //        currentTrack.points.size(), totalDistanceMoved, trackStart.x, trackStart.y);
                                 }
 
                                 if (hasSteadyRhythm(currentTrack, config.rhythmAllowedVariance, config.rhythmStationaryThreshold, config.rhythmMinConsistencyRatio)) {
@@ -415,14 +415,14 @@ public class TrackLinker {
                                             SpatialGrid masterGridForDebug = new SpatialGrid(masterStars, 30.0);
                                             double distToMaster = masterGridForDebug.getNearestDistance(trackStart.x, trackStart.y, 30.0);
 
-                                            System.out.printf("         [SUCCESS] Track formed at X:%.1f, Y:%.1f (Length: %d points)%n",
-                                                    trackStart.x, trackStart.y, currentTrack.points.size());
+                                            //System.out.printf("         [SUCCESS] Track formed at X:%.1f, Y:%.1f (Length: %d points)%n",
+                                            //        trackStart.x, trackStart.y, currentTrack.points.size());
 
                                             if (distToMaster > 0) {
-                                                System.out.printf("            -> DIAGNOSTIC: Nearest Master Centroid is %.2f pixels away. (Veto radius was %.2f)%n",
-                                                        distToMaster, expandedStarJitter);
+                                            //    System.out.printf("            -> DIAGNOSTIC: Nearest Master Centroid is %.2f pixels away. (Veto radius was %.2f)%n",
+                                            //            distToMaster, expandedStarJitter);
                                             } else {
-                                                System.out.println("            -> DIAGNOSTIC: NO Master Centroid found within 30 pixels!");
+                                             //   System.out.println("            -> DIAGNOSTIC: NO Master Centroid found within 30 pixels!");
                                             }
                                         }
                                     } else {
@@ -430,11 +430,11 @@ public class TrackLinker {
                                     }
                                 } else {
                                     telemetry.countTrackErraticRhythm++;
-                                    if (JTransientEngine.DEBUG) System.out.println("         [REJECTED] Failed steady rhythm check.");
+                                    //if (JTransientEngine.DEBUG) System.out.println("         [REJECTED] Failed steady rhythm check.");
                                 }
                             } else {
                                 telemetry.countTrackTooShort++;
-                                if (JTransientEngine.DEBUG) System.out.println("         [REJECTED] Track became too short after pruning hijacked points.");
+                                //if (JTransientEngine.DEBUG) System.out.println("         [REJECTED] Track became too short after pruning hijacked points.");
                             }
                         } else {
                             telemetry.countTrackTooShort++;
@@ -458,14 +458,6 @@ public class TrackLinker {
                         // Check if it meets the extreme thresholds AND is safely away from the edges!
                         if (orphan.pixelArea >= config.anomalyMinPixels && orphan.peakSigma >= config.anomalyMinPeakSigma) {
 
-                            // --- NEW: Veto the anomaly if it touched the strict boundary ---
-                            if (orphan.isNearAnomalyEdge) {
-                                if (JTransientEngine.DEBUG) {
-                                    System.out.printf("         [ANOMALY REJECTED] Massive transient at X:%.1f, Y:%.1f touches strict edge bounds.%n", orphan.x, orphan.y);
-                                }
-                                continue;
-                            }
-
                             Track anomalyTrack = new Track();
                             anomalyTrack.addPoint(orphan);
                             anomalyTrack.isAnomaly = true;
@@ -475,8 +467,8 @@ public class TrackLinker {
                             anomaliesRescued++;
 
                             if (JTransientEngine.DEBUG) {
-                                System.out.printf("         [ANOMALY RESCUED] Huge transient found at Frame %d (X:%.1f, Y:%.1f). Area: %.1f px, Peak Sigma: %.1f%n",
-                                        orphan.sourceFrameIndex, orphan.x, orphan.y, orphan.pixelArea, orphan.peakSigma);
+                                //System.out.printf("         [ANOMALY RESCUED] Huge transient found at Frame %d (X:%.1f, Y:%.1f). Area: %.1f px, Peak Sigma: %.1f%n",
+                                 //       orphan.sourceFrameIndex, orphan.x, orphan.y, orphan.pixelArea, orphan.peakSigma);
                             }
                         }
                     }

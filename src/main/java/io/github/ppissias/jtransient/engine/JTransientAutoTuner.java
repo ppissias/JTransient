@@ -10,8 +10,8 @@
 package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.core.MasterMapGenerator;
 import io.github.ppissias.jtransient.core.SourceExtractor;
-import io.github.ppissias.jtransient.core.SpatialGrid;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
 
 import java.util.ArrayList;
@@ -30,17 +30,23 @@ public class JTransientAutoTuner {
     // TUNABLE AUTO-TUNER CONSTRAINTS & MAGIC NUMBERS
     // =========================================================================
 
-    // The number of highest-quality frames to sample for tuning. (Must be odd, e.g., 3, 5, 7)
+    // The number of highest-quality frames to sample for tuning.
     public static int AUTO_TUNE_SAMPLE_SIZE = 5;
 
-    // The search radius (pixels) to find matching stars across frames.
+    // The search radius (pixels) to find matching stars across frames for jitter analysis.
     public static double SEARCH_RADIUS_PX = 4.0;
 
+    // --- NEW: STRICT NOISE GATES ---
     // The strict noise gate. The ratio of transients to total objects must be <= this value.
-    public static double MAX_TRANSIENT_RATIO = 0.25; // 25%
+    // Lowered to 5% to demand highly pure tracking frames.
+    public static double MAX_TRANSIENT_RATIO = 0.05;
 
-    // The absolute minimum number of stable stars required to consider the sweep valid.
+    // The absolute minimum number of stable stars required across the sample to consider the sweep valid.
     public static int MIN_STABLE_STARS = 15;
+
+    // The target number of stars. Once the engine finds this many, it stops rewarding raw count
+    // and starts optimizing purely for safety (higher sigmas) and zero noise.
+    public static double OPTIMAL_STAR_COUNT = 100.0;
 
     // The absolute maximum objects allowed across the sample frames to prevent memory/CPU freezing
     public static int MAX_TOTAL_EXTRACTED_OBJECTS = 500000;
@@ -53,9 +59,10 @@ public class JTransientAutoTuner {
     public static int[] MIN_PIXELS_TO_TEST = {3, 5, 7, 9, 12};
 
     // --- HEURISTIC ALGORITHM WEIGHTS ---
-    public static double GROW_SIGMA_RATIO = 0.5;
-    public static double SCORE_WEIGHT_TRANSIENT_PENALTY = 10.0;
-    public static double SCORE_WEIGHT_MINPIX_REWARD = 25.0;
+    //TODO make these configurable
+    public static double SCORE_WEIGHT_TRANSIENT_PENALTY = 3.0;  // Very gentle penalty, allows 10-50 avg transients
+    public static double SCORE_WEIGHT_SIGMA_PENALTY = 15.0;     // Strong penalty to force sigma down
+    public static double SCORE_WEIGHT_MINPIX_PENALTY = 5.0;     // Moderate penalty to force size down
 
     // --- OPTICAL & KINEMATIC TUNING LIMITS ---
     public static double JITTER_PERCENTILE = 0.90;
@@ -109,10 +116,12 @@ public class JTransientAutoTuner {
             return result;
         }
 
-        // We already did the quality pass in AutoTuneTask!
-        // Just go straight to Phase 1:
-        if (DEBUG) System.out.println("\n[START] Phase 1: Detection Threshold Sweep...");
-        report.append("\n--- PHASE 1: Detection Threshold Sweep ---\n");
+        int sensorHeight = sampleFrames.get(0).pixelData.length;
+        int sensorWidth = sampleFrames.get(0).pixelData[0].length;
+
+        // --- Generate the Master Stack once for the entire tuning process! ---
+        if (DEBUG) System.out.println("\n[PRE-COMPUTE] Generating Master Stack for Auto-Tuning Sample...");
+        short[][] masterStackData = MasterMapGenerator.createMedianMasterStack(sampleFrames);
 
         // =====================================================================
         // PHASE 1: THE SIGNAL-TO-NOISE SWEEP
@@ -126,7 +135,6 @@ public class JTransientAutoTuner {
         int maxStableStars = -1;
         double bestRatio = 1.0;
         double bestScore = -Double.MAX_VALUE;
-        int baseIndex = AUTO_TUNE_SAMPLE_SIZE / 2; // Center frame of the sample
 
         for (int minPix : MIN_PIXELS_TO_TEST) {
             for (double sigma : SIGMAS_TO_TEST) {
@@ -139,93 +147,126 @@ public class JTransientAutoTuner {
                 DetectionConfig testConfig = cloneConfig(baseConfig);
                 testConfig.detectionSigmaMultiplier = sigma;
                 testConfig.minDetectionPixels = minPix;
-                testConfig.growSigmaMultiplier = sigma * GROW_SIGMA_RATIO;
+                //testConfig.growSigmaMultiplier = sigma * GROW_SIGMA_RATIO;
 
+                // -----------------------------------------------------------
+                // STEP A: EXTRACT THE MASTER MAP (Using Dynamic Scaling)
+                // -----------------------------------------------------------
+                double masterSigma = Math.max(1.5, testConfig.detectionSigmaMultiplier / 2.0);
+                int masterMinPix = Math.max(2, testConfig.minDetectionPixels / 3);
+
+                int originalEdgeMargin = testConfig.edgeMarginPixels;
+                int originalVoidProximity = testConfig.voidProximityRadius;
+
+                testConfig.edgeMarginPixels = 5;
+                testConfig.voidProximityRadius = 5;
+
+                List<SourceExtractor.DetectedObject> masterStars = SourceExtractor.extractSources(
+                        masterStackData, masterSigma, masterMinPix, testConfig
+                );
+
+                testConfig.edgeMarginPixels = originalEdgeMargin;
+                testConfig.voidProximityRadius = originalVoidProximity;
+
+                // -----------------------------------------------------------
+                // STEP B: BUILD THE BINARY VETO MASK
+                // -----------------------------------------------------------
+                boolean[][] masterMask = new boolean[sensorHeight][sensorWidth];
+                int dilationRadius = (int) Math.ceil(testConfig.maxStarJitter);
+
+                for (SourceExtractor.DetectedObject mStar : masterStars) {
+                    if (mStar.rawPixels != null) {
+                        for (SourceExtractor.Pixel p : mStar.rawPixels) {
+                            for (int dx = -dilationRadius; dx <= dilationRadius; dx++) {
+                                for (int dy = -dilationRadius; dy <= dilationRadius; dy++) {
+                                    if (dx * dx + dy * dy <= dilationRadius * dilationRadius) {
+                                        int mx = p.x + dx;
+                                        int my = p.y + dy;
+                                        if (mx >= 0 && mx < sensorWidth && my >= 0 && my < sensorHeight) {
+                                            masterMask[my][mx] = true;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // -----------------------------------------------------------
+                // STEP C: EXTRACT FRAMES & TEST AGAINST MASK
+                // -----------------------------------------------------------
                 List<List<SourceExtractor.DetectedObject>> extractedFrames = new ArrayList<>();
                 int totalObjectsExtracted = 0;
+                int totalStableStars = 0;
+                int totalTransients = 0;
 
-                // --- DETAILED EXTRACTION DEBUG ---
-                for (int i = 0; i < sampleFrames.size(); i++) {
-                    ImageFrame frame = sampleFrames.get(i);
+                for (ImageFrame frame : sampleFrames) {
                     List<SourceExtractor.DetectedObject> objects = SourceExtractor.extractSources(
-                            frame.pixelData,
-                            testConfig.detectionSigmaMultiplier,
-                            testConfig.minDetectionPixels,
-                            testConfig
+                            frame.pixelData, testConfig.detectionSigmaMultiplier, testConfig.minDetectionPixels, testConfig
                     );
                     extractedFrames.add(objects);
                     totalObjectsExtracted += objects.size();
 
-                    if (DEBUG) System.out.println("      -> Frame " + frame.sequenceIndex + " extracted: " + objects.size() + " objects.");
+                    // Instantly check if the extracted objects hit the mask
+                    for (SourceExtractor.DetectedObject obj : objects) {
+                        boolean isPurged = false;
+                        if (obj.rawPixels != null) {
+                            for (SourceExtractor.Pixel p : obj.rawPixels) {
+                                if (p.x >= 0 && p.x < sensorWidth && p.y >= 0 && p.y < sensorHeight) {
+                                    if (masterMask[p.y][p.x]) {
+                                        isPurged = true;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        if (isPurged) {
+                            totalStableStars++;
+                        } else {
+                            totalTransients++;
+                        }
+                    }
                 }
 
                 if (totalObjectsExtracted > MAX_TOTAL_EXTRACTED_OBJECTS || totalObjectsExtracted < MIN_TOTAL_EXTRACTED_OBJECTS) {
-                    if (DEBUG) System.out.println("      [REJECTED] Extracted " + totalObjectsExtracted + " total objects (Out of bounds). Moving to next test.");
+                    if (DEBUG) System.out.println("      [REJECTED] Extracted " + totalObjectsExtracted + " total objects (Out of bounds).");
                     report.append(String.format("Skip -> Sigma: %.1f, MinPix: %d | Extracted %d objects (Out of bounds)%n",
                             sigma, minPix, totalObjectsExtracted));
                     continue;
                 }
 
-                int stableStars = 0;
-                int transients = 0;
-                List<SourceExtractor.DetectedObject> baseFrame = extractedFrames.get(baseIndex);
+                double transientRatio = (totalObjectsExtracted == 0) ? 1.0 : (double) totalTransients / totalObjectsExtracted;
 
-                // --- DETAILED CROSS-MATCH DEBUG ---
-                if (DEBUG) {
-                    System.out.println("      -> Cross-matching " + baseFrame.size() + " objects using Spatial Grid...");
-                }
-
-                // 1. Build the fast-search grids for the other frames
-                List<SpatialGrid> searchGrids = new ArrayList<>();
-                for (int i = 0; i < AUTO_TUNE_SAMPLE_SIZE; i++) {
-                    if (i == baseIndex) {
-                        searchGrids.add(null); // We don't need a grid for the base frame
-                    } else {
-                        // Cell size equal to search radius is highly optimal
-                        searchGrids.add(new SpatialGrid(extractedFrames.get(i), SEARCH_RADIUS_PX));
-                    }
-                }
-
-                // 2. Perform the lightning-fast cross-match
-                for (SourceExtractor.DetectedObject candidate : baseFrame) {
-                    int detections = 1;
-
-                    for (int i = 0; i < AUTO_TUNE_SAMPLE_SIZE; i++) {
-                        if (i == baseIndex) continue;
-
-                        // Instantly ask the grid if there is a match nearby
-                        if (searchGrids.get(i).hasMatch(candidate.x, candidate.y, SEARCH_RADIUS_PX)) {
-                            detections++;
-                        }
-                    }
-
-                    if (detections >= 3) {
-                        stableStars++;
-                    } else {
-                        transients++;
-                    }
-                }
-
-                int totalBaseObjects = baseFrame.size();
-                double transientRatio = (totalBaseObjects == 0) ? 1.0 : (double) transients / totalBaseObjects;
-
-                if (DEBUG) System.out.println(String.format("      [RESULT] Stars: %d | Transients (Noise): %d | Noise Ratio: %.1f%%", stableStars, transients, transientRatio * 100));
+                if (DEBUG) System.out.println(String.format("      [RESULT] Stars: %d | Transients (Noise): %d | Noise Ratio: %.1f%%", totalStableStars, totalTransients, transientRatio * 100));
 
                 report.append(String.format("Test -> Sigma: %.1f, MinPix: %d | Stars: %d | Transients: %d | Ratio: %.1f%%%n",
-                        sigma, minPix, stableStars, transients, transientRatio * 100));
+                        sigma, minPix, totalStableStars, totalTransients, transientRatio * 100));
 
-                boolean isClean = (transientRatio <= MAX_TRANSIENT_RATIO) &&
-                        (stableStars >= MIN_STABLE_STARS);
+                boolean isClean = (transientRatio <= MAX_TRANSIENT_RATIO) && (totalStableStars >= MIN_STABLE_STARS);
 
                 if (isClean) {
-                    double score = stableStars - (transients * SCORE_WEIGHT_TRANSIENT_PENALTY) + (minPix * SCORE_WEIGHT_MINPIX_REWARD);
+                    // Average the stable stars per frame so the scoring formula remains balanced
+                    double avgStableStars = (double) totalStableStars / sampleFrames.size();
+                    double avgTransients = (double) totalTransients / sampleFrames.size();
+
+                    // --- NEW SCORING HEURISTIC ---
+                    // Cap the reward for raw star count. After ~100 stars, the tracker has plenty.
+                    // This forces the algorithm to maximize Sigma (safety) instead of hunting for 5,000 noisy stars.
+                    double cappedStars = Math.min(avgStableStars, OPTIMAL_STAR_COUNT);
+
+                    // Start with the stars, massively penalize noise, and gently penalize higher thresholds
+                    // to force the tuner to find the lowest (most sensitive) clean configuration.
+                    double score = cappedStars
+                            - (avgTransients * SCORE_WEIGHT_TRANSIENT_PENALTY)
+                            - (sigma * SCORE_WEIGHT_SIGMA_PENALTY)
+                            - (minPix * SCORE_WEIGHT_MINPIX_PENALTY);
 
                     if (DEBUG) System.out.println("      [SCORE] Configuration passed noise gates! Score: " + score);
 
                     if (score > bestScore) {
                         if (DEBUG) System.out.println("      *** NEW BEST CONFIGURATION FOUND ***");
                         bestScore = score;
-                        maxStableStars = stableStars;
+                        maxStableStars = totalStableStars; // Keep raw total for telemetry
                         bestConfig = testConfig;
                         bestRatio = transientRatio;
                         bestExtractedFrames = extractedFrames;
@@ -249,24 +290,28 @@ public class JTransientAutoTuner {
             List<Double> jitterDistances = new ArrayList<>();
             List<Double> elongations = new ArrayList<>();
 
-            List<SourceExtractor.DetectedObject> frameA = bestExtractedFrames.get(baseIndex);
-            List<SourceExtractor.DetectedObject> frameB = bestExtractedFrames.get(baseIndex + 1);
+            // Measure jitter between consecutive frames in the best extraction
+            for (int i = 0; i < bestExtractedFrames.size() - 1; i++) {
+                List<SourceExtractor.DetectedObject> frameA = bestExtractedFrames.get(i);
+                List<SourceExtractor.DetectedObject> frameB = bestExtractedFrames.get(i + 1);
 
-            for (SourceExtractor.DetectedObject objA : frameA) {
-                elongations.add(objA.elongation);
+                for (SourceExtractor.DetectedObject objA : frameA) {
+                    elongations.add(objA.elongation);
 
-                double closestDist = Double.MAX_VALUE;
-                for (SourceExtractor.DetectedObject objB : frameB) {
-                    double dx = objA.x - objB.x;
-                    double dy = objA.y - objB.y;
-                    double dist = Math.sqrt(dx * dx + dy * dy);
-                    if (dist < closestDist) {
-                        closestDist = dist;
+                    double closestDist = Double.MAX_VALUE;
+                    for (SourceExtractor.DetectedObject objB : frameB) {
+                        double dx = objA.x - objB.x;
+                        double dy = objA.y - objB.y;
+                        double dist = Math.sqrt(dx * dx + dy * dy);
+                        if (dist < closestDist) {
+                            closestDist = dist;
+                        }
                     }
-                }
 
-                if (closestDist <= SEARCH_RADIUS_PX) {
-                    jitterDistances.add(closestDist);
+                    // We only care about objects that are clearly stationary
+                    if (closestDist <= SEARCH_RADIUS_PX) {
+                        jitterDistances.add(closestDist);
+                    }
                 }
             }
 
@@ -358,8 +403,6 @@ public class JTransientAutoTuner {
         bestFrames.sort(Comparator.comparingInt(f -> f.sequenceIndex));
         return bestFrames;
     }
-
-
 
     // =====================================================================
 

@@ -10,6 +10,7 @@
 package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.core.MasterMapGenerator;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.core.TrackLinker;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
@@ -141,17 +142,28 @@ public class JTransientEngine {
         }
 
         // 1. Mathematically stack the surviving frames to erase transients
-        short[][] masterStackData = SourceExtractor.createMedianMasterStack(cleanFrames);
+        // (Note: Retained SourceExtractor call to match your current architecture)
+        short[][] masterStackData = MasterMapGenerator.createMedianMasterStack(cleanFrames);
 
-        // --- ULTRA-DEEP MASTER MAP EXTRACTION ---
-        // Paint every microscopic faint star onto the Binary Mask canvas!
-        double masterSigma = 1.5;
-        int masterMinPix = 2;
+        // --- DYNAMIC MASTER MAP PARAMETERS ---
+        // Scale sensitivity based on user config, but enforce absolute safety floors
+        double masterSigma = Math.max(1.5, config.detectionSigmaMultiplier / 2.0);
+        int masterMinPix = Math.max(2, config.minDetectionPixels / 3);
+
+        // Note: config.growSigmaMultiplier is deliberately left exactly as the user configured it.
 
         if (DEBUG) {
-            System.out.printf("DEBUG: Extracting Master Map with ultra-deep parameters (Sigma: %.2f, MinPix: %d)%n",
-                    masterSigma, masterMinPix);
+            System.out.printf("DEBUG: Master Map Config -> Master Sigma: %.2f | Master Grow: %.2f | Master MinPix: %d%n",
+                    masterSigma, config.growSigmaMultiplier, masterMinPix);
         }
+
+        // --- NARROW MARGIN TRICK FOR MASTER MAP ---
+        // Force extraction to the very edge of the sensor to map edge artifacts
+        int originalEdgeMargin = config.edgeMarginPixels;
+        int originalVoidProximity = config.voidProximityRadius;
+
+        config.edgeMarginPixels = 5;
+        config.voidProximityRadius = 5;
 
         // 2. Extract every stable star and galaxy from the deep stack
         List<SourceExtractor.DetectedObject> masterStars = SourceExtractor.extractSources(
@@ -160,6 +172,10 @@ public class JTransientEngine {
                 masterMinPix,
                 config
         );
+
+        // --- RESTORE ORIGINAL CONFIGURATION ---
+        config.edgeMarginPixels = originalEdgeMargin;
+        config.voidProximityRadius = originalVoidProximity;
 
         if (DEBUG) {
             System.out.println("DEBUG: Master Stack generated. Found " + masterStars.size() + " deep stationary objects.");
@@ -171,6 +187,9 @@ public class JTransientEngine {
         if (DEBUG) {
             System.out.println("\n--- JTRANSIENT: PHASE 4 (Track Linking) ---");
         }
+
+        int sensorHeight = masterStackData.length;
+        int sensorWidth = masterStackData[0].length;
 
         // Pass BOTH the clean frame extractions and the master stars into the Linker
         TrackLinker.TrackingResult trackResult = TrackLinker.findMovingObjects(

@@ -10,14 +10,11 @@
 package io.github.ppissias.jtransient.core;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
-import io.github.ppissias.jtransient.engine.ImageFrame;
 import io.github.ppissias.jtransient.engine.JTransientEngine;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Queue;
-import java.util.stream.IntStream;
 
 public class SourceExtractor {
 
@@ -35,9 +32,7 @@ public class SourceExtractor {
         public int pixelCount;
         public double peakSigma; // For Anomaly Detection
 
-        public boolean isNearAnomalyEdge = false; // <--- NEW: Flag for TrackLinker Phase 5
-
-        // Save the exact blob mask for UI Visualization
+        // Save the exact blob mask for UI Visualization (Populated only if DEBUG is true)
         public List<Pixel> rawPixels = null;
 
         // Size metric for TrackLinker Morphological Filtering
@@ -83,37 +78,10 @@ public class SourceExtractor {
     // CORE EXTRACTION PIPELINE
     // =================================================================
 
-    public static short[][] createMedianMasterStack(List<ImageFrame> frames) {
-        if (frames == null || frames.isEmpty()) return null;
-
-        int height = frames.get(0).pixelData.length;
-        int width = frames.get(0).pixelData[0].length;
-        int numFrames = frames.size();
-
-        short[][] masterMap = new short[height][width];
-
-        if (JTransientEngine.DEBUG) {
-            System.out.println("\n[PHASE 0] Generating Median Master Stack across " + numFrames + " frames...");
-        }
-
-        IntStream.range(0, height).parallel().forEach(y -> {
-            short[] pixelValues = new short[numFrames];
-            for (int x = 0; x < width; x++) {
-                for (int i = 0; i < numFrames; i++) {
-                    pixelValues[i] = frames.get(i).pixelData[y][x];
-                }
-                Arrays.sort(pixelValues);
-                masterMap[y][x] = pixelValues[numFrames / 2];
-            }
-        });
-
-        if (JTransientEngine.DEBUG) {
-            System.out.println("  -> Master Stack generation complete.");
-        }
-
-        return masterMap;
-    }
-
+    /**
+     * Main method to run the detection pipeline on a single frame.
+     * Allows overriding the primary thresholds (used by FrameQualityAnalyzer).
+     */
     public static List<DetectedObject> extractSources(short[][] image, double sigmaMultiplier, int minPixels, DetectionConfig config) {
         int height = image.length;
         int width = image[0].length;
@@ -136,6 +104,7 @@ public class SourceExtractor {
         List<DetectedObject> detectedObjects = new ArrayList<>();
         boolean[][] visited = new boolean[height][width];
 
+        // --- DEBUG TELEMETRY COUNTERS ---
         int statBfsTriggers = 0;
         int statRejectedNoise = 0;
         int statRejectedEdge = 0;
@@ -181,12 +150,21 @@ public class SourceExtractor {
                     // 4. Centroiding and Filtering
                     if (currentBlob.size() >= minPixels) {
 
-                        DetectedObject obj = analyzeShape(currentBlob, bg, config, minPixels);
+                        // Removed redundant minPixels parameter
+                        DetectedObject obj = analyzeShape(currentBlob, bg, config);
+
+                        if (obj.isNoise) {
+                            statRejectedNoise++;
+                            continue;
+                        }
+                        // --- MEMORY OPTIMIZATION ---
+                        // Only attach the raw pixels if we are debugging/tuning the UI.
+                        //if (JTransientEngine.DEBUG) {
                         obj.rawPixels = currentBlob;
-                        obj.pixelArea = currentBlob.size();
+                        //}
 
                         // ==========================================================
-                        // STANDARD FILTER 1: PHYSICAL SENSOR EDGE (Centroid based)
+                        // FILTER 1: PHYSICAL SENSOR EDGE
                         // ==========================================================
                         if (obj.x < config.edgeMarginPixels || obj.x >= (width - config.edgeMarginPixels) ||
                                 obj.y < config.edgeMarginPixels || obj.y >= (height - config.edgeMarginPixels)) {
@@ -194,13 +172,8 @@ public class SourceExtractor {
                             continue;
                         }
 
-                        if (obj.isNoise) {
-                            statRejectedNoise++;
-                            continue;
-                        }
-
                         // ==========================================================
-                        // STANDARD FILTER 2: FAST VIRTUAL EDGE (Centroid based)
+                        // FILTER 2: FAST VIRTUAL EDGE (ALIGNMENT VOID) CHECK
                         // ==========================================================
                         boolean nearVirtualEdge = false;
                         int vr = config.voidProximityRadius;
@@ -231,52 +204,7 @@ public class SourceExtractor {
                             continue;
                         }
 
-                        // ==========================================================
-                        // NEW: STRICT ANOMALY BOUNDARY FLAG (Bounding Box Based)
-                        // ==========================================================
-                        // We do NOT discard the object here so it stays in the Master Map.
-                        // We just flag it so Phase 5 knows not to rescue it!
-
-                        int minX = width, maxX = 0, minY = height, maxY = 0;
-                        for (Pixel p : currentBlob) {
-                            if (p.x < minX) minX = p.x;
-                            if (p.x > maxX) maxX = p.x;
-                            if (p.y < minY) minY = p.y;
-                            if (p.y > maxY) maxY = p.y;
-                        }
-
-                        int combinedMargin = config.voidProximityRadius + +config.edgeMarginPixels + config.anomalyMinPixels + 1;
-
-
-                        // Strict Physical Edge Check
-                        boolean strictEdge = (minX < combinedMargin || maxX >= (width - combinedMargin) ||
-                                minY < combinedMargin || maxY >= (height - combinedMargin));
-
-                        boolean strictVoid = false;
-                        if (!strictEdge) {
-                            int cxBox = (minX + maxX) / 2;
-                            int cyBox = (minY + maxY) / 2;
-                            int[] apx = {minX - combinedMargin, maxX + combinedMargin, cxBox, cxBox, minX - combinedMargin, maxX + combinedMargin, minX - combinedMargin, maxX + combinedMargin};
-                            int[] apy = {cyBox, cyBox, minY - combinedMargin, maxY + combinedMargin, minY - combinedMargin, minY - combinedMargin, maxY + combinedMargin, maxY + combinedMargin};
-
-                            for (int i = 0; i < 8; i++) {
-                                int testX = apx[i];
-                                int testY = apy[i];
-
-                                if (testX < 0 || testX >= width || testY < 0 || testY >= height) {
-                                    strictVoid = true;
-                                    break;
-                                }
-                                int vValue = image[testY][testX] + 32768;
-                                if (vValue <= voidValueThreshold) {
-                                    strictVoid = true;
-                                    break;
-                                }
-                            }
-                        }
-
-                        obj.isNearAnomalyEdge = strictEdge || strictVoid;
-
+                        obj.pixelArea = currentBlob.size();
                         detectedObjects.add(obj);
                     } else {
                         statRejectedNoise++;
@@ -285,6 +213,7 @@ public class SourceExtractor {
             }
         }
 
+        // --- PRINT FINAL FRAME TELEMETRY SUMMARY ---
         if (JTransientEngine.DEBUG) {
             System.out.printf("  -> Extracted %d valid objects. [BFS Triggers: %d | Rejected Noise: %d | Rejected Edge: %d | Rejected Void: %d]%n",
                     detectedObjects.size(), statBfsTriggers, statRejectedNoise, statRejectedEdge, statRejectedVoid);
@@ -293,6 +222,9 @@ public class SourceExtractor {
         return detectedObjects;
     }
 
+    /**
+     * Fast Histogram-based background estimation using Iterative Sigma Clipping.
+     */
     public static BackgroundMetrics calculateBackgroundSigmaClipped(short[][] image, int width, int height, double sigmaMultiplier, DetectionConfig config) {
         BackgroundMetrics metrics = new BackgroundMetrics();
         int[] histogram = new int[65536];
@@ -347,7 +279,10 @@ public class SourceExtractor {
         return metrics;
     }
 
-    public static DetectedObject analyzeShape(List<Pixel> blob, BackgroundMetrics bg, DetectionConfig config, int minPixels) {
+    /**
+     * Calculates the centroid, elongation, and angle of a pixel blob using Image Moments.
+     */
+    public static DetectedObject analyzeShape(List<Pixel> blob, BackgroundMetrics bg, DetectionConfig config) {
         DetectedObject obj = new DetectedObject(0,0,0,0);
 
         // Calculate Peak Sigma for Anomaly Rescue
@@ -406,17 +341,21 @@ public class SourceExtractor {
         double sigmaSq = lambda1 + lambda2;
         obj.fwhm = 2.355 * Math.sqrt(sigmaSq);
 
-        if (obj.elongation > config.streakMinElongation && blob.size() > config.streakMinPixels) {
-            obj.isStreak = true;
-            obj.isNoise = false;
-        }
-        else if (obj.elongation <= config.streakMinElongation && blob.size() >= minPixels) {
+        // --- CLEANED UP MORPHOLOGICAL CLASSIFICATION ---
+        if (obj.elongation > config.streakMinElongation) {
+            if (blob.size() >= config.streakMinPixels) {
+                // It is long enough and large enough. It's a real streak.
+                obj.isStreak = true;
+                obj.isNoise = false;
+            } else {
+                // It is elongated, but too small. It's a cosmic ray strike or glitch.
+                obj.isStreak = false;
+                obj.isNoise = true;
+            }
+        } else {
+            // It is relatively round, and we already know it passed the outer minPixels check. It's a point source!
             obj.isStreak = false;
             obj.isNoise = false;
-        }
-        else {
-            obj.isStreak = false;
-            obj.isNoise = true;
         }
 
         return obj;
