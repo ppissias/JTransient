@@ -24,6 +24,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class JTransientEngine {
 
@@ -42,10 +43,14 @@ public class JTransientEngine {
     /**
      * The single entry point for the JTransient library.
      */
-    public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config) throws Exception {
+    public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
         long startTime = System.currentTimeMillis();
         PipelineTelemetry telemetry = new PipelineTelemetry();
         telemetry.totalFramesLoaded = inputFrames.size();
+
+        if (listener != null) {
+            listener.onProgressUpdate(0, "Initializing pipeline...");
+        }
 
         if (DEBUG) {
             System.out.println("\n--- JTRANSIENT: PHASE 1 (Extraction) ---");
@@ -55,6 +60,10 @@ public class JTransientEngine {
 
         // Ensure input frames are sorted chronologically before processing
         inputFrames.sort(Comparator.comparingInt(f -> f.sequenceIndex));
+
+        // --- SAFE CONCURRENT PROGRESS TRACKING ---
+        int totalFrames = inputFrames.size();
+        AtomicInteger framesCompleted = new AtomicInteger(0);
 
         for (ImageFrame frame : inputFrames) {
             tasks.add(() -> {
@@ -79,6 +88,13 @@ public class JTransientEngine {
                 result.frameIndex = frame.sequenceIndex;
                 result.extractedObjects = objectsInFrame;
                 result.metrics = metrics;
+
+                // Safely update progress from multiple threads (Mapping Phase 1 to 0-40% of the total bar)
+                int completed = framesCompleted.incrementAndGet();
+                if (listener != null) {
+                    int progress = (int) ((completed / (double) totalFrames) * 40.0);
+                    listener.onProgressUpdate(progress, "Extracting features from frame " + completed + " of " + totalFrames);
+                }
 
                 return result;
             });
@@ -112,6 +128,10 @@ public class JTransientEngine {
             System.out.println("\n--- JTRANSIENT: PHASE 2 & 3 (Quality Filter) ---");
         }
 
+        if (listener != null) {
+            listener.onProgressUpdate(42, "Filtering outlier frames...");
+        }
+
         // Pass the config down to the evaluator
         SessionEvaluator.rejectOutlierFrames(sessionMetrics, config);
 
@@ -141,8 +161,11 @@ public class JTransientEngine {
             System.out.println("\n--- JTRANSIENT: PHASE 0 (Master Map Generation) ---");
         }
 
+        if (listener != null) {
+            listener.onProgressUpdate(45, "Generating Median Master Stack...");
+        }
+
         // 1. Mathematically stack the surviving frames to erase transients
-        // (Note: Retained SourceExtractor call to match your current architecture)
         short[][] masterStackData = MasterMapGenerator.createMedianMasterStack(cleanFrames);
 
         // --- DYNAMIC MASTER MAP PARAMETERS ---
@@ -155,6 +178,10 @@ public class JTransientEngine {
         if (DEBUG) {
             System.out.printf("DEBUG: Master Map Config -> Master Sigma: %.2f | Master Grow: %.2f | Master MinPix: %d%n",
                     masterSigma, config.growSigmaMultiplier, masterMinPix);
+        }
+
+        if (listener != null) {
+            listener.onProgressUpdate(48, "Extracting Master Star Map...");
         }
 
         // --- NARROW MARGIN TRICK FOR MASTER MAP ---
@@ -188,14 +215,23 @@ public class JTransientEngine {
             System.out.println("\n--- JTRANSIENT: PHASE 4 (Track Linking) ---");
         }
 
-        int sensorHeight = masterStackData.length;
-        int sensorWidth = masterStackData[0].length;
+        // --- THE PROXY LISTENER ---
+        // We pass a synthetic listener to the Linker. It maps the Linker's 0-100% to the Engine's 50-100% range!
+        TransientEngineProgressListener trackingProxyListener = null;
+        if (listener != null) {
+            trackingProxyListener = (percentage, message) -> {
+                int scaledProgress = 50 + (percentage / 2);
+                listener.onProgressUpdate(scaledProgress, message);
+            };
+        }
 
-        // Pass BOTH the clean frame extractions and the master stars into the Linker
+        // NOTE: Make sure your TrackLinker.findMovingObjects method signature is updated to accept the new listener!
+        // (You might also need to pass sensorWidth and sensorHeight here if you kept the Phase 5 boundary check)
         TrackLinker.TrackingResult trackResult = TrackLinker.findMovingObjects(
                 cleanFramesData,
                 masterStars,
-                config
+                config,
+                trackingProxyListener
         );
 
         // Map the track results back to our main telemetry object
@@ -203,6 +239,10 @@ public class JTransientEngine {
         telemetry.trackerTelemetry = trackResult.telemetry;
 
         telemetry.processingTimeMs = System.currentTimeMillis() - startTime;
+
+        if (listener != null) {
+            listener.onProgressUpdate(100, "Processing Complete!");
+        }
 
         // Return the unified result with the new Master Data payloads!
         return new PipelineResult(trackResult.tracks, telemetry, masterStackData, masterStars);

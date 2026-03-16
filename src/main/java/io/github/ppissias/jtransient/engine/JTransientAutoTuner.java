@@ -97,12 +97,16 @@ public class JTransientAutoTuner {
     /**
      * Automatically determines the optimal extraction and kinematic settings for a given image sequence.
      */
-    public static AutoTunerResult tune(List<ImageFrame> sampleFrames, DetectionConfig baseConfig) {
+    public static AutoTunerResult tune(List<ImageFrame> sampleFrames, DetectionConfig baseConfig, TransientEngineProgressListener listener) { // <--- Added Listener
         if (DEBUG) {
             System.out.println("\n==================================================");
             System.out.println("      JTRANSIENT AUTO-TUNER INITIALIZED");
             System.out.println("==================================================");
             System.out.println("Total frames to process: " + sampleFrames.size());
+        }
+
+        if (listener != null) {
+            listener.onProgressUpdate(0, "Initializing Auto-Tuner...");
         }
 
         AutoTunerResult result = new AutoTunerResult();
@@ -118,6 +122,10 @@ public class JTransientAutoTuner {
 
         int sensorHeight = sampleFrames.get(0).pixelData.length;
         int sensorWidth = sampleFrames.get(0).pixelData[0].length;
+
+        if (listener != null) {
+            listener.onProgressUpdate(5, "Generating sample Master Stack...");
+        }
 
         // --- Generate the Master Stack once for the entire tuning process! ---
         if (DEBUG) System.out.println("\n[PRE-COMPUTE] Generating Master Stack for Auto-Tuning Sample...");
@@ -136,8 +144,19 @@ public class JTransientAutoTuner {
         double bestRatio = 1.0;
         double bestScore = -Double.MAX_VALUE;
 
+        // --- PREPARE FOR PROGRESS TRACKING ---
+        int totalCombinations = MIN_PIXELS_TO_TEST.length * SIGMAS_TO_TEST.length;
+        int currentCombination = 0;
+
         for (int minPix : MIN_PIXELS_TO_TEST) {
             for (double sigma : SIGMAS_TO_TEST) {
+
+                currentCombination++;
+                if (listener != null) {
+                    // Map this nested loop to progress from 5% to 90%
+                    int progress = 5 + (int) (((double) currentCombination / totalCombinations) * 85.0);
+                    listener.onProgressUpdate(progress, String.format("Testing Thresholds: Sigma %.1f, MinPix %d", sigma, minPix));
+                }
 
                 if (DEBUG) {
                     System.out.println("\n--------------------------------------------------");
@@ -281,6 +300,11 @@ public class JTransientAutoTuner {
         // PHASE 2: OPTICAL & KINEMATIC MEASUREMENT
         // =====================================================================
         if (bestConfig != null && bestExtractedFrames != null) {
+
+            if (listener != null) {
+                listener.onProgressUpdate(92, "Measuring optical jitter and morphology...");
+            }
+
             if (DEBUG) {
                 System.out.println("\n--------------------------------------------------");
                 System.out.println("[START] Phase 2: Optical & Kinematic Measurement...");
@@ -354,9 +378,16 @@ public class JTransientAutoTuner {
             result.bestTransientRatio = bestRatio;
             result.success = true;
 
+            if (listener != null) {
+                listener.onProgressUpdate(100, "Auto-Tuning Complete!");
+            }
+
             if (DEBUG) System.out.println("\n[SUCCESS] Auto-Tuning Complete.");
 
         } else {
+            if (listener != null) {
+                listener.onProgressUpdate(100, "Auto-Tuning Failed. Using base config.");
+            }
             if (DEBUG) System.err.println("\n[FAILED] Could not find stable configuration. Falling back to base settings.");
             report.append("\nFAILED TO FIND STABLE CONFIGURATION. FALLING BACK TO BASE SETTINGS.\n");
             result.optimizedConfig = baseConfig;

@@ -11,6 +11,7 @@ package io.github.ppissias.jtransient.core;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.engine.JTransientEngine;
+import io.github.ppissias.jtransient.engine.TransientEngineProgressListener;
 import io.github.ppissias.jtransient.telemetry.TrackerTelemetry;
 
 import java.util.ArrayList;
@@ -51,10 +52,15 @@ public class TrackLinker {
     public static TrackingResult findMovingObjects(
             List<List<SourceExtractor.DetectedObject>> allFrames,
             List<SourceExtractor.DetectedObject> masterStars,
-            DetectionConfig config) {
+            DetectionConfig config,
+            TransientEngineProgressListener listener) { // <--- Added Listener
 
         int numFrames = allFrames.size();
         if (JTransientEngine.DEBUG) System.out.println("\nDEBUG: [START] findMovingObjects initialized with " + numFrames + " frames.");
+
+        if (listener != null) {
+            listener.onProgressUpdate(0, "Initializing tracking engine...");
+        }
 
         if (numFrames < 3) {
             if (JTransientEngine.DEBUG) System.out.println("DEBUG: [ABORT] Less than 3 frames provided. Cannot form point tracks.");
@@ -63,6 +69,10 @@ public class TrackLinker {
 
         List<Track> confirmedTracks = new ArrayList<>();
         double angleToleranceRad = Math.toRadians(config.angleToleranceDegrees);
+
+        if (listener != null) {
+            listener.onProgressUpdate(5, "Purging stationary defects...");
+        }
 
         // =================================================================
         // PHASE 1: Separate Streaks and Purge Stationary Defects
@@ -95,6 +105,10 @@ public class TrackLinker {
         }
 
         if (JTransientEngine.DEBUG) System.out.println("DEBUG: Purged " + (rawStreaks.size() - validMovingStreaks.size()) + " stationary hot columns.");
+
+        if (listener != null) {
+            listener.onProgressUpdate(15, "Linking fast-moving streaks...");
+        }
 
         // =================================================================
         // PHASE 2: LINK FAST-MOVING STREAKS
@@ -132,6 +146,10 @@ public class TrackLinker {
             streakTracksFound++;
         }
         if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 2] Completed. Found " + streakTracksFound + " streak track(s).");
+
+        if (listener != null) {
+            listener.onProgressUpdate(25, "Building Binary Veto Mask...");
+        }
 
         // =================================================================
         // PHASE 3: BINARY MASK MASTER STAR MAP VETO
@@ -215,6 +233,13 @@ public class TrackLinker {
 
         // 4. Evaluate Transients against the Mask
         for (int i = 0; i < numFrames; i++) {
+
+            // --- SMOOTH PROGRESS TRACKING FOR PHASE 3 (25% to 50%) ---
+            if (listener != null) {
+                int progress = 25 + (int) (((double) i / numFrames) * 25.0);
+                listener.onProgressUpdate(progress, "Applying Veto Mask: Frame " + (i + 1) + " of " + numFrames);
+            }
+
             List<SourceExtractor.DetectedObject> currentFrame = pointSourcesOnly.get(i);
             List<SourceExtractor.DetectedObject> frameTransients = new ArrayList<>();
             int purgedCount = 0;
@@ -283,7 +308,15 @@ public class TrackLinker {
         List<Track> pointTracks = new ArrayList<>();
         Set<SourceExtractor.DetectedObject> usedPoints = new HashSet<>();
 
-        for (int f1 = 0; f1 < numFrames - 2; f1++) {
+        int loopMax = numFrames - 2;
+        for (int f1 = 0; f1 < loopMax; f1++) {
+
+            // --- SMOOTH PROGRESS TRACKING FOR PHASE 4 (50% to 90%) ---
+            if (listener != null) {
+                int progress = 50 + (int) (((double) f1 / loopMax) * 40.0);
+                listener.onProgressUpdate(progress, "Analyzing kinematics: Frame " + (f1 + 1) + " of " + loopMax);
+            }
+
             for (SourceExtractor.DetectedObject p1 : transients.get(f1)) {
                 if (usedPoints.contains(p1)) continue;
 
@@ -384,8 +417,8 @@ public class TrackLinker {
                                     prunedPoints.add(pB);
                                 } else {
                                     //if (JTransientEngine.DEBUG) {
-                                        //System.out.printf("         *** PRUNING: Dropped hijacked point at frame %d. (Stalled segment: %.2f px) ***%n",
-                                        //        pB.sourceFrameIndex, stepDist);
+                                    //System.out.printf("         *** PRUNING: Dropped hijacked point at frame %d. (Stalled segment: %.2f px) ***%n",
+                                    //        pB.sourceFrameIndex, stepDist);
                                     //}
                                 }
                             }
@@ -419,10 +452,10 @@ public class TrackLinker {
                                             //        trackStart.x, trackStart.y, currentTrack.points.size());
 
                                             if (distToMaster > 0) {
-                                            //    System.out.printf("            -> DIAGNOSTIC: Nearest Master Centroid is %.2f pixels away. (Veto radius was %.2f)%n",
-                                            //            distToMaster, expandedStarJitter);
+                                                //    System.out.printf("            -> DIAGNOSTIC: Nearest Master Centroid is %.2f pixels away. (Veto radius was %.2f)%n",
+                                                //            distToMaster, expandedStarJitter);
                                             } else {
-                                             //   System.out.println("            -> DIAGNOSTIC: NO Master Centroid found within 30 pixels!");
+                                                //   System.out.println("            -> DIAGNOSTIC: NO Master Centroid found within 30 pixels!");
                                             }
                                         }
                                     } else {
@@ -442,6 +475,10 @@ public class TrackLinker {
                     }
                 }
             }
+        }
+
+        if (listener != null) {
+            listener.onProgressUpdate(90, "Scanning for high-energy anomalies...");
         }
 
         // =================================================================
@@ -468,7 +505,7 @@ public class TrackLinker {
 
                             if (JTransientEngine.DEBUG) {
                                 //System.out.printf("         [ANOMALY RESCUED] Huge transient found at Frame %d (X:%.1f, Y:%.1f). Area: %.1f px, Peak Sigma: %.1f%n",
-                                 //       orphan.sourceFrameIndex, orphan.x, orphan.y, orphan.pixelArea, orphan.peakSigma);
+                                //       orphan.sourceFrameIndex, orphan.x, orphan.y, orphan.pixelArea, orphan.peakSigma);
                             }
                         }
                     }
@@ -507,6 +544,10 @@ public class TrackLinker {
             System.out.println("   - Slow Point Tracks (Phase 4)   : " + telemetry.pointTracksFound);
             System.out.println("   - TOTAL MOVING TARGETS FOUND    : " + (telemetry.streakTracksFound + telemetry.pointTracksFound));
             System.out.println("--------------------------------------------------\n");
+        }
+
+        if (listener != null) {
+            listener.onProgressUpdate(100, "Finalizing track telemetry...");
         }
 
         confirmedTracks.addAll(pointTracks);
