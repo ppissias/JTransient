@@ -142,8 +142,20 @@ public class TrackLinker {
                     }
                 }
             }
-            confirmedTracks.add(continuousStreakTrack);
-            streakTracksFound++;
+            
+            // Apply dedicated sigma filter for single-frame streaks to prevent false positives
+            if (continuousStreakTrack.points.size() == 1) {
+                if (baseStreak.peakSigma >= config.singleStreakMinPeakSigma) {
+                    confirmedTracks.add(continuousStreakTrack);
+                    streakTracksFound++;
+                } else {
+                    // if (JTransientEngine.DEBUG) System.out.println("DEBUG: Rejected faint single streak at frame " + baseStreak.sourceFrameIndex + " (Peak Sigma: " + baseStreak.peakSigma + " < " + config.singleStreakMinPeakSigma + ")");
+                }
+            } else {
+                // Multi-frame streaks are kinematically validated, so they bypass this filter
+                confirmedTracks.add(continuousStreakTrack);
+                streakTracksFound++;
+            }
         }
         if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 2] Completed. Found " + streakTracksFound + " streak track(s).");
 
@@ -559,6 +571,8 @@ public class TrackLinker {
     // =================================================================
 
     private static boolean isSizeConsistent(SourceExtractor.DetectedObject obj1, SourceExtractor.DetectedObject obj2, double maxRatio) {
+        if (maxRatio <= 0.0) return true; // Disabled via config
+        
         double size1 = Math.max(obj1.pixelArea, 1.0);
         double size2 = Math.max(obj2.pixelArea, 1.0);
         double ratio = Math.max(size1, size2) / Math.min(size1, size2);
@@ -635,6 +649,8 @@ public class TrackLinker {
     }
 
     private static boolean isBrightnessConsistent(SourceExtractor.DetectedObject obj1, SourceExtractor.DetectedObject obj2, double maxRatio) {
+        if (maxRatio <= 0.0) return true; // Disabled via config
+        
         double flux1 = Math.max(Math.abs(obj1.totalFlux), 1.0);
         double flux2 = Math.max(Math.abs(obj2.totalFlux), 1.0);
         double ratio = Math.max(flux1, flux2) / Math.min(flux1, flux2);

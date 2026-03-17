@@ -63,7 +63,12 @@ public class DetectionConfig {
     /** * Secondary size filter for streaks. To be officially tagged as a streak, the elongated object
      * must have at least this many pixels.
      */
-    public int streakMinPixels = 10;
+    public int streakMinPixels = 25;
+
+    /** * Dedicated filter for single-frame streaks to prevent elongated noise/artifacts from being flagged.
+     * A streak that appears in only one frame must have a peak signal-to-noise ratio (Sigma) above this value.
+     */
+    public double singleStreakMinPeakSigma = 15.0;
 
 
     /** * Number of passes used in the iterative histogram calculation to mathematically chop off
@@ -169,7 +174,7 @@ public class DetectionConfig {
     /** * Kinematic Speed Check: Max allowed pixel deviation from the expected median speed to still
      * be considered part of a "steady rhythm".
      */
-    public double rhythmAllowedVariance = 5.0;
+    public double rhythmAllowedVariance = 8.0;
 
     /** * Kinematic Speed Check: Minimum percentage of jumps (e.g., 0.70 = 70%) that must
      * strictly match the median track speed within the allowed variance.
@@ -232,4 +237,5 @@ public class DetectionConfig {
 
     /** * The minimum physical size a single-frame point must have to be rescued.
      * Prevents single hot-pixels or cosmic rays from being flagged. */
-    public int anomalyMinPixels = 25;}
+    public int anomalyMinPixels = 25;
+}
