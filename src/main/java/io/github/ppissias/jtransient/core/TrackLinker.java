@@ -282,6 +282,17 @@ public class TrackLinker {
                     purgedCount++;
                 } else {
                     frameTransients.add(candidateObj);
+                    
+                    // --- FORENSIC DEBUG TRACE ---
+                    //if (JTransientEngine.DEBUG) {
+                    //    double nearestDist = Double.MAX_VALUE;
+                    //    for (SourceExtractor.DetectedObject ms : masterStars) {
+                     //       double d = distance(candidateObj.x, candidateObj.y, ms.x, ms.y);
+                    //        if (d < nearestDist) nearestDist = d;
+                    //    }
+                    //    System.out.printf("      -> [VETO SURVIVOR] Frame %d: Object at (X:%.1f, Y:%.1f) Area: %.1fpx. Nearest Master Star is %.2f pixels away!%n",
+                    //            i, candidateObj.x, candidateObj.y, candidateObj.pixelArea, nearestDist);
+                   // }
                 }
             }
 

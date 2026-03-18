@@ -24,13 +24,13 @@ public class DetectionConfig {
      * The engine calculates the background median and sigma (noise).
      * A pixel must be strictly brighter than (Median + (Sigma * detectionSigmaMultiplier)) to spawn a new object.
      */
-    public double detectionSigmaMultiplier = 7.0;
+    public double detectionSigmaMultiplier = 4.5;
 
     /** * Dual-Thresholding (Hysteresis): Once a bright "seed" pixel is found, the Breadth-First Search (BFS)
      * algorithm expands outward, absorbing neighbors. It stops when pixel values drop below this secondary, lower threshold.
      * This prevents "region spilling" (leaking into the noise) while capturing the faint, fading edges of real streaks.
      */
-    public double growSigmaMultiplier = 1.5;
+    public double growSigmaMultiplier = 2.5;
 
     /** * The absolute physical floor. If the BFS region-growing finishes and the total blob size is
      * less than this value, it is immediately discarded as read-noise or a hot pixel.
