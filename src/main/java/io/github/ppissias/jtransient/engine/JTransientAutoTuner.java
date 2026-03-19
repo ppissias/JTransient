@@ -55,7 +55,7 @@ public class JTransientAutoTuner {
     public static int MIN_TOTAL_EXTRACTED_OBJECTS = 10;
 
     // The parameter grid to sweep during Phase 1
-    public static double[] SIGMAS_TO_TEST = {2.5, 3.0, 3.5, 4.0, 5.0, 6.0, 7.0};
+    public static double[] SIGMAS_TO_TEST = {4.0, 5.0,  6.0, 7.0};
     public static int[] MIN_PIXELS_TO_TEST = {3, 5, 7, 9, 12};
 
 

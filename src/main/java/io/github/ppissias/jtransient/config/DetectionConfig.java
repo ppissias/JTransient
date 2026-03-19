@@ -24,13 +24,13 @@ public class DetectionConfig {
      * The engine calculates the background median and sigma (noise).
      * A pixel must be strictly brighter than (Median + (Sigma * detectionSigmaMultiplier)) to spawn a new object.
      */
-    public double detectionSigmaMultiplier = 4.5;
+    public double detectionSigmaMultiplier = 5;
 
     /** * Dual-Thresholding (Hysteresis): Once a bright "seed" pixel is found, the Breadth-First Search (BFS)
      * algorithm expands outward, absorbing neighbors. It stops when pixel values drop below this secondary, lower threshold.
      * This prevents "region spilling" (leaking into the noise) while capturing the faint, fading edges of real streaks.
      */
-    public double growSigmaMultiplier = 2.5;
+    public double growSigmaMultiplier = 3;
 
     /** * The absolute physical floor. If the BFS region-growing finishes and the total blob size is
      * less than this value, it is immediately discarded as read-noise or a hot pixel.
@@ -184,7 +184,7 @@ public class DetectionConfig {
     /** * Morphological Filter: When linking points, the physical pixel area cannot differ by more than this ratio.
      * Prevents linking a massive, bright asteroid to a tiny, faint noise blip.
      */
-    public double maxSizeRatio = 3.0;
+    public double maxSizeRatio = 0;
 
     /** * Kinematic Speed Check: Max allowed pixel deviation from the expected median speed to still
      * be considered part of a "steady rhythm".
@@ -203,7 +203,7 @@ public class DetectionConfig {
 
     /** * Photometric Filter: When linking points, the total brightness (flux) cannot differ by more than this ratio.
      */
-    public double maxFluxRatio = 3.0;
+    public double maxFluxRatio = 0;
 
     // =================================================================
     // 4. SESSION EVALUATOR PARAMETERS
@@ -248,7 +248,7 @@ public class DetectionConfig {
 
     /** * The minimum Peak Signal-to-Noise ratio (Sigma) a single-frame point must have to be rescued.
      * e.g., 50.0 means the brightest pixel in the object is 50x brighter than the background noise. */
-    public double anomalyMinPeakSigma = 10.0;
+    public double anomalyMinPeakSigma = 8;
 
     /** * The minimum physical size a single-frame point must have to be rescued.
      * Prevents single hot-pixels or cosmic rays from being flagged. */
