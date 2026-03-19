@@ -37,16 +37,21 @@ public class MasterMapGenerator {
 
         // Multi-thread the row processing for maximum speed!
         IntStream.range(0, height).parallel().forEach(y -> {
-            short[] pixelValues = new short[numFrames];
+            int[] pixelValues = new int[numFrames];
             for (int x = 0; x < width; x++) {
                 // Collect this specific pixel's value from every frame
                 for (int i = 0; i < numFrames; i++) {
-                    pixelValues[i] = frames.get(i).pixelData[y][x];
+                    // Shift to a positive 32-bit int domain (matching SourceExtractor logic)
+                    // This makes the sort immune to Java signed-short wrap-around bugs from custom FITS files.
+                    pixelValues[i] = frames.get(i).pixelData[y][x] + 32768;
                 }
 
-                // Sort to find the mathematical median
+                // Sort the perfectly continuous positive integers
                 Arrays.sort(pixelValues);
-                masterMap[y][x] = pixelValues[numFrames / 2];
+                
+                // Use safe lower-median bias and shift back to the original signed short domain
+                int safeMedianIndex = (numFrames - 1) / 2;
+                masterMap[y][x] = (short) (pixelValues[safeMedianIndex] - 32768);
             }
         });
 

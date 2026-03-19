@@ -202,8 +202,7 @@ public class TrackLinker {
 
         // 2. Initialize the blazing-fast 2D Boolean Mask
         boolean[][] masterMask = new boolean[maxY][maxX];
-        int dilationRadius = (int) Math.ceil(config.maxStarJitter); // Dilate footprint to protect against alignment drift
-        double expandedStarJitter = Math.max(4.0, config.maxStarJitter * config.starJitterExpansionFactor);
+        int dilationRadius = (int) Math.ceil(config.maxStarJitter); // Dilate footprint based on expected atmospheric seeing
 
         // 3. Paint the Master Objects into the Mask
         for (SourceExtractor.DetectedObject mStar : masterStars) {
@@ -226,7 +225,7 @@ public class TrackLinker {
                 // Fallback: If raw pixels are somehow missing, paint a circle around the centroid
                 int cx = (int) mStar.x;
                 int cy = (int) mStar.y;
-                int r = (int) Math.max(dilationRadius, Math.ceil(expandedStarJitter));
+                int r = dilationRadius;
                 for (int dx = -r; dx <= r; dx++) {
                     for (int dy = -r; dy <= r; dy++) {
                         if (dx * dx + dy * dy <= r * r) {
@@ -261,14 +260,21 @@ public class TrackLinker {
 
                 // Perform the Pixel-Perfect Collision Check
                 if (candidateObj.rawPixels != null) {
+                    int overlapCount = 0;
                     for (SourceExtractor.Pixel p : candidateObj.rawPixels) {
                         if (p.x >= 0 && p.x < maxX && p.y >= 0 && p.y < maxY) {
-                            // If even ONE candidate pixel touches the painted master mask, it is destroyed!
                             if (masterMask[p.y][p.x]) {
-                                isPurged = true;
-                                break;
+                                overlapCount++;
                             }
                         }
+                    }
+                    
+                    // Only purge if a significant portion of the object is swallowed by the mask.
+                    // Real stationary stars will be near 100% inside the mask.
+                    // Transients clipping a star's edge will have a low overlap ratio.
+                    double overlapFraction = (double) overlapCount / candidateObj.rawPixels.size();
+                    if (overlapFraction > config.maxMaskOverlapFraction) {
+                        isPurged = true;
                     }
                 } else {
                     int cx = (int) candidateObj.x;

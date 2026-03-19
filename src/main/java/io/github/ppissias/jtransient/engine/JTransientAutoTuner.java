@@ -58,11 +58,6 @@ public class JTransientAutoTuner {
     public static double[] SIGMAS_TO_TEST = {2.5, 3.0, 3.5, 4.0, 5.0, 6.0, 7.0};
     public static int[] MIN_PIXELS_TO_TEST = {3, 5, 7, 9, 12};
 
-    // --- HEURISTIC ALGORITHM WEIGHTS ---
-    //TODO make these configurable
-    public static double SCORE_WEIGHT_TRANSIENT_PENALTY = 3.0;  // Very gentle penalty, allows 10-50 avg transients
-    public static double SCORE_WEIGHT_SIGMA_PENALTY = 15.0;     // Strong penalty to force sigma down
-    public static double SCORE_WEIGHT_MINPIX_PENALTY = 5.0;     // Moderate penalty to force size down
 
     // --- OPTICAL & KINEMATIC TUNING LIMITS ---
     public static double JITTER_PERCENTILE = 0.90;
@@ -169,23 +164,32 @@ public class JTransientAutoTuner {
                 //testConfig.growSigmaMultiplier = sigma * GROW_SIGMA_RATIO;
 
                 // -----------------------------------------------------------
-                // STEP A: EXTRACT THE MASTER MAP (Using Dynamic Scaling)
+                // STEP A: EXTRACT THE MASTER MAP
                 // -----------------------------------------------------------
-                double masterSigma = Math.max(1.5, testConfig.detectionSigmaMultiplier / 2.0);
-                int masterMinPix = Math.max(2, testConfig.minDetectionPixels / 3);
+                double masterSigma = testConfig.masterSigmaMultiplier;
+                int masterMinPix = testConfig.masterMinDetectionPixels;
+
+                // --- APPLY THE CORE-ONLY MASTER MAP OPTIMIZATIONS (Matching Engine Phase 0) ---
+                double originalGrowSigma = testConfig.growSigmaMultiplier;
+                testConfig.growSigmaMultiplier = masterSigma;
 
                 int originalEdgeMargin = testConfig.edgeMarginPixels;
                 int originalVoidProximity = testConfig.voidProximityRadius;
+                double originalStreakElongation = testConfig.streakMinElongation;
 
                 testConfig.edgeMarginPixels = 5;
                 testConfig.voidProximityRadius = 5;
+                testConfig.streakMinElongation = 999.0; // Prevent optically distorted corner stars from being rejected
 
                 List<SourceExtractor.DetectedObject> masterStars = SourceExtractor.extractSources(
                         masterStackData, masterSigma, masterMinPix, testConfig
                 );
 
+                // --- RESTORE ORIGINAL CONFIGURATION ---
+                testConfig.growSigmaMultiplier = originalGrowSigma;
                 testConfig.edgeMarginPixels = originalEdgeMargin;
                 testConfig.voidProximityRadius = originalVoidProximity;
+                testConfig.streakMinElongation = originalStreakElongation;
 
                 // -----------------------------------------------------------
                 // STEP B: BUILD THE BINARY VETO MASK
@@ -276,9 +280,9 @@ public class JTransientAutoTuner {
                     // Start with the stars, massively penalize noise, and gently penalize higher thresholds
                     // to force the tuner to find the lowest (most sensitive) clean configuration.
                     double score = cappedStars
-                            - (avgTransients * SCORE_WEIGHT_TRANSIENT_PENALTY)
-                            - (sigma * SCORE_WEIGHT_SIGMA_PENALTY)
-                            - (minPix * SCORE_WEIGHT_MINPIX_PENALTY);
+                            - (avgTransients * testConfig.scoreWeightTransientPenalty)
+                            - (sigma * testConfig.scoreWeightSigmaPenalty)
+                            - (minPix * testConfig.scoreWeightMinPixPenalty);
 
                     if (DEBUG) System.out.println("      [SCORE] Configuration passed noise gates! Score: " + score);
 
@@ -320,7 +324,6 @@ public class JTransientAutoTuner {
                 List<SourceExtractor.DetectedObject> frameB = bestExtractedFrames.get(i + 1);
 
                 for (SourceExtractor.DetectedObject objA : frameA) {
-                    elongations.add(objA.elongation);
 
                     double closestDist = Double.MAX_VALUE;
                     for (SourceExtractor.DetectedObject objB : frameB) {
@@ -332,9 +335,10 @@ public class JTransientAutoTuner {
                         }
                     }
 
-                    // We only care about objects that are clearly stationary
+                    // We only care about objects that are clearly stationary (real stars)
                     if (closestDist <= SEARCH_RADIUS_PX) {
                         jitterDistances.add(closestDist);
+                        elongations.add(objA.elongation);
                     }
                 }
             }
@@ -368,7 +372,6 @@ public class JTransientAutoTuner {
 
             report.append("\n=== FINAL OPTIMIZED CONFIGURATION ===\n");
             report.append(String.format("Detection Sigma: %.1f%n", bestConfig.detectionSigmaMultiplier));
-            report.append(String.format("Grow Sigma:      %.1f%n", bestConfig.growSigmaMultiplier));
             report.append(String.format("Min Pixels:      %d%n", bestConfig.minDetectionPixels));
             report.append(String.format("Max Star Jitter: %.2f px%n", bestConfig.maxStarJitter));
             report.append(String.format("Streak Min Elong:%.2f%n", bestConfig.streakMinElongation));
@@ -440,13 +443,14 @@ public class JTransientAutoTuner {
     private static DetectionConfig cloneConfig(DetectionConfig base) {
         DetectionConfig clone = new DetectionConfig();
         clone.detectionSigmaMultiplier = base.detectionSigmaMultiplier;
+        clone.masterSigmaMultiplier = base.masterSigmaMultiplier;
+        clone.masterMinDetectionPixels = base.masterMinDetectionPixels;
         clone.growSigmaMultiplier = base.growSigmaMultiplier;
         clone.minDetectionPixels = base.minDetectionPixels;
         clone.qualitySigmaMultiplier = base.qualitySigmaMultiplier;
         clone.qualityMinDetectionPixels = base.qualityMinDetectionPixels;
         clone.errorFallbackValue = base.errorFallbackValue;
         clone.maxStarJitter = base.maxStarJitter;
-        clone.starJitterExpansionFactor = base.starJitterExpansionFactor;
         clone.maxElongationForFwhm = base.maxElongationForFwhm;
         clone.streakMinElongation = base.streakMinElongation;
         clone.streakMinPixels = base.streakMinPixels;
@@ -475,6 +479,9 @@ public class JTransientAutoTuner {
         clone.rhythmAllowedVariance = base.rhythmAllowedVariance;
         clone.rhythmStationaryThreshold = base.rhythmStationaryThreshold;
         clone.rhythmMinConsistencyRatio = base.rhythmMinConsistencyRatio;
+        clone.scoreWeightTransientPenalty = base.scoreWeightTransientPenalty;
+        clone.scoreWeightSigmaPenalty = base.scoreWeightSigmaPenalty;
+        clone.scoreWeightMinPixPenalty = base.scoreWeightMinPixPenalty;
         return clone;
     }
 }

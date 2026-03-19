@@ -166,14 +166,18 @@ public class JTransientEngine {
         }
 
         // 1. Mathematically stack the surviving frames to erase transients
+        // (We still generate the image payload so the UI has a clean background to draw tracks over)
         short[][] masterStackData = MasterMapGenerator.createMedianMasterStack(cleanFrames);
 
-        // --- DYNAMIC MASTER MAP PARAMETERS ---
-        // Scale sensitivity based on user config, but enforce absolute safety floors
-        double masterSigma = Math.max(1.5, config.detectionSigmaMultiplier / 2.0);
-        int masterMinPix = Math.max(2, config.minDetectionPixels / 3);
+        // --- MASTER MAP PARAMETERS ---
+        double masterSigma = config.masterSigmaMultiplier;
+        int masterMinPix = config.masterMinDetectionPixels;
 
-        // Note: config.growSigmaMultiplier is deliberately left exactly as the user configured it.
+        // --- SAFE CORE-ONLY EXTRACTION ---
+        // Explicitly tie the grow multiplier to the master sigma. 
+        // This disables fuzzy halo expansion, guaranteeing consistently tight and relaxed Veto Masks.
+        double originalGrowSigma = config.growSigmaMultiplier;
+        config.growSigmaMultiplier = masterSigma;
 
         if (DEBUG) {
             System.out.printf("DEBUG: Master Map Config -> Master Sigma: %.2f | Master Grow: %.2f | Master MinPix: %d%n",
@@ -188,9 +192,12 @@ public class JTransientEngine {
         // Force extraction to the very edge of the sensor to map edge artifacts
         int originalEdgeMargin = config.edgeMarginPixels;
         int originalVoidProximity = config.voidProximityRadius;
+        double originalStreakElongation = config.streakMinElongation;
 
         config.edgeMarginPixels = 5;
         config.voidProximityRadius = 5;
+        // Prevent optically distorted corner stars from being classified as "elongated noise" and rejected
+        config.streakMinElongation = 999.0;
 
         // 2. Extract every stable star and galaxy from the deep stack
         List<SourceExtractor.DetectedObject> masterStars = SourceExtractor.extractSources(
@@ -203,6 +210,8 @@ public class JTransientEngine {
         // --- RESTORE ORIGINAL CONFIGURATION ---
         config.edgeMarginPixels = originalEdgeMargin;
         config.voidProximityRadius = originalVoidProximity;
+        config.growSigmaMultiplier = originalGrowSigma;
+        config.streakMinElongation = originalStreakElongation;
 
         if (DEBUG) {
             System.out.println("DEBUG: Master Stack generated. Found " + masterStars.size() + " deep stationary objects.");

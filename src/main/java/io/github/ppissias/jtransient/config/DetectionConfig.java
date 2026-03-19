@@ -68,7 +68,7 @@ public class DetectionConfig {
     /** * Dedicated filter for single-frame streaks to prevent elongated noise/artifacts from being flagged.
      * A streak that appears in only one frame must have a peak signal-to-noise ratio (Sigma) above this value.
      */
-    public double singleStreakMinPeakSigma = 15.0;
+    public double singleStreakMinPeakSigma = 7.0;
 
 
     /** * Number of passes used in the iterative histogram calculation to mathematically chop off
@@ -80,6 +80,19 @@ public class DetectionConfig {
      */
     public double bgClippingFactor = 3.0;
 
+    // =================================================================
+    // 1.5 MASTER MAP EXTRACTION PARAMETERS
+    // =================================================================
+
+    /** * The baseline requirement for extracting stars to build the Master Star Map. 
+     * Typically lower than detectionSigmaMultiplier to ensure faint halos are masked.
+     */
+    public double masterSigmaMultiplier = 2.25;
+
+    /** * Minimum number of pixels a source must have to be considered a star in the Master Star Map.
+     * Lower values allow capturing faint background stars to better protect against noise.
+     */
+    public int masterMinDetectionPixels = 3;
 
     // =================================================================
     // 2. FRAME QUALITY ANALYZER PARAMETERS
@@ -126,15 +139,17 @@ public class DetectionConfig {
     // 3. TRACK LINKER PARAMETERS
     // =================================================================
 
-    /** * The radius within which a stationary object is allowed to wobble between frames due to atmospheric seeing.
-     * If an object moves less than this, it is considered stationary.
+    /** * Expected Star Jitter (in pixels). Represents the maximum atmospheric wobble (seeing) or focus bloat
+     * between perfectly aligned frames. Used to dilate the Master Star Mask and as the minimum speed limit
+     * for moving objects.
      */
     public double maxStarJitter = 3.0;
 
-    /** * Multiplier for maxStarJitter to account for long-term atmospheric wobble and slight field rotation
-     * over the entire imaging session.
+    /** * Instead of a strict 1-pixel touch destroying a transient, allow it to overlap the master star mask
+     * up to this fraction (e.g., 0.25 = 25%). This rescues high-energy transients or moving objects
+     * that happen to graze the protective halo of a background star.
      */
-    public double starJitterExpansionFactor = 1.5;
+    public double maxMaskOverlapFraction = 0.25;
 
     /** * Once a baseline vector is established (Points 1 and 2), Point 3 must fall within this many pixels
      * of the infinitely projected mathematical trajectory line.
@@ -238,4 +253,19 @@ public class DetectionConfig {
     /** * The minimum physical size a single-frame point must have to be rescued.
      * Prevents single hot-pixels or cosmic rays from being flagged. */
     public int anomalyMinPixels = 25;
+
+    // =================================================================
+    // 6. AUTO-TUNER PARAMETERS
+    // =================================================================
+
+    /** * Weighting penalty for transients used in the Auto-Tuner scoring heuristic. */
+    public double scoreWeightTransientPenalty = 3.0;
+
+    /** * Weighting penalty for high sigma thresholds used in the Auto-Tuner scoring heuristic. 
+     * Forces the tuner to prefer the lowest possible sigma that remains clean. */
+    public double scoreWeightSigmaPenalty = 15.0;
+
+    /** * Weighting penalty for high minimum pixel limits used in the Auto-Tuner scoring heuristic. */
+    public double scoreWeightMinPixPenalty = 5.0;
+
 }
