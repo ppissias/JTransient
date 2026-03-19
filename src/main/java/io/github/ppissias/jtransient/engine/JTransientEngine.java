@@ -41,9 +41,89 @@ public class JTransientEngine {
     }
 
     /**
+     * Generates the Master Stack independently so it can be reused across iterative pipeline runs.
+     * Highly optimized: Skips transient extraction and only runs quality analysis to drop outliers.
+     */
+    public short[][] generateMasterStack(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
+        if (listener != null) {
+            listener.onProgressUpdate(0, "Evaluating frames for Master Stack...");
+        }
+
+        if (DEBUG) {
+            System.out.println("\n--- JTRANSIENT: PRE-COMPUTING MASTER STACK ---");
+        }
+
+        List<Callable<FrameExtractionResult>> tasks = new ArrayList<>();
+        inputFrames.sort(Comparator.comparingInt(f -> f.sequenceIndex));
+
+        int totalFrames = inputFrames.size();
+        AtomicInteger framesCompleted = new AtomicInteger(0);
+
+        for (ImageFrame frame : inputFrames) {
+            tasks.add(() -> {
+                // We only need quality metrics to drop outliers. We skip SourceExtractor to save massive CPU time!
+                FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData, config);
+                metrics.filename = frame.identifier;
+
+                FrameExtractionResult result = new FrameExtractionResult();
+                result.frameIndex = frame.sequenceIndex;
+                result.metrics = metrics;
+
+                int completed = framesCompleted.incrementAndGet();
+                if (listener != null) {
+                    int progress = (int) ((completed / (double) totalFrames) * 50.0);
+                    listener.onProgressUpdate(progress, "Evaluating frame " + completed + " of " + totalFrames);
+                }
+
+                return result;
+            });
+        }
+
+        List<FrameExtractionResult> completedResults = new ArrayList<>();
+        List<Future<FrameExtractionResult>> futures = executor.invokeAll(tasks);
+        for (Future<FrameExtractionResult> future : futures) {
+            completedResults.add(future.get());
+        }
+        completedResults.sort(Comparator.comparingInt(r -> r.frameIndex));
+
+        List<FrameQualityAnalyzer.FrameMetrics> sessionMetrics = new ArrayList<>();
+        for (FrameExtractionResult result : completedResults) {
+            sessionMetrics.add(result.metrics);
+        }
+
+        if (listener != null) {
+            listener.onProgressUpdate(55, "Filtering outlier frames...");
+        }
+
+        SessionEvaluator.rejectOutlierFrames(sessionMetrics, config);
+
+        List<ImageFrame> cleanFrames = new ArrayList<>();
+        for (int i = 0; i < completedResults.size(); i++) {
+            if (!sessionMetrics.get(i).isRejected) {
+                cleanFrames.add(inputFrames.get(i));
+            }
+        }
+
+        if (listener != null) {
+            listener.onProgressUpdate(60, "Stacking " + cleanFrames.size() + " clean frames...");
+        }
+
+        return MasterMapGenerator.createMedianMasterStack(cleanFrames);
+    }
+
+    /**
      * The single entry point for the JTransient library.
+     * Convenience wrapper that calculates the master stack automatically.
      */
     public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
+        return runPipeline(inputFrames, config, listener, null);
+    }
+
+    /**
+     * Iterative entry point for the JTransient library.
+     * Allows passing a pre-computed master stack to bypass the heavy stacking phase during iterative runs.
+     */
+    public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
         long startTime = System.currentTimeMillis();
         PipelineTelemetry telemetry = new PipelineTelemetry();
         telemetry.totalFramesLoaded = inputFrames.size();
@@ -157,17 +237,26 @@ public class JTransientEngine {
         // =================================================================
         // PHASE 0 (Generate Deep Master Star Map)
         // =================================================================
-        if (DEBUG) {
-            System.out.println("\n--- JTRANSIENT: PHASE 0 (Master Map Generation) ---");
-        }
+        short[][] masterStackData;
 
-        if (listener != null) {
-            listener.onProgressUpdate(45, "Generating Median Master Stack...");
+        if (providedMasterStack != null) {
+            if (DEBUG) {
+                System.out.println("\n--- JTRANSIENT: PHASE 0 (Using Pre-Computed Master Stack) ---");
+            }
+            if (listener != null) {
+                listener.onProgressUpdate(45, "Using pre-computed Master Stack...");
+            }
+            masterStackData = providedMasterStack;
+        } else {
+            if (DEBUG) {
+                System.out.println("\n--- JTRANSIENT: PHASE 0 (Master Map Generation) ---");
+            }
+            if (listener != null) {
+                listener.onProgressUpdate(45, "Generating Median Master Stack...");
+            }
+            // 1. Mathematically stack the surviving frames to erase transients
+            masterStackData = MasterMapGenerator.createMedianMasterStack(cleanFrames);
         }
-
-        // 1. Mathematically stack the surviving frames to erase transients
-        // (We still generate the image payload so the UI has a clean background to draw tracks over)
-        short[][] masterStackData = MasterMapGenerator.createMedianMasterStack(cleanFrames);
 
         // --- MASTER MAP PARAMETERS ---
         double masterSigma = config.masterSigmaMultiplier;
