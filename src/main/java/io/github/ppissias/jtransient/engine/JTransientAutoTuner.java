@@ -471,6 +471,7 @@ public class JTransientAutoTuner {
         clone.stationaryDefectThreshold = base.stationaryDefectThreshold;
         clone.angleToleranceDegrees = base.angleToleranceDegrees;
         clone.trackMinFrameRatio = base.trackMinFrameRatio;
+        clone.timeBasedVelocityTolerance = base.timeBasedVelocityTolerance;
         clone.absoluteMaxPointsRequired = base.absoluteMaxPointsRequired;
         clone.maxJumpPixels = base.maxJumpPixels;
         clone.maxSizeRatio = base.maxSizeRatio;

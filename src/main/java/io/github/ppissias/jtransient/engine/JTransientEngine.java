@@ -158,6 +158,7 @@ public class JTransientEngine {
                 for (SourceExtractor.DetectedObject obj : objectsInFrame) {
                     obj.sourceFrameIndex = frame.sequenceIndex;
                     obj.sourceFilename = frame.identifier;
+                    obj.timestamp = frame.timestamp;
                 }
 
                 // 2. Quality Metrics (Passing config down)

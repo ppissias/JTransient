@@ -171,6 +171,12 @@ public class DetectionConfig {
      */
     public double trackMinFrameRatio = 3.0;
 
+    /** * When valid timestamps are available, this defines the maximum allowed variance in velocity (speed).
+     * A value of 0.10 means a 10% change in velocity between jumps is acceptable.
+     * Tracks linked using time bypass the maxJumpPixels constraint.
+     */
+    public double timeBasedVelocityTolerance = 0.10;
+
     /** * A hard ceiling on the required track length so the algorithm doesn't demand mathematically
      * impossible track lengths for massive frame batches (e.g., requiring 166 points in a 500 frame session).
      */

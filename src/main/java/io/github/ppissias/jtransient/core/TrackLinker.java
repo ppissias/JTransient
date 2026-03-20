@@ -29,6 +29,7 @@ public class TrackLinker {
         public List<SourceExtractor.DetectedObject> points = new ArrayList<>();
         public boolean isStreakTrack = false;
         public boolean isAnomaly = false; // <--- NEW
+        public boolean isTimeBasedTrack = false; 
 
         public void addPoint(SourceExtractor.DetectedObject obj) {
             points.add(obj);
@@ -329,20 +330,128 @@ public class TrackLinker {
             minPointsRequired = config.absoluteMaxPointsRequired;
         }
 
+        List<Track> pointTracks = new ArrayList<>();
+        Set<SourceExtractor.DetectedObject> usedPoints = new HashSet<>();
+        int loopMax = numFrames - 2;
+
+        // =================================================================
+        // PHASE 3.5: TIME-BASED KINEMATIC LINKING (Velocity Vector Matching)
+        // =================================================================
+        boolean hasTimestamps = false;
+        for (List<SourceExtractor.DetectedObject> frame : allFrames) {
+            if (!frame.isEmpty() && frame.get(0).timestamp != -1) {
+                hasTimestamps = true;
+                break;
+            }
+        }
+
+        if (hasTimestamps) {
+            if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3.5] Timestamps detected. Running Time-Based Velocity Linking...");
+            if (listener != null) listener.onProgressUpdate(50, "Analyzing precise velocity kinematics...");
+
+            int timeTracksFound = 0;
+
+            for (int f1 = 0; f1 < loopMax; f1++) {
+                for (SourceExtractor.DetectedObject p1 : transients.get(f1)) {
+                    if (usedPoints.contains(p1)) continue;
+
+                    for (int f2 = f1 + 1; f2 < numFrames - 1; f2++) {
+                        if (usedPoints.contains(p1)) break;
+                        for (SourceExtractor.DetectedObject p2 : transients.get(f2)) {
+                            if (usedPoints.contains(p1)) break;
+                            if (usedPoints.contains(p2)) continue;
+
+                            double dt12 = p2.timestamp - p1.timestamp;
+                            if (dt12 <= 0) continue; // Prevent div by zero
+
+                            double dist12 = distance(p1.x, p1.y, p2.x, p2.y);
+                            if (dist12 < config.maxStarJitter) continue;
+
+                            // Morphological checks (maxJumpPixels explicitly bypassed for extreme speeds)
+                            if (!isSizeConsistent(p1, p2, config.maxSizeRatio)) continue;
+                            if (!isBrightnessConsistent(p1, p2, config.maxFluxRatio)) continue;
+
+                            double v12 = dist12 / dt12; // Velocity in pixels per ms
+                            double expectedAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+
+                            Track currentTrack = new Track();
+                            currentTrack.addPoint(p1);
+                            currentTrack.addPoint(p2);
+
+                            SourceExtractor.DetectedObject currentLineAnchor = p2;
+                            double currentVelocity = v12;
+
+                            for (int f3 = f2 + 1; f3 < numFrames; f3++) {
+                                SourceExtractor.DetectedObject bestMatch = null;
+                                double bestVError = Double.MAX_VALUE;
+
+                                for (SourceExtractor.DetectedObject p3 : transients.get(f3)) {
+                                    if (usedPoints.contains(p3)) continue;
+
+                                    double dt23 = p3.timestamp - currentLineAnchor.timestamp;
+                                    if (dt23 <= 0) continue;
+
+                                    double dist23 = distance(currentLineAnchor.x, currentLineAnchor.y, p3.x, p3.y);
+                                    double v23 = dist23 / dt23;
+
+                                    double vDiffRatio = Math.abs(v23 - currentVelocity) / currentVelocity;
+
+                                    // If speed matches within tolerance (e.g. 10%)
+                                    if (vDiffRatio <= config.timeBasedVelocityTolerance) {
+                                        double actualAngle = Math.atan2(p3.y - currentLineAnchor.y, p3.x - currentLineAnchor.x);
+                                        
+                                        // If strict forward direction matches
+                                        if (isDirectionConsistent(expectedAngle, actualAngle, angleToleranceRad)) {
+                                            if (isSizeConsistent(currentLineAnchor, p3, config.maxSizeRatio) &&
+                                                isBrightnessConsistent(currentLineAnchor, p3, config.maxFluxRatio)) {
+                                                
+                                                if (vDiffRatio < bestVError) {
+                                                    bestVError = vDiffRatio;
+                                                    bestMatch = p3;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                if (bestMatch != null) {
+                                    currentTrack.addPoint(bestMatch);
+                                    double stepDt = bestMatch.timestamp - currentLineAnchor.timestamp;
+                                    double stepDist = distance(currentLineAnchor.x, currentLineAnchor.y, bestMatch.x, bestMatch.y);
+                                    currentVelocity = stepDist / stepDt; // Update progressive velocity
+                                    expectedAngle = Math.atan2(bestMatch.y - currentLineAnchor.y, bestMatch.x - currentLineAnchor.x);
+                                    currentLineAnchor = bestMatch;
+                                }
+                            }
+
+                            if (currentTrack.points.size() >= minPointsRequired) {
+                                if (!isTrackAlreadyFound(pointTracks, currentTrack)) {
+                                    currentTrack.isTimeBasedTrack = true;
+                                    pointTracks.add(currentTrack);
+                                    usedPoints.addAll(currentTrack.points);
+                                    timeTracksFound++;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3.5] Completed. Found " + timeTracksFound + " precise time-based track(s).");
+        }
+
+        // =================================================================
+        // PHASE 4: GEOMETRIC COLLINEAR LINKING (Frame-Agnostic Fallback)
+        // =================================================================
         if (JTransientEngine.DEBUG) {
-            System.out.println("DEBUG: [PHASE 4] Applying time-agnostic geometric filter...");
+            System.out.println("DEBUG: [PHASE 4] Applying time-agnostic geometric fallback filter...");
             System.out.println("  -> Track confirmation threshold: " + minPointsRequired + " points.");
         }
 
-        List<Track> pointTracks = new ArrayList<>();
-        Set<SourceExtractor.DetectedObject> usedPoints = new HashSet<>();
-
-        int loopMax = numFrames - 2;
         for (int f1 = 0; f1 < loopMax; f1++) {
 
             // --- SMOOTH PROGRESS TRACKING FOR PHASE 4 (50% to 90%) ---
             if (listener != null) {
-                int progress = 50 + (int) (((double) f1 / loopMax) * 40.0);
+                int progress = 60 + (int) (((double) f1 / loopMax) * 30.0);
                 listener.onProgressUpdate(progress, "Analyzing kinematics: Frame " + (f1 + 1) + " of " + loopMax);
             }
 
@@ -396,10 +505,7 @@ public class TrackLinker {
 
                                 if (lineError <= config.predictionTolerance) {
                                     double actualAngle = Math.atan2(p3.y - lastPoint.y, p3.x - lastPoint.x);
-                                    double angleDiff = Math.abs(expectedAngle - actualAngle);
-                                    if (angleDiff > Math.PI) angleDiff = (2.0 * Math.PI) - angleDiff;
-
-                                    if (angleDiff <= angleToleranceRad) {
+                                    if (isDirectionConsistent(expectedAngle, actualAngle, angleToleranceRad)) {
                                         if (!isSizeConsistent(lastPoint, p3, config.maxSizeRatio)) {
                                             telemetry.countP3Size++;
                                         } else if (!isBrightnessConsistent(lastPoint, p3, config.maxFluxRatio)) {
@@ -605,6 +711,12 @@ public class TrackLinker {
     private static boolean anglesMatch(double a1, double a2, double tolerance) {
         double diff = Math.abs(a1 - a2) % Math.PI;
         return diff <= tolerance || Math.PI - diff <= tolerance;
+    }
+
+    private static boolean isDirectionConsistent(double expectedAngle, double actualAngle, double tolerance) {
+        double diff = Math.abs(expectedAngle - actualAngle);
+        if (diff > Math.PI) diff = (2.0 * Math.PI) - diff;
+        return diff <= tolerance;
     }
 
     private static double distanceToLineOptimized(SourceExtractor.DetectedObject p1,
