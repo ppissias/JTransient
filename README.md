@@ -69,7 +69,7 @@ engine.shutdown();
 
 **Return Data (`PipelineResult`):**
 The return payload contains highly detailed structures ideal for rendering a diagnostic UI.
-*   **`tracks`**: Confirmed `TrackLinker.Track` objects. Tracks are mathematically tagged as `isTimeBasedTrack` (fast satellites), `isStreakTrack` (meteors), `isAnomaly` (flashes), or standard geometric moving objects (asteroids).
+*   **`tracks`**: Confirmed `TrackLinker.Track` objects. Tracks are mathematically tagged as `isTimeBasedTrack` (constant speed track based on time), `isStreakTrack` (Streak tracks), `isAnomaly` (flashes), or standard geometric moving objects.
 *   **`masterStackData`**: The generated deep median `short[][]` pixel array (perfect as a clean UI background).
 *   **`masterStars`**: A list of all stationary `DetectedObject`s extracted to build the mask.
 *   **`slowMoverStackData`**: The specialized percentile `short[][]` pixel array used for identifying ultra-slow objects.
