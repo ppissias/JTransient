@@ -167,10 +167,12 @@ public class SourceExtractor {
                         // ==========================================================
                         // FILTER 1: PHYSICAL SENSOR EDGE
                         // ==========================================================
-                        if (obj.x < config.edgeMarginPixels || obj.x >= (width - config.edgeMarginPixels) ||
-                                obj.y < config.edgeMarginPixels || obj.y >= (height - config.edgeMarginPixels)) {
-                            statRejectedEdge++;
-                            continue;
+                        if (!obj.isStreak) {
+                            if (obj.x < config.edgeMarginPixels || obj.x >= (width - config.edgeMarginPixels) ||
+                                    obj.y < config.edgeMarginPixels || obj.y >= (height - config.edgeMarginPixels)) {
+                                statRejectedEdge++;
+                                continue;
+                            }
                         }
 
                         // ==========================================================

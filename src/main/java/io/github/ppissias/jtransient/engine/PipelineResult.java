@@ -26,17 +26,22 @@ public class PipelineResult {
     public final short[][] slowMoverStackData;
     public final List<SourceExtractor.DetectedObject> slowMoverCandidates;
 
+    /** A chronological, frame-by-frame list of all surviving transients */
+    public final List<List<SourceExtractor.DetectedObject>> allTransients;
+
     public PipelineResult(List<TrackLinker.Track> tracks,
                           PipelineTelemetry telemetry,
                           short[][] masterStackData,
                           List<SourceExtractor.DetectedObject> masterStars,
                           short[][] slowMoverStackData,
-                          List<SourceExtractor.DetectedObject> slowMoverCandidates) {
+                          List<SourceExtractor.DetectedObject> slowMoverCandidates,
+                          List<List<SourceExtractor.DetectedObject>> allTransients) {
         this.tracks = tracks;
         this.telemetry = telemetry;
         this.masterStackData = masterStackData;
         this.masterStars = masterStars;
         this.slowMoverStackData = slowMoverStackData;
         this.slowMoverCandidates = slowMoverCandidates;
+        this.allTransients = allTransients;
     }
 }

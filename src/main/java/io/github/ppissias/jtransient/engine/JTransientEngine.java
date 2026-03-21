@@ -40,6 +40,23 @@ public class JTransientEngine {
         public FrameQualityAnalyzer.FrameMetrics metrics;
     }
 
+    public static class TransientExtractionContext {
+        public List<List<SourceExtractor.DetectedObject>> cleanFramesData;
+        public List<ImageFrame> cleanFrames;
+        public PipelineTelemetry telemetry;
+        public long startTime;
+    }
+
+    public static class FrameTransients {
+        public final String filename;
+        public final List<SourceExtractor.DetectedObject> transients;
+
+        public FrameTransients(String filename, List<SourceExtractor.DetectedObject> transients) {
+            this.filename = filename;
+            this.transients = transients;
+        }
+    }
+
     /**
      * Generates the Master Stack independently so it can be reused across iterative pipeline runs.
      * Highly optimized: Skips transient extraction and only runs quality analysis to drop outliers.
@@ -120,10 +137,74 @@ public class JTransientEngine {
     }
 
     /**
-     * Iterative entry point for the JTransient library.
-     * Allows passing a pre-computed master stack to bypass the heavy stacking phase during iterative runs.
+     * Runs the pipeline up to detecting the transients (extracted objects) for all frames and does no further processing.
+     * Generates a median master stack automatically to apply the Veto Mask.
+     * @return A list of objects containing the filename and its actual transients that survived the Master Veto Mask.
      */
-    public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
+    public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
+        return detectTransients(inputFrames, config, listener, null);
+    }
+
+    /**
+     * Runs the pipeline up to detecting the transients for all frames and does no further processing.
+     * Uses the provided master stack to successfully apply the Veto Mask.
+     * @return A list of objects containing the filename and its actual transients that survived the Master Veto Mask.
+     */
+    public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
+        TransientExtractionContext context = extractFrameTransientsContext(inputFrames, config, listener);
+        
+        short[][] masterStackData;
+        if (providedMasterStack != null) {
+            masterStackData = providedMasterStack;
+        } else {
+            if (listener != null) listener.onProgressUpdate(45, "Generating Median Master Stack for Veto Mask...");
+            masterStackData = MasterMapGenerator.createMedianMasterStack(context.cleanFrames);
+        }
+
+        if (listener != null) listener.onProgressUpdate(48, "Extracting Master Star Map...");
+
+        double originalGrowSigma = config.growSigmaMultiplier;
+        config.growSigmaMultiplier = config.masterSigmaMultiplier;
+        int originalEdgeMargin = config.edgeMarginPixels;
+        int originalVoidProximity = config.voidProximityRadius;
+        double originalStreakElongation = config.streakMinElongation;
+
+        config.edgeMarginPixels = 5;
+        config.voidProximityRadius = 5;
+        config.streakMinElongation = 999.0;
+
+        List<SourceExtractor.DetectedObject> masterStars = SourceExtractor.extractSources(
+                masterStackData, config.masterSigmaMultiplier, config.masterMinDetectionPixels, config);
+
+        config.edgeMarginPixels = originalEdgeMargin;
+        config.voidProximityRadius = originalVoidProximity;
+        config.growSigmaMultiplier = originalGrowSigma;
+        config.streakMinElongation = originalStreakElongation;
+
+        TransientEngineProgressListener proxyListener = null;
+        if (listener != null) {
+            proxyListener = (percentage, message) -> listener.onProgressUpdate(60 + (int) (percentage * 0.40), message); // Scale 0-100 to 60-100
+        }
+
+        TrackLinker.TransientsFilterResult filterResult = TrackLinker.filterTransients(context.cleanFramesData, masterStars, config, proxyListener);
+        
+        if (listener != null) listener.onProgressUpdate(100, "Transient Extraction Complete!");
+
+        List<FrameTransients> finalResult = new ArrayList<>();
+        for (int i = 0; i < context.cleanFrames.size(); i++) {
+            finalResult.add(new FrameTransients(
+                    context.cleanFrames.get(i).identifier,
+                    filterResult.mergedTransients.get(i)
+            ));
+        }
+        return finalResult;
+    }
+
+    /**
+     * Does exactly the same processing as the first phases of runPipeline up to detecting the transients,
+     * returning the full context so it can be reused by runPipeline.
+     */
+    private TransientExtractionContext extractFrameTransientsContext(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
         long startTime = System.currentTimeMillis();
         PipelineTelemetry telemetry = new PipelineTelemetry();
         telemetry.totalFramesLoaded = inputFrames.size();
@@ -234,6 +315,26 @@ public class JTransientEngine {
                 cleanFrames.add(inputFrames.get(i)); // Keep the actual frame for the Master Stack
             }
         }
+
+        TransientExtractionContext context = new TransientExtractionContext();
+        context.cleanFramesData = cleanFramesData;
+        context.cleanFrames = cleanFrames;
+        context.telemetry = telemetry;
+        context.startTime = startTime;
+
+        return context;
+    }
+
+    /**
+     * Iterative entry point for the JTransient library.
+     * Allows passing a pre-computed master stack to bypass the heavy stacking phase during iterative runs.
+     */
+    public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
+        TransientExtractionContext context = extractFrameTransientsContext(inputFrames, config, listener);
+        long startTime = context.startTime;
+        PipelineTelemetry telemetry = context.telemetry;
+        List<List<SourceExtractor.DetectedObject>> cleanFramesData = context.cleanFramesData;
+        List<ImageFrame> cleanFrames = context.cleanFrames;
 
         // =================================================================
         // PHASE 0 (Generate Deep Master Star Map)
@@ -393,7 +494,8 @@ public class JTransientEngine {
         }
 
         // Return the unified result with the new Master Data payloads!
-        return new PipelineResult(trackResult.tracks, telemetry, masterStackData, masterStars, slowMoverStackData, slowMoverCandidates);
+        return new PipelineResult(trackResult.tracks, telemetry, masterStackData, masterStars, 
+                                  slowMoverStackData, slowMoverCandidates, trackResult.allTransients);
     }
 
     /**

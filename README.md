@@ -6,11 +6,14 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 
 ## ✨ Key Features
 
-* **Robust Source Extraction:** Custom mathematical extraction that separates true point sources and streaks from background noise using local background estimation and sigma clipping.
-* **Geometric Track Linking:** Utilizes time-agnostic collinear linking to connect transient detections across multiple frames, enforcing strict kinematic rules (angle tolerance, prediction line variance, and rhythm consistency).
-* **Rolling Star Map Baseline:** Defeats the "slow-mover trap" by using an all-to-all spatial frame comparison, ensuring that clouds or single-frame artifacts don't ruin the master stationary star map.
+* **Robust Source Extraction:** Custom mathematical extraction that separates true point sources and streaks from background noise using local background estimation, hysteresis, and sigma clipping.
+* **Time-Based Kinematics:** Uses frame timestamps to calculate exact velocity vectors, allowing the engine to track fast-moving satellites flawlessly, even across dropped frames or variable camera delays.
+* **Geometric Fallback Linking:** Time-agnostic collinear linking for slow asteroids using strict kinematic rules (angle tolerance, prediction line variance, and rhythm consistency).
+* **Deep Master Star Map Veto:** Generates a highly accurate pixel-perfect Boolean Veto Mask from a dynamically generated median stack to ruthlessly purge background stars.
+* **Slow Mover Detection:** Features a specialized percentile-stacking engine designed to detect ultra-slow trailing objects that barely move over the course of a session.
 * **Smart Auto-Tuning:** Includes a mathematical Auto-Tuner that samples your image sequence to dynamically measure atmospheric seeing (star wobble) and optical elongation, automatically configuring the engine's tracking thresholds to prevent false positives.
 * **Deep Telemetry:** Returns highly detailed telemetry for every run, allowing developers to see exactly why potential tracks were rejected (e.g., morphological mismatch, velocity limits, or erratic rhythm).
+* **Modular Pipeline API:** Run the entire pipeline, manually pre-compute background stacks for UI performance, or just extract raw frame-by-frame transients for custom applications.
 
 ---
 
@@ -29,98 +32,64 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 
 ---
 
-## 🚀 Usage Guide
+## 🚀 API Documentation & Usage
 
-Using JTransient involves three main steps: packaging your image data, configuring the engine (manually or via the Auto-Tuner), and running the pipeline.
+JTransient is designed to be highly modular. You can run the entire automated tracking pipeline, or directly invoke the mathematical source extractor on single images if you are building custom linking algorithms.
 
-### 1. Preparing Image Frames
-JTransient operates on raw 2D pixel arrays (`short[][]`). You must wrap your image data (usually extracted from FITS files) into `ImageFrame` objects.
+### Use Case 1: Full Detection Pipeline (`runPipeline`)
+This is the primary entry point. It automatically handles frame quality evaluation, median deep stack generation, streak matching, stationary star Veto Masking, time-based kinematics, and slow-mover detection.
 
+**Method Signature:**
 ```java
-import io.github.ppissias.jtransient.engine.ImageFrame;
-import java.util.ArrayList;
-import java.util.List;
-
-List<ImageFrame> sequence = new ArrayList<>();
-
-// Assuming you have a method to extract a 2D short array from a FITS file
-for (int i = 0; i < totalFiles; i++) {
-    short[][] pixelData = loadFitsData(files[i]);
-    // Create the frame: index, identifier string, and the raw data
-    sequence.add(new ImageFrame(i, files[i].getName(), pixelData));
-}
+public PipelineResult runPipeline(
+        List<ImageFrame> inputFrames, 
+        DetectionConfig config, 
+        TransientEngineProgressListener listener
+) throws Exception
 ```
 
-### 2. Configuration & Auto-Tuning
-JTransient is highly configurable via the `DetectionConfig` object. Because tracking heavily depends on the telescope's focal length, mount tracking accuracy, and nightly seeing conditions, **using the `JTransientAutoTuner` is highly recommended.**
+**Inputs:**
+*   `inputFrames`: A chronological list of `ImageFrame` objects containing your raw `short[][]` pixel data and timestamps.
+*   `config`: The `DetectionConfig` object defining thresholds, bounds, and kinematics. *(Tip: Use `JTransientAutoTuner.tune()` to generate this automatically).*
+*   `listener`: (Optional) A callback interface to stream progress updates to your UI.
 
+**Execution Example:**
 ```java
-import io.github.ppissias.jtransient.config.DetectionConfig;
-import io.github.ppissias.jtransient.engine.JTransientAutoTuner;
-
-// 1. Create a base configuration with default fallback parameters
-DetectionConfig baseConfig = new DetectionConfig();
-
-// 2. (Optional) Adjust Auto-Tuner constraints before running
-// e.g., Set to 4.0 for perfectly registered images, or 10.0+ for unguided images
-JTransientAutoTuner.SEARCH_RADIUS_PX = 4.0; 
-
-// 3. Run the Auto-Tuner on the sequence
-JTransientAutoTuner.AutoTunerResult tuneResult = JTransientAutoTuner.tune(sequence, baseConfig);
-
-DetectionConfig finalConfig;
-if (tuneResult.success) {
-    System.out.println("Auto-Tune Success! " + tuneResult.telemetryReport);
-    finalConfig = tuneResult.optimizedConfig;
-} else {
-    System.out.println("Auto-Tune Failed. Falling back to base configuration.");
-    finalConfig = baseConfig;
-}
-```
-
-### 3. Running the Engine
-Once your configuration is ready, instantiate the engine, run the pipeline, and gracefully shut it down to free up the internal thread pools.
-
-```java
-import io.github.ppissias.jtransient.engine.JTransientEngine;
-import io.github.ppissias.jtransient.engine.PipelineResult;
-
 // Initialize the engine (spawns worker threads)
 JTransientEngine engine = new JTransientEngine();
 
-// Execute the pipeline
-PipelineResult result = engine.runPipeline(sequence, finalConfig);
+// Run the pipeline with an inline UI listener
+PipelineResult result = engine.runPipeline(sequence, finalConfig, (progress, message) -> {
+    System.out.println(progress + "% : " + message);
+});
 
-// CRITICAL: Shut down the engine to release threads and prevent memory leaks
+// CRITICAL: Shut down the engine to release thread pools when your application closes
 engine.shutdown();
-
-System.out.println("Found " + result.tracks.size() + " moving targets!");
 ```
-ad
-### 4. Interpreting Results
-The `PipelineResult` contains a list of `Track` objects and a rich `PipelineTelemetry` object.
 
+**Return Data (`PipelineResult`):**
+The return payload contains highly detailed structures ideal for rendering a diagnostic UI.
+*   **`tracks`**: Confirmed `TrackLinker.Track` objects. Tracks are mathematically tagged as `isTimeBasedTrack` (fast satellites), `isStreakTrack` (meteors), `isAnomaly` (flashes), or standard geometric moving objects (asteroids).
+*   **`masterStackData`**: The generated deep median `short[][]` pixel array (perfect as a clean UI background).
+*   **`masterStars`**: A list of all stationary `DetectedObject`s extracted to build the mask.
+*   **`slowMoverStackData`**: The specialized percentile `short[][]` pixel array used for identifying ultra-slow objects.
+*   **`slowMoverCandidates`**: Highly-elongated `DetectedObject`s identified as slow-mover trails.
+*   **`allTransients`**: A chronological `List<List<DetectedObject>>` containing all raw points and streaks that successfully survived the Veto Mask frame-by-frame.
+*   **`telemetry`**: Exhaustive `PipelineTelemetry` detailing execution times, quality rejection reasons, and specific tracking filter drop-offs.
+
+---
+
+### Use Case 2: Standalone Source Extraction (`extractSources`)
+If you already have your own track-linking logic but want to leverage JTransient's highly tuned Breadth-First Search (BFS) region growing, local background estimation, and Image Moments shape analysis, you can call the extractor directly on a single image.
+
+**Method Signature:**
 ```java
-import io.github.ppissias.jtransient.core.TrackLinker.Track;
-import io.github.ppissias.jtransient.core.SourceExtractor.DetectedObject;
-
-for (int i = 0; i < result.tracks.size(); i++) {
-    Track track = result.tracks.get(i);
-    System.out.println("Track " + i + " contains " + track.points.size() + " detections.");
-    
-    // Iterate through the chronological points of the asteroid's path
-    for (DetectedObject point : track.points) {
-        System.out.printf("  Frame %d -> X: %.2f, Y: %.2f (Flux: %.1f)%n", 
-            point.sourceFrameIndex, 
-            point.x, 
-            point.y, 
-            point.totalFlux);
-    }
-}
-
-// Print diagnostic telemetry
-System.out.println("Stars purged: " + result.telemetry.trackerTelemetry.totalStationaryStarsPurged);
-System.out.println("Pipeline execution time: " + result.telemetry.processingTimeMs + " ms");
+public static List<DetectedObject> extractSources(
+        short[][] image, 
+        double sigmaMultiplier, 
+        int minPixels, 
+        DetectionConfig config
+)
 ```
 
 ---
