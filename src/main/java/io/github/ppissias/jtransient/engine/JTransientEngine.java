@@ -308,6 +308,55 @@ public class JTransientEngine {
         }
 
         // =================================================================
+        // PHASE 0.5 (Slow Mover Detection)
+        // =================================================================
+        short[][] slowMoverStackData = null;
+        List<SourceExtractor.DetectedObject> slowMoverCandidates = new ArrayList<>();
+
+        if (config.enableSlowMoverDetection) {
+            if (DEBUG) {
+                System.out.println("\n--- JTRANSIENT: PHASE 0.5 (Slow Mover Detection) ---");
+            }
+            if (listener != null) {
+                listener.onProgressUpdate(49, "Generating Slow Mover Master Stack...");
+            }
+
+            slowMoverStackData = MasterMapGenerator.createSlowMoverMasterStack(cleanFrames, config.slowMoverStackMiddleFraction);
+
+            // Temporarily override config parameters for slow mover extraction
+            double origGrow = config.growSigmaMultiplier;
+            config.growSigmaMultiplier = config.masterSlowMoverGrowSigmaMultiplier;
+
+            List<SourceExtractor.DetectedObject> rawSlowMovers = SourceExtractor.extractSources(
+                    slowMoverStackData,
+                    config.masterSlowMoverSigmaMultiplier,
+                    config.masterSlowMoverMinPixels,
+                    config
+            );
+
+            // Restore original config
+            config.growSigmaMultiplier = origGrow;
+
+            // Filter for true slow movers (must be elongated to prove they moved over time)
+            for (SourceExtractor.DetectedObject obj : rawSlowMovers) {
+                if (config.masterSlowMoverMinElongation <= 0 || obj.elongation >= config.masterSlowMoverMinElongation) {
+                    
+                    // Apply strict morphological filters to reject merged binary stars and stacking artifacts
+                    boolean isIrregular = SourceExtractor.isIrregularStreakShape(obj);
+                    boolean isBinary = SourceExtractor.isBinaryStarAnomaly(slowMoverStackData, obj);
+                    
+                    if (!isIrregular && !isBinary) {
+                        slowMoverCandidates.add(obj);
+                    }
+                }
+            }
+
+            if (DEBUG) {
+                System.out.println("DEBUG: Slow Mover analysis complete. Found " + slowMoverCandidates.size() + " highly elongated candidate(s).");
+            }
+        }
+
+        // =================================================================
         // PHASE 4 (Track Linking)
         // =================================================================
         if (DEBUG) {
@@ -344,7 +393,7 @@ public class JTransientEngine {
         }
 
         // Return the unified result with the new Master Data payloads!
-        return new PipelineResult(trackResult.tracks, telemetry, masterStackData, masterStars);
+        return new PipelineResult(trackResult.tracks, telemetry, masterStackData, masterStars, slowMoverStackData, slowMoverCandidates);
     }
 
     /**

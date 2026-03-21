@@ -84,6 +84,11 @@ public class DetectionConfig {
     // 1.5 MASTER MAP EXTRACTION PARAMETERS
     // =================================================================
 
+    /** * Master switch to enable the generation and analysis of the specialized Slow Mover stack. 
+     * Set to true to actively hunt for ultra-slow moving objects like distant asteroids.
+     */
+    public boolean enableSlowMoverDetection = false;
+
     /** * The baseline requirement for extracting stars to build the Master Star Map. 
      * Typically lower than detectionSigmaMultiplier to ensure faint halos are masked.
      */
@@ -93,6 +98,26 @@ public class DetectionConfig {
      * Lower values allow capturing faint background stars to better protect against noise.
      */
     public int masterMinDetectionPixels = 3;
+
+    /** * The fraction of the sorted pixel values around the median to use when generating a Slow Mover Master Stack.
+     * By taking the maximum of this middle band, the stack captures ultra-slow moving objects without including
+     * high-energy single-frame flashes (like fast streaks or cosmic rays). Default is 0.30 (Middle 30%).
+     */
+    public double slowMoverStackMiddleFraction = 0.30;
+
+    /** * Minimum elongation in the master stack to flag an object as an ultra-slow mover candidate.
+     * Use 0 to disable. */
+    public double masterSlowMoverMinElongation = 3;
+
+    /** * Minimum pixel area required to flag an elongated object in the master stack as a slow mover candidate. */
+    public int masterSlowMoverMinPixels = 20;
+
+    /** * The strict detection threshold multiplier used exclusively when scanning the master stack for ultra-slow movers. */
+    public double masterSlowMoverSigmaMultiplier = 4;
+
+    /** * The grow sigma multiplier (hysteresis) used exclusively when scanning the master stack for ultra-slow movers. */
+    public double masterSlowMoverGrowSigmaMultiplier = 4;
+
 
     // =================================================================
     // 2. FRAME QUALITY ANALYZER PARAMETERS

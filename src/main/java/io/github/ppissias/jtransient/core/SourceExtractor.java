@@ -361,4 +361,161 @@ public class SourceExtractor {
 
         return obj;
     }
+
+    /**
+     * Analyzes the pixel profile of a highly elongated object to determine if it is a
+     * merged pair of distinct stars (binary) rather than a continuous slow-mover streak.
+     */
+    public static boolean isBinaryStarAnomaly(short[][] originalImage, SourceExtractor.DetectedObject obj) {
+        if (obj.rawPixels == null || obj.rawPixels.size() < 10) return false;
+
+        int maxVal = -32768;
+        int minVal = 32767;
+        int maxX = -1, maxY = -1;
+
+        // Find the absolute peak, and the background edge (minVal) of the footprint
+        for (SourceExtractor.Pixel p : obj.rawPixels) {
+            int val = originalImage[p.y][p.x];
+            if (val > maxVal) {
+                maxVal = val;
+                maxX = p.x;
+                maxY = p.y;
+            }
+            if (val < minVal) minVal = val;
+        }
+
+        if (maxVal <= minVal) return false;
+
+        int minSeparation = 4; // Stars closer than this are too tightly merged to split mathematically
+        int secondMaxVal = -32768;
+        int sMaxX = -1, sMaxY = -1;
+
+        // Find the second highest peak that is at least a few pixels away
+        for (SourceExtractor.Pixel p : obj.rawPixels) {
+            double dist = Math.hypot(p.x - maxX, p.y - maxY);
+            if (dist >= minSeparation) {
+                int val = originalImage[p.y][p.x];
+                if (val > secondMaxVal) {
+                    secondMaxVal = val;
+                    sMaxX = p.x;
+                    sMaxY = p.y;
+                }
+            }
+        }
+
+        if (sMaxX == -1) return false;
+
+        double primarySignal = maxVal - minVal;
+        double secondarySignal = secondMaxVal - minVal;
+
+        // If the secondary peak is very faint, it's just a tail or noise, not a distinct star
+        if (secondarySignal < primarySignal * 0.3) return false;
+
+        double minSaddleSignal = primarySignal;
+        int steps = (int) Math.round(Math.hypot(sMaxX - maxX, sMaxY - maxY));
+        if (steps <= 1) return false;
+
+        // Walk the straight line between the two peaks to find the deepest point (saddle)
+        for (int i = 1; i < steps; i++) {
+            int px = (int) Math.round(maxX + i * (sMaxX - maxX) / (double) steps);
+            int py = (int) Math.round(maxY + i * (sMaxY - maxY) / (double) steps);
+
+            if (py >= 0 && py < originalImage.length && px >= 0 && px < originalImage[0].length) {
+                double signal = originalImage[py][px] - minVal;
+                if (signal < minSaddleSignal) {
+                    minSaddleSignal = signal;
+                }
+            }
+        }
+
+        // If the saddle point drops below 80% of the secondary peak, it's two separate Gaussian curves
+        // A true streak would maintain near-constant brightness along its central ridge
+        return minSaddleSignal < (secondarySignal * 0.80);
+    }
+
+    /**
+     * Analyzes the morphological boundaries of a streak to ensure it forms a consistent,
+     * straight capsule shape. Throws out "L", "V", and highly asymmetric blob shapes.
+     */
+    public static boolean isIrregularStreakShape(SourceExtractor.DetectedObject obj) {
+        if (obj.rawPixels == null || obj.rawPixels.size() < 10) return false;
+
+        double dx = Math.cos(obj.angle);
+        double dy = Math.sin(obj.angle);
+
+        double minPar = Double.MAX_VALUE;
+        double maxPar = -Double.MAX_VALUE;
+        double minPerp = Double.MAX_VALUE;
+        double maxPerp = -Double.MAX_VALUE;
+
+        // Project every pixel onto the primary and perpendicular axes
+        for (SourceExtractor.Pixel p : obj.rawPixels) {
+            double vx = p.x - obj.x;
+            double vy = p.y - obj.y;
+            double par = vx * dx + vy * dy;       // Distance along the streak
+            double perp = -vx * dy + vy * dx;     // Distance away from the center line (thickness)
+
+            if (par < minPar) minPar = par;
+            if (par > maxPar) maxPar = par;
+            if (perp < minPerp) minPerp = perp;
+            if (perp > maxPerp) maxPerp = perp;
+        }
+
+        double length = maxPar - minPar + 1;
+        double width = maxPerp - minPerp + 1;
+
+        // 1. Fill Factor Check (Catches L-shapes, V-shapes, and diagonal crosses)
+        // A true streak (capsule) fills roughly 78% (PI/4) to 100% of its oriented bounding box.
+        // Relaxed to 35% to account for ragged edges on faint targets.
+        double fillFactor = obj.pixelArea / (length * width);
+        if (fillFactor < 0.35) {
+            return true;
+        }
+
+        if (length < 10) return false; // Too short to reliably segment without pixel-grid aliasing
+
+        // 2. Thickness consistency check (5 segments, analyzing middle 3 to ignore natural tapering)
+        double segmentLength = length / 5.0;
+        double[] sMin = {Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE};
+        double[] sMax = {-Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE, -Double.MAX_VALUE};
+        int[] sCount = new int[5];
+
+        for (SourceExtractor.Pixel p : obj.rawPixels) {
+            double vx = p.x - obj.x;
+            double vy = p.y - obj.y;
+            double par = vx * dx + vy * dy;
+            double perp = -vx * dy + vy * dx;
+
+            int seg = (int) ((par - minPar) / segmentLength);
+            if (seg > 4) seg = 4;
+            if (seg < 0) seg = 0;
+
+            if (perp < sMin[seg]) sMin[seg] = perp;
+            if (perp > sMax[seg]) sMax[seg] = perp;
+            sCount[seg]++;
+        }
+
+        double w1 = sCount[1] > 0 ? (sMax[1] - sMin[1] + 1) : 0;
+        double w2 = sCount[2] > 0 ? (sMax[2] - sMin[2] + 1) : 0;
+        double w3 = sCount[3] > 0 ? (sMax[3] - sMin[3] + 1) : 0;
+
+        // Skip only if ALL middle segments are completely empty
+        if (w1 == 0 && w2 == 0 && w3 == 0) return true;
+
+        // Peanut check: middle is severely thinner than its neighbors
+        // Relaxed to 40% to account for standard pixelation variance on faint targets
+        if (w2 < w1 * 0.40 && w2 < w3 * 0.40) {
+            return true;
+        }
+
+        // Bowling pin / Teardrop check: one side of the middle is massively thicker than the other
+        // Relaxed to 3.0x to prevent false positives on thin streaks (e.g., width fluctuating between 1px and 3px)
+        double midMaxW = Math.max(w1, Math.max(w2, w3));
+        double midMinW = Math.min(w1, Math.min(w2, w3));
+        if (midMinW > 0 && midMaxW > Math.max(4.0, midMinW * 3.0)) {
+            return true;
+        }
+
+        return false;
+    }
 }

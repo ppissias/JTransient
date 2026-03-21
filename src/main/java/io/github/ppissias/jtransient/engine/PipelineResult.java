@@ -22,13 +22,21 @@ public class PipelineResult {
     public final short[][] masterStackData;
     public final List<SourceExtractor.DetectedObject> masterStars;
 
+    // --- NEW: Slow Mover Data Payloads ---
+    public final short[][] slowMoverStackData;
+    public final List<SourceExtractor.DetectedObject> slowMoverCandidates;
+
     public PipelineResult(List<TrackLinker.Track> tracks,
                           PipelineTelemetry telemetry,
                           short[][] masterStackData,
-                          List<SourceExtractor.DetectedObject> masterStars) {
+                          List<SourceExtractor.DetectedObject> masterStars,
+                          short[][] slowMoverStackData,
+                          List<SourceExtractor.DetectedObject> slowMoverCandidates) {
         this.tracks = tracks;
         this.telemetry = telemetry;
         this.masterStackData = masterStackData;
         this.masterStars = masterStars;
+        this.slowMoverStackData = slowMoverStackData;
+        this.slowMoverCandidates = slowMoverCandidates;
     }
 }
