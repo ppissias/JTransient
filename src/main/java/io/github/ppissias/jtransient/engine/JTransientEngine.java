@@ -181,12 +181,16 @@ public class JTransientEngine {
         config.growSigmaMultiplier = originalGrowSigma;
         config.streakMinElongation = originalStreakElongation;
 
+        int sensorHeight = context.cleanFrames.get(0).pixelData.length;
+        int sensorWidth = context.cleanFrames.get(0).pixelData[0].length;
+
         TransientEngineProgressListener proxyListener = null;
         if (listener != null) {
             proxyListener = (percentage, message) -> listener.onProgressUpdate(60 + (int) (percentage * 0.40), message); // Scale 0-100 to 60-100
         }
 
-        TrackLinker.TransientsFilterResult filterResult = TrackLinker.filterTransients(context.cleanFramesData, masterStars, config, proxyListener);
+        TrackLinker.TransientsFilterResult filterResult = TrackLinker.filterTransients(
+                context.cleanFramesData, masterStars, config, proxyListener, sensorWidth, sensorHeight);
         
         if (listener != null) listener.onProgressUpdate(100, "Transient Extraction Complete!");
 
@@ -474,13 +478,16 @@ public class JTransientEngine {
             };
         }
 
-        // NOTE: Make sure your TrackLinker.findMovingObjects method signature is updated to accept the new listener!
-        // (You might also need to pass sensorWidth and sensorHeight here if you kept the Phase 5 boundary check)
+        int sensorHeight = cleanFrames.get(0).pixelData.length;
+        int sensorWidth = cleanFrames.get(0).pixelData[0].length;
+
         TrackLinker.TrackingResult trackResult = TrackLinker.findMovingObjects(
                 cleanFramesData,
                 masterStars,
                 config,
-                trackingProxyListener
+                trackingProxyListener,
+                sensorWidth,
+                sensorHeight
         );
 
         // Map the track results back to our main telemetry object
@@ -495,7 +502,7 @@ public class JTransientEngine {
 
         // Return the unified result with the new Master Data payloads!
         return new PipelineResult(trackResult.tracks, telemetry, masterStackData, masterStars, 
-                                  slowMoverStackData, slowMoverCandidates, trackResult.allTransients);
+                                  slowMoverStackData, slowMoverCandidates, trackResult.allTransients, trackResult.masterMask);
     }
 
     /**

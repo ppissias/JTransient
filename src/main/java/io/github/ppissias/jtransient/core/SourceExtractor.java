@@ -158,11 +158,9 @@ public class SourceExtractor {
                             statRejectedNoise++;
                             continue;
                         }
-                        // --- MEMORY OPTIMIZATION ---
-                        // Only attach the raw pixels if we are debugging/tuning the UI.
-                        //if (JTransientEngine.DEBUG) {
+
+                        //we always have this
                         obj.rawPixels = currentBlob;
-                        //}
 
                         // ==========================================================
                         // FILTER 1: PHYSICAL SENSOR EDGE

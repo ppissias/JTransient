@@ -43,17 +43,20 @@ public class TrackLinker {
         public TrackerTelemetry telemetry;
         public int streakTracksFound;
         public List<List<SourceExtractor.DetectedObject>> mergedTransients;
+        public boolean[][] masterMask;
     }
 
     public static class TrackingResult {
         public List<Track> tracks;
         public TrackerTelemetry telemetry;
         public List<List<SourceExtractor.DetectedObject>> allTransients;
+        public boolean[][] masterMask;
 
-        public TrackingResult(List<Track> tracks, TrackerTelemetry telemetry, List<List<SourceExtractor.DetectedObject>> allTransients) {
+        public TrackingResult(List<Track> tracks, TrackerTelemetry telemetry, List<List<SourceExtractor.DetectedObject>> allTransients, boolean[][] masterMask) {
             this.tracks = tracks;
             this.telemetry = telemetry;
             this.allTransients = allTransients;
+            this.masterMask = masterMask;
         }
     }
 
@@ -69,7 +72,9 @@ public class TrackLinker {
             List<List<SourceExtractor.DetectedObject>> allFrames,
             List<SourceExtractor.DetectedObject> masterStars,
             DetectionConfig config,
-            TransientEngineProgressListener listener) {
+            TransientEngineProgressListener listener,
+            int sensorWidth,
+            int sensorHeight) {
 
         int numFrames = allFrames.size();
         List<Track> confirmedStreakTracks = new ArrayList<>();
@@ -171,59 +176,19 @@ public class TrackLinker {
         if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3] Building Binary Footprint Mask from Master Map...");
         int totalTransientsFound = 0;
 
-        int maxX = 0;
-        int maxY = 0;
-        for (SourceExtractor.DetectedObject mStar : masterStars) {
-            if (mStar.x > maxX) maxX = (int) mStar.x;
-            if (mStar.y > maxY) maxY = (int) mStar.y;
-            if (mStar.rawPixels != null) {
-                for (SourceExtractor.Pixel p : mStar.rawPixels) {
-                    if (p.x > maxX) maxX = p.x;
-                    if (p.y > maxY) maxY = p.y;
-                }
-            }
-        }
-        for (List<SourceExtractor.DetectedObject> frame : pointSourcesOnly) {
-            for (SourceExtractor.DetectedObject cand : frame) {
-                if (cand.x > maxX) maxX = (int) cand.x;
-                if (cand.y > maxY) maxY = (int) cand.y;
-                if (cand.rawPixels != null) {
-                    for (SourceExtractor.Pixel p : cand.rawPixels) {
-                        if (p.x > maxX) maxX = p.x;
-                        if (p.y > maxY) maxY = p.y;
-                    }
-                }
-            }
-        }
-
-        maxX += 50;
-        maxY += 50;
-
-        boolean[][] masterMask = new boolean[maxY][maxX];
+        boolean[][] masterMask = new boolean[sensorHeight][sensorWidth];
         int dilationRadius = (int) Math.ceil(config.maxStarJitter);
 
         for (SourceExtractor.DetectedObject mStar : masterStars) {
-            if (mStar.rawPixels != null) {
-                for (SourceExtractor.Pixel p : mStar.rawPixels) {
-                    for (int dx = -dilationRadius; dx <= dilationRadius; dx++) {
-                        for (int dy = -dilationRadius; dy <= dilationRadius; dy++) {
-                            if (dx * dx + dy * dy <= dilationRadius * dilationRadius) {
-                                int mx = p.x + dx;
-                                int my = p.y + dy;
-                                if (mx >= 0 && mx < maxX && my >= 0 && my < maxY) masterMask[my][mx] = true;
-                            }
-                        }
-                    }
-                }
-            } else {
-                int cx = (int) mStar.x;
-                int cy = (int) mStar.y;
+            for (SourceExtractor.Pixel p : mStar.rawPixels) {
                 for (int dx = -dilationRadius; dx <= dilationRadius; dx++) {
                     for (int dy = -dilationRadius; dy <= dilationRadius; dy++) {
                         if (dx * dx + dy * dy <= dilationRadius * dilationRadius) {
-                            int mx = cx + dx;
-                            int my = cy + dy;
-                            if (mx >= 0 && mx < maxX && my >= 0 && my < maxY) masterMask[my][mx] = true;
+                            int mx = p.x + dx;
+                            int my = p.y + dy;
+                            if (mx >= 0 && mx < sensorWidth && my >= 0 && my < sensorHeight) {
+                                masterMask[my][mx] = true;
+                            }
                         }
                     }
                 }
@@ -244,20 +209,14 @@ public class TrackLinker {
 
             for (SourceExtractor.DetectedObject candidateObj : currentFrame) {
                 boolean isPurged = false;
-                if (candidateObj.rawPixels != null) {
-                    int overlapCount = 0;
-                    for (SourceExtractor.Pixel p : candidateObj.rawPixels) {
-                        if (p.x >= 0 && p.x < maxX && p.y >= 0 && p.y < maxY && masterMask[p.y][p.x]) {
-                            overlapCount++;
-                        }
+                int overlapCount = 0;
+                for (SourceExtractor.Pixel p : candidateObj.rawPixels) {
+                    if (p.x >= 0 && p.x < sensorWidth && p.y >= 0 && p.y < sensorHeight && masterMask[p.y][p.x]) {
+                        overlapCount++;
                     }
-                    double overlapFraction = (double) overlapCount / candidateObj.rawPixels.size();
-                    if (overlapFraction > config.maxMaskOverlapFraction) isPurged = true;
-                } else {
-                    int cx = (int) candidateObj.x;
-                    int cy = (int) candidateObj.y;
-                    if (cx >= 0 && cx < maxX && cy >= 0 && cy < maxY && masterMask[cy][cx]) isPurged = true;
                 }
+                double overlapFraction = (double) overlapCount / candidateObj.rawPixels.size();
+                if (overlapFraction > config.maxMaskOverlapFraction) isPurged = true;
 
                 if (isPurged) {
                     purgedCount++;
@@ -299,6 +258,7 @@ public class TrackLinker {
         result.telemetry = telemetry;
         result.streakTracksFound = streakTracksFound;
         result.mergedTransients = mergedTransients;
+        result.masterMask = masterMask;
 
         return result;
     }
@@ -307,7 +267,9 @@ public class TrackLinker {
             List<List<SourceExtractor.DetectedObject>> allFrames,
             List<SourceExtractor.DetectedObject> masterStars,
             DetectionConfig config,
-            TransientEngineProgressListener listener) { // <--- Added Listener
+            TransientEngineProgressListener listener,
+            int sensorWidth,
+            int sensorHeight) { 
 
         int numFrames = allFrames.size();
         if (JTransientEngine.DEBUG) System.out.println("\nDEBUG: [START] findMovingObjects initialized with " + numFrames + " frames.");
@@ -318,10 +280,10 @@ public class TrackLinker {
 
         if (numFrames < 3) {
             if (JTransientEngine.DEBUG) System.out.println("DEBUG: [ABORT] Less than 3 frames provided. Cannot form point tracks.");
-            return new TrackingResult(new ArrayList<>(), new TrackerTelemetry(), new ArrayList<>());
+            return new TrackingResult(new ArrayList<>(), new TrackerTelemetry(), new ArrayList<>(), null);
         }
 
-        TransientsFilterResult filterResult = filterTransients(allFrames, masterStars, config, listener);
+        TransientsFilterResult filterResult = filterTransients(allFrames, masterStars, config, listener, sensorWidth, sensorHeight);
         
         List<Track> confirmedTracks = filterResult.streakTracks;
         TrackerTelemetry telemetry = filterResult.telemetry;
@@ -694,7 +656,7 @@ public class TrackLinker {
         }
 
         confirmedTracks.addAll(pointTracks);
-        return new TrackingResult(confirmedTracks, telemetry, filterResult.mergedTransients);
+        return new TrackingResult(confirmedTracks, telemetry, filterResult.mergedTransients, filterResult.masterMask);
     }
 
     // =================================================================

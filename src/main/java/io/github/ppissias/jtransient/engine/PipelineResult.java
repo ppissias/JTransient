@@ -29,13 +29,15 @@ public class PipelineResult {
     /** A chronological, frame-by-frame list of all surviving transients */
     public final List<List<SourceExtractor.DetectedObject>> allTransients;
 
+    public final boolean[][] masterMask;
+
     public PipelineResult(List<TrackLinker.Track> tracks,
                           PipelineTelemetry telemetry,
                           short[][] masterStackData,
                           List<SourceExtractor.DetectedObject> masterStars,
                           short[][] slowMoverStackData,
                           List<SourceExtractor.DetectedObject> slowMoverCandidates,
-                          List<List<SourceExtractor.DetectedObject>> allTransients) {
+                          List<List<SourceExtractor.DetectedObject>> allTransients, boolean[][] masterMask) {
         this.tracks = tracks;
         this.telemetry = telemetry;
         this.masterStackData = masterStackData;
@@ -43,5 +45,6 @@ public class PipelineResult {
         this.slowMoverStackData = slowMoverStackData;
         this.slowMoverCandidates = slowMoverCandidates;
         this.allTransients = allTransients;
+        this.masterMask = masterMask;
     }
 }
