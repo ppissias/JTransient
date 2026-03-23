@@ -343,18 +343,13 @@ public class SourceExtractor {
         obj.fwhm = 2.355 * Math.sqrt(sigmaSq);
 
         // --- CLEANED UP MORPHOLOGICAL CLASSIFICATION ---
-        if (obj.elongation > config.streakMinElongation) {
-            if (blob.size() >= config.streakMinPixels) {
-                // It is long enough and large enough. It's a real streak.
-                obj.isStreak = true;
-                obj.isNoise = false;
-            } else {
-                // It is elongated, but too small. It's a cosmic ray strike or glitch.
-                obj.isStreak = false;
-                obj.isNoise = true;
-            }
+        if (obj.elongation > config.streakMinElongation && blob.size() >= config.streakMinPixels) {
+            // It is long enough and large enough. It's a real streak.
+            obj.isStreak = true;
+            obj.isNoise = false;
         } else {
-            // It is relatively round, and we already know it passed the outer minPixels check. It's a point source!
+            // It is relatively round, OR it is an elongated small anomaly (like a cosmic ray). 
+            // Since it passed the outer minPixels check, we keep it alive as a standard point source.
             obj.isStreak = false;
             obj.isNoise = false;
         }

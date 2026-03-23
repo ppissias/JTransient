@@ -158,7 +158,7 @@ public class JTransientAutoTuner {
                     System.out.println("   -> Testing Sigma: " + sigma + " | MinPix: " + minPix);
                 }
 
-                DetectionConfig testConfig = cloneConfig(baseConfig);
+                DetectionConfig testConfig = baseConfig.clone();
                 testConfig.detectionSigmaMultiplier = sigma;
                 testConfig.minDetectionPixels = minPix;
                 //testConfig.growSigmaMultiplier = sigma * GROW_SIGMA_RATIO;
@@ -175,11 +175,9 @@ public class JTransientAutoTuner {
 
                 int originalEdgeMargin = testConfig.edgeMarginPixels;
                 int originalVoidProximity = testConfig.voidProximityRadius;
-                double originalStreakElongation = testConfig.streakMinElongation;
 
                 testConfig.edgeMarginPixels = 5;
                 testConfig.voidProximityRadius = 5;
-                testConfig.streakMinElongation = 999.0; // Prevent optically distorted corner stars from being rejected
 
                 List<SourceExtractor.DetectedObject> masterStars = SourceExtractor.extractSources(
                         masterStackData, masterSigma, masterMinPix, testConfig
@@ -189,7 +187,6 @@ public class JTransientAutoTuner {
                 testConfig.growSigmaMultiplier = originalGrowSigma;
                 testConfig.edgeMarginPixels = originalEdgeMargin;
                 testConfig.voidProximityRadius = originalVoidProximity;
-                testConfig.streakMinElongation = originalStreakElongation;
 
                 // -----------------------------------------------------------
                 // STEP B: BUILD THE BINARY VETO MASK
@@ -436,53 +433,5 @@ public class JTransientAutoTuner {
 
         bestFrames.sort(Comparator.comparingInt(f -> f.sequenceIndex));
         return bestFrames;
-    }
-
-    // =====================================================================
-
-    private static DetectionConfig cloneConfig(DetectionConfig base) {
-        DetectionConfig clone = new DetectionConfig();
-        clone.detectionSigmaMultiplier = base.detectionSigmaMultiplier;
-        clone.masterSigmaMultiplier = base.masterSigmaMultiplier;
-        clone.masterMinDetectionPixels = base.masterMinDetectionPixels;
-        clone.growSigmaMultiplier = base.growSigmaMultiplier;
-        clone.minDetectionPixels = base.minDetectionPixels;
-        clone.qualitySigmaMultiplier = base.qualitySigmaMultiplier;
-        clone.qualityMinDetectionPixels = base.qualityMinDetectionPixels;
-        clone.errorFallbackValue = base.errorFallbackValue;
-        clone.maxStarJitter = base.maxStarJitter;
-        clone.maxElongationForFwhm = base.maxElongationForFwhm;
-        clone.streakMinElongation = base.streakMinElongation;
-        clone.streakMinPixels = base.streakMinPixels;
-        clone.edgeMarginPixels = base.edgeMarginPixels;
-        clone.voidProximityRadius = base.voidProximityRadius;
-        clone.voidThresholdFraction = base.voidThresholdFraction;
-        clone.bgClippingIterations = base.bgClippingIterations;
-        clone.bgClippingFactor = base.bgClippingFactor;
-        clone.minFramesForAnalysis = base.minFramesForAnalysis;
-        clone.fwhmSigmaDeviation = base.fwhmSigmaDeviation;
-        clone.backgroundSigmaDeviation = base.backgroundSigmaDeviation;
-        clone.starCountSigmaDeviation = base.starCountSigmaDeviation;
-        clone.eccentricitySigmaDeviation = base.eccentricitySigmaDeviation;
-        clone.minBackgroundDeviationADU = base.minBackgroundDeviationADU;
-        clone.minEccentricityEnvelope = base.minEccentricityEnvelope;
-        clone.minFwhmEnvelope = base.minFwhmEnvelope;
-        clone.zeroSigmaFallback = base.zeroSigmaFallback;
-        clone.stationaryDefectThreshold = base.stationaryDefectThreshold;
-        clone.angleToleranceDegrees = base.angleToleranceDegrees;
-        clone.trackMinFrameRatio = base.trackMinFrameRatio;
-        clone.timeBasedVelocityTolerance = base.timeBasedVelocityTolerance;
-        clone.absoluteMaxPointsRequired = base.absoluteMaxPointsRequired;
-        clone.maxJumpPixels = base.maxJumpPixels;
-        clone.maxSizeRatio = base.maxSizeRatio;
-        clone.maxFluxRatio = base.maxFluxRatio;
-        clone.predictionTolerance = base.predictionTolerance;
-        clone.rhythmAllowedVariance = base.rhythmAllowedVariance;
-        clone.rhythmStationaryThreshold = base.rhythmStationaryThreshold;
-        clone.rhythmMinConsistencyRatio = base.rhythmMinConsistencyRatio;
-        clone.scoreWeightTransientPenalty = base.scoreWeightTransientPenalty;
-        clone.scoreWeightSigmaPenalty = base.scoreWeightSigmaPenalty;
-        clone.scoreWeightMinPixPenalty = base.scoreWeightMinPixPenalty;
-        return clone;
     }
 }

@@ -13,8 +13,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class TrackerTelemetry {
-    public long countBaselineJitter, countBaselineJump, countBaselineSize, countBaselineFlux;
-    public long countP3NotLine, countP3WrongDirection, countP3Jump, countP3Size, countP3Flux;
+    public long countBaselineJitter, countBaselineJump, countBaselineSize;
+    public long countP3NotLine, countP3WrongDirection, countP3Jump, countP3Size;
     public long countTrackTooShort, countTrackErraticRhythm, countTrackDuplicate;
     public int streakTracksFound, pointTracksFound;
 

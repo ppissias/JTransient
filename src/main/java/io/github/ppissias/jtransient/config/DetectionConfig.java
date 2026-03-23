@@ -14,7 +14,7 @@ package io.github.ppissias.jtransient.config;
  * This class holds all tuning parameters for extraction, quality control, and track linking.
  * It is designed to be easily serialized to/from JSON.
  */
-public class DetectionConfig {
+public class DetectionConfig implements Cloneable {
 
     // =================================================================
     // 1. SOURCE EXTRACTOR PARAMETERS
@@ -106,10 +106,6 @@ public class DetectionConfig {
      */
     public double slowMoverStackMiddleFraction = 0.50;
 
-    /** * Minimum elongation in the master stack to flag an object as an ultra-slow mover candidate.
-     * Use 0 to disable. */
-    public double masterSlowMoverMinElongation = 3;
-
     /** * Minimum pixel area required to flag an elongated object in the master stack as a slow mover candidate. */
     public int masterSlowMoverMinPixels = 20;
 
@@ -119,6 +115,10 @@ public class DetectionConfig {
     /** * The grow sigma multiplier (hysteresis) used exclusively when scanning the master stack for ultra-slow movers. */
     public double masterSlowMoverGrowSigmaMultiplier = 4;
 
+    /** * Multiplier applied to the MAD to calculate the dynamic elongation threshold for slow movers.
+     * A value of 5.0 means an object must be 5 deviations more elongated than the median to be flagged.
+     */
+    public double slowMoverBaselineMadMultiplier = 5.0;
 
     // =================================================================
     // 2. FRAME QUALITY ANALYZER PARAMETERS
@@ -169,7 +169,7 @@ public class DetectionConfig {
      * between perfectly aligned frames. Used to dilate the Master Star Mask and as the minimum speed limit
      * for moving objects.
      */
-    public double maxStarJitter = 3.0;
+    public double maxStarJitter = 1.5;
 
     /** * Instead of a strict 1-pixel touch destroying a transient, allow it to overlap the master star mask
      * up to this fraction (e.g., 0.25 = 25%). This rescues high-energy transients or moving objects
@@ -186,11 +186,6 @@ public class DetectionConfig {
      * trajectory vector it is traveling on.
      */
     public double angleToleranceDegrees = 5.0;
-
-    /** * Specifically targeting fast streaks. If a "streak" appears in different frames but its center moves
-     * less than this threshold, it is identified as a hot column/sensor defect and destroyed.
-     */
-    public double stationaryDefectThreshold = 5.0;
 
     /** * Determines how many points are needed to confirm a track by dividing the total number of frames
      * by this ratio (e.g., 20 frames / 3.0 = ~7 points required).
@@ -213,10 +208,14 @@ public class DetectionConfig {
      */
     public double maxJumpPixels = 400.0;
 
-    /** * Morphological Filter: When linking points, the physical pixel area cannot differ by more than this ratio.
-     * Prevents linking a massive, bright asteroid to a tiny, faint noise blip.
-     */
-    public double maxSizeRatio = 0;
+
+    /** * Morphological Filter: FWHM represents the optical focus/spread. Real targets share similar optical blurring.
+     * A value of 2.0 means the FWHM cannot more than double between frames. 0 to disable. */
+    public double maxFwhmRatio = 2.0;
+
+    /** * Morphological Filter: Surface Brightness (Flux / Area) identifies the density of the light.
+     * Prevents linking a concentrated cosmic ray to a diffuse noise smudge. 0 to disable. */
+    public double maxSurfaceBrightnessRatio = 3.0;
 
     /** * Kinematic Speed Check: Max allowed pixel deviation from the expected median speed to still
      * be considered part of a "steady rhythm".
@@ -233,9 +232,7 @@ public class DetectionConfig {
      */
     public double rhythmStationaryThreshold = 0.5;
 
-    /** * Photometric Filter: When linking points, the total brightness (flux) cannot differ by more than this ratio.
-     */
-    public double maxFluxRatio = 0;
+
 
     // =================================================================
     // 4. SESSION EVALUATOR PARAMETERS
@@ -300,4 +297,14 @@ public class DetectionConfig {
     /** * Weighting penalty for high minimum pixel limits used in the Auto-Tuner scoring heuristic. */
     public double scoreWeightMinPixPenalty = 5.0;
 
+    @Override
+    public DetectionConfig clone() {
+        try {
+            // Performs a highly optimized native shallow copy.
+            // Safe because this class only contains primitive data types.
+            return (DetectionConfig) super.clone();
+        } catch (CloneNotSupportedException e) {
+            throw new AssertionError("DetectionConfig could not be cloned", e);
+        }
+    }
 }

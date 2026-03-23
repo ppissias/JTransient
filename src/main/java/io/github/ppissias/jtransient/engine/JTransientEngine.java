@@ -45,6 +45,7 @@ public class JTransientEngine {
         public List<ImageFrame> cleanFrames;
         public PipelineTelemetry telemetry;
         public long startTime;
+        public List<SourceExtractor.Pixel> driftPoints;
     }
 
     public static class FrameTransients {
@@ -167,11 +168,9 @@ public class JTransientEngine {
         config.growSigmaMultiplier = config.masterSigmaMultiplier;
         int originalEdgeMargin = config.edgeMarginPixels;
         int originalVoidProximity = config.voidProximityRadius;
-        double originalStreakElongation = config.streakMinElongation;
 
         config.edgeMarginPixels = 5;
         config.voidProximityRadius = 5;
-        config.streakMinElongation = 999.0;
 
         List<SourceExtractor.DetectedObject> masterStars = SourceExtractor.extractSources(
                 masterStackData, config.masterSigmaMultiplier, config.masterMinDetectionPixels, config);
@@ -179,7 +178,6 @@ public class JTransientEngine {
         config.edgeMarginPixels = originalEdgeMargin;
         config.voidProximityRadius = originalVoidProximity;
         config.growSigmaMultiplier = originalGrowSigma;
-        config.streakMinElongation = originalStreakElongation;
 
         int sensorHeight = context.cleanFrames.get(0).pixelData.length;
         int sensorWidth = context.cleanFrames.get(0).pixelData[0].length;
@@ -219,6 +217,80 @@ public class JTransientEngine {
 
         if (DEBUG) {
             System.out.println("\n--- JTRANSIENT: PHASE 1 (Extraction) ---");
+        }
+
+        // =================================================================
+        // --- NEW: DITHER & DRIFT DIAGNOSTICS ---
+        // =================================================================
+        if (listener != null) {
+            listener.onProgressUpdate(0, "Analyzing sequence dither and corner drift...");
+        }
+
+        List<SourceExtractor.Pixel> driftPoints = new ArrayList<>();
+        if (!inputFrames.isEmpty()) {
+            int height = inputFrames.get(0).pixelData.length;
+            int width = inputFrames.get(0).pixelData[0].length;
+            int maxDrift = 0;
+
+            for (ImageFrame frame : inputFrames) {
+                // Robust center background estimate (11x11 median) to avoid single bright stars
+                int[] centerPixels = new int[121];
+                int idx = 0;
+                int cx = width / 2;
+                int cy = height / 2;
+                for (int dy = -5; dy <= 5; dy++) {
+                    for (int dx = -5; dx <= 5; dx++) {
+                        centerPixels[idx++] = frame.pixelData[cy + dy][cx + dx] + 32768;
+                    }
+                }
+                java.util.Arrays.sort(centerPixels);
+                int centerVal = centerPixels[60];
+                double voidThresh = centerVal * config.voidThresholdFraction;
+
+                int limit = Math.min(width, height) / 3;
+                int leftPad = 0, rightPad = 0, topPad = 0, bottomPad = 0;
+                int midX = width / 2;
+                int midY = height / 2;
+
+                // Scan Left edge inward
+                for (int i = 0; i < limit; i++) {
+                    if (frame.pixelData[midY][i] + 32768 > voidThresh) { leftPad = i; break; }
+                }
+                // Scan Right edge inward
+                for (int i = 0; i < limit; i++) {
+                    if (frame.pixelData[midY][width - 1 - i] + 32768 > voidThresh) { rightPad = i; break; }
+                }
+                // Scan Top edge inward
+                for (int i = 0; i < limit; i++) {
+                    if (frame.pixelData[i][midX] + 32768 > voidThresh) { topPad = i; break; }
+                }
+                // Scan Bottom edge inward
+                for (int i = 0; i < limit; i++) {
+                    if (frame.pixelData[height - 1 - i][midX] + 32768 > voidThresh) { bottomPad = i; break; }
+                }
+
+                // Calculate the single uniform translation (dx, dy) of the entire frame
+                int dx = leftPad - rightPad;
+                int dy = topPad - bottomPad;
+
+                // Store the exact relative movement vector (dx, dy) instead of absolute pixel coordinates
+                driftPoints.add(new SourceExtractor.Pixel(dx, dy, frame.sequenceIndex));
+
+                // Track global max drift for the Void Proximity Radius safety override
+                int frameMax = Math.max(Math.max(leftPad, rightPad), Math.max(topPad, bottomPad));
+                if (frameMax > maxDrift) {
+                    maxDrift = frameMax;
+                }
+            }
+
+            // Derive the optimal Void Proximity Radius (Max inward drift + 10px safety envelope)
+            if (maxDrift > 0) {
+                int derivedVoidRadius = maxDrift + 10;
+                if (derivedVoidRadius > config.voidProximityRadius) {
+                    if (DEBUG) System.out.println("DEBUG: Dither Diagnostics found corner drift of " + maxDrift + "px. Overriding config.voidProximityRadius to " + derivedVoidRadius);
+                    config.voidProximityRadius = derivedVoidRadius;
+                }
+            }
         }
 
         List<Callable<FrameExtractionResult>> tasks = new ArrayList<>();
@@ -325,6 +397,7 @@ public class JTransientEngine {
         context.cleanFrames = cleanFrames;
         context.telemetry = telemetry;
         context.startTime = startTime;
+        context.driftPoints = driftPoints;
 
         return context;
     }
@@ -387,12 +460,9 @@ public class JTransientEngine {
         // Force extraction to the very edge of the sensor to map edge artifacts
         int originalEdgeMargin = config.edgeMarginPixels;
         int originalVoidProximity = config.voidProximityRadius;
-        double originalStreakElongation = config.streakMinElongation;
 
         config.edgeMarginPixels = 5;
         config.voidProximityRadius = 5;
-        // Prevent optically distorted corner stars from being classified as "elongated noise" and rejected
-        config.streakMinElongation = 999.0;
 
         // 2. Extract every stable star and galaxy from the deep stack
         List<SourceExtractor.DetectedObject> masterStars = SourceExtractor.extractSources(
@@ -406,7 +476,6 @@ public class JTransientEngine {
         config.edgeMarginPixels = originalEdgeMargin;
         config.voidProximityRadius = originalVoidProximity;
         config.growSigmaMultiplier = originalGrowSigma;
-        config.streakMinElongation = originalStreakElongation;
 
         if (DEBUG) {
             System.out.println("DEBUG: Master Stack generated. Found " + masterStars.size() + " deep stationary objects.");
@@ -417,6 +486,7 @@ public class JTransientEngine {
         // =================================================================
         short[][] slowMoverStackData = null;
         List<SourceExtractor.DetectedObject> slowMoverCandidates = new ArrayList<>();
+        PipelineResult.SlowMoverTelemetry smTelemetry = null;
 
         if (config.enableSlowMoverDetection) {
             if (DEBUG) {
@@ -439,19 +509,76 @@ public class JTransientEngine {
                     config
             );
 
+            // Extract baseline static artifacts from the median stack using IDENTICAL parameters
+            List<SourceExtractor.DetectedObject> medianArtifacts = SourceExtractor.extractSources(
+                    masterStackData,
+                    config.masterSlowMoverSigmaMultiplier,
+                    config.masterSlowMoverMinPixels,
+                    config
+            );
+
             // Restore original config
             config.growSigmaMultiplier = origGrow;
 
+            // --- DYNAMIC ELONGATION STATISTICAL BASELINE ---
+            // Measure the elongation of all standard objects to establish the optical baseline (accounts for trailing/coma).
+            List<Double> elongations = new ArrayList<>();
+            for (SourceExtractor.DetectedObject obj : rawSlowMovers) {
+                elongations.add(obj.elongation);
+            }
+
+            // Default fallback threshold if there are not enough objects to form a statistical baseline
+            double dynamicElongationThreshold = 3.0;
+            double medianElong = 0.0;
+            if (elongations.size() >= 10) {
+                elongations.sort(Double::compareTo);
+                medianElong = elongations.get(elongations.size() / 2);
+
+                List<Double> deviations = new ArrayList<>();
+                for (double e : elongations) {
+                    deviations.add(Math.abs(e - medianElong));
+                }
+                deviations.sort(Double::compareTo);
+                double mad = deviations.get(deviations.size() / 2);
+                
+                // Safety floor to prevent hyper-sensitivity on perfectly round tracking nights
+                if (mad < 0.1) mad = 0.1; 
+
+                // A slow mover must be a massive statistical outlier
+                dynamicElongationThreshold = medianElong + (mad * config.slowMoverBaselineMadMultiplier);
+                
+                if (DEBUG) System.out.printf("DEBUG: Slow Mover Stats -> Median Elong: %.2f | MAD: %.2f | Dynamic Threshold: %.2f%n", medianElong, mad, dynamicElongationThreshold);
+            }
+
             // Filter for true slow movers (must be elongated to prove they moved over time)
             for (SourceExtractor.DetectedObject obj : rawSlowMovers) {
-                if (config.masterSlowMoverMinElongation <= 0 || obj.elongation >= config.masterSlowMoverMinElongation) {
+                if (obj.elongation >= dynamicElongationThreshold) {
                     
                     // Apply strict morphological filters to reject merged binary stars and stacking artifacts
                     boolean isIrregular = SourceExtractor.isIrregularStreakShape(obj);
                     boolean isBinary = SourceExtractor.isBinaryStarAnomaly(slowMoverStackData, obj);
                     
                     if (!isIrregular && !isBinary) {
-                        slowMoverCandidates.add(obj);
+                        
+                        // --- STATIC ARTIFACT REJECTION ---
+                        // Verify this isn't just a static double star that looks identical in the median stack
+                        boolean isStaticArtifact = false;
+                        for (SourceExtractor.DetectedObject medObj : medianArtifacts) {
+                            double dist = Math.hypot(obj.x - medObj.x, obj.y - medObj.y);
+                            if (dist <= config.maxStarJitter * 2.0) {
+                                // If it's the same size in the median stack, it's a static double star.
+                                // A true slow mover would be severely erased/shrunk by the median stack!
+                                double sizeRatio = Math.max(obj.pixelArea, medObj.pixelArea) / Math.max(1.0, Math.min(obj.pixelArea, medObj.pixelArea));
+                                if (sizeRatio < 2.0) {
+                                    isStaticArtifact = true;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (!isStaticArtifact) {
+                            slowMoverCandidates.add(obj);
+                        }
                     }
                 }
             }
@@ -459,6 +586,11 @@ public class JTransientEngine {
             if (DEBUG) {
                 System.out.println("DEBUG: Slow Mover analysis complete. Found " + slowMoverCandidates.size() + " highly elongated candidate(s).");
             }
+
+            smTelemetry = new PipelineResult.SlowMoverTelemetry();
+            smTelemetry.candidatesDetected = slowMoverCandidates.size();
+            smTelemetry.medianElongation = medianElong;
+            smTelemetry.dynamicElongationThreshold = dynamicElongationThreshold;
         }
 
         // =================================================================
@@ -502,7 +634,8 @@ public class JTransientEngine {
 
         // Return the unified result with the new Master Data payloads!
         return new PipelineResult(trackResult.tracks, telemetry, masterStackData, masterStars, 
-                                  slowMoverStackData, slowMoverCandidates, trackResult.allTransients, trackResult.masterMask);
+                                  slowMoverStackData, slowMoverCandidates, trackResult.allTransients,
+                                  trackResult.masterMask, context.driftPoints, smTelemetry);
     }
 
     /**

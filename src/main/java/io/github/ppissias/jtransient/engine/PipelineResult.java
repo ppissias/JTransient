@@ -9,27 +9,39 @@
  */
 package io.github.ppissias.jtransient.engine;
 
-import java.util.List;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.core.TrackLinker;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 
+import java.util.List;
+
 public class PipelineResult {
     public final List<TrackLinker.Track> tracks;
     public final PipelineTelemetry telemetry;
-
-    // --- NEW: Master Data Payloads for the Diagnostic UI ---
     public final short[][] masterStackData;
     public final List<SourceExtractor.DetectedObject> masterStars;
 
-    // --- NEW: Slow Mover Data Payloads ---
+    // --- Slow Mover Data Payloads ---
     public final short[][] slowMoverStackData;
     public final List<SourceExtractor.DetectedObject> slowMoverCandidates;
 
     /** A chronological, frame-by-frame list of all surviving transients */
     public final List<List<SourceExtractor.DetectedObject>> allTransients;
 
+    /** The pixel-perfect Boolean Veto Mask generated from the Master Star Map */
     public final boolean[][] masterMask;
+
+    /** The diagnostic points representing the relative translation vector of the dither/drift */
+    public final List<SourceExtractor.Pixel> driftPoints;
+
+    /** Statistical baseline metrics calculated during the slow mover detection phase */
+    public final SlowMoverTelemetry slowMoverTelemetry;
+
+    public static class SlowMoverTelemetry {
+        public int candidatesDetected;
+        public double medianElongation;
+        public double dynamicElongationThreshold;
+    }
 
     public PipelineResult(List<TrackLinker.Track> tracks,
                           PipelineTelemetry telemetry,
@@ -37,7 +49,10 @@ public class PipelineResult {
                           List<SourceExtractor.DetectedObject> masterStars,
                           short[][] slowMoverStackData,
                           List<SourceExtractor.DetectedObject> slowMoverCandidates,
-                          List<List<SourceExtractor.DetectedObject>> allTransients, boolean[][] masterMask) {
+                          List<List<SourceExtractor.DetectedObject>> allTransients,
+                          boolean[][] masterMask,
+                          List<SourceExtractor.Pixel> driftPoints,
+                          SlowMoverTelemetry slowMoverTelemetry) {
         this.tracks = tracks;
         this.telemetry = telemetry;
         this.masterStackData = masterStackData;
@@ -46,5 +61,7 @@ public class PipelineResult {
         this.slowMoverCandidates = slowMoverCandidates;
         this.allTransients = allTransients;
         this.masterMask = masterMask;
+        this.driftPoints = driftPoints;
+        this.slowMoverTelemetry = slowMoverTelemetry;
     }
 }

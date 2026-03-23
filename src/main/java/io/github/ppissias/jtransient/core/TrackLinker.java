@@ -81,41 +81,19 @@ public class TrackLinker {
         double angleToleranceRad = Math.toRadians(config.angleToleranceDegrees);
         TrackerTelemetry telemetry = new TrackerTelemetry();
 
-        if (listener != null) {
-            listener.onProgressUpdate(5, "Purging stationary defects...");
-        }
-
         // =================================================================
-        // PHASE 1: Separate Streaks and Purge Stationary Defects
+        // PHASE 1: Separate Streaks
         // =================================================================
-        List<SourceExtractor.DetectedObject> rawStreaks = new ArrayList<>();
+        List<SourceExtractor.DetectedObject> validMovingStreaks = new ArrayList<>();
         List<List<SourceExtractor.DetectedObject>> pointSourcesOnly = new ArrayList<>();
 
         for (int i = 0; i < allFrames.size(); i++) {
             pointSourcesOnly.add(new ArrayList<>());
             for (SourceExtractor.DetectedObject obj : allFrames.get(i)) {
-                if (obj.isStreak) rawStreaks.add(obj);
+                if (obj.isStreak) validMovingStreaks.add(obj);
                 else pointSourcesOnly.get(i).add(obj);
             }
         }
-
-        List<SourceExtractor.DetectedObject> validMovingStreaks = new ArrayList<>();
-        if (JTransientEngine.DEBUG) System.out.println("DEBUG: Evaluating " + rawStreaks.size() + " total streaks for sensor defects...");
-
-        for (SourceExtractor.DetectedObject candidate : rawStreaks) {
-            boolean isStationaryDefect = false;
-            for (SourceExtractor.DetectedObject other : rawStreaks) {
-                if (candidate == other || candidate.sourceFrameIndex == other.sourceFrameIndex) continue;
-
-                if (distance(candidate.x, candidate.y, other.x, other.y) <= config.stationaryDefectThreshold) {
-                    isStationaryDefect = true;
-                    break;
-                }
-            }
-            if (!isStationaryDefect) validMovingStreaks.add(candidate);
-        }
-
-        if (JTransientEngine.DEBUG) System.out.println("DEBUG: Purged " + (rawStreaks.size() - validMovingStreaks.size()) + " stationary hot columns.");
 
         if (listener != null) {
             listener.onProgressUpdate(15, "Linking fast-moving streaks...");
@@ -137,20 +115,67 @@ public class TrackLinker {
             continuousStreakTrack.addPoint(baseStreak);
             streakMatched[i] = true;
 
-            for (int j = i + 1; j < validMovingStreaks.size(); j++) {
-                if (streakMatched[j]) continue;
+            SourceExtractor.DetectedObject currentAnchor = baseStreak;
+            boolean directionEstablished = false;
+            double forwardAngle = 0;
 
-                SourceExtractor.DetectedObject candidateStreak = validMovingStreaks.get(j);
+            while (true) {
+                SourceExtractor.DetectedObject bestMatch = null;
+                int bestMatchIndex = -1;
+                double shortestDistance = Double.MAX_VALUE;
+                double bestTrajectoryAngle = 0;
 
-                if (anglesMatch(baseStreak.angle, candidateStreak.angle, angleToleranceRad)) {
-                    double dy = candidateStreak.y - baseStreak.y;
-                    double dx = candidateStreak.x - baseStreak.x;
-                    double trajectoryAngle = Math.atan2(dy, dx);
+                // Scan all available streaks to find the absolute closest valid link
+                for (int j = 0; j < validMovingStreaks.size(); j++) {
+                    if (streakMatched[j]) continue;
 
-                    if (anglesMatch(baseStreak.angle, trajectoryAngle, angleToleranceRad)) {
-                        continuousStreakTrack.addPoint(candidateStreak);
-                        streakMatched[j] = true;
+                    SourceExtractor.DetectedObject candidateStreak = validMovingStreaks.get(j);
+                    
+                    // Ensure we only link chronologically forward (allowing same-frame fragmented streaks to merge)
+                    if (candidateStreak.sourceFrameIndex < currentAnchor.sourceFrameIndex) continue;
+
+                    if (anglesMatch(baseStreak.angle, candidateStreak.angle, angleToleranceRad)) {
+                        double dy = candidateStreak.y - currentAnchor.y;
+                        double dx = candidateStreak.x - currentAnchor.x;
+                        double trajectoryAngle = Math.atan2(dy, dx);
+
+                        boolean isDirectionValid = false;
+                        if (!directionEstablished) {
+                            // Establish forward trajectory from the first valid jump
+                            if (anglesMatch(baseStreak.angle, trajectoryAngle, angleToleranceRad)) {
+                                isDirectionValid = true;
+                            }
+                        } else {
+                            // Subsequent jumps must maintain the strictly established forward polarity
+                            if (isDirectionConsistent(forwardAngle, trajectoryAngle, angleToleranceRad)) {
+                                isDirectionValid = true;
+                            }
+                        }
+                        
+                        if (isDirectionValid) {
+                            double dist = distance(currentAnchor.x, currentAnchor.y, candidateStreak.x, candidateStreak.y);
+                            if (dist < shortestDistance) {
+                                shortestDistance = dist;
+                                bestMatch = candidateStreak;
+                                bestMatchIndex = j;
+                                bestTrajectoryAngle = trajectoryAngle;
+                            }
+                        }
                     }
+                }
+                
+                if (bestMatch != null) {
+                    continuousStreakTrack.addPoint(bestMatch);
+                    streakMatched[bestMatchIndex] = true;
+                    currentAnchor = bestMatch;
+                    
+                    if (!directionEstablished) {
+                        forwardAngle = bestTrajectoryAngle;
+                        directionEstablished = true;
+                    }
+                } else {
+                    // No more valid streaks can be linked to this track
+                    break;
                 }
             }
             
@@ -337,9 +362,8 @@ public class TrackLinker {
                             double dist12 = distance(p1.x, p1.y, p2.x, p2.y);
                             if (dist12 < config.maxStarJitter) continue;
 
-                            // Morphological checks (maxJumpPixels explicitly bypassed for extreme speeds)
-                            if (!isSizeConsistent(p1, p2, config.maxSizeRatio)) continue;
-                            if (!isBrightnessConsistent(p1, p2, config.maxFluxRatio)) continue;
+                            // Morphological profile check (maxJumpPixels explicitly bypassed for extreme speeds)
+                            if (!isProfileConsistent(p1, p2, config)) continue;
 
                             double v12 = dist12 / dt12; // Velocity in pixels per ms
                             double expectedAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
@@ -372,8 +396,7 @@ public class TrackLinker {
                                         
                                         // If strict forward direction matches
                                         if (isDirectionConsistent(expectedAngle, actualAngle, angleToleranceRad)) {
-                                            if (isSizeConsistent(currentLineAnchor, p3, config.maxSizeRatio) &&
-                                                isBrightnessConsistent(currentLineAnchor, p3, config.maxFluxRatio)) {
+                                            if (isProfileConsistent(currentLineAnchor, p3, config)) {
                                                 
                                                 if (vDiffRatio < bestVError) {
                                                     bestVError = vDiffRatio;
@@ -442,8 +465,7 @@ public class TrackLinker {
                         // Baseline Filter Gates
                         if (dist12 < config.maxStarJitter) { telemetry.countBaselineJitter++; continue; }
                         if (dist12 > config.maxJumpPixels) { telemetry.countBaselineJump++; continue; }
-                        if (!isSizeConsistent(p1, p2, config.maxSizeRatio)) { telemetry.countBaselineSize++; continue; }
-                        if (!isBrightnessConsistent(p1, p2, config.maxFluxRatio)) { telemetry.countBaselineFlux++; continue; }
+                        if (!isProfileConsistent(p1, p2, config)) { telemetry.countBaselineSize++; continue; }
 
                         Track currentTrack = new Track();
                         currentTrack.addPoint(p1);
@@ -476,10 +498,8 @@ public class TrackLinker {
                                 if (lineError <= config.predictionTolerance) {
                                     double actualAngle = Math.atan2(p3.y - lastPoint.y, p3.x - lastPoint.x);
                                     if (isDirectionConsistent(expectedAngle, actualAngle, angleToleranceRad)) {
-                                        if (!isSizeConsistent(lastPoint, p3, config.maxSizeRatio)) {
+                                        if (!isProfileConsistent(lastPoint, p3, config)) {
                                             telemetry.countP3Size++;
-                                        } else if (!isBrightnessConsistent(lastPoint, p3, config.maxFluxRatio)) {
-                                            telemetry.countP3Flux++;
                                         } else {
                                             if (lineError < bestError) {
                                                 bestError = lineError;
@@ -628,15 +648,13 @@ public class TrackLinker {
             System.out.println("1. Baseline Generation (p1 -> p2) Rejections:");
             System.out.println("   - Stationary / Jitter           : " + telemetry.countBaselineJitter);
             System.out.println("   - Exceeded Max Jump Velocity    : " + telemetry.countBaselineJump);
-            System.out.println("   - Morphological Size Mismatch   : " + telemetry.countBaselineSize);
-            System.out.println("   - Photometric Flux Mismatch     : " + telemetry.countBaselineFlux);
+            System.out.println("   - Morphological Profile Mismatch: " + telemetry.countBaselineSize);
 
             System.out.println("\n2. Point 3+ (p3, p4...) Search Rejections:");
             System.out.println("   - Not Collinear (Off-line)      : " + telemetry.countP3NotLine);
             System.out.println("   - Wrong Direction / Angle       : " + telemetry.countP3WrongDirection);
             System.out.println("   - Exceeded Max Jump Velocity    : " + telemetry.countP3Jump);
-            System.out.println("   - Morphological Size Mismatch   : " + telemetry.countP3Size);
-            System.out.println("   - Photometric Flux Mismatch     : " + telemetry.countP3Flux);
+            System.out.println("   - Morphological Profile Mismatch: " + telemetry.countP3Size);
 
             System.out.println("\n3. Final Track Rejections:");
             System.out.println("   - Insufficient track length     : " + telemetry.countTrackTooShort);
@@ -663,13 +681,24 @@ public class TrackLinker {
     // HELPER METHODS
     // =================================================================
 
-    private static boolean isSizeConsistent(SourceExtractor.DetectedObject obj1, SourceExtractor.DetectedObject obj2, double maxRatio) {
-        if (maxRatio <= 0.0) return true; // Disabled via config
-        
-        double size1 = Math.max(obj1.pixelArea, 1.0);
-        double size2 = Math.max(obj2.pixelArea, 1.0);
-        double ratio = Math.max(size1, size2) / Math.min(size1, size2);
-        return ratio <= maxRatio;
+
+    private static boolean isProfileConsistent(SourceExtractor.DetectedObject obj1, SourceExtractor.DetectedObject obj2, DetectionConfig config) {
+        // 1. FWHM Consistency (Optics fingerprint)
+        if (config.maxFwhmRatio > 0.0) {
+            double fwhm1 = Math.max(obj1.fwhm, 0.1);
+            double fwhm2 = Math.max(obj2.fwhm, 0.1);
+            double fwhmRatio = Math.max(fwhm1, fwhm2) / Math.min(fwhm1, fwhm2);
+            if (fwhmRatio > config.maxFwhmRatio) return false;
+        }
+
+        // 2. Surface Brightness Consistency (Density of the light)
+        if (config.maxSurfaceBrightnessRatio > 0.0) {
+            double sb1 = obj1.totalFlux / Math.max(obj1.pixelArea, 1.0);
+            double sb2 = obj2.totalFlux / Math.max(obj2.pixelArea, 1.0);
+            double sbRatio = Math.max(sb1, sb2) / Math.min(sb1, sb2);
+            if (sbRatio > config.maxSurfaceBrightnessRatio) return false;
+        }
+        return true;
     }
 
     private static double distance(double x1, double y1, double x2, double y2) {
@@ -747,12 +776,4 @@ public class TrackLinker {
         return consistencyRatio >= rhythmMinConsistencyRatio;
     }
 
-    private static boolean isBrightnessConsistent(SourceExtractor.DetectedObject obj1, SourceExtractor.DetectedObject obj2, double maxRatio) {
-        if (maxRatio <= 0.0) return true; // Disabled via config
-        
-        double flux1 = Math.max(Math.abs(obj1.totalFlux), 1.0);
-        double flux2 = Math.max(Math.abs(obj2.totalFlux), 1.0);
-        double ratio = Math.max(flux1, flux2) / Math.min(flux1, flux2);
-        return ratio <= maxRatio;
-    }
 }
