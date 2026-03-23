@@ -437,6 +437,9 @@ public class JTransientEngine {
             masterStackData = MasterMapGenerator.createMedianMasterStack(cleanFrames);
         }
 
+        int sensorHeight = masterStackData.length;
+        int sensorWidth = masterStackData[0].length;
+
         // --- MASTER MAP PARAMETERS ---
         double masterSigma = config.masterSigmaMultiplier;
         int masterMinPix = config.masterMinDetectionPixels;
@@ -520,6 +523,15 @@ public class JTransientEngine {
             // Restore original config
             config.growSigmaMultiplier = origGrow;
 
+            // --- BUILD MEDIAN ARTIFACT MASK ---
+            // Paint the median artifacts onto a fast 2D boolean array for pixel-perfect overlap checks
+            boolean[][] medianMask = new boolean[sensorHeight][sensorWidth];
+            for (SourceExtractor.DetectedObject medObj : medianArtifacts) {
+                for (SourceExtractor.Pixel p : medObj.rawPixels) {
+                    medianMask[p.y][p.x] = true;
+                }
+            }
+
             // --- DYNAMIC ELONGATION STATISTICAL BASELINE ---
             // Measure the elongation of all standard objects to establish the optical baseline (accounts for trailing/coma).
             List<Double> elongations = new ArrayList<>();
@@ -557,24 +569,23 @@ public class JTransientEngine {
                     // Apply strict morphological filters to reject merged binary stars and stacking artifacts
                     boolean isIrregular = SourceExtractor.isIrregularStreakShape(obj);
                     boolean isBinary = SourceExtractor.isBinaryStarAnomaly(slowMoverStackData, obj);
-                    
+
                     if (!isIrregular && !isBinary) {
                         
                         // --- STATIC ARTIFACT REJECTION ---
-                        // Verify this isn't just a static double star that looks identical in the median stack
-                        boolean isStaticArtifact = false;
-                        for (SourceExtractor.DetectedObject medObj : medianArtifacts) {
-                            double dist = Math.hypot(obj.x - medObj.x, obj.y - medObj.y);
-                            if (dist <= config.maxStarJitter * 2.0) {
-                                // If it's the same size in the median stack, it's a static double star.
-                                // A true slow mover would be severely erased/shrunk by the median stack!
-                                double sizeRatio = Math.max(obj.pixelArea, medObj.pixelArea) / Math.max(1.0, Math.min(obj.pixelArea, medObj.pixelArea));
-                                if (sizeRatio < 2.0) {
-                                    isStaticArtifact = true;
-                                    break;
-                                }
-                            }
+                        // Calculate the exact percentage of this object's pixels that also exist in the median stack.
+                        // A true slow mover (asteroid) will be largely erased in the median stack (low overlap).
+                        // A static double-star artifact will look almost identical in both stacks (high overlap).
+                        int overlapCount = 0;
+                        for (SourceExtractor.Pixel p : obj.rawPixels) {
+                            if (medianMask[p.y][p.x]) overlapCount++;
                         }
+                        
+                        double overlapFraction = (double) overlapCount / obj.rawPixels.size();
+                        
+                        // Relaxed to 0.85 (85%). A static double star will have ~100% overlap.
+                        // A true slow mover might have up to 70% overlap if its center got baked into the median stack!
+                        boolean isStaticArtifact = overlapFraction > 0.85; 
 
                         if (!isStaticArtifact) {
                             slowMoverCandidates.add(obj);
@@ -609,9 +620,6 @@ public class JTransientEngine {
                 listener.onProgressUpdate(scaledProgress, message);
             };
         }
-
-        int sensorHeight = cleanFrames.get(0).pixelData.length;
-        int sensorWidth = cleanFrames.get(0).pixelData[0].length;
 
         TrackLinker.TrackingResult trackResult = TrackLinker.findMovingObjects(
                 cleanFramesData,

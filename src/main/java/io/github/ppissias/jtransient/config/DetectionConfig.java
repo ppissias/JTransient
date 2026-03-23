@@ -104,7 +104,7 @@ public class DetectionConfig implements Cloneable {
      * By taking the maximum of this middle band, the stack captures ultra-slow moving objects without including
      * high-energy single-frame flashes (like fast streaks or cosmic rays). Default is 0.30 (Middle 30%).
      */
-    public double slowMoverStackMiddleFraction = 0.50;
+    public double slowMoverStackMiddleFraction = 0.85;
 
     /** * Minimum pixel area required to flag an elongated object in the master stack as a slow mover candidate. */
     public int masterSlowMoverMinPixels = 20;
@@ -175,7 +175,7 @@ public class DetectionConfig implements Cloneable {
      * up to this fraction (e.g., 0.25 = 25%). This rescues high-energy transients or moving objects
      * that happen to graze the protective halo of a background star.
      */
-    public double maxMaskOverlapFraction = 0.25;
+    public double maxMaskOverlapFraction = 0.75;
 
     /** * Once a baseline vector is established (Points 1 and 2), Point 3 must fall within this many pixels
      * of the infinitely projected mathematical trajectory line.
