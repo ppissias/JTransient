@@ -22,7 +22,7 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 For a deeper dive into the inner workings and configuration of JTransient, please refer to the following dedicated guides:
 
 * [**The Detection Algorithm (`ALGORITHM.md`)**](ALGORITHM.md): A highly detailed, chronological breakdown of the mathematical and logical steps executed during the tracking pipeline, including the Auto-Tuner, Slow Mover Detection, and Time-Based Kinematics.
-* **Pipeline Configuration Guide (`PIPELINE.md`)**: An in-depth breakdown of every tuning parameter within the `DetectionConfig` object, detailing exactly where and how each parameter influences the detection algorithms.
+* [**Pipeline Configuration Guide (`PIPELINE.md`)**](PIPELINE.md): An in-depth breakdown of every tuning parameter within the `DetectionConfig` object, detailing exactly where and how each parameter influences the detection algorithms.
 
 ---
 
