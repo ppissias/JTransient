@@ -185,7 +185,7 @@ public class DetectionConfig implements Cloneable {
     /** * For fast streaks, this ensures the streak's physical rotation angle matches the
      * trajectory vector it is traveling on.
      */
-    public double angleToleranceDegrees = 5.0;
+    public double angleToleranceDegrees = 2;
 
     /** * Determines how many points are needed to confirm a track by dividing the total number of frames
      * by this ratio (e.g., 20 frames / 3.0 = ~7 points required).
@@ -215,7 +215,7 @@ public class DetectionConfig implements Cloneable {
 
     /** * Morphological Filter: Surface Brightness (Flux / Area) identifies the density of the light.
      * Prevents linking a concentrated cosmic ray to a diffuse noise smudge. 0 to disable. */
-    public double maxSurfaceBrightnessRatio = 3.0;
+    public double maxSurfaceBrightnessRatio = 2.0;
 
     /** * Kinematic Speed Check: Max allowed pixel deviation from the expected median speed to still
      * be considered part of a "steady rhythm".
@@ -283,19 +283,6 @@ public class DetectionConfig implements Cloneable {
      * Prevents single hot-pixels or cosmic rays from being flagged. */
     public int anomalyMinPixels = 25;
 
-    // =================================================================
-    // 6. AUTO-TUNER PARAMETERS
-    // =================================================================
-
-    /** * Weighting penalty for transients used in the Auto-Tuner scoring heuristic. */
-    public double scoreWeightTransientPenalty = 3.0;
-
-    /** * Weighting penalty for high sigma thresholds used in the Auto-Tuner scoring heuristic. 
-     * Forces the tuner to prefer the lowest possible sigma that remains clean. */
-    public double scoreWeightSigmaPenalty = 15.0;
-
-    /** * Weighting penalty for high minimum pixel limits used in the Auto-Tuner scoring heuristic. */
-    public double scoreWeightMinPixPenalty = 5.0;
 
     @Override
     public DetectionConfig clone() {
