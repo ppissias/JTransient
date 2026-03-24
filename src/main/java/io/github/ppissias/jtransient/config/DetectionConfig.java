@@ -102,23 +102,23 @@ public class DetectionConfig implements Cloneable {
 
     /** * The fraction of the sorted pixel values around the median to use when generating a Slow Mover Master Stack.
      * By taking the maximum of this middle band, the stack captures ultra-slow moving objects without including
-     * high-energy single-frame flashes (like fast streaks or cosmic rays). Default is 0.30 (Middle 30%).
+     * high-energy single-frame flashes (like fast streaks or cosmic rays).
      */
-    public double slowMoverStackMiddleFraction = 0.85;
+    public double slowMoverStackMiddleFraction = 0.75;
 
     /** * Minimum pixel area required to flag an elongated object in the master stack as a slow mover candidate. */
-    public int masterSlowMoverMinPixels = 20;
+    public int masterSlowMoverMinPixels = 15;
 
     /** * The strict detection threshold multiplier used exclusively when scanning the master stack for ultra-slow movers. */
     public double masterSlowMoverSigmaMultiplier = 4;
 
     /** * The grow sigma multiplier (hysteresis) used exclusively when scanning the master stack for ultra-slow movers. */
-    public double masterSlowMoverGrowSigmaMultiplier = 4;
+    public double masterSlowMoverGrowSigmaMultiplier = 3.5;
 
     /** * Multiplier applied to the MAD to calculate the dynamic elongation threshold for slow movers.
      * A value of 5.0 means an object must be 5 deviations more elongated than the median to be flagged.
      */
-    public double slowMoverBaselineMadMultiplier = 5.0;
+    public double slowMoverBaselineMadMultiplier = 4.5;
 
     // =================================================================
     // 2. FRAME QUALITY ANALYZER PARAMETERS

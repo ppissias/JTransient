@@ -202,7 +202,9 @@ public class TrackLinker {
         int totalTransientsFound = 0;
 
         boolean[][] masterMask = new boolean[sensorHeight][sensorWidth];
-        int dilationRadius = (int) Math.ceil(config.maxStarJitter);
+        // The Master Map represents the median (center) of the atmospheric wobble cloud.
+        // Therefore, we only dilate by half the frame-to-frame maximum jitter to safely cover the seeing disk!
+        int dilationRadius = (int) Math.max(1, Math.round(config.maxStarJitter / 2.0));
 
         for (SourceExtractor.DetectedObject mStar : masterStars) {
             for (SourceExtractor.Pixel p : mStar.rawPixels) {

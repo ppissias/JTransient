@@ -7,13 +7,22 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 ## ✨ Key Features
 
 * **Robust Source Extraction:** Custom mathematical extraction that separates true point sources and streaks from background noise using local background estimation, hysteresis, and sigma clipping.
-* **Time-Based Kinematics:** Uses frame timestamps to calculate exact velocity vectors, allowing the engine to track fast-moving satellites flawlessly, even across dropped frames or variable camera delays.
+* **Time-Based Kinematics:** Uses frame timestamps to calculate exact velocity vectors, allowing the engine to track fast-moving satellites robustly, even across dropped frames or variable camera delays.
 * **Geometric Fallback Linking:** Time-agnostic collinear linking for slow asteroids using strict kinematic rules (angle tolerance, prediction line variance, and rhythm consistency).
-* **Deep Master Star Map Veto:** Generates a highly accurate pixel-perfect Boolean Veto Mask from a dynamically generated median stack to ruthlessly purge background stars.
+* **Deep Master Star Map Veto:** Generates a highly accurate pixel-perfect Boolean Veto Mask from a dynamically generated median stack to efficiently purge background stars.
 * **Slow Mover Detection:** Features a specialized percentile-stacking engine designed to detect ultra-slow trailing objects that barely move over the course of a session.
 * **Smart Auto-Tuning:** Includes a mathematical Auto-Tuner that samples your image sequence to dynamically measure atmospheric seeing (star wobble) and optical elongation, automatically configuring the engine's tracking thresholds to prevent false positives.
 * **Deep Telemetry:** Returns highly detailed telemetry for every run, allowing developers to see exactly why potential tracks were rejected (e.g., morphological mismatch, velocity limits, or erratic rhythm).
 * **Modular Pipeline API:** Run the entire pipeline, manually pre-compute background stacks for UI performance, or just extract raw frame-by-frame transients for custom applications.
+
+---
+
+## 📖 Detailed Documentation
+
+For a deeper dive into the inner workings and configuration of JTransient, please refer to the following dedicated guides:
+
+* [**The Detection Algorithm (`ALGORITHM.md`)**](ALGORITHM.md): A highly detailed, chronological breakdown of the mathematical and logical steps executed during the tracking pipeline, including the Auto-Tuner, Slow Mover Detection, and Time-Based Kinematics.
+* **Pipeline Configuration Guide (`PIPELINE.md`)**: An in-depth breakdown of every tuning parameter within the `DetectionConfig` object, detailing exactly where and how each parameter influences the detection algorithms.
 
 ---
 
@@ -70,7 +79,7 @@ engine.shutdown();
 **Return Data (`PipelineResult`):**
 The return payload contains highly detailed structures ideal for rendering a diagnostic UI.
 *   **`tracks`**: Confirmed `TrackLinker.Track` objects. Tracks are mathematically tagged as `isTimeBasedTrack` (constant speed track based on time), `isStreakTrack` (Streak tracks), `isAnomaly` (flashes), or standard geometric moving objects.
-*   **`masterStackData`**: The generated deep median `short[][]` pixel array (perfect as a clean UI background).
+*   **`masterStackData`**: The generated deep median `short[][]` pixel array (ideal for use as a clean UI background).
 *   **`masterStars`**: A list of all stationary `DetectedObject`s extracted to build the mask.
 *   **`slowMoverStackData`**: The specialized percentile `short[][]` pixel array used for identifying ultra-slow objects.
 *   **`slowMoverCandidates`**: Highly-elongated `DetectedObject`s identified as slow-mover trails.
@@ -95,6 +104,8 @@ public static List<DetectedObject> extractSources(
 ---
 
 ## 🧠 Architecture Overview
+
+*For a complete, step-by-step breakdown of the engine, please see the Detection Algorithm Guide.*
 
 JTransient executes in four distinct phases:
 
