@@ -36,12 +36,12 @@ public class JTransientEngine {
 
     private static class FrameExtractionResult {
         public int frameIndex;
-        public List<SourceExtractor.DetectedObject> extractedObjects;
+        public SourceExtractor.ExtractionResult extractionResult;
         public FrameQualityAnalyzer.FrameMetrics metrics;
     }
 
     public static class TransientExtractionContext {
-        public List<List<SourceExtractor.DetectedObject>> cleanFramesData;
+        public List<SourceExtractor.ExtractionResult> cleanFramesData;
         public List<ImageFrame> cleanFrames;
         public PipelineTelemetry telemetry;
         public long startTime;
@@ -51,10 +51,12 @@ public class JTransientEngine {
     public static class FrameTransients {
         public final String filename;
         public final List<SourceExtractor.DetectedObject> transients;
+        public final SourceExtractor.ExtractionResult extractionResult;
 
-        public FrameTransients(String filename, List<SourceExtractor.DetectedObject> transients) {
+        public FrameTransients(String filename, List<SourceExtractor.DetectedObject> transients, SourceExtractor.ExtractionResult extractionResult) {
             this.filename = filename;
             this.transients = transients;
+            this.extractionResult = extractionResult;
         }
     }
 
@@ -130,7 +132,7 @@ public class JTransientEngine {
     }
 
     /**
-     * The single entry point for the JTransient library.
+     * Entry point for the JTransient library.
      * Convenience wrapper that calculates the master stack automatically.
      */
     public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
@@ -173,7 +175,7 @@ public class JTransientEngine {
         config.voidProximityRadius = 5;
 
         List<SourceExtractor.DetectedObject> masterStars = SourceExtractor.extractSources(
-                masterStackData, config.masterSigmaMultiplier, config.masterMinDetectionPixels, config);
+                masterStackData, config.masterSigmaMultiplier, config.masterMinDetectionPixels, config).objects;
 
         config.edgeMarginPixels = originalEdgeMargin;
         config.voidProximityRadius = originalVoidProximity;
@@ -187,8 +189,13 @@ public class JTransientEngine {
             proxyListener = (percentage, message) -> listener.onProgressUpdate(60 + (int) (percentage * 0.40), message); // Scale 0-100 to 60-100
         }
 
+        List<List<SourceExtractor.DetectedObject>> cleanFramesObjects = new ArrayList<>();
+        for (SourceExtractor.ExtractionResult extRes : context.cleanFramesData) {
+            cleanFramesObjects.add(extRes.objects);
+        }
+
         TrackLinker.TransientsFilterResult filterResult = TrackLinker.filterTransients(
-                context.cleanFramesData, masterStars, config, proxyListener, sensorWidth, sensorHeight);
+                cleanFramesObjects, masterStars, config, proxyListener, sensorWidth, sensorHeight);
         
         if (listener != null) listener.onProgressUpdate(100, "Transient Extraction Complete!");
 
@@ -196,7 +203,8 @@ public class JTransientEngine {
         for (int i = 0; i < context.cleanFrames.size(); i++) {
             finalResult.add(new FrameTransients(
                     context.cleanFrames.get(i).identifier,
-                    filterResult.mergedTransients.get(i)
+                    filterResult.mergedTransients.get(i),
+                    context.cleanFramesData.get(i)
             ));
         }
         return finalResult;
@@ -222,76 +230,7 @@ public class JTransientEngine {
         // =================================================================
         // --- NEW: DITHER & DRIFT DIAGNOSTICS ---
         // =================================================================
-        if (listener != null) {
-            listener.onProgressUpdate(0, "Analyzing sequence dither and corner drift...");
-        }
-
-        List<SourceExtractor.Pixel> driftPoints = new ArrayList<>();
-        if (!inputFrames.isEmpty()) {
-            int height = inputFrames.get(0).pixelData.length;
-            int width = inputFrames.get(0).pixelData[0].length;
-            int maxDrift = 0;
-
-            for (ImageFrame frame : inputFrames) {
-                // Robust center background estimate (11x11 median) to avoid single bright stars
-                int[] centerPixels = new int[121];
-                int idx = 0;
-                int cx = width / 2;
-                int cy = height / 2;
-                for (int dy = -5; dy <= 5; dy++) {
-                    for (int dx = -5; dx <= 5; dx++) {
-                        centerPixels[idx++] = frame.pixelData[cy + dy][cx + dx] + 32768;
-                    }
-                }
-                java.util.Arrays.sort(centerPixels);
-                int centerVal = centerPixels[60];
-                double voidThresh = centerVal * config.voidThresholdFraction;
-
-                int limit = Math.min(width, height) / 3;
-                int leftPad = 0, rightPad = 0, topPad = 0, bottomPad = 0;
-                int midX = width / 2;
-                int midY = height / 2;
-
-                // Scan Left edge inward
-                for (int i = 0; i < limit; i++) {
-                    if (frame.pixelData[midY][i] + 32768 > voidThresh) { leftPad = i; break; }
-                }
-                // Scan Right edge inward
-                for (int i = 0; i < limit; i++) {
-                    if (frame.pixelData[midY][width - 1 - i] + 32768 > voidThresh) { rightPad = i; break; }
-                }
-                // Scan Top edge inward
-                for (int i = 0; i < limit; i++) {
-                    if (frame.pixelData[i][midX] + 32768 > voidThresh) { topPad = i; break; }
-                }
-                // Scan Bottom edge inward
-                for (int i = 0; i < limit; i++) {
-                    if (frame.pixelData[height - 1 - i][midX] + 32768 > voidThresh) { bottomPad = i; break; }
-                }
-
-                // Calculate the single uniform translation (dx, dy) of the entire frame
-                int dx = leftPad - rightPad;
-                int dy = topPad - bottomPad;
-
-                // Store the exact relative movement vector (dx, dy) instead of absolute pixel coordinates
-                driftPoints.add(new SourceExtractor.Pixel(dx, dy, frame.sequenceIndex));
-
-                // Track global max drift for the Void Proximity Radius safety override
-                int frameMax = Math.max(Math.max(leftPad, rightPad), Math.max(topPad, bottomPad));
-                if (frameMax > maxDrift) {
-                    maxDrift = frameMax;
-                }
-            }
-
-            // Derive the optimal Void Proximity Radius (Max inward drift + 10px safety envelope)
-            if (maxDrift > 0) {
-                int derivedVoidRadius = maxDrift + 10;
-                if (derivedVoidRadius > config.voidProximityRadius) {
-                    if (DEBUG) System.out.println("DEBUG: Dither Diagnostics found corner drift of " + maxDrift + "px. Overriding config.voidProximityRadius to " + derivedVoidRadius);
-                    config.voidProximityRadius = derivedVoidRadius;
-                }
-            }
-        }
+        List<SourceExtractor.Pixel> driftPoints = analyzeDitherAndDrift(inputFrames, config, listener);
 
         List<Callable<FrameExtractionResult>> tasks = new ArrayList<>();
 
@@ -305,12 +244,13 @@ public class JTransientEngine {
         for (ImageFrame frame : inputFrames) {
             tasks.add(() -> {
                 // 1. Extract Sources (Passing config as the 4th argument)
-                List<SourceExtractor.DetectedObject> objectsInFrame = SourceExtractor.extractSources(
+                SourceExtractor.ExtractionResult extResult = SourceExtractor.extractSources(
                         frame.pixelData,
                         config.detectionSigmaMultiplier,
                         config.minDetectionPixels,
                         config
                 );
+                List<SourceExtractor.DetectedObject> objectsInFrame = extResult.objects;
 
                 for (SourceExtractor.DetectedObject obj : objectsInFrame) {
                     obj.sourceFrameIndex = frame.sequenceIndex;
@@ -324,7 +264,7 @@ public class JTransientEngine {
 
                 FrameExtractionResult result = new FrameExtractionResult();
                 result.frameIndex = frame.sequenceIndex;
-                result.extractedObjects = objectsInFrame;
+                result.extractionResult = extResult;
                 result.metrics = metrics;
 
                 // Safely update progress from multiple threads (Mapping Phase 1 to 0-40% of the total bar)
@@ -347,18 +287,24 @@ public class JTransientEngine {
         completedResults.sort(Comparator.comparingInt(r -> r.frameIndex));
 
         // Unpack results & update Telemetry
-        List<List<SourceExtractor.DetectedObject>> rawExtractedFrames = new ArrayList<>();
+        List<SourceExtractor.ExtractionResult> rawExtractedFrames = new ArrayList<>();
         List<FrameQualityAnalyzer.FrameMetrics> sessionMetrics = new ArrayList<>();
 
         for (FrameExtractionResult result : completedResults) {
-            rawExtractedFrames.add(result.extractedObjects);
+            rawExtractedFrames.add(result.extractionResult);
             sessionMetrics.add(result.metrics);
 
-            telemetry.totalRawObjectsExtracted += result.extractedObjects.size();
+            telemetry.totalRawObjectsExtracted += result.extractionResult.objects.size();
             PipelineTelemetry.FrameExtractionStat stat = new PipelineTelemetry.FrameExtractionStat();
             stat.frameIndex = result.frameIndex;
             stat.filename = result.metrics.filename;
-            stat.objectCount = result.extractedObjects.size();
+            stat.objectCount = result.extractionResult.objects.size();
+            if (result.extractionResult.backgroundMetrics != null) {
+                stat.bgMedian = result.extractionResult.backgroundMetrics.median;
+                stat.bgSigma = result.extractionResult.backgroundMetrics.sigma;
+            }
+            stat.seedThreshold = result.extractionResult.seedThreshold;
+            stat.growThreshold = result.extractionResult.growThreshold;
             telemetry.frameExtractionStats.add(stat);
         }
 
@@ -373,7 +319,7 @@ public class JTransientEngine {
         // Pass the config down to the evaluator
         SessionEvaluator.rejectOutlierFrames(sessionMetrics, config);
 
-        List<List<SourceExtractor.DetectedObject>> cleanFramesData = new ArrayList<>();
+        List<SourceExtractor.ExtractionResult> cleanFramesData = new ArrayList<>();
         List<ImageFrame> cleanFrames = new ArrayList<>(); // Track the raw images that passed the quality check
 
         for (int i = 0; i < rawExtractedFrames.size(); i++) {
@@ -403,14 +349,96 @@ public class JTransientEngine {
     }
 
     /**
-     * Iterative entry point for the JTransient library.
+     * Analyzes sequence dither and corner drift by measuring the inward black padding.
+     * Dynamically overrides the void proximity radius if the drift exceeds the configured value.
+     *
+     * @return A list of translation vectors (dx, dy) representing the relative movement per frame.
+     */
+    private List<SourceExtractor.Pixel> analyzeDitherAndDrift(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) {
+        if (listener != null) {
+            listener.onProgressUpdate(0, "Analyzing sequence dither and corner drift...");
+        }
+
+        List<SourceExtractor.Pixel> driftPoints = new ArrayList<>();
+        if (inputFrames.isEmpty()) {
+            return driftPoints;
+        }
+
+        int height = inputFrames.get(0).pixelData.length;
+        int width = inputFrames.get(0).pixelData[0].length;
+        int maxDrift = 0;
+
+        for (ImageFrame frame : inputFrames) {
+            // Robust center background estimate (11x11 median) to avoid single bright stars
+            int[] centerPixels = new int[121];
+            int idx = 0;
+            int cx = width / 2;
+            int cy = height / 2;
+            for (int dy = -5; dy <= 5; dy++) {
+                for (int dx = -5; dx <= 5; dx++) {
+                    centerPixels[idx++] = frame.pixelData[cy + dy][cx + dx] + 32768;
+                }
+            }
+            java.util.Arrays.sort(centerPixels);
+            int centerVal = centerPixels[60];
+            double voidThresh = centerVal * config.voidThresholdFraction;
+
+            int limit = Math.min(width, height) / 3;
+            int leftPad = 0, rightPad = 0, topPad = 0, bottomPad = 0;
+            int midX = width / 2;
+            int midY = height / 2;
+
+            // Scan Left edge inward
+            for (int i = 0; i < limit; i++) {
+                if (frame.pixelData[midY][i] + 32768 > voidThresh) { leftPad = i; break; }
+            }
+            // Scan Right edge inward
+            for (int i = 0; i < limit; i++) {
+                if (frame.pixelData[midY][width - 1 - i] + 32768 > voidThresh) { rightPad = i; break; }
+            }
+            // Scan Top edge inward
+            for (int i = 0; i < limit; i++) {
+                if (frame.pixelData[i][midX] + 32768 > voidThresh) { topPad = i; break; }
+            }
+            // Scan Bottom edge inward
+            for (int i = 0; i < limit; i++) {
+                if (frame.pixelData[height - 1 - i][midX] + 32768 > voidThresh) { bottomPad = i; break; }
+            }
+
+            // Calculate the single uniform translation (dx, dy) of the entire frame
+            int dx = leftPad - rightPad;
+            int dy = topPad - bottomPad;
+
+            // Store the exact relative movement vector (dx, dy) instead of absolute pixel coordinates
+            driftPoints.add(new SourceExtractor.Pixel(dx, dy, frame.sequenceIndex));
+
+            // Track global max drift for the Void Proximity Radius safety override
+            int frameMax = Math.max(Math.max(leftPad, rightPad), Math.max(topPad, bottomPad));
+            if (frameMax > maxDrift) {
+                maxDrift = frameMax;
+            }
+        }
+
+        // Derive the optimal Void Proximity Radius (Max inward drift + 10px safety envelope)
+        if (maxDrift > 0) {
+            int derivedVoidRadius = maxDrift + 10;
+            if (derivedVoidRadius > config.voidProximityRadius) {
+                if (DEBUG) System.out.println("DEBUG: Dither Diagnostics found corner drift of " + maxDrift + "px. Overriding config.voidProximityRadius to " + derivedVoidRadius);
+                config.voidProximityRadius = derivedVoidRadius;
+            }
+        }
+        return driftPoints;
+    }
+
+    /**
+     * Entry point for the JTransient library.
      * Allows passing a pre-computed master stack to bypass the heavy stacking phase during iterative runs.
      */
     public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
         TransientExtractionContext context = extractFrameTransientsContext(inputFrames, config, listener);
         long startTime = context.startTime;
         PipelineTelemetry telemetry = context.telemetry;
-        List<List<SourceExtractor.DetectedObject>> cleanFramesData = context.cleanFramesData;
+        List<SourceExtractor.ExtractionResult> cleanFramesData = context.cleanFramesData;
         List<ImageFrame> cleanFrames = context.cleanFrames;
 
         // =================================================================
@@ -473,7 +501,7 @@ public class JTransientEngine {
                 masterSigma,
                 masterMinPix,
                 config
-        );
+        ).objects;
 
         // --- RESTORE ORIGINAL CONFIGURATION ---
         config.edgeMarginPixels = originalEdgeMargin;
@@ -516,7 +544,7 @@ public class JTransientEngine {
                     config.masterSlowMoverSigmaMultiplier,
                     config.masterSlowMoverMinPixels,
                     config
-            );
+            ).objects;
 
             // Extract baseline static artifacts from the median stack using IDENTICAL parameters
             List<SourceExtractor.DetectedObject> medianArtifacts = SourceExtractor.extractSources(
@@ -524,7 +552,7 @@ public class JTransientEngine {
                     config.masterSlowMoverSigmaMultiplier,
                     config.masterSlowMoverMinPixels,
                     config
-            );
+            ).objects;
 
             // Restore original config
             config.growSigmaMultiplier = origGrow;
@@ -627,8 +655,13 @@ public class JTransientEngine {
             };
         }
 
+        List<List<SourceExtractor.DetectedObject>> cleanFramesObjects = new ArrayList<>();
+        for (SourceExtractor.ExtractionResult extRes : cleanFramesData) {
+            cleanFramesObjects.add(extRes.objects);
+        }
+
         TrackLinker.TrackingResult trackResult = TrackLinker.findMovingObjects(
-                cleanFramesData,
+                cleanFramesObjects,
                 masterStars,
                 config,
                 trackingProxyListener,

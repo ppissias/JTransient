@@ -42,7 +42,7 @@ public class FrameQualityAnalyzer {
 
         // 1. Extract sources using the strict quality-evaluation parameters from the config
         List<SourceExtractor.DetectedObject> objects =
-                SourceExtractor.extractSources(imageData, config.qualitySigmaMultiplier, config.qualityMinDetectionPixels, config);
+                SourceExtractor.extractSources(imageData, config.qualitySigmaMultiplier, config.qualityMinDetectionPixels, config).objects;
 
         // 2. Calculate the background using the same strict parameter
         SourceExtractor.BackgroundMetrics bg = SourceExtractor.calculateBackgroundSigmaClipped(

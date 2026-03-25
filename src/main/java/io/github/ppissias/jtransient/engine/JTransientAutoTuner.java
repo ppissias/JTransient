@@ -624,7 +624,7 @@ public class JTransientAutoTuner {
                             testConfig.voidProximityRadius = 5;
 
                             List<SourceExtractor.DetectedObject> masterStars =
-                                    SourceExtractor.extractSources(masterStackData, masterSigma, masterMinPix, testConfig);
+                                    SourceExtractor.extractSources(masterStackData, masterSigma, masterMinPix, testConfig).objects;
 
                             testConfig.growSigmaMultiplier = originalGrowSigma;
                             testConfig.edgeMarginPixels = originalEdgeMargin;
@@ -685,7 +685,7 @@ public class JTransientAutoTuner {
                                         testConfig.detectionSigmaMultiplier,
                                         testConfig.minDetectionPixels,
                                         testConfig
-                                );
+                                ).objects;
 
                                 totalObjectsExtracted += objects.size();
 
@@ -1395,14 +1395,14 @@ public class JTransientAutoTuner {
                         probeConfig.detectionSigmaMultiplier,
                         probeConfig.minDetectionPixels,
                         probeConfig
-                );
+                ).objects;
 
                 List<SourceExtractor.DetectedObject> objectsB = SourceExtractor.extractSources(
                         frameB.pixelData,
                         probeConfig.detectionSigmaMultiplier,
                         probeConfig.minDetectionPixels,
                         probeConfig
-                );
+                ).objects;
 
                 for (SourceExtractor.DetectedObject objA : objectsA) {
                     if (!isUsableForInitialJitter(objA)) {

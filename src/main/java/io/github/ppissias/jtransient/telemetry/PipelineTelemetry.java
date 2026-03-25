@@ -23,6 +23,10 @@ public class PipelineTelemetry {
         public int frameIndex;
         public String filename;
         public int objectCount;
+        public double bgMedian;
+        public double bgSigma;
+        public double seedThreshold;
+        public double growThreshold;
     }
     public List<FrameExtractionStat> frameExtractionStats = new ArrayList<>();
 
@@ -79,8 +83,9 @@ public class PipelineTelemetry {
 
         sb.append("--- EXTRACTION STATISTICS ---\n");
         for (FrameExtractionStat stat : frameExtractionStats) {
-            sb.append(String.format("  Frame %03d (%s) -> %d objects extracted\n",
-                    stat.frameIndex + 1, stat.filename, stat.objectCount));
+            sb.append(String.format("  Frame %03d (%s) -> %d objects extracted | Median: %.2f, Sigma: %.2f, Seed: %.2f, Grow: %.2f\n",
+                    stat.frameIndex + 1, stat.filename, stat.objectCount, 
+                    stat.bgMedian, stat.bgSigma, stat.seedThreshold, stat.growThreshold));
         }
         sb.append("\n");
         sb.append("==================================================\n");

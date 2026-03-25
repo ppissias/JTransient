@@ -75,6 +75,20 @@ public class SourceExtractor {
         public double threshold;
     }
 
+    public static class ExtractionResult {
+        public final List<DetectedObject> objects;
+        public final BackgroundMetrics backgroundMetrics;
+        public final double seedThreshold;
+        public final double growThreshold;
+
+        public ExtractionResult(List<DetectedObject> objects, BackgroundMetrics bg, double seedThreshold, double growThreshold) {
+            this.objects = objects;
+            this.backgroundMetrics = bg;
+            this.seedThreshold = seedThreshold;
+            this.growThreshold = growThreshold;
+        }
+    }
+
     // =================================================================
     // CORE EXTRACTION PIPELINE
     // =================================================================
@@ -83,7 +97,7 @@ public class SourceExtractor {
      * Main method to run the detection pipeline on a single frame.
      * Allows overriding the primary thresholds (used by FrameQualityAnalyzer).
      */
-    public static List<DetectedObject> extractSources(short[][] image, double sigmaMultiplier, int minPixels, DetectionConfig config) {
+    public static ExtractionResult extractSources(short[][] image, double sigmaMultiplier, int minPixels, DetectionConfig config) {
         int height = image.length;
         int width = image[0].length;
 
@@ -220,7 +234,7 @@ public class SourceExtractor {
                     detectedObjects.size(), statBfsTriggers, statRejectedNoise, statRejectedEdge, statRejectedVoid);
         }
 
-        return detectedObjects;
+        return new ExtractionResult(detectedObjects, bg, seedThreshold, growThreshold);
     }
 
     /**
