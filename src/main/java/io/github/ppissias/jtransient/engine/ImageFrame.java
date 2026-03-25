@@ -14,11 +14,13 @@ public class ImageFrame {
     public final String identifier; // Usually the filename
     public final short[][] pixelData;
     public final long timestamp;
+    public final long exposureDuration; // Exposure time in milliseconds (or -1 if unknown)
 
-    public ImageFrame(int sequenceIndex, String identifier, short[][] pixelData, long timestamp) {
+    public ImageFrame(int sequenceIndex, String identifier, short[][] pixelData, long timestamp, long exposureDuration) {
         this.sequenceIndex = sequenceIndex;
         this.identifier = identifier;
         this.pixelData = pixelData;
         this.timestamp = timestamp;
+        this.exposureDuration = exposureDuration;
     }
 }

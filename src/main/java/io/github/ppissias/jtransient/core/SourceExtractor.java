@@ -50,6 +50,7 @@ public class SourceExtractor {
         public int sourceFrameIndex; // Points back to rawFrames.get(i)
         public String sourceFilename;
         public long timestamp; // Real-world time the frame was taken (or -1 if unknown)
+        public long exposureDuration; // Exposure length in milliseconds
 
         public DetectedObject(double x, double y, double flux, int count) {
             this.x = x;

@@ -19,7 +19,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public class TrackLinker {
+public class TrackLinkerOriginal {
 
     // =================================================================
     // DATA MODELS
@@ -412,33 +412,21 @@ public class TrackLinker {
                                         }
                                     }
 
-                                    // --- TRUE KINEMATIC VELOCITY & ANGLE MATCHING ---
                                     double v23 = dist23 / dt23;
-                                    double vDiff = Math.abs(v23 - currentVelocity);
-                                    
-                                    // Allowed variance is a combination of the percentage tolerance AND the physical sub-pixel seeing jitter
-                                    double allowedVDiff = (currentVelocity * config.timeBasedVelocityTolerance) + (config.maxStarJitter / dt23);
 
-                                    if (vDiff <= allowedVDiff) {
-                                        
-                                        // Ensure the point physically lies on the exact trajectory line
-                                        double currentBaselineDist = distance(p1.x, p1.y, currentLineAnchor.x, currentLineAnchor.y);
-                                        double lineError = distanceToLineOptimized(p1, currentLineAnchor, p3, currentBaselineDist);
-                                        
-                                        if (lineError <= config.predictionTolerance) {
-                                            
-                                            double actualAngle = Math.atan2(p3.y - currentLineAnchor.y, p3.x - currentLineAnchor.x);
-                                            // Dynamically relax the angle tolerance for short jumps where sub-pixel jitter causes massive angular swings
-                                            double dynamicAngleTolerance = Math.max(angleToleranceRad, Math.atan2(config.maxStarJitter + 1.0, dist23));
-    
-                                            if (isDirectionConsistent(expectedAngle, actualAngle, dynamicAngleTolerance)) {
-                                                if (isProfileConsistent(currentLineAnchor, p3, config)) {
-    
-                                                    // Prioritize the point that best matches the expected velocity
-                                                    if (vDiff < bestVError) {
-                                                        bestVError = vDiff;
-                                                        bestMatch = p3;
-                                                    }
+                                    double vDiffRatio = Math.abs(v23 - currentVelocity) / currentVelocity;
+
+                                    // If speed matches within tolerance (e.g. 10%)
+                                    if (vDiffRatio <= config.timeBasedVelocityTolerance) {
+                                        double actualAngle = Math.atan2(p3.y - currentLineAnchor.y, p3.x - currentLineAnchor.x);
+
+                                        // If strict forward direction matches
+                                        if (isDirectionConsistent(expectedAngle, actualAngle, angleToleranceRad)) {
+                                            if (isProfileConsistent(currentLineAnchor, p3, config)) {
+                                                
+                                                if (vDiffRatio < bestVError) {
+                                                    bestVError = vDiffRatio;
+                                                    bestMatch = p3;
                                                 }
                                             }
                                         }
@@ -447,13 +435,10 @@ public class TrackLinker {
 
                                 if (bestMatch != null) {
                                     currentTrack.addPoint(bestMatch);
-
-                                    // UPDATE PROGRESSIVE VECTOR: Anchor to Point 1 to prevent "drunk" jitter accumulation!
-                                    double totalDt = bestMatch.timestamp - p1.timestamp;
-                                    double totalDist = distance(p1.x, p1.y, bestMatch.x, bestMatch.y);
-                                    currentVelocity = totalDist / totalDt;
-                                    expectedAngle = Math.atan2(bestMatch.y - p1.y, bestMatch.x - p1.x);
-
+                                    double stepDt = bestMatch.timestamp - currentLineAnchor.timestamp;
+                                    double stepDist = distance(currentLineAnchor.x, currentLineAnchor.y, bestMatch.x, bestMatch.y);
+                                    currentVelocity = stepDist / stepDt; // Update progressive velocity
+                                    expectedAngle = Math.atan2(bestMatch.y - currentLineAnchor.y, bestMatch.x - currentLineAnchor.x);
                                     currentLineAnchor = bestMatch;
                                 }
                             }

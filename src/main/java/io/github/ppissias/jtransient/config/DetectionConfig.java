@@ -58,7 +58,7 @@ public class DetectionConfig implements Cloneable {
      * eigenvalues (elongation) is greater than this value, the blob is long and thin enough to be considered
      * a fast-moving satellite/meteor streak.
      */
-    public double streakMinElongation = 5.0;
+    public double streakMinElongation = 6.0;
 
     /** * Secondary size filter for streaks. To be officially tagged as a streak, the elongated object
      * must have at least this many pixels.
@@ -79,6 +79,13 @@ public class DetectionConfig implements Cloneable {
     /** * Threshold (in standard deviations) used to chop off pixels during the iterative background calculation.
      */
     public double bgClippingFactor = 3.0;
+
+    /** * Strict Exposure Kinematics: If an object appears as a round point source in a long exposure,
+     * it physically cannot be moving fast. This mathematically bounds its maximum jump distance between
+     * frames based on its footprint and the exposure time.
+     * NOTE: Turn this OFF if tracking tumbling/flashing LEO satellites that only glint for a fraction of the exposure.
+     */
+    public boolean strictExposureKinematics = false;
 
     // =================================================================
     // 1.5 MASTER MAP EXTRACTION PARAMETERS
@@ -281,7 +288,7 @@ public class DetectionConfig implements Cloneable {
 
     /** * The minimum physical size a single-frame point must have to be rescued.
      * Prevents single hot-pixels or cosmic rays from being flagged. */
-    public int anomalyMinPixels = 25;
+    public int anomalyMinPixels = 15;
 
 
     @Override

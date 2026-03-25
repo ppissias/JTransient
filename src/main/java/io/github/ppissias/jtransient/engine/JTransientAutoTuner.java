@@ -694,6 +694,12 @@ public class JTransientAutoTuner {
                                 int transientThisFrame = 0;
 
                                 for (SourceExtractor.DetectedObject obj : objects) {
+                                    // Streaks bypass the veto mask in the main engine. 
+                                    // We do not want a real meteor in the sample frame to be penalized as noise!
+                                    if (obj.isStreak) {
+                                        continue;
+                                    }
+
                                     double overlap = computeMaskOverlapFraction(obj, masterMask, cropWidth, cropHeight);
 
                                     if (overlap >= testConfig.maxMaskOverlapFraction) {

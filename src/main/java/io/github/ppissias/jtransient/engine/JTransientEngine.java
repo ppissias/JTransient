@@ -256,6 +256,7 @@ public class JTransientEngine {
                     obj.sourceFrameIndex = frame.sequenceIndex;
                     obj.sourceFilename = frame.identifier;
                     obj.timestamp = frame.timestamp;
+                    obj.exposureDuration = frame.exposureDuration;
                 }
 
                 // 2. Quality Metrics (Passing config down)
