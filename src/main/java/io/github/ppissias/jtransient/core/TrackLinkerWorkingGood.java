@@ -19,7 +19,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public class TrackLinker {
+public class TrackLinkerWorkingGood {
 
     // =================================================================
     // DATA MODELS
@@ -57,16 +57,6 @@ public class TrackLinker {
             this.telemetry = telemetry;
             this.allTransients = allTransients;
             this.masterMask = masterMask;
-        }
-    }
-
-    private static class RankedTrackCandidate {
-        private final Track track;
-        private final double score;
-
-        private RankedTrackCandidate(Track track, double score) {
-            this.track = track;
-            this.score = score;
         }
     }
 
@@ -340,7 +330,6 @@ public class TrackLinker {
         List<Track> pointTracks = new ArrayList<>();
         Set<SourceExtractor.DetectedObject> usedPoints = new HashSet<>();
         int loopMax = numFrames - 2;
-        List<RankedTrackCandidate> timeTrackCandidates = new ArrayList<>();
 
         // =================================================================
         // PHASE 3.5: TIME-BASED KINEMATIC LINKING (Velocity Vector Matching)
@@ -357,24 +346,10 @@ public class TrackLinker {
             if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3.5] Timestamps detected. Running Time-Based Velocity Linking...");
             if (listener != null) listener.onProgressUpdate(50, "Analyzing precise velocity kinematics...");
 
-            int generatedTimeTracks = 0;
-
-            // Calculate total points to process for accurate progress reporting
-            int totalP1Candidates = 0;
-            for (int i = 0; i < loopMax; i++) {
-                totalP1Candidates += transients.get(i).size();
-            }
-            int p1Processed = 0;
+            int timeTracksFound = 0;
 
             for (int f1 = 0; f1 < loopMax; f1++) {
                 for (SourceExtractor.DetectedObject p1 : transients.get(f1)) {
-                    
-                    p1Processed++;
-                    if (listener != null && (p1Processed % 50 == 0 || p1Processed == totalP1Candidates)) {
-                        int progress = 50 + (int) (((double) p1Processed / Math.max(1, totalP1Candidates)) * 10.0);
-                        listener.onProgressUpdate(progress, "Analyzing time-based kinematics: point " + p1Processed + " of " + totalP1Candidates);
-                    }
-
                     if (usedPoints.contains(p1)) continue;
 
                     for (int f2 = f1 + 1; f2 < numFrames - 1; f2++) {
@@ -440,25 +415,25 @@ public class TrackLinker {
                                     // --- TRUE KINEMATIC VELOCITY & ANGLE MATCHING ---
                                     double v23 = dist23 / dt23;
                                     double vDiff = Math.abs(v23 - currentVelocity);
-
+                                    
                                     // Allowed variance is a combination of the percentage tolerance AND the physical sub-pixel seeing jitter
                                     double allowedVDiff = (currentVelocity * config.timeBasedVelocityTolerance) + (config.maxStarJitter / dt23);
 
                                     if (vDiff <= allowedVDiff) {
-
+                                        
                                         // Ensure the point physically lies on the exact trajectory line
                                         double currentBaselineDist = distance(p1.x, p1.y, currentLineAnchor.x, currentLineAnchor.y);
                                         double lineError = distanceToLineOptimized(p1, currentLineAnchor, p3, currentBaselineDist);
-
+                                        
                                         if (lineError <= config.predictionTolerance) {
-
+                                            
                                             double actualAngle = Math.atan2(p3.y - currentLineAnchor.y, p3.x - currentLineAnchor.x);
                                             // Dynamically relax the angle tolerance for short jumps where sub-pixel jitter causes massive angular swings
                                             double dynamicAngleTolerance = Math.max(angleToleranceRad, Math.atan2(config.maxStarJitter + 1.0, dist23));
-
+    
                                             if (isDirectionConsistent(expectedAngle, actualAngle, dynamicAngleTolerance)) {
                                                 if (isProfileConsistent(currentLineAnchor, p3, config)) {
-
+    
                                                     // Prioritize the point that best matches the expected velocity
                                                     if (vDiff < bestVError) {
                                                         bestVError = vDiff;
@@ -484,35 +459,18 @@ public class TrackLinker {
                             }
 
                             if (currentTrack.points.size() >= minPointsRequired) {
-                                currentTrack.isTimeBasedTrack = true;
-                                timeTrackCandidates.add(new RankedTrackCandidate(
-                                        currentTrack,
-                                        scoreTimeBasedTrackCandidate(currentTrack)));
-                                generatedTimeTracks++;
+                                if (!isTrackAlreadyFound(pointTracks, currentTrack)) {
+                                    currentTrack.isTimeBasedTrack = true;
+                                    pointTracks.add(currentTrack);
+                                    usedPoints.addAll(currentTrack.points);
+                                    timeTracksFound++;
+                                }
                             }
                         }
                     }
                 }
             }
-
-            timeTrackCandidates.sort(TrackLinker::compareRankedTimeTrackCandidates);
-
-            int timeTracksFound = 0;
-            for (RankedTrackCandidate candidate : timeTrackCandidates) {
-                if (conflictsWithUsedPoints(usedPoints, candidate.track)) {
-                    telemetry.countTrackDuplicate++;
-                    continue;
-                }
-
-                pointTracks.add(candidate.track);
-                usedPoints.addAll(candidate.track.points);
-                timeTracksFound++;
-            }
-
-            if (JTransientEngine.DEBUG) {
-                System.out.println("DEBUG: [PHASE 3.5] Completed. Generated " + generatedTimeTracks
-                        + " precise time-based track candidate(s), accepted " + timeTracksFound + " after ranking.");
-            }
+            if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3.5] Completed. Found " + timeTracksFound + " precise time-based track(s).");
         }
 
         // =================================================================
@@ -795,100 +753,6 @@ public class TrackLinker {
     // HELPER METHODS
     // =================================================================
 
-    private static double scoreTimeBasedTrackCandidate(Track track) {
-        if (track.points.size() < 2) {
-            return Double.NEGATIVE_INFINITY;
-        }
-
-        SourceExtractor.DetectedObject start = track.points.get(0);
-        SourceExtractor.DetectedObject end = track.points.get(track.points.size() - 1);
-
-        double frameSpan = Math.max(1, end.sourceFrameIndex - start.sourceFrameIndex);
-        double coverageRatio = (double) track.points.size() / (frameSpan + 1.0);
-        double totalDistance = distance(start.x, start.y, end.x, end.y);
-        double baselineDistance = Math.max(totalDistance, 0.0001);
-        double expectedAngle = Math.atan2(end.y - start.y, end.x - start.x);
-        double expectedDelta = Math.max(getTrackDelta(start, end), 0.0001);
-        double expectedSpeed = totalDistance / expectedDelta;
-
-        double totalLineError = 0.0;
-        int lineSamples = 0;
-        for (int i = 1; i < track.points.size() - 1; i++) {
-            totalLineError += distanceToLineOptimized(start, end, track.points.get(i), baselineDistance);
-            lineSamples++;
-        }
-
-        double totalAngleError = 0.0;
-        double totalSpeedError = 0.0;
-        int segmentSamples = 0;
-        for (int i = 0; i < track.points.size() - 1; i++) {
-            SourceExtractor.DetectedObject p1 = track.points.get(i);
-            SourceExtractor.DetectedObject p2 = track.points.get(i + 1);
-
-            double segmentDelta = getTrackDelta(p1, p2);
-            if (segmentDelta <= 0) {
-                continue;
-            }
-
-            double segmentDistance = distance(p1.x, p1.y, p2.x, p2.y);
-            double segmentSpeed = segmentDistance / segmentDelta;
-            double segmentAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-
-            totalAngleError += angularDifference(expectedAngle, segmentAngle);
-            if (expectedSpeed > 0.0) {
-                totalSpeedError += Math.abs(segmentSpeed - expectedSpeed) / expectedSpeed;
-            }
-            segmentSamples++;
-        }
-
-        double averageLineError = lineSamples == 0 ? 0.0 : totalLineError / lineSamples;
-        double averageAngleError = segmentSamples == 0 ? 0.0 : totalAngleError / segmentSamples;
-        double averageSpeedError = segmentSamples == 0 ? 0.0 : totalSpeedError / segmentSamples;
-
-        return (track.points.size() * 1000.0)
-                + (coverageRatio * 250.0)
-                + (frameSpan * 50.0)
-                + (totalDistance * 5.0)
-                - (averageLineError * 150.0)
-                - (averageAngleError * 250.0)
-                - (averageSpeedError * 400.0);
-    }
-
-    private static int compareRankedTimeTrackCandidates(RankedTrackCandidate left, RankedTrackCandidate right) {
-        int byLength = Integer.compare(right.track.points.size(), left.track.points.size());
-        if (byLength != 0) {
-            return byLength;
-        }
-
-        int byScore = Double.compare(right.score, left.score);
-        if (byScore != 0) {
-            return byScore;
-        }
-
-        SourceExtractor.DetectedObject leftStart = left.track.points.get(0);
-        SourceExtractor.DetectedObject rightStart = right.track.points.get(0);
-        return Integer.compare(leftStart.sourceFrameIndex, rightStart.sourceFrameIndex);
-    }
-
-    private static boolean conflictsWithUsedPoints(Set<SourceExtractor.DetectedObject> usedPoints, Track track) {
-        for (SourceExtractor.DetectedObject point : track.points) {
-            if (usedPoints.contains(point)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static double getTrackDelta(SourceExtractor.DetectedObject from, SourceExtractor.DetectedObject to) {
-        if (from.timestamp != -1 && to.timestamp != -1) {
-            double delta = to.timestamp - from.timestamp;
-            if (delta > 0) {
-                return delta;
-            }
-        }
-        return Math.max(1, to.sourceFrameIndex - from.sourceFrameIndex);
-    }
-
 
     private static boolean isProfileConsistent(SourceExtractor.DetectedObject obj1, SourceExtractor.DetectedObject obj2, DetectionConfig config) {
         // 1. FWHM Consistency (Optics fingerprint)
@@ -924,14 +788,6 @@ public class TrackLinker {
         double diff = Math.abs(expectedAngle - actualAngle);
         if (diff > Math.PI) diff = (2.0 * Math.PI) - diff;
         return diff <= tolerance;
-    }
-
-    private static double angularDifference(double a1, double a2) {
-        double diff = Math.abs(a1 - a2);
-        if (diff > Math.PI) {
-            diff = (2.0 * Math.PI) - diff;
-        }
-        return diff;
     }
 
     private static double distanceToLineOptimized(SourceExtractor.DetectedObject p1,
