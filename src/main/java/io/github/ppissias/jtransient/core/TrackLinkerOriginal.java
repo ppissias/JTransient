@@ -19,6 +19,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * New implementation but proved to be problematic in that it does not regocnise time tracks well
+ */
 public class TrackLinkerOriginal {
 
     private static final int MAX_SEED_CANDIDATES_PER_FRAME = 6;

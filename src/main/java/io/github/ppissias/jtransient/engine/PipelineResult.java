@@ -37,6 +37,9 @@ public class PipelineResult {
     /** Statistical baseline metrics calculated during the slow mover detection phase */
     public final SlowMoverTelemetry slowMoverTelemetry;
 
+    /** A stack containing the maximum pixel values across the sequence */
+    public final short[][] masterMaximumStackData;
+
     public static class SlowMoverTelemetry {
         public int candidatesDetected;
         public double medianElongation;
@@ -52,7 +55,8 @@ public class PipelineResult {
                           List<List<SourceExtractor.DetectedObject>> allTransients,
                           boolean[][] masterMask,
                           List<SourceExtractor.Pixel> driftPoints,
-                          SlowMoverTelemetry slowMoverTelemetry) {
+                          SlowMoverTelemetry slowMoverTelemetry,
+                          short[][] masterMaximumStackData) {
         this.tracks = tracks;
         this.telemetry = telemetry;
         this.masterStackData = masterStackData;
@@ -63,5 +67,6 @@ public class PipelineResult {
         this.masterMask = masterMask;
         this.driftPoints = driftPoints;
         this.slowMoverTelemetry = slowMoverTelemetry;
+        this.masterMaximumStackData = masterMaximumStackData;
     }
 }

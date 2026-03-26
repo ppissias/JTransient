@@ -19,6 +19,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * Original - time based tracking logic
+ */
 public class TrackLinkerWorkingGood {
 
     // =================================================================

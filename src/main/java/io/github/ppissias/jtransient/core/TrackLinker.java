@@ -19,6 +19,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * This is based on Working good, with additional logic to have candidate tracks and select the best ones
+ */
 public class TrackLinker {
 
     // =================================================================

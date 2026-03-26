@@ -40,7 +40,7 @@ public class JTransientEngine {
         public FrameQualityAnalyzer.FrameMetrics metrics;
     }
 
-    public static class TransientExtractionContext {
+    public static class FramesExtractedSources {
         public List<SourceExtractor.ExtractionResult> cleanFramesData;
         public List<ImageFrame> cleanFrames;
         public PipelineTelemetry telemetry;
@@ -83,7 +83,7 @@ public class JTransientEngine {
             tasks.add(() -> {
                 // We only need quality metrics to drop outliers. We skip SourceExtractor to save massive CPU time!
                 FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData, config);
-                metrics.filename = frame.identifier;
+                metrics.filename = frame.filename;
 
                 FrameExtractionResult result = new FrameExtractionResult();
                 result.frameIndex = frame.sequenceIndex;
@@ -154,7 +154,7 @@ public class JTransientEngine {
      * @return A list of objects containing the filename and its actual transients that survived the Master Veto Mask.
      */
     public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
-        TransientExtractionContext context = extractFrameTransientsContext(inputFrames, config, listener);
+        FramesExtractedSources context = extractSourcesFromFrames(inputFrames, config, listener);
         
         short[][] masterStackData;
         if (providedMasterStack != null) {
@@ -202,7 +202,7 @@ public class JTransientEngine {
         List<FrameTransients> finalResult = new ArrayList<>();
         for (int i = 0; i < context.cleanFrames.size(); i++) {
             finalResult.add(new FrameTransients(
-                    context.cleanFrames.get(i).identifier,
+                    context.cleanFrames.get(i).filename,
                     filterResult.mergedTransients.get(i),
                     context.cleanFramesData.get(i)
             ));
@@ -214,7 +214,7 @@ public class JTransientEngine {
      * Does exactly the same processing as the first phases of runPipeline up to detecting the transients,
      * returning the full context so it can be reused by runPipeline.
      */
-    private TransientExtractionContext extractFrameTransientsContext(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
+    private FramesExtractedSources extractSourcesFromFrames(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
         long startTime = System.currentTimeMillis();
         PipelineTelemetry telemetry = new PipelineTelemetry();
         telemetry.totalFramesLoaded = inputFrames.size();
@@ -254,14 +254,14 @@ public class JTransientEngine {
 
                 for (SourceExtractor.DetectedObject obj : objectsInFrame) {
                     obj.sourceFrameIndex = frame.sequenceIndex;
-                    obj.sourceFilename = frame.identifier;
+                    obj.sourceFilename = frame.filename;
                     obj.timestamp = frame.timestamp;
                     obj.exposureDuration = frame.exposureDuration;
                 }
 
                 // 2. Quality Metrics (Passing config down)
                 FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData, config);
-                metrics.filename = frame.identifier;
+                metrics.filename = frame.filename;
 
                 FrameExtractionResult result = new FrameExtractionResult();
                 result.frameIndex = frame.sequenceIndex;
@@ -339,7 +339,7 @@ public class JTransientEngine {
             }
         }
 
-        TransientExtractionContext context = new TransientExtractionContext();
+        FramesExtractedSources context = new FramesExtractedSources();
         context.cleanFramesData = cleanFramesData;
         context.cleanFrames = cleanFrames;
         context.telemetry = telemetry;
@@ -436,7 +436,7 @@ public class JTransientEngine {
      * Allows passing a pre-computed master stack to bypass the heavy stacking phase during iterative runs.
      */
     public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
-        TransientExtractionContext context = extractFrameTransientsContext(inputFrames, config, listener);
+        FramesExtractedSources context = extractSourcesFromFrames(inputFrames, config, listener);
         long startTime = context.startTime;
         PipelineTelemetry telemetry = context.telemetry;
         List<SourceExtractor.ExtractionResult> cleanFramesData = context.cleanFramesData;
@@ -680,10 +680,13 @@ public class JTransientEngine {
             listener.onProgressUpdate(100, "Processing Complete!");
         }
 
+        // --- FINAL POST-PROCESSING ---
+        short[][] masterMaximumStackData = MasterMapGenerator.createMaximumMasterStack(cleanFrames);
+
         // Return the unified result with the new Master Data payloads!
-        return new PipelineResult(trackResult.tracks, telemetry, masterStackData, masterStars, 
-                                  slowMoverStackData, slowMoverCandidates, trackResult.allTransients,
-                                  trackResult.masterMask, context.driftPoints, smTelemetry);
+        return new PipelineResult(trackResult.tracks, telemetry, masterStackData, masterStars,
+                slowMoverStackData, slowMoverCandidates, trackResult.allTransients,
+                trackResult.masterMask, context.driftPoints, smTelemetry, masterMaximumStackData);
     }
 
     /**

@@ -106,4 +106,40 @@ public class MasterMapGenerator {
 
         return masterMap;
     }
+
+    /**
+     * Generates a Maximum Value Master Stack from the sequence.
+     * This is useful for creating star trails and visualizing the full path of all moving objects.
+     */
+    public static short[][] createMaximumMasterStack(List<ImageFrame> frames) {
+        if (frames == null || frames.isEmpty()) return null;
+
+        int height = frames.get(0).pixelData.length;
+        int width = frames.get(0).pixelData[0].length;
+        int numFrames = frames.size();
+
+        short[][] masterMap = new short[height][width];
+
+        if (JTransientEngine.DEBUG) {
+            System.out.println("\n[POST-PROCESS] Generating Maximum Master Stack across " + numFrames + " frames...");
+        }
+
+        IntStream.range(0, height).parallel().forEach(y -> {
+            for (int x = 0; x < width; x++) {
+                int maxPixelValue = -32768;
+                for (int i = 0; i < numFrames; i++) {
+                    if (frames.get(i).pixelData[y][x] > maxPixelValue) {
+                        maxPixelValue = frames.get(i).pixelData[y][x];
+                    }
+                }
+                masterMap[y][x] = (short) maxPixelValue;
+            }
+        });
+
+        if (JTransientEngine.DEBUG) {
+            System.out.println("  -> Maximum Stack generation complete.");
+        }
+
+        return masterMap;
+    }
 }
