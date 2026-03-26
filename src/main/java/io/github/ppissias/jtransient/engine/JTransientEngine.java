@@ -683,63 +683,19 @@ public class JTransientEngine {
         // --- FINAL POST-PROCESSING ---
         short[][] masterMaximumStackData = MasterMapGenerator.createMaximumMasterStack(cleanFrames);
 
-        // --- MASTER MAXIMUM STACK STREAK DETECTION ---
+        // --- MASTER MAXIMUM STACK EXPORT ONLY ---
         if (listener != null) {
-            listener.onProgressUpdate(100, "Extracting streaks from Master Maximum Stack...");
+            listener.onProgressUpdate(100, "Maximum Stack generation complete.");
         }
 
-        List<SourceExtractor.DetectedObject> maxStackObjects = SourceExtractor.extractSources(
-                masterMaximumStackData,
-                config.detectionSigmaMultiplier,
-                config.minDetectionPixels,
-                config
-        ).objects;
-
-        List<SourceExtractor.DetectedObject> maxStackStreaks = new ArrayList<>();
-        for (SourceExtractor.DetectedObject obj : maxStackObjects) {
-            if (obj.isStreak) {
-                maxStackStreaks.add(obj);
-            }
-        }
-
-        // Collect all already-detected streaks from single frames and linked tracks
-        List<SourceExtractor.DetectedObject> allKnownStreaks = new ArrayList<>();
-        for (TrackLinker.Track track : trackResult.tracks) {
-            if (track.isStreakTrack) {
-                allKnownStreaks.addAll(track.points);
-            }
-        }
-        for (List<SourceExtractor.DetectedObject> frameTransients : trackResult.allTransients) {
-            for (SourceExtractor.DetectedObject obj : frameTransients) {
-                if (obj.isStreak && !allKnownStreaks.contains(obj)) {
-                    allKnownStreaks.add(obj);
-                }
-            }
-        }
-
-        // Filter the maximum stack streaks against the known ones
-        List<SourceExtractor.DetectedObject> newMasterStackStreaks = new ArrayList<>();
-        double overlapTolerance = 10.0; // Distance in pixels to consider two centroids as the "same" object
-
-        for (SourceExtractor.DetectedObject maxStreak : maxStackStreaks) {
-            boolean isKnown = false;
-            for (SourceExtractor.DetectedObject knownStreak : allKnownStreaks) {
-                double dist = Math.hypot(maxStreak.x - knownStreak.x, maxStreak.y - knownStreak.y);
-                if (dist <= overlapTolerance) {
-                    isKnown = true;
-                    break;
-                }
-            }
-            
-            if (!isKnown) {
-                newMasterStackStreaks.add(maxStreak);
-            }
-        }
+        List<SourceExtractor.DetectedObject> maxStackStreaks = java.util.Collections.emptyList();
+        List<SourceExtractor.DetectedObject> newMasterStackStreaks = java.util.Collections.emptyList();
 
         // Return the unified result with the new Master Data payloads!
         return new PipelineResult(trackResult.tracks, telemetry, masterStackData, masterStars,
                 slowMoverStackData, slowMoverCandidates, trackResult.allTransients,
                 trackResult.masterMask, context.driftPoints, smTelemetry, masterMaximumStackData,
+                maxStackStreaks,
                 newMasterStackStreaks);
     }
 

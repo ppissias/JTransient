@@ -40,7 +40,10 @@ public class PipelineResult {
     /** A stack containing the maximum pixel values across the sequence */
     public final short[][] masterMaximumStackData;
 
-    /** Streaks detected in the master maximum stack that were not found in single frames. */
+    /** Reserved for future use. Max-stack streak detection is currently disabled, so this is empty. */
+    public final List<SourceExtractor.DetectedObject> masterMaximumStackAllStreaks;
+
+    /** Reserved for future use. Max-stack streak detection is currently disabled, so this is empty. */
     public final List<SourceExtractor.DetectedObject> masterMaximumStackTransientStreaks;
 
 
@@ -61,6 +64,7 @@ public class PipelineResult {
                           List<SourceExtractor.Pixel> driftPoints,
                           SlowMoverTelemetry slowMoverTelemetry,
                           short[][] masterMaximumStackData,
+                          List<SourceExtractor.DetectedObject> masterMaximumStackAllStreaks,
                           List<SourceExtractor.DetectedObject> masterMaximumStackTransientStreaks) {
         this.tracks = tracks;
         this.telemetry = telemetry;
@@ -73,6 +77,7 @@ public class PipelineResult {
         this.driftPoints = driftPoints;
         this.slowMoverTelemetry = slowMoverTelemetry;
         this.masterMaximumStackData = masterMaximumStackData;
+        this.masterMaximumStackAllStreaks = masterMaximumStackAllStreaks;
         this.masterMaximumStackTransientStreaks = masterMaximumStackTransientStreaks;
     }
 }
