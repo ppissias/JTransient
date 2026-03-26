@@ -12,6 +12,9 @@ package io.github.ppissias.jtransient.telemetry;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Diagnostic counters emitted by the track-linking stages.
+ */
 public class TrackerTelemetry {
     public long countBaselineJitter, countBaselineJump, countBaselineSize;
     public long countP3NotLine, countP3WrongDirection, countP3Jump, countP3Size;
@@ -22,6 +25,9 @@ public class TrackerTelemetry {
     public List<FrameStarMapStat> frameStarMapStats = new ArrayList<>();
     public int totalStationaryStarsPurged = 0;
 
+    /**
+     * Per-frame summary of the stationary-star veto pass.
+     */
     public static class FrameStarMapStat {
         public int frameIndex;
         public int initialPointSources;

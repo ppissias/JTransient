@@ -15,14 +15,22 @@ import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 
 import java.util.List;
 
+/**
+ * Aggregates all exported data products produced by a full pipeline run.
+ */
 public class PipelineResult {
+    /** Confirmed moving-object tracks, including streaks, point tracks, and rescued anomalies. */
     public final List<TrackLinker.Track> tracks;
+    /** Per-phase counters and diagnostics collected during processing. */
     public final PipelineTelemetry telemetry;
+    /** Median master stack built from the quality-filtered frames. */
     public final short[][] masterStackData;
+    /** Stationary objects extracted from the median master stack. */
     public final List<SourceExtractor.DetectedObject> masterStars;
 
-    // --- Slow Mover Data Payloads ---
+    /** Slow-mover stack produced from the configured middle band of sorted pixels. */
     public final short[][] slowMoverStackData;
+    /** Elongated candidates that survived the slow-mover artifact filters. */
     public final List<SourceExtractor.DetectedObject> slowMoverCandidates;
 
     /** A chronological, frame-by-frame list of all surviving transients */
@@ -47,12 +55,21 @@ public class PipelineResult {
     public final List<SourceExtractor.DetectedObject> masterMaximumStackTransientStreaks;
 
 
+    /**
+     * Diagnostic summary for the slow-mover detection branch.
+     */
     public static class SlowMoverTelemetry {
+        /** Number of slow-mover candidates retained after all filters. */
         public int candidatesDetected;
+        /** Median elongation measured from the raw slow-mover extraction pass. */
         public double medianElongation;
+        /** Dynamic elongation threshold derived from the baseline elongation distribution. */
         public double dynamicElongationThreshold;
     }
 
+    /**
+     * Creates the unified pipeline result payload.
+     */
     public PipelineResult(List<TrackLinker.Track> tracks,
                           PipelineTelemetry telemetry,
                           short[][] masterStackData,

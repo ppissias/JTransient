@@ -16,20 +16,34 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * Measures per-frame quality metrics used for session-level outlier rejection.
+ */
 public class FrameQualityAnalyzer {
 
     // =================================================================
     // DATA MODELS
     // =================================================================
 
+    /**
+     * Summary metrics derived from one frame.
+     */
     public static class FrameMetrics {
+        /** Median sky background level. */
         public double backgroundMedian;
+        /** Estimated background noise sigma. */
         public double backgroundNoise;
+        /** Median full width at half maximum of usable stars. */
         public double medianFWHM;
+        /** Median elongation of usable stars. */
         public double medianEccentricity;
+        /** Number of extracted quality-reference stars. */
         public int starCount;
+        /** Whether the frame was later rejected by the session evaluator. */
         public boolean isRejected = false;
+        /** Human-readable rejection cause. */
         public String rejectionReason = "OK";
+        /** Frame label copied from the source image. */
         public String filename;
     }
 
@@ -37,6 +51,13 @@ public class FrameQualityAnalyzer {
     // EVALUATION LOGIC
     // =================================================================
 
+    /**
+     * Extracts the quality metrics used by {@link SessionEvaluator}.
+     *
+     * @param imageData frame pixels to analyze
+     * @param config pipeline configuration supplying quality thresholds
+     * @return measured frame metrics
+     */
     public static FrameMetrics evaluateFrame(short[][] imageData, DetectionConfig config) {
         FrameMetrics metrics = new FrameMetrics();
 
@@ -76,7 +97,7 @@ public class FrameQualityAnalyzer {
     }
 
     /**
-     * Helper to calculate a mathematically precise median.
+     * Calculates the median of the supplied values or a configured fallback when empty.
      */
     private static double calculateMedian(List<Double> values, double fallbackValue) {
         if (values.isEmpty()) {

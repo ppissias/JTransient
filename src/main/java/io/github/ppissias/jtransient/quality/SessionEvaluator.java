@@ -16,12 +16,21 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * Applies session-wide robust statistics to reject frames that are clear outliers.
+ */
 public class SessionEvaluator {
 
     // =================================================================
     // CORE EVALUATION LOGIC
     // =================================================================
 
+    /**
+     * Flags frames whose star count, focus, elongation, or background deviate too far from the session baseline.
+     *
+     * @param sessionMetrics per-frame metrics in chronological order
+     * @param config configuration containing the rejection thresholds
+     */
     public static void rejectOutlierFrames(List<FrameQualityAnalyzer.FrameMetrics> sessionMetrics, DetectionConfig config) {
         // Parameterized minimum frames check
         if (sessionMetrics.size() < config.minFramesForAnalysis) return;
@@ -123,13 +132,18 @@ public class SessionEvaluator {
         }
     }
 
+    /**
+     * Marks a frame metric record as rejected with the supplied reason.
+     */
     private static void reject(FrameQualityAnalyzer.FrameMetrics m, String reason) {
         m.isRejected = true;
         m.rejectionReason = reason;
     }
 
     /**
-     * Helper to calculate Robust Statistics (Returns [Median, Sigma])
+     * Calculates a robust median and sigma estimate using MAD scaling.
+     *
+     * @return a two-element array containing {@code [median, sigma]}
      */
     private static double[] calculateMedianAndSigma(List<Double> values, DetectionConfig config) {
         Collections.sort(values);

@@ -12,13 +12,18 @@ package io.github.ppissias.jtransient.telemetry;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Top-level telemetry bundle describing what happened during one pipeline run.
+ */
 public class PipelineTelemetry {
 
     // --- PHASE 1: Extraction ---
     public int totalFramesLoaded = 0;
     public int totalRawObjectsExtracted = 0;
 
-    // Per-frame basic stats
+    /**
+     * Per-frame extraction summary captured immediately after source extraction.
+     */
     public static class FrameExtractionStat {
         public int frameIndex;
         public String filename;
@@ -34,6 +39,9 @@ public class PipelineTelemetry {
     public int totalFramesRejected = 0;
     public int totalFramesKept = 0;
 
+    /**
+     * Per-frame rejection record emitted by the quality-control stage.
+     */
     public static class FrameRejectionStat {
         public int frameIndex;
         public String filename;
@@ -52,7 +60,7 @@ public class PipelineTelemetry {
     public long processingTimeMs = 0;
 
     /**
-     * Generates a formatted text report.
+     * Generates a human-readable text summary of the recorded telemetry.
      */
     public String generateReport() {
         StringBuilder sb = new StringBuilder();

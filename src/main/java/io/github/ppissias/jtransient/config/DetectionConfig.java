@@ -291,6 +291,9 @@ public class DetectionConfig implements Cloneable {
     public int anomalyMinPixels = 15;
 
 
+    /**
+     * Returns a copy of this configuration.
+     */
     @Override
     public DetectionConfig clone() {
         try {

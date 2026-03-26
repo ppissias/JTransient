@@ -26,33 +26,56 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
+/**
+ * Orchestrates the full JTransient processing pipeline from extraction through track linking.
+ */
 public class JTransientEngine {
 
-    // --- NEW: Centralized Debug Flag for the entire JTransient library ---
+    /** Global debug switch shared by the core library. */
     public static boolean DEBUG = false;
 
     // Internal thread pool for the library
     private final ExecutorService executor = Executors.newCachedThreadPool();
 
+    /**
+     * Internal concurrent work product for one frame.
+     */
     private static class FrameExtractionResult {
         public int frameIndex;
         public SourceExtractor.ExtractionResult extractionResult;
         public FrameQualityAnalyzer.FrameMetrics metrics;
     }
 
+    /**
+     * Shared context returned by the extraction and quality-filtering stages.
+     */
     public static class FramesExtractedSources {
+        /** Source-extraction results for frames that passed quality control. */
         public List<SourceExtractor.ExtractionResult> cleanFramesData;
+        /** Raw image frames that survived session-level rejection. */
         public List<ImageFrame> cleanFrames;
+        /** Telemetry accumulated during the early pipeline phases. */
         public PipelineTelemetry telemetry;
+        /** Pipeline start timestamp used to calculate total runtime. */
         public long startTime;
+        /** Relative per-frame drift diagnostics derived from border padding analysis. */
         public List<SourceExtractor.Pixel> driftPoints;
     }
 
+    /**
+     * Pairing of one frame label with the transients that survived stationary-star vetoing.
+     */
     public static class FrameTransients {
+        /** Source frame label. */
         public final String filename;
+        /** Surviving transient objects for the frame. */
         public final List<SourceExtractor.DetectedObject> transients;
+        /** Full extraction result for the same frame. */
         public final SourceExtractor.ExtractionResult extractionResult;
 
+        /**
+         * Creates a transient-export payload for one frame.
+         */
         public FrameTransients(String filename, List<SourceExtractor.DetectedObject> transients, SourceExtractor.ExtractionResult extractionResult) {
             this.filename = filename;
             this.transients = transients;
@@ -63,6 +86,11 @@ public class JTransientEngine {
     /**
      * Generates the Master Stack independently so it can be reused across iterative pipeline runs.
      * Highly optimized: Skips transient extraction and only runs quality analysis to drop outliers.
+     *
+     * @param inputFrames frames to evaluate and stack
+     * @param config pipeline configuration
+     * @param listener optional progress listener
+     * @return median master stack built from the retained frames
      */
     public short[][] generateMasterStack(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
         if (listener != null) {
@@ -134,6 +162,11 @@ public class JTransientEngine {
     /**
      * Entry point for the JTransient library.
      * Convenience wrapper that calculates the master stack automatically.
+     *
+     * @param inputFrames frames to process
+     * @param config pipeline configuration
+     * @param listener optional progress listener
+     * @return full pipeline output bundle
      */
     public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
         return runPipeline(inputFrames, config, listener, null);
@@ -142,6 +175,10 @@ public class JTransientEngine {
     /**
      * Runs the pipeline up to detecting the transients (extracted objects) for all frames and does no further processing.
      * Generates a median master stack automatically to apply the Veto Mask.
+     *
+     * @param inputFrames frames to process
+     * @param config pipeline configuration
+     * @param listener optional progress listener
      * @return A list of objects containing the filename and its actual transients that survived the Master Veto Mask.
      */
     public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
@@ -151,6 +188,11 @@ public class JTransientEngine {
     /**
      * Runs the pipeline up to detecting the transients for all frames and does no further processing.
      * Uses the provided master stack to successfully apply the Veto Mask.
+     *
+     * @param inputFrames frames to process
+     * @param config pipeline configuration
+     * @param listener optional progress listener
+     * @param providedMasterStack optional precomputed median master stack
      * @return A list of objects containing the filename and its actual transients that survived the Master Veto Mask.
      */
     public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
@@ -213,6 +255,11 @@ public class JTransientEngine {
     /**
      * Does exactly the same processing as the first phases of runPipeline up to detecting the transients,
      * returning the full context so it can be reused by runPipeline.
+     *
+     * @param inputFrames frames to process
+     * @param config pipeline configuration
+     * @param listener optional progress listener
+     * @return extraction context reused by the full pipeline and transient-only path
      */
     private FramesExtractedSources extractSourcesFromFrames(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
         long startTime = System.currentTimeMillis();
@@ -353,6 +400,9 @@ public class JTransientEngine {
      * Analyzes sequence dither and corner drift by measuring the inward black padding.
      * Dynamically overrides the void proximity radius if the drift exceeds the configured value.
      *
+     * @param inputFrames frames to inspect
+     * @param config pipeline configuration that may be updated with a safer void radius
+     * @param listener optional progress listener
      * @return A list of translation vectors (dx, dy) representing the relative movement per frame.
      */
     private List<SourceExtractor.Pixel> analyzeDitherAndDrift(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) {
@@ -434,6 +484,12 @@ public class JTransientEngine {
     /**
      * Entry point for the JTransient library.
      * Allows passing a pre-computed master stack to bypass the heavy stacking phase during iterative runs.
+     *
+     * @param inputFrames frames to process
+     * @param config pipeline configuration
+     * @param listener optional progress listener
+     * @param providedMasterStack optional precomputed median master stack
+     * @return full pipeline output bundle
      */
     public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
         FramesExtractedSources context = extractSourcesFromFrames(inputFrames, config, listener);

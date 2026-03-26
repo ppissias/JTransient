@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Original - time based tracking logic
+ * Earlier tracker implementation retained as a known-good geometric and time-based reference.
  */
 public class TrackLinkerWorkingGood {
 
@@ -28,17 +28,30 @@ public class TrackLinkerWorkingGood {
     // DATA MODELS
     // =================================================================
 
+    /**
+     * One confirmed moving-object track produced by this reference tracker.
+     */
     public static class Track {
+        /** Chronological detections belonging to the track. */
         public List<SourceExtractor.DetectedObject> points = new ArrayList<>();
+        /** Whether the track is composed of streak detections. */
         public boolean isStreakTrack = false;
-        public boolean isAnomaly = false; // <--- NEW
+        /** Whether the track represents a rescued single-frame anomaly. */
+        public boolean isAnomaly = false;
+        /** Whether the track was linked using timestamps rather than frame spacing alone. */
         public boolean isTimeBasedTrack = false;
 
+        /**
+         * Appends one detection to the track.
+         */
         public void addPoint(SourceExtractor.DetectedObject obj) {
             points.add(obj);
         }
     }
 
+    /**
+     * Output of the pre-tracking transient filtering stages.
+     */
     public static class TransientsFilterResult {
         public List<List<SourceExtractor.DetectedObject>> pointTransients;
         public List<SourceExtractor.DetectedObject> validMovingStreaks;
@@ -49,12 +62,18 @@ public class TrackLinkerWorkingGood {
         public boolean[][] masterMask;
     }
 
+    /**
+     * Output of the complete reference tracking run.
+     */
     public static class TrackingResult {
         public List<Track> tracks;
         public TrackerTelemetry telemetry;
         public List<List<SourceExtractor.DetectedObject>> allTransients;
         public boolean[][] masterMask;
 
+        /**
+         * Creates a tracking result bundle.
+         */
         public TrackingResult(List<Track> tracks, TrackerTelemetry telemetry, List<List<SourceExtractor.DetectedObject>> allTransients, boolean[][] masterMask) {
             this.tracks = tracks;
             this.telemetry = telemetry;
@@ -70,6 +89,14 @@ public class TrackLinkerWorkingGood {
     /**
      * Executes the pipeline up to Phase 3.
      * Separates streaks, purges stationary defects, links fast streaks, and applies the Binary Veto Mask.
+     *
+     * @param allFrames extracted objects grouped by frame
+     * @param masterStars stationary objects extracted from the master stack
+     * @param config pipeline configuration
+     * @param listener optional progress listener
+     * @param sensorWidth frame width
+     * @param sensorHeight frame height
+     * @return filtered transients, streak tracks, telemetry, and the veto mask
      */
     public static TransientsFilterResult filterTransients(
             List<List<SourceExtractor.DetectedObject>> allFrames,
@@ -293,6 +320,17 @@ public class TrackLinkerWorkingGood {
         return result;
     }
 
+    /**
+     * Runs the full reference track-linking algorithm.
+     *
+     * @param allFrames extracted objects grouped by frame
+     * @param masterStars stationary objects extracted from the master stack
+     * @param config pipeline configuration
+     * @param listener optional progress listener
+     * @param sensorWidth frame width
+     * @param sensorHeight frame height
+     * @return reference tracking result bundle
+     */
     public static TrackingResult findMovingObjects(
             List<List<SourceExtractor.DetectedObject>> allFrames,
             List<SourceExtractor.DetectedObject> masterStars,
@@ -818,6 +856,9 @@ public class TrackLinkerWorkingGood {
         return false;
     }
 
+    /**
+     * Validates that the step sizes in a track stay close to a steady cadence after allowing for skipped frames.
+     */
     public static boolean hasSteadyRhythm(Track track, double rhythmAllowedVariance, double rhythmStationaryThreshold, double rhythmMinConsistencyRatio) {
         if (track.points.size() < 3) return true;
 

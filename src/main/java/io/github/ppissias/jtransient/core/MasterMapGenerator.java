@@ -16,6 +16,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.IntStream;
 
+/**
+ * Builds stacked reference images from a sequence of aligned frames.
+ */
 public class MasterMapGenerator {
 
     /**

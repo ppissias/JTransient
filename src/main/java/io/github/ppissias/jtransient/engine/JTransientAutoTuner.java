@@ -18,8 +18,16 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
+/**
+ * Auto-tunes a {@link DetectionConfig} against representative crops from a frame sequence.
+ *
+ * <p>The tuner sweeps extraction thresholds on cropped regions, scores each configuration
+ * using star yield, transient leakage, stability, and mask size, then measures optical
+ * jitter and elongation to populate the remaining motion-sensitive settings.</p>
+ */
 public class JTransientAutoTuner {
 
+    /** Enables verbose console diagnostics for the tuning process. */
     public static boolean DEBUG = true;
 
     // =========================================================================
@@ -85,20 +93,34 @@ public class JTransientAutoTuner {
 
     // =========================================================================
 
+    /**
+     * Result of one auto-tuning run.
+     */
     public static class AutoTunerResult {
+        /** Whether a stable optimized configuration was found. */
         public boolean success;
+        /** Tuned configuration, or the provided base configuration on fallback. */
         public DetectionConfig optimizedConfig;
+        /** Human-readable report describing the explored parameter space. */
         public String telemetryReport;
+        /** Stable-star count recorded for the winning configuration. */
         public int bestStarCount;
+        /** Fraction of extracted objects that survived as transients for the winning configuration. */
         public double bestTransientRatio;
     }
 
+    /**
+     * High-level tuning policy presets.
+     */
     public enum AutoTuneProfile {
         CONSERVATIVE,
         BALANCED,
         AGGRESSIVE
     }
 
+    /**
+     * Internal policy object defining score weights and hard gates for a tuning profile.
+     */
     private static class AutoTunePolicy {
 
         /**
@@ -389,11 +411,17 @@ public class JTransientAutoTuner {
     }
 
 
+    /**
+     * Internal frame-quality record used when selecting a representative tuning sample.
+     */
     private static class FrameQualityRecord {
         ImageFrame frame;
         FrameQualityAnalyzer.FrameMetrics metrics;
         double qualityScore;
 
+        /**
+         * Creates a sampled frame-quality record.
+         */
         public FrameQualityRecord(ImageFrame frame, FrameQualityAnalyzer.FrameMetrics metrics, double qualityScore) {
             this.frame = frame;
             this.metrics = metrics;
@@ -401,6 +429,9 @@ public class JTransientAutoTuner {
         }
     }
 
+    /**
+     * Rectangular region of interest used during crop-based tuning.
+     */
     private static class CropRegion {
         final int x;
         final int y;
@@ -408,6 +439,9 @@ public class JTransientAutoTuner {
         final int height;
         final String label;
 
+        /**
+         * Creates a named crop region.
+         */
         CropRegion(int x, int y, int width, int height, String label) {
             this.x = x;
             this.y = y;
@@ -417,10 +451,16 @@ public class JTransientAutoTuner {
         }
     }
 
+    /**
+     * Lightweight cropped frame used during ROI-based tuning sweeps.
+     */
     private static class CroppedFrame {
         final short[][] pixelData;
         final int sequenceIndex;
 
+        /**
+         * Creates one cropped-frame descriptor.
+         */
         CroppedFrame(short[][] pixelData, int sequenceIndex) {
             this.pixelData = pixelData;
             this.sequenceIndex = sequenceIndex;
@@ -430,6 +470,11 @@ public class JTransientAutoTuner {
 
     /**
      * Automatically determines the optimal extraction and kinematic settings for a given image sequence.
+     *
+     * @param allFrames full frame sequence available for sampling
+     * @param baseConfig starting configuration that is cloned and refined
+     * @param listener optional progress listener
+     * @return tuning result using the balanced policy preset
      */
     public static AutoTunerResult tune(List<ImageFrame> allFrames,
                                        DetectionConfig baseConfig,
@@ -437,6 +482,15 @@ public class JTransientAutoTuner {
         return tune(allFrames, baseConfig, AutoTuneProfile.BALANCED, listener);
     }
 
+    /**
+     * Automatically determines an optimized configuration using the supplied tuning policy.
+     *
+     * @param allFrames full frame sequence available for sampling
+     * @param baseConfig starting configuration that is cloned and refined
+     * @param profile policy preset controlling scoring aggressiveness
+     * @param listener optional progress listener
+     * @return tuning result containing the best configuration or a fallback to {@code baseConfig}
+     */
     public static AutoTunerResult tune(List<ImageFrame> allFrames,
                                        DetectionConfig baseConfig,
                                        AutoTuneProfile profile,
@@ -984,6 +1038,9 @@ public class JTransientAutoTuner {
     // ROI HELPERS
     // =====================================================================
 
+    /**
+     * Builds the set of representative interior crops used during tuning.
+     */
     private static List<CropRegion> buildTuningCropRegions(int sensorWidth, int sensorHeight, StringBuilder report) {
         List<CropRegion> regions = new ArrayList<>();
 
@@ -1043,6 +1100,9 @@ public class JTransientAutoTuner {
         return regions;
     }
 
+    /**
+     * Crops every sampled frame to the supplied region.
+     */
     private static List<CroppedFrame> buildCroppedFramesForRegion(List<ImageFrame> frames, CropRegion region) {
         List<CroppedFrame> cropped = new ArrayList<>(frames.size());
         for (ImageFrame frame : frames) {
@@ -1051,6 +1111,9 @@ public class JTransientAutoTuner {
         return cropped;
     }
 
+    /**
+     * Copies one rectangular ROI out of a source frame.
+     */
     private static short[][] cropPixels(short[][] source, CropRegion region) {
         short[][] out = new short[region.height][region.width];
         for (int y = 0; y < region.height; y++) {
@@ -1059,6 +1122,9 @@ public class JTransientAutoTuner {
         return out;
     }
 
+    /**
+     * Builds a median master stack for a small set of already cropped frames.
+     */
     private static short[][] createMedianMasterStackForCrops(List<CroppedFrame> frames) {
         int height = frames.get(0).pixelData.length;
         int width = frames.get(0).pixelData[0].length;
@@ -1082,6 +1148,9 @@ public class JTransientAutoTuner {
         return out;
     }
 
+    /**
+     * Sorts a tiny short array in place using insertion sort.
+     */
     private static void insertionSort(short[] arr) {
         for (int i = 1; i < arr.length; i++) {
             short key = arr[i];
@@ -1161,6 +1230,9 @@ public class JTransientAutoTuner {
         return selected;
     }
 
+    /**
+     * Adds one frame to the tuning sample if it has not already been selected.
+     */
     private static void addSampleFrame(List<FrameQualityRecord> records,
                                        int index,
                                        List<Integer> usedIndices,
@@ -1182,6 +1254,9 @@ public class JTransientAutoTuner {
                 rec.qualityScore));
     }
 
+    /**
+     * Computes the fraction of an object's footprint that overlaps a veto mask.
+     */
     private static double computeMaskOverlapFraction(SourceExtractor.DetectedObject obj,
                                                      boolean[][] mask,
                                                      int sensorWidth,
@@ -1206,6 +1281,9 @@ public class JTransientAutoTuner {
         return (double) touched / total;
     }
 
+    /**
+     * Returns the coefficient of variation for a set of integer counts.
+     */
     private static double coefficientOfVariation(List<Integer> values) {
         if (values == null || values.isEmpty()) return 0.0;
 
@@ -1225,19 +1303,31 @@ public class JTransientAutoTuner {
         return Math.sqrt(variance) / mean;
     }
 
+    /**
+     * Clamps an integer into the supplied range.
+     */
     private static int clampInt(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
     }
 
+    /**
+     * Clamps a floating-point value into the {@code [0, 1]} range.
+     */
     private static double clamp01(double value) {
         return Math.max(0.0, Math.min(1.0, value));
     }
 
+    /**
+     * Normalizes a value into the {@code [0, 1]} range using the supplied bounds.
+     */
     private static double normalize(double value, double min, double max) {
         if (max <= min) return 0.0;
         return clamp01((value - min) / (max - min));
     }
 
+    /**
+     * Returns a percentile from an already sorted list.
+     */
     private static double getPercentileFromSorted(List<Double> sortedValues, double percentile) {
         if (sortedValues == null || sortedValues.isEmpty()) return 0.0;
         if (sortedValues.size() == 1) return sortedValues.get(0);
@@ -1247,6 +1337,9 @@ public class JTransientAutoTuner {
         return sortedValues.get(index);
     }
 
+    /**
+     * Returns the statistical median from an already sorted list.
+     */
     private static double getMedianFromSorted(List<Double> sortedValues) {
         if (sortedValues == null || sortedValues.isEmpty()) return 0.0;
         int n = sortedValues.size();
@@ -1256,6 +1349,9 @@ public class JTransientAutoTuner {
         return 0.5 * (sortedValues.get((n / 2) - 1) + sortedValues.get(n / 2));
     }
 
+    /**
+     * Penalizes configurations that fall outside the desired transient leakage band.
+     */
     private static double computeTransientSweetSpotPenalty(double avgTransientsPerCropFrame,
                                                            double low,
                                                            double target,
@@ -1287,6 +1383,9 @@ public class JTransientAutoTuner {
         }
     }
 
+    /**
+     * Returns the scoring policy associated with a named tuning profile.
+     */
     private static AutoTunePolicy getPolicy(AutoTuneProfile profile) {
         switch (profile) {
             case CONSERVATIVE:
@@ -1352,6 +1451,9 @@ public class JTransientAutoTuner {
         }
     }
 
+    /**
+     * Penalizes overly permissive low-sigma and low-minPixels combinations.
+     */
     private static double computeLowSigmaMinPixGuardPenalty(double sigma,
                                                             int minPix,
                                                             double sigmaPivot,
@@ -1375,6 +1477,9 @@ public class JTransientAutoTuner {
         return clamp01((desiredMinPix - minPix) / Math.max(desiredMinPix, 1e-9));
     }
 
+    /**
+     * Produces a rough initial estimate of frame-to-frame jitter before the main sweep.
+     */
     private static double estimateInitialJitter(List<List<CroppedFrame>> croppedFramesByRegion,
                                                 DetectionConfig baseConfig,
                                                 StringBuilder report) {
@@ -1474,6 +1579,9 @@ public class JTransientAutoTuner {
         return estimated;
     }
 
+    /**
+     * Returns whether an extracted object is reliable enough to use for the jitter pre-pass.
+     */
     private static boolean isUsableForInitialJitter(SourceExtractor.DetectedObject obj) {
         if (obj == null) {
             return false;
@@ -1486,6 +1594,9 @@ public class JTransientAutoTuner {
         return obj.elongation <= INITIAL_JITTER_PROBE_MAX_ELONGATION;
     }
 
+    /**
+     * Finds the closest usable jitter-probe match for a source object.
+     */
     private static SourceExtractor.DetectedObject findClosestUsableMatch(SourceExtractor.DetectedObject source,
                                                                          List<SourceExtractor.DetectedObject> candidates) {
         SourceExtractor.DetectedObject best = null;
@@ -1506,6 +1617,9 @@ public class JTransientAutoTuner {
         return best;
     }
 
+    /**
+     * Returns Euclidean distance between two detected objects.
+     */
     private static double distance(SourceExtractor.DetectedObject a,
                                    SourceExtractor.DetectedObject b) {
         double dx = a.x - b.x;

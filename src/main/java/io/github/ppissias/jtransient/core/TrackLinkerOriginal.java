@@ -20,7 +20,10 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * New implementation but proved to be problematic in that it does not regocnise time tracks well
+ * Legacy tracker variant preserved for comparison with the primary {@link TrackLinker} implementation.
+ *
+ * <p>This version contains an earlier proposal-based time-linking strategy that is
+ * kept for reference even though it underperforms on some timestamp-driven tracks.</p>
  */
 public class TrackLinkerOriginal {
 
@@ -36,17 +39,30 @@ public class TrackLinkerOriginal {
     // DATA MODELS
     // =================================================================
 
+    /**
+     * One confirmed moving-object track produced by this legacy tracker.
+     */
     public static class Track {
+        /** Chronological detections belonging to the track. */
         public List<SourceExtractor.DetectedObject> points = new ArrayList<>();
+        /** Whether the track is composed of streak detections. */
         public boolean isStreakTrack = false;
-        public boolean isAnomaly = false; // <--- NEW
+        /** Whether the track represents a rescued single-frame anomaly. */
+        public boolean isAnomaly = false;
+        /** Whether the track was linked using timestamps rather than frame spacing alone. */
         public boolean isTimeBasedTrack = false;
 
+        /**
+         * Appends one detection to the track.
+         */
         public void addPoint(SourceExtractor.DetectedObject obj) {
             points.add(obj);
         }
     }
 
+    /**
+     * Output of the pre-tracking transient filtering stages.
+     */
     public static class TransientsFilterResult {
         public List<List<SourceExtractor.DetectedObject>> pointTransients;
         public List<SourceExtractor.DetectedObject> validMovingStreaks;
@@ -57,12 +73,18 @@ public class TrackLinkerOriginal {
         public boolean[][] masterMask;
     }
 
+    /**
+     * Output of the complete legacy tracking run.
+     */
     public static class TrackingResult {
         public List<Track> tracks;
         public TrackerTelemetry telemetry;
         public List<List<SourceExtractor.DetectedObject>> allTransients;
         public boolean[][] masterMask;
 
+        /**
+         * Creates a tracking result bundle.
+         */
         public TrackingResult(List<Track> tracks, TrackerTelemetry telemetry, List<List<SourceExtractor.DetectedObject>> allTransients, boolean[][] masterMask) {
             this.tracks = tracks;
             this.telemetry = telemetry;
@@ -71,6 +93,9 @@ public class TrackLinkerOriginal {
         }
     }
 
+    /**
+     * Mutable state used while extending one candidate track proposal.
+     */
     private static class TrackState {
         private final List<SourceExtractor.DetectedObject> points = new ArrayList<>();
         private final Set<SourceExtractor.DetectedObject> pointSet = new HashSet<>();
@@ -173,6 +198,9 @@ public class TrackLinkerOriginal {
         }
     }
 
+    /**
+     * Ranked track proposal awaiting conflict resolution.
+     */
     private static class TrackProposal {
         private final Track track;
         private final boolean timeBased;
@@ -187,6 +215,9 @@ public class TrackLinkerOriginal {
         }
     }
 
+    /**
+     * Candidate point match together with its link score.
+     */
     private static class CandidateMatch {
         private final SourceExtractor.DetectedObject point;
         private final double linkScore;
@@ -197,6 +228,9 @@ public class TrackLinkerOriginal {
         }
     }
 
+    /**
+     * Accumulator used while accepting the best non-conflicting proposals.
+     */
     private static class TrackAcceptanceResult {
         private final List<Track> acceptedTracks = new ArrayList<>();
         private final Set<SourceExtractor.DetectedObject> usedPoints = new HashSet<>();
@@ -211,6 +245,14 @@ public class TrackLinkerOriginal {
     /**
      * Executes the pipeline up to Phase 3.
      * Separates streaks, purges stationary defects, links fast streaks, and applies the Binary Veto Mask.
+     *
+     * @param allFrames extracted objects grouped by frame
+     * @param masterStars stationary objects extracted from the master stack
+     * @param config pipeline configuration
+     * @param listener optional progress listener
+     * @param sensorWidth frame width
+     * @param sensorHeight frame height
+     * @return filtered transients, streak tracks, telemetry, and the veto mask
      */
     public static TransientsFilterResult filterTransients(
             List<List<SourceExtractor.DetectedObject>> allFrames,
@@ -434,6 +476,17 @@ public class TrackLinkerOriginal {
         return result;
     }
 
+    /**
+     * Runs the full legacy track-linking algorithm for comparison and regression analysis.
+     *
+     * @param allFrames extracted objects grouped by frame
+     * @param masterStars stationary objects extracted from the master stack
+     * @param config pipeline configuration
+     * @param listener optional progress listener
+     * @param sensorWidth frame width
+     * @param sensorHeight frame height
+     * @return legacy tracking result bundle
+     */
     public static TrackingResult findMovingObjects(
             List<List<SourceExtractor.DetectedObject>> allFrames,
             List<SourceExtractor.DetectedObject> masterStars,
@@ -1178,6 +1231,9 @@ public class TrackLinkerOriginal {
         return false;
     }
 
+    /**
+     * Validates that the step sizes in a track stay close to a steady cadence after allowing for skipped frames.
+     */
     public static boolean hasSteadyRhythm(Track track, double rhythmAllowedVariance, double rhythmStationaryThreshold, double rhythmMinConsistencyRatio) {
         if (track.points.size() < 3) return true;
 

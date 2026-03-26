@@ -14,6 +14,9 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Simple spatial index used to accelerate nearest-neighbor lookups between detected objects.
+ */
 public class SpatialGrid {
 
     private static final int MAX_GRID_WINDOW_BEFORE_LINEAR_SCAN = 512;
@@ -22,6 +25,12 @@ public class SpatialGrid {
     private final Map<String, List<SourceExtractor.DetectedObject>> cells;
     private final List<SourceExtractor.DetectedObject> allObjects;
 
+    /**
+     * Builds a grid over the supplied objects.
+     *
+     * @param objects detected objects to index
+     * @param cellSize requested cell size in pixels; values below {@code 1.0} are clamped
+     */
     public SpatialGrid(List<SourceExtractor.DetectedObject> objects, double cellSize) {
         // Ensure cell size is at least 1.0 to prevent infinite/tiny grids
         this.cellSize = Math.max(1.0, cellSize);
@@ -40,6 +49,9 @@ public class SpatialGrid {
         return cx + "," + cy;
     }
 
+    /**
+     * Returns whether any indexed object lies within the given search radius.
+     */
     public boolean hasMatch(double targetX, double targetY, double searchRadius) {
         for (SourceExtractor.DetectedObject obj : getCandidates(targetX, targetY, searchRadius)) {
             double dx = targetX - obj.x;
@@ -51,6 +63,9 @@ public class SpatialGrid {
         return false;
     }
 
+    /**
+     * Returns all indexed objects within the supplied search radius.
+     */
     public List<SourceExtractor.DetectedObject> getCandidates(double targetX, double targetY, double searchRadius) {
         int minX = (int) ((targetX - searchRadius) / cellSize);
         int maxX = (int) ((targetX + searchRadius) / cellSize);
@@ -89,6 +104,9 @@ public class SpatialGrid {
         return candidates;
     }
 
+    /**
+     * Returns the nearest candidates in ascending distance order, capped to {@code maxCandidates}.
+     */
     public List<SourceExtractor.DetectedObject> getNearestCandidates(double targetX,
                                                                      double targetY,
                                                                      double searchRadius,
@@ -162,10 +180,16 @@ public class SpatialGrid {
         return found ? Math.sqrt(minDistanceSquared) : -1.0;
     }
 
+    /**
+     * Falls back to a linear scan when the requested grid window is larger than the object population.
+     */
     private boolean shouldUseLinearScan(long cellWindow) {
         return cellWindow > MAX_GRID_WINDOW_BEFORE_LINEAR_SCAN && allObjects.size() < cellWindow;
     }
 
+    /**
+     * Inserts one object into the fixed-size nearest-candidate list while preserving sort order.
+     */
     private void insertNearest(List<SourceExtractor.DetectedObject> nearest,
                                List<Double> nearestDistances,
                                SourceExtractor.DetectedObject obj,

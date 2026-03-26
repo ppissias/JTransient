@@ -16,6 +16,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
 
+/**
+ * Detects bright connected components in a single frame and derives their morphology.
+ */
 public class SourceExtractor {
 
     // --- OPTIMIZATION: Moved directional arrays to static constants to avoid reallocation ---
@@ -26,32 +29,49 @@ public class SourceExtractor {
     // HELPER CLASSES
     // =================================================================
 
+    /**
+     * Describes one extracted source or streak candidate.
+     */
     public static class DetectedObject {
+        /** Intensity-weighted centroid X coordinate. */
         public double x, y;
+        /** Background-subtracted integrated flux. */
         public double totalFlux;
+        /** Number of pixels used when the object was instantiated. */
         public int pixelCount;
-        public double peakSigma; // For Anomaly Detection
+        /** Peak signal-to-noise estimate used by anomaly rescue. */
+        public double peakSigma;
 
-        // Save the exact blob mask for UI Visualization (Populated only if DEBUG is true)
+        /** Exact blob footprint used for mask building and diagnostics. */
         public List<Pixel> rawPixels = null;
 
-        // Size metric for TrackLinker Morphological Filtering
+        /** Pixel footprint size used by the track-linking morphology filters. */
         public double pixelArea;
 
-        // FWHM Metric
+        /** Approximate full width at half maximum derived from image moments. */
         public double fwhm;
 
-        // Shape Fields
+        /** Ratio between the principal axes of the detected footprint. */
         public double elongation;
-        public double angle; // The angle of the streak in radians
+        /** Dominant orientation of the footprint in radians. */
+        public double angle;
+        /** Whether the footprint is classified as a streak-like object. */
         public boolean isStreak;
+        /** Whether the footprint should be treated as noise. */
         public boolean isNoise;
 
-        public int sourceFrameIndex; // Points back to rawFrames.get(i)
+        /** Source frame index assigned by the engine after extraction. */
+        public int sourceFrameIndex;
+        /** Source frame label assigned by the engine after extraction. */
         public String sourceFilename;
-        public long timestamp; // Real-world time the frame was taken (or -1 if unknown)
-        public long exposureDuration; // Exposure length in milliseconds
+        /** Real-world capture time in milliseconds, or {@code -1} if unknown. */
+        public long timestamp;
+        /** Exposure duration in milliseconds, or {@code -1} if unknown. */
+        public long exposureDuration;
 
+        /**
+         * Creates a detected-object shell with the supplied centroid and flux values.
+         */
         public DetectedObject(double x, double y, double flux, int count) {
             this.x = x;
             this.y = y;
@@ -60,9 +80,16 @@ public class SourceExtractor {
         }
     }
 
+    /**
+     * Represents one pixel belonging to an extracted footprint.
+     */
     public static class Pixel {
+        /** Pixel X coordinate. */
         public int x, y, value;
 
+        /**
+         * Creates a pixel coordinate and value tuple.
+         */
         public Pixel(int x, int y, int value) {
             this.x = x;
             this.y = y;
@@ -70,18 +97,34 @@ public class SourceExtractor {
         }
     }
 
+    /**
+     * Background statistics derived from sigma-clipped histogram analysis.
+     */
     public static class BackgroundMetrics {
+        /** Estimated background median in shifted ADU space. */
         public double median;
+        /** Estimated background sigma in shifted ADU space. */
         public double sigma;
+        /** Detection threshold derived from the chosen sigma multiplier. */
         public double threshold;
     }
 
+    /**
+     * Bundles the extracted objects with the thresholds used to produce them.
+     */
     public static class ExtractionResult {
+        /** Objects that survived the blob and artifact filters. */
         public final List<DetectedObject> objects;
+        /** Background model used by the extraction pass. */
         public final BackgroundMetrics backgroundMetrics;
+        /** Seed threshold used to start blob growth. */
         public final double seedThreshold;
+        /** Lower hysteresis threshold used while growing blobs. */
         public final double growThreshold;
 
+        /**
+         * Creates an immutable extraction result.
+         */
         public ExtractionResult(List<DetectedObject> objects, BackgroundMetrics bg, double seedThreshold, double growThreshold) {
             this.objects = objects;
             this.backgroundMetrics = bg;
@@ -97,6 +140,12 @@ public class SourceExtractor {
     /**
      * Main method to run the detection pipeline on a single frame.
      * Allows overriding the primary thresholds (used by FrameQualityAnalyzer).
+     *
+     * @param image input frame
+     * @param sigmaMultiplier seed threshold multiplier used for this extraction pass
+     * @param minPixels minimum footprint size required to keep an object
+     * @param config pipeline configuration containing grow and artifact filters
+     * @return extracted objects and background statistics
      */
     public static ExtractionResult extractSources(short[][] image, double sigmaMultiplier, int minPixels, DetectionConfig config) {
         int height = image.length;
@@ -240,6 +289,13 @@ public class SourceExtractor {
 
     /**
      * Fast Histogram-based background estimation using Iterative Sigma Clipping.
+     *
+     * @param image frame pixels to analyze
+     * @param width frame width
+     * @param height frame height
+     * @param sigmaMultiplier multiplier used to derive the reported threshold
+     * @param config configuration containing clipping settings
+     * @return background median, sigma, and derived threshold
      */
     public static BackgroundMetrics calculateBackgroundSigmaClipped(short[][] image, int width, int height, double sigmaMultiplier, DetectionConfig config) {
         BackgroundMetrics metrics = new BackgroundMetrics();
@@ -297,6 +353,11 @@ public class SourceExtractor {
 
     /**
      * Calculates the centroid, elongation, and angle of a pixel blob using Image Moments.
+     *
+     * @param blob extracted footprint pixels
+     * @param bg background metrics used for intensity weighting
+     * @param config configuration containing streak classification thresholds
+     * @return analyzed object populated with morphology metrics
      */
     public static DetectedObject analyzeShape(List<Pixel> blob, BackgroundMetrics bg, DetectionConfig config) {
         DetectedObject obj = new DetectedObject(0,0,0,0);
@@ -375,6 +436,10 @@ public class SourceExtractor {
     /**
      * Analyzes the pixel profile of a highly elongated object to determine if it is a
      * merged pair of distinct stars (binary) rather than a continuous slow-mover streak.
+     *
+     * @param originalImage source image used to sample the raw profile
+     * @param obj candidate elongated object
+     * @return {@code true} when the profile is more consistent with a merged binary star
      */
     public static boolean isBinaryStarAnomaly(short[][] originalImage, SourceExtractor.DetectedObject obj) {
         if (obj.rawPixels == null || obj.rawPixels.size() < 10) return false;
@@ -446,6 +511,9 @@ public class SourceExtractor {
     /**
      * Analyzes the morphological boundaries of a streak to ensure it forms a consistent,
      * straight capsule shape. Throws out "L", "V", and highly asymmetric blob shapes.
+     *
+     * @param obj elongated candidate to inspect
+     * @return {@code true} when the object shape is too irregular to trust as a streak
      */
     public static boolean isIrregularStreakShape(SourceExtractor.DetectedObject obj) {
         if (obj.rawPixels == null || obj.rawPixels.size() < 10) return false;

@@ -20,7 +20,11 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * This is based on Working good, with additional logic to have candidate tracks and select the best ones
+ * Links per-frame transient detections into moving-object tracks.
+ *
+ * <p>This is the primary tracker implementation used by the engine. It combines
+ * streak chaining, stationary-star vetoing, time-aware candidate ranking, and a
+ * geometric fallback linker for sequences without usable timestamps.</p>
  */
 public class TrackLinker {
 
@@ -28,33 +32,63 @@ public class TrackLinker {
     // DATA MODELS
     // =================================================================
 
+    /**
+     * One confirmed moving-object track.
+     */
     public static class Track {
+        /** Chronological points that make up the track. */
         public List<SourceExtractor.DetectedObject> points = new ArrayList<>();
+        /** Whether the track is composed of streak detections. */
         public boolean isStreakTrack = false;
-        public boolean isAnomaly = false; // <--- NEW
+        /** Whether the track is a rescued single-frame anomaly. */
+        public boolean isAnomaly = false;
+        /** Whether the track was accepted by the time-aware linker. */
         public boolean isTimeBasedTrack = false;
 
+        /**
+         * Appends one detection to the track.
+         */
         public void addPoint(SourceExtractor.DetectedObject obj) {
             points.add(obj);
         }
     }
 
+    /**
+     * Output of the streak-separation and stationary-star veto stages.
+     */
     public static class TransientsFilterResult {
+        /** Point-like transients that survived vetoing, grouped by frame. */
         public List<List<SourceExtractor.DetectedObject>> pointTransients;
+        /** All streak detections considered mobile enough to keep. */
         public List<SourceExtractor.DetectedObject> validMovingStreaks;
+        /** Confirmed multi-frame or single-frame high-significance streak tracks. */
         public List<Track> streakTracks;
+        /** Tracker diagnostics collected so far. */
         public TrackerTelemetry telemetry;
+        /** Number of streak tracks accepted during the fast-streak phase. */
         public int streakTracksFound;
+        /** Final export list that merges point transients and surviving streaks per frame. */
         public List<List<SourceExtractor.DetectedObject>> mergedTransients;
+        /** Pixel-accurate stationary-star veto mask built from the master stack. */
         public boolean[][] masterMask;
     }
 
+    /**
+     * Output of the complete tracking stage.
+     */
     public static class TrackingResult {
+        /** All confirmed moving-object tracks. */
         public List<Track> tracks;
+        /** Tracker diagnostics covering all stages. */
         public TrackerTelemetry telemetry;
+        /** Per-frame transients that survived filtering. */
         public List<List<SourceExtractor.DetectedObject>> allTransients;
+        /** Pixel veto mask generated from the master star map. */
         public boolean[][] masterMask;
 
+        /**
+         * Creates a tracking result bundle.
+         */
         public TrackingResult(List<Track> tracks, TrackerTelemetry telemetry, List<List<SourceExtractor.DetectedObject>> allTransients, boolean[][] masterMask) {
             this.tracks = tracks;
             this.telemetry = telemetry;
@@ -63,6 +97,9 @@ public class TrackLinker {
         }
     }
 
+    /**
+     * Internal wrapper used to rank time-based track proposals before conflict resolution.
+     */
     private static class RankedTrackCandidate {
         private final Track track;
         private final double score;
@@ -80,6 +117,14 @@ public class TrackLinker {
     /**
      * Executes the pipeline up to Phase 3.
      * Separates streaks, purges stationary defects, links fast streaks, and applies the Binary Veto Mask.
+     *
+     * @param allFrames extracted objects grouped by frame
+     * @param masterStars stationary objects extracted from the master stack
+     * @param config pipeline configuration
+     * @param listener optional progress listener
+     * @param sensorWidth frame width
+     * @param sensorHeight frame height
+     * @return filtered transients, streak tracks, telemetry, and the veto mask
      */
     public static TransientsFilterResult filterTransients(
             List<List<SourceExtractor.DetectedObject>> allFrames,
@@ -303,6 +348,17 @@ public class TrackLinker {
         return result;
     }
 
+    /**
+     * Runs the full tracking pipeline, starting from extracted objects and master-stack stars.
+     *
+     * @param allFrames extracted objects grouped by frame
+     * @param masterStars stationary objects extracted from the master stack
+     * @param config pipeline configuration
+     * @param listener optional progress listener
+     * @param sensorWidth frame width
+     * @param sensorHeight frame height
+     * @return final confirmed tracks together with telemetry and exported transients
+     */
     public static TrackingResult findMovingObjects(
             List<List<SourceExtractor.DetectedObject>> allFrames,
             List<SourceExtractor.DetectedObject> masterStars,
@@ -798,6 +854,9 @@ public class TrackLinker {
     // HELPER METHODS
     // =================================================================
 
+    /**
+     * Scores time-based track candidates so that longer, straighter, and more uniformly paced tracks rank first.
+     */
     private static double scoreTimeBasedTrackCandidate(Track track) {
         if (track.points.size() < 2) {
             return Double.NEGATIVE_INFINITY;
@@ -857,6 +916,9 @@ public class TrackLinker {
                 - (averageSpeedError * 400.0);
     }
 
+    /**
+     * Orders ranked time-based candidates by track length, then by score, then by start frame.
+     */
     private static int compareRankedTimeTrackCandidates(RankedTrackCandidate left, RankedTrackCandidate right) {
         int byLength = Integer.compare(right.track.points.size(), left.track.points.size());
         if (byLength != 0) {
@@ -873,6 +935,9 @@ public class TrackLinker {
         return Integer.compare(leftStart.sourceFrameIndex, rightStart.sourceFrameIndex);
     }
 
+    /**
+     * Checks whether any point in the candidate track has already been consumed by a higher-ranked track.
+     */
     private static boolean conflictsWithUsedPoints(Set<SourceExtractor.DetectedObject> usedPoints, Track track) {
         for (SourceExtractor.DetectedObject point : track.points) {
             if (usedPoints.contains(point)) {
@@ -882,6 +947,9 @@ public class TrackLinker {
         return false;
     }
 
+    /**
+     * Returns the time delta when timestamps are available, otherwise the frame-index delta.
+     */
     private static double getTrackDelta(SourceExtractor.DetectedObject from, SourceExtractor.DetectedObject to) {
         if (from.timestamp != -1 && to.timestamp != -1) {
             double delta = to.timestamp - from.timestamp;
@@ -893,6 +961,9 @@ public class TrackLinker {
     }
 
 
+    /**
+     * Applies morphology consistency checks between two candidate points.
+     */
     private static boolean isProfileConsistent(SourceExtractor.DetectedObject obj1, SourceExtractor.DetectedObject obj2, DetectionConfig config) {
         // 1. FWHM Consistency (Optics fingerprint)
         if (config.maxFwhmRatio > 0.0) {
@@ -912,23 +983,35 @@ public class TrackLinker {
         return true;
     }
 
+    /**
+     * Returns Euclidean distance between two points.
+     */
     private static double distance(double x1, double y1, double x2, double y2) {
         double dx = x2 - x1;
         double dy = y2 - y1;
         return Math.sqrt(dx * dx + dy * dy);
     }
 
+    /**
+     * Compares two orientation angles while treating 180-degree flips as equivalent streak directions.
+     */
     private static boolean anglesMatch(double a1, double a2, double tolerance) {
         double diff = Math.abs(a1 - a2) % Math.PI;
         return diff <= tolerance || Math.PI - diff <= tolerance;
     }
 
+    /**
+     * Returns whether an observed motion vector stays within the expected directional cone.
+     */
     private static boolean isDirectionConsistent(double expectedAngle, double actualAngle, double tolerance) {
         double diff = Math.abs(expectedAngle - actualAngle);
         if (diff > Math.PI) diff = (2.0 * Math.PI) - diff;
         return diff <= tolerance;
     }
 
+    /**
+     * Computes the smallest unsigned angular distance between two directions.
+     */
     private static double angularDifference(double a1, double a2) {
         double diff = Math.abs(a1 - a2);
         if (diff > Math.PI) {
@@ -937,6 +1020,9 @@ public class TrackLinker {
         return diff;
     }
 
+    /**
+     * Computes perpendicular distance from {@code p3} to the line defined by {@code p1 -> p2}.
+     */
     private static double distanceToLineOptimized(SourceExtractor.DetectedObject p1,
                                                   SourceExtractor.DetectedObject p2,
                                                   SourceExtractor.DetectedObject p3,
@@ -947,6 +1033,9 @@ public class TrackLinker {
         return numerator / precalculatedDenominator;
     }
 
+    /**
+     * Treats tracks that share two or more detections as duplicates.
+     */
     private static boolean isTrackAlreadyFound(List<Track> existingTracks, Track newTrack) {
         for (Track existing : existingTracks) {
             int sharedPoints = 0;
@@ -962,6 +1051,9 @@ public class TrackLinker {
         return false;
     }
 
+    /**
+     * Validates that the step sizes in a track follow a mostly steady rhythm after allowing for skipped frames.
+     */
     public static boolean hasSteadyRhythm(Track track, double rhythmAllowedVariance, double rhythmStationaryThreshold, double rhythmMinConsistencyRatio) {
         if (track.points.size() < 3) return true;
 
