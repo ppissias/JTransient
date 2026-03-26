@@ -40,6 +40,10 @@ public class PipelineResult {
     /** A stack containing the maximum pixel values across the sequence */
     public final short[][] masterMaximumStackData;
 
+    /** Streaks detected in the master maximum stack that were not found in single frames. */
+    public final List<SourceExtractor.DetectedObject> masterMaximumStackTransientStreaks;
+
+
     public static class SlowMoverTelemetry {
         public int candidatesDetected;
         public double medianElongation;
@@ -56,7 +60,8 @@ public class PipelineResult {
                           boolean[][] masterMask,
                           List<SourceExtractor.Pixel> driftPoints,
                           SlowMoverTelemetry slowMoverTelemetry,
-                          short[][] masterMaximumStackData) {
+                          short[][] masterMaximumStackData,
+                          List<SourceExtractor.DetectedObject> masterMaximumStackTransientStreaks) {
         this.tracks = tracks;
         this.telemetry = telemetry;
         this.masterStackData = masterStackData;
@@ -68,5 +73,6 @@ public class PipelineResult {
         this.driftPoints = driftPoints;
         this.slowMoverTelemetry = slowMoverTelemetry;
         this.masterMaximumStackData = masterMaximumStackData;
+        this.masterMaximumStackTransientStreaks = masterMaximumStackTransientStreaks;
     }
 }
