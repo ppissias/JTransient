@@ -44,7 +44,7 @@ public class JTransientAutoTuner {
     public static double[] GROW_DELTAS_TO_TEST = {0.75, 1.25, 1.75};
 
     // Tune the actual binary-veto behavior as well
-    public static double[] MASK_OVERLAP_TO_TEST = {0.65, 0.75, 0.85};
+    public static double[] MASK_OVERLAP_TO_TEST = {0.65, 0.70, 0.75};
 
 
     // Penalize oversized veto masks
