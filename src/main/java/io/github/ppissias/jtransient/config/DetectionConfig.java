@@ -85,7 +85,7 @@ public class DetectionConfig implements Cloneable {
      * frames based on its footprint and the exposure time.
      * NOTE: Turn this OFF if tracking tumbling/flashing LEO satellites that only glint for a fraction of the exposure.
      */
-    public boolean strictExposureKinematics = false;
+    public boolean strictExposureKinematics = true;
 
     // =================================================================
     // 1.5 MASTER MAP EXTRACTION PARAMETERS
