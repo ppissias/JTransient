@@ -1,122 +1,223 @@
-# ☄️ JTransient Engine
+# JTransient
 
-**JTransient** is a pure Java library designed for astronomical transient detection and kinematic track linking. It processes sequences of aligned, monochrome astronomical images to automatically identify moving targets such as asteroids, comets, satellites, and Kuiper Belt Objects (KBOs), while aggressively filtering out stationary stars, hot pixels, and atmospheric noise.
+JTransient is a Java library for transient extraction and moving-object track linking on aligned monochrome astronomical image sequences. It works on `short[][]` pixel matrices and can be used in three ways:
+
+- run the full pipeline with `JTransientEngine`
+- stop after transient extraction with `JTransientEngine.detectTransients(...)`
+- use `SourceExtractor.extractSources(...)` directly on a single frame
 
 It is the core detection engine powering [SpacePixels](https://github.com/ppissias/SpacePixels).
 
-## ✨ Key Features
+## What The Library Exposes
 
-* **Robust Source Extraction:** Custom mathematical extraction that separates true point sources and streaks from background noise using local background estimation, hysteresis, and sigma clipping.
-* **Time-Based Kinematics:** Uses frame timestamps to calculate exact velocity vectors, allowing the engine to track fast-moving satellites robustly, even across dropped frames or variable camera delays.
-* **Geometric Fallback Linking:** Time-agnostic collinear linking for slow asteroids using strict kinematic rules (angle tolerance, prediction line variance, and rhythm consistency).
-* **Deep Master Star Map Veto:** Generates a highly accurate pixel-perfect Boolean Veto Mask from a dynamically generated median stack to efficiently purge background stars.
-* **Slow Mover Detection:** Features a specialized percentile-stacking engine designed to detect ultra-slow trailing objects that barely move over the course of a session.
-* **Smart Auto-Tuning:** Includes a mathematical Auto-Tuner that samples your image sequence to dynamically measure atmospheric seeing (star wobble) and optical elongation, automatically configuring the engine's tracking thresholds to prevent false positives.
-* **Deep Telemetry:** Returns highly detailed telemetry for every run, allowing developers to see exactly why potential tracks were rejected (e.g., morphological mismatch, velocity limits, or erratic rhythm).
-* **Modular Pipeline API:** Run the entire pipeline, manually pre-compute background stacks for UI performance, or just extract raw frame-by-frame transients for custom applications.
+- `JTransientAutoTuner.tune(...)`: derives a cleaner `DetectionConfig` from a representative subset of frames
+- `JTransientEngine.runPipeline(...)`: full extraction, quality filtering, master-stack masking, slow-mover detection, and track linking
+- `JTransientEngine.detectTransients(...)`: same early pipeline, but stops after the stationary-star veto and returns per-frame transients
+- `JTransientEngine.generateMasterStack(...)`: precomputes a reusable median master stack
+- `SourceExtractor.extractSources(...)`: standalone single-frame object extraction
 
----
+## Build
 
-## 📖 Detailed Documentation
+This repository is a Gradle Java library project:
 
-For a deeper dive into the inner workings and configuration of JTransient, please refer to the following dedicated guides:
-
-* [**The Detection Algorithm (`ALGORITHM.md`)**](ALGORITHM.md): A highly detailed, chronological breakdown of the mathematical and logical steps executed during the tracking pipeline, including the Auto-Tuner, Slow Mover Detection, and Time-Based Kinematics.
-* [**Pipeline Configuration Guide (`PIPELINE.md`)**](PIPELINE.md): An in-depth breakdown of every tuning parameter within the `DetectionConfig` object, detailing exactly where and how each parameter influences the detection algorithms.
-
----
-
-## 📦 Installation
-
-*Coming soon!!! *
-
-```xml
-<dependency>
-    <groupId>io.github.ppissias</groupId>
-    <artifactId>jtransient</artifactId>
-    <version>1.0.0</version>
-</dependency>
-```
-*Coming soon!!! *
-
----
-
-## 🚀 API Documentation & Usage
-
-JTransient is designed to be highly modular. You can run the entire automated tracking pipeline, or directly invoke the mathematical source extractor on single images if you are building custom linking algorithms.
-
-### Use Case 1: Full Detection Pipeline (`runPipeline`)
-This is the primary entry point. It automatically handles frame quality evaluation, median deep stack generation, streak matching, stationary star Veto Masking, time-based kinematics, and slow-mover detection.
-
-**Method Signature:**
-```java
-public PipelineResult runPipeline(
-        List<ImageFrame> inputFrames, 
-        DetectionConfig config, 
-        TransientEngineProgressListener listener
-) throws Exception
+```powershell
+.\gradlew.bat build
 ```
 
-**Inputs:**
-*   `inputFrames`: A chronological list of `ImageFrame` objects containing your raw `short[][]` pixel data and timestamps.
-*   `config`: The `DetectionConfig` object defining thresholds, bounds, and kinematics. *(Tip: Use `JTransientAutoTuner.tune()` to generate this automatically).*
-*   `listener`: (Optional) A callback interface to stream progress updates to your UI.
+The project name is `JTransient` and the current library version in `build.gradle` is `1.0.0`.
 
-**Execution Example:**
+## Data Model
+
+All engine entrypoints operate on `ImageFrame` objects:
+
 ```java
-// Initialize the engine (spawns worker threads)
+ImageFrame frame = new ImageFrame(
+        sequenceIndex,
+        "frame_001.fit",
+        pixelData,          // short[][]
+        timestampMillis,    // use -1 if unavailable
+        exposureMillis      // use -1 if unavailable
+);
+```
+
+Notes:
+
+- frames must all have the same dimensions
+- the data should already be aligned/registered to the same pixel grid
+- the engine restores chronological order from `sequenceIndex`
+- time-based linking only activates when timestamps are present
+
+## Basic Usage
+
+### 1. Auto-tune a configuration
+
+`JTransientAutoTuner` clones the base config, evaluates a representative frame sample, and returns an `AutoTunerResult`.
+
+```java
+import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.engine.ImageFrame;
+import io.github.ppissias.jtransient.engine.JTransientAutoTuner;
+
+List<ImageFrame> frames = loadFrames();
+
+DetectionConfig baseConfig = new DetectionConfig();
+
+JTransientAutoTuner.AutoTunerResult tuning = JTransientAutoTuner.tune(
+        frames,
+        baseConfig,
+        JTransientAutoTuner.AutoTuneProfile.BALANCED,
+        (percent, message) -> System.out.printf("%3d%% %s%n", percent, message)
+);
+
+DetectionConfig config = tuning.optimizedConfig;
+System.out.println("Auto-tune success: " + tuning.success);
+System.out.println(tuning.telemetryReport);
+```
+
+If you do not need to pick a profile explicitly, use the three-argument overload. It defaults to `BALANCED`.
+
+### 2. Run the full pipeline
+
+This is the main entrypoint. It performs extraction, frame rejection, master-stack generation, optional slow-mover detection, streak linking, time-based linking when timestamps exist, geometric fallback linking, and anomaly rescue.
+
+```java
+import io.github.ppissias.jtransient.engine.JTransientEngine;
+import io.github.ppissias.jtransient.engine.PipelineResult;
+
 JTransientEngine engine = new JTransientEngine();
 
-// Run the pipeline with an inline UI listener
-PipelineResult result = engine.runPipeline(sequence, finalConfig, (progress, message) -> {
-    System.out.println(progress + "% : " + message);
-});
+try {
+    PipelineResult result = engine.runPipeline(
+            frames,
+            config,
+            (percent, message) -> System.out.printf("%3d%% %s%n", percent, message)
+    );
 
-// CRITICAL: Shut down the engine to release thread pools when your application closes
-engine.shutdown();
+    System.out.println("Tracks found: " + result.tracks.size());
+    System.out.println("Slow mover candidates: " + result.slowMoverCandidates.size());
+    System.out.println(result.telemetry.generateReport());
+
+    result.tracks.forEach(track -> {
+        System.out.println(
+                "Track points=" + track.points.size()
+                        + " streak=" + track.isStreakTrack
+                        + " timeBased=" + track.isTimeBasedTrack
+                        + " anomaly=" + track.isAnomaly
+        );
+    });
+} finally {
+    engine.shutdown();
+}
 ```
 
-**Return Data (`PipelineResult`):**
-The return payload contains highly detailed structures ideal for rendering a diagnostic UI.
-*   **`tracks`**: Confirmed `TrackLinker.Track` objects. Tracks are mathematically tagged as `isTimeBasedTrack` (constant speed track based on time), `isStreakTrack` (Streak tracks), `isAnomaly` (flashes), or standard geometric moving objects.
-*   **`masterStackData`**: The generated deep median `short[][]` pixel array (ideal for use as a clean UI background).
-*   **`masterStars`**: A list of all stationary `DetectedObject`s extracted to build the mask.
-*   **`slowMoverStackData`**: The specialized percentile `short[][]` pixel array used for identifying ultra-slow objects.
-*   **`slowMoverCandidates`**: Highly-elongated `DetectedObject`s identified as slow-mover trails.
-*   **`allTransients`**: A chronological `List<List<DetectedObject>>` containing all raw points and streaks that successfully survived the Veto Mask frame-by-frame.
-*   **`telemetry`**: Exhaustive `PipelineTelemetry` detailing execution times, quality rejection reasons, and specific tracking filter drop-offs.
+Key `PipelineResult` fields:
 
----
+- `tracks`: confirmed `TrackLinker.Track` objects
+- `allTransients`: per-frame export of veto-surviving point transients plus preserved streak detections
+- `masterStackData`: median master stack used to extract stationary stars
+- `masterMaximumStackData`: maximum stack exported for visualization/post-processing
+- `masterStars`: stationary objects extracted from the master stack
+- `masterMask`: boolean veto mask used to purge stationary stars
+- `slowMoverStackData` and `slowMoverCandidates`: optional slow-mover products
+- `driftPoints`: per-frame border-drift diagnostics
+- `telemetry`: pipeline and tracker counters
 
-### Use Case 2: Standalone Source Extraction (`extractSources`)
-If you already have your own track-linking logic but want to leverage JTransient's highly tuned Breadth-First Search (BFS) region growing, local background estimation, and Image Moments shape analysis, you can call the extractor directly on a single image.
+### 3. Reuse a precomputed master stack
 
-**Method Signature:**
+If you are iterating on parameters or running UI workflows, you can precompute the median master stack once and pass it into the overloads that accept `providedMasterStack`.
+
 ```java
-public static List<DetectedObject> extractSources(
-        short[][] image, 
-        double sigmaMultiplier, 
-        int minPixels, 
-        DetectionConfig config
-)
+JTransientEngine engine = new JTransientEngine();
+
+try {
+    short[][] masterStack = engine.generateMasterStack(frames, config, null);
+
+    PipelineResult pipeline = engine.runPipeline(frames, config, null, masterStack);
+
+    List<JTransientEngine.FrameTransients> transients =
+            engine.detectTransients(frames, config, null, masterStack);
+} finally {
+    engine.shutdown();
+}
 ```
 
----
+`generateMasterStack(...)` is lighter than a full run: it performs quality evaluation and session rejection, then stacks the retained frames, but it does not extract frame objects or link tracks.
 
-## 🧠 Architecture Overview
+### 4. Export transients without linking tracks
 
-*For a complete, step-by-step breakdown of the engine, please see the Detection Algorithm Guide.*
+`detectTransients(...)` runs the same early stages as the full engine and returns the per-frame export produced after stationary-star filtering, with preserved streak detections included.
 
-JTransient executes in four distinct phases:
+```java
+JTransientEngine engine = new JTransientEngine();
 
-1. **Source Extraction:** Scans raw pixel arrays to detect significant deviations above the local background using configured sigma multipliers. Extracts morphological data (centroid, flux, elongation).
-2. **Fast Streak Linking:** Identifies highly elongated sources (e.g., fast-moving satellites or meteors) and links them based on trajectory angles.
-3. **Master Star Map Generation:** Uses an "all-to-all" spatial comparison. If a source is found in the same spatial location across multiple frames (dictated by the `maxStarJitter` radius), it is classified as a stationary star and purged from the pool.
-4. **Geometric Track Linking:** The remaining "transient" points are evaluated using kinematic rules. The engine builds trajectory vectors, calculates predicted line tolerances, evaluates photometric consistency, and ensures rhythmic movement to confirm true asteroids.
+try {
+    List<JTransientEngine.FrameTransients> frameTransients =
+            engine.detectTransients(frames, config, null);
 
----
+    for (JTransientEngine.FrameTransients frame : frameTransients) {
+        System.out.println(frame.filename + " -> " + frame.transients.size() + " transients");
+        System.out.println("Seed threshold: " + frame.extractionResult.seedThreshold);
+        System.out.println("Grow threshold: " + frame.extractionResult.growThreshold);
+    }
+} finally {
+    engine.shutdown();
+}
+```
 
-## 📄 License
+This entrypoint is useful when you want JTransient's extraction and stationary-star filtering, but you plan to do your own higher-level linking.
 
-BSD License
-See the LICENSE file included in this distribution for specific terms.
+### 5. Use `SourceExtractor` directly on a single frame
+
+If you only want object detection on one image, call `SourceExtractor.extractSources(...)` directly.
+
+```java
+import io.github.ppissias.jtransient.core.SourceExtractor;
+
+DetectionConfig config = new DetectionConfig();
+
+SourceExtractor.ExtractionResult extraction = SourceExtractor.extractSources(
+        image,
+        config.detectionSigmaMultiplier,
+        config.minDetectionPixels,
+        config
+);
+
+System.out.println("Objects: " + extraction.objects.size());
+System.out.println("Background median: " + extraction.backgroundMetrics.median);
+System.out.println("Background sigma: " + extraction.backgroundMetrics.sigma);
+
+for (SourceExtractor.DetectedObject object : extraction.objects) {
+    System.out.printf(
+            "x=%.2f y=%.2f area=%.0f elongation=%.2f streak=%s%n",
+            object.x,
+            object.y,
+            object.pixelArea,
+            object.elongation,
+            object.isStreak
+    );
+}
+```
+
+The extractor returns:
+
+- `objects`: detected blobs that survived the size and artifact filters
+- `backgroundMetrics`: sigma-clipped background median and sigma
+- `seedThreshold`: threshold used to start a blob
+- `growThreshold`: hysteresis threshold used to expand the blob
+
+## Choosing The Right Entry Point
+
+- use `JTransientAutoTuner.tune(...)` before production runs if the dataset changes often
+- use `runPipeline(...)` when you want confirmed tracks and full telemetry
+- use `detectTransients(...)` when you want frame-by-frame candidates after stationary-star masking
+- use `generateMasterStack(...)` plus the overloads with `providedMasterStack` when repeated runs would otherwise spend too much time stacking
+- use `SourceExtractor.extractSources(...)` when you only need single-frame object detection
+
+## Detailed Documentation
+
+- [ALGORITHM.md](ALGORITHM.md): full pipeline and auto-tuner behavior
+- [PIPELINE.md](PIPELINE.md): `DetectionConfig` field-by-field reference
+
+## License
+
+BSD License. See [LICENSE](LICENSE).
