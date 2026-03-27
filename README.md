@@ -16,6 +16,12 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 - `JTransientEngine.generateMasterStack(...)`: precomputes a reusable median master stack
 - `SourceExtractor.extractSources(...)`: standalone single-frame object extraction
 
+## Documentation
+
+- [PIPELINE.md](PIPELINE.md): what each public entrypoint runs and returns
+- [ALGORITHM.md](ALGORITHM.md): internal phases of `JTransientEngine.runPipeline(...)`
+- [CONFIG.md](CONFIG.md): `DetectionConfig` field-by-field reference
+
 ## Build
 
 This repository is a Gradle Java library project:
@@ -215,8 +221,9 @@ The extractor returns:
 
 ## Detailed Documentation
 
-- [ALGORITHM.md](ALGORITHM.md): full pipeline and auto-tuner behavior
-- [PIPELINE.md](PIPELINE.md): `DetectionConfig` field-by-field reference
+- [PIPELINE.md](PIPELINE.md): what each public entrypoint runs and returns
+- [ALGORITHM.md](ALGORITHM.md): internal phases of `JTransientEngine.runPipeline(...)`
+- [CONFIG.md](CONFIG.md): `DetectionConfig` field-by-field reference
 
 ## License
 

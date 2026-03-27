@@ -1,162 +1,160 @@
 # JTransient Detection Algorithm
 
-This document describes what the current implementation does when you call the main public entrypoints:
+This document describes the internal phases of `JTransientEngine.runPipeline(...)`.
 
-- `JTransientEngine.runPipeline(...)`
-- `JTransientEngine.detectTransients(...)`
-- `SourceExtractor.extractSources(...)`
-- `JTransientAutoTuner.tune(...)`
+It does not document the public API surface in general. For that, see `PIPELINE.md`. This file is specifically about how the full detection run works once you choose the full pipeline entrypoint.
 
-The engine is a staged reduction pipeline. It starts from raw `short[][]` frames, removes poor-quality frames and stationary objects, then tries increasingly stricter linking strategies before exporting the remaining tracks and diagnostics.
+## Input Assumptions
 
-## Entry Point Map
+The implementation expects:
 
-### `SourceExtractor.extractSources(...)`
+- all frames to share the same dimensions
+- aligned or registered monochrome frames
+- pixel data as signed `short[][]`
+- `sequenceIndex` to represent chronological order
+- timestamps in milliseconds when time-based linking should be enabled
 
-Single-frame extraction only. Returns:
+`runPipeline(...)` sorts frames by `sequenceIndex` before the main extraction work. If timestamps are missing, the engine still runs, but it falls back to geometric linking for point-like movers.
 
-- `ExtractionResult.objects`
-- `ExtractionResult.backgroundMetrics`
-- `ExtractionResult.seedThreshold`
-- `ExtractionResult.growThreshold`
+## High-Level Flow
 
-No frame rejection, no master stack, no masking, no track linking.
+The full run is organized into these major phases:
 
-### `JTransientEngine.detectTransients(...)`
-
-Runs the same early stages as the full engine:
-
-1. drift diagnostics
-2. per-frame extraction
-3. frame quality analysis and session rejection
-4. master-stack generation or reuse
+1. border drift diagnostics
+2. parallel extraction and frame-quality measurement
+3. session-level frame rejection
+4. median master-stack generation
 5. master-star extraction
-6. stationary-star veto mask
+6. optional slow-mover analysis
+7. streak linking and stationary-star veto filtering
+8. time-based point linking
+9. geometric fallback point linking
+10. anomaly rescue
+11. output assembly and maximum-stack export
 
-It stops there and returns `FrameTransients` per retained frame.
+## 1. Border Drift Diagnostics
 
-### `JTransientEngine.runPipeline(...)`
-
-Runs the full engine. In addition to the transient-only path it also:
-
-1. optionally builds the slow-mover stack
-2. links streaks
-3. performs time-based linking when timestamps are available
-4. falls back to geometric linking
-5. rescues very bright single-frame anomalies
-6. exports median, slow-mover, and maximum stacks
-
-## Full Pipeline
-
-### 1. Border Drift Diagnostics
-
-Before extraction, `JTransientEngine` evaluates the aligned sequence for black border padding caused by dithering plus registration.
+Before extracting sources, `JTransientEngine` scans the sequence for black border padding introduced by dithering plus external registration.
 
 For each frame:
 
-1. It takes an `11 x 11` sample around the image center and uses the median as a local sky reference.
-2. It computes `voidThreshold = centerMedian * voidThresholdFraction`.
-3. It scans inward from the middle of the left, right, top, and bottom edges until a pixel rises above that threshold.
-4. It converts the padding depths into a translation vector:
+1. it samples an `11 x 11` patch around the image center
+2. it uses the patch median as a local background estimate
+3. it computes `voidThreshold = centerMedian * voidThresholdFraction`
+4. it scans inward from the middle of the left, right, top, and bottom edges until the scan rises above that threshold
+5. it derives a translation vector:
    - `dx = leftPad - rightPad`
    - `dy = topPad - bottomPad`
-5. It records that vector in `PipelineResult.driftPoints`.
 
-Across the whole sequence it also keeps the maximum inward padding depth. If `maxDrift + 10` exceeds `config.voidProximityRadius`, it raises `voidProximityRadius` in place so later extraction does not accept interpolation artifacts near the alignment void.
+The vectors are exported as `PipelineResult.driftPoints`.
 
-### 2. Parallel Per-Frame Extraction
+Across the whole sequence, the engine also tracks the maximum inward padding depth. If `maxDrift + 10` is larger than the configured `voidProximityRadius`, it raises `voidProximityRadius` in place before extraction starts. That makes the later alignment-void rejection more conservative when the dataset actually needs it.
 
-The engine sorts frames by `sequenceIndex`, then uses its worker pool to process them in parallel.
+## 2. Parallel Extraction And Quality Measurement
 
-For each frame it runs two independent passes:
+The engine then processes frames in parallel. Each frame goes through two independent calculations:
 
 - `SourceExtractor.extractSources(...)`
 - `FrameQualityAnalyzer.evaluateFrame(...)`
 
-The extraction result is then annotated with:
+The source-extraction result is annotated with sequence metadata afterward:
 
 - `sourceFrameIndex`
 - `sourceFilename`
 - `timestamp`
 - `exposureDuration`
 
-### 3. Source Extraction Internals
+At the same time, `PipelineTelemetry.frameExtractionStats` records:
 
-`SourceExtractor` works on a single `short[][]` image.
+- extracted object count
+- background median
+- background sigma
+- seed threshold
+- grow threshold
 
-#### 3.1 Background model
+## 3. Single-Frame Extraction Internals
 
-`calculateBackgroundSigmaClipped(...)` builds a full 16-bit histogram of the shifted pixel values (`pixel + 32768`) and iteratively estimates the background:
+`SourceExtractor` is the detector at the heart of the pipeline.
 
-1. compute median within the current histogram bounds
+### 3.1 Background estimation
+
+`calculateBackgroundSigmaClipped(...)` builds a full 16-bit histogram from shifted pixel values (`pixel + 32768`) and iteratively estimates the background:
+
+1. compute the median within the current histogram bounds
 2. compute sigma around that median
-3. narrow the valid histogram range to `median +/- bgClippingFactor * sigma`
+3. clamp the histogram bounds to `median +/- bgClippingFactor * sigma`
 4. repeat for `bgClippingIterations`
 
-The extractor then computes:
+The extraction thresholds are then:
 
 - `seedThreshold = bg.median + bg.sigma * sigmaMultiplier`
-- `growThreshold = bg.median + bg.sigma * config.growSigmaMultiplier`
-- `voidValueThreshold = bg.median * config.voidThresholdFraction`
+- `growThreshold = bg.median + bg.sigma * growSigmaMultiplier`
+- `voidValueThreshold = bg.median * voidThresholdFraction`
 
-#### 3.2 Blob growth
+### 3.2 Hysteresis blob detection
 
-The image is scanned pixel by pixel.
+The image is scanned pixel-by-pixel. When an unvisited pixel rises above the seed threshold:
 
-When a pixel is above `seedThreshold` and has not been visited:
+1. it becomes a new blob seed
+2. a breadth-first search grows the region in 8 directions
+3. neighboring pixels are absorbed while they stay above the grow threshold
 
-1. it becomes a new seed
-2. a breadth-first search grows the blob in 8 directions
-3. neighbors are absorbed while they stay above `growThreshold`
+The seed threshold is strict. The grow threshold is lower, which lets the blob keep faint edges once a convincing core has been found.
 
-This is a classic hysteresis detector: the seed threshold is strict, but growth is more permissive.
+### 3.3 Shape analysis
 
-#### 3.3 Shape analysis
+Blobs that meet the `minPixels` requirement go through `analyzeShape(...)`.
 
-If the blob contains at least `minPixels`, `analyzeShape(...)` computes:
+The extractor computes:
 
-- centroid from intensity-weighted moments
-- integrated flux
+- intensity-weighted centroid
+- background-subtracted total flux
 - `peakSigma`
-- elongation from the eigenvalues of the second-moment matrix
+- elongation from second moments
 - dominant angle
 - approximate `fwhm`
 
-The object is flagged as a streak only when both conditions hold:
+An object is marked as a streak only when:
 
 - `elongation > streakMinElongation`
-- `blob.size() >= streakMinPixels`
+- blob size `>= streakMinPixels`
 
-#### 3.4 Extraction filters
+Otherwise it stays alive as a point-like detection.
+
+### 3.4 Per-object filtering
 
 After shape analysis the extractor applies:
 
-1. size rejection: blobs smaller than `minPixels` are dropped before analysis
-2. physical-edge rejection: non-streaks whose centroid falls inside `edgeMarginPixels` are removed
-3. virtual-edge rejection: an 8-point ring test of radius `voidProximityRadius` is run around the centroid; if any test point is out of bounds or below `voidValueThreshold`, the object is removed
+1. physical-edge rejection for non-streaks using `edgeMarginPixels`
+2. virtual-edge rejection using an 8-point ring at `voidProximityRadius`
 
-Surviving objects are returned together with the background metrics and thresholds.
+If any virtual-edge test point is out of bounds or falls below the void threshold, the object is rejected as an alignment-border artifact.
 
-### 4. Frame Quality Analysis
+## 4. Frame Quality Analysis
 
-`FrameQualityAnalyzer.evaluateFrame(...)` performs a stricter extraction pass for quality statistics, using:
+`FrameQualityAnalyzer.evaluateFrame(...)` runs a stricter extraction pass using:
 
 - `qualitySigmaMultiplier`
 - `qualityMinDetectionPixels`
 
-From those detections it records:
+It computes:
 
 - `backgroundMedian`
 - `backgroundNoise`
 - `starCount`
-- `medianEccentricity` from all non-streak detections
-- `medianFWHM` from non-streak detections whose elongation is below `maxElongationForFwhm`
+- `medianEccentricity`
+- `medianFWHM`
 
-If no usable values exist, the analyzer returns `errorFallbackValue` for the affected metric.
+Important detail:
 
-### 5. Session-Level Frame Rejection
+- eccentricity uses all non-streak detections
+- FWHM uses only non-streak detections whose elongation is below `maxElongationForFwhm`
 
-`SessionEvaluator.rejectOutlierFrames(...)` uses robust global statistics once at least `minFramesForAnalysis` frames are available.
+If the analyzer cannot compute a meaningful median, it falls back to `errorFallbackValue`.
+
+## 5. Session-Level Frame Rejection
+
+Once all frames have been measured, `SessionEvaluator.rejectOutlierFrames(...)` decides which frames remain in the run.
 
 It computes a median and a MAD-derived sigma for:
 
@@ -165,44 +163,44 @@ It computes a median and a MAD-derived sigma for:
 - median eccentricity
 - background median
 
-Frames are rejected when they violate the configured envelopes:
+Frames are rejected when:
 
-- star count too low
-- FWHM too high
-- eccentricity too high
-- absolute background deviation too large
+- star count falls too far below the session median
+- FWHM rises too far above the median
+- eccentricity rises too far above the median
+- background median deviates too much from the median
 
-Three absolute floors stop the envelopes from becoming unrealistically tight on very stable nights:
+Three absolute floors keep the rejection envelopes from becoming too tight:
 
 - `minBackgroundDeviationADU`
 - `minEccentricityEnvelope`
 - `minFwhmEnvelope`
 
-Only the retained frames move on to master-stack generation and tracking.
+Rejected frames are recorded in `PipelineTelemetry.rejectedFrames`. Only the retained frames participate in stacking and tracking.
 
-### 6. Median Master Stack
+## 6. Median Master Stack
 
-If a `providedMasterStack` is not supplied, `MasterMapGenerator.createMedianMasterStack(...)` builds one from the retained frames.
+If the caller did not pass a `providedMasterStack`, the engine builds one from the retained frames with `MasterMapGenerator.createMedianMasterStack(...)`.
 
 For each pixel coordinate:
 
-1. gather the pixel value from every retained frame
-2. shift to positive integers
-3. sort
-4. take the lower median index `(numFrames - 1) / 2`
-5. shift back to `short`
+1. collect the pixel value from every retained frame
+2. shift values into a positive integer domain
+3. sort them
+4. select the lower median index `(numFrames - 1) / 2`
+5. shift back to a signed `short`
 
-This stack is used as the stationary-scene reference.
+This erases many transient or moving features while preserving the stationary sky.
 
-### 7. Master-Star Extraction
+## 7. Master-Star Extraction
 
-The engine extracts stationary objects from the median master stack with a temporary configuration override:
+The engine next extracts stationary objects from the median master stack. During this extraction it temporarily changes the config:
 
 - `growSigmaMultiplier = masterSigmaMultiplier`
 - `edgeMarginPixels = 5`
 - `voidProximityRadius = 5`
 
-The actual extraction call is:
+Then it runs:
 
 ```java
 SourceExtractor.extractSources(
@@ -213,272 +211,207 @@ SourceExtractor.extractSources(
 )
 ```
 
-The overrides are then restored. The resulting `masterStars` drive the veto mask.
+The resulting `masterStars` are the stationary reference objects used for veto masking. After extraction, the temporary config changes are restored.
 
-### 8. Optional Slow-Mover Stack
+## 8. Optional Slow-Mover Analysis
 
-If `enableSlowMoverDetection` is `true`, the engine creates a second reference stack with `MasterMapGenerator.createSlowMoverMasterStack(...)`.
+If `enableSlowMoverDetection` is true, the engine generates a second reference stack with `MasterMapGenerator.createSlowMoverMasterStack(...)`.
 
-This is not a plain percentile stack. For each pixel:
+This stack is built by:
 
-1. sort the values across frames
-2. compute a middle-band size from `slowMoverStackMiddleFraction`
-3. take the upper end of that middle band
+1. sorting the per-pixel values across frames
+2. computing a band size from `slowMoverStackMiddleFraction`
+3. selecting the upper end of that middle band
 
-This retains objects that occupy a pixel in several frames while still suppressing many one-frame flashes.
+This favors objects that persist in roughly the same area across several frames while suppressing many one-frame flashes.
 
 The engine then:
 
-1. extracts objects from the slow-mover stack using `masterSlowMoverSigmaMultiplier`, `masterSlowMoverMinPixels`, and a temporary `growSigmaMultiplier = masterSlowMoverGrowSigmaMultiplier`
-2. extracts a comparison set from the median master stack using the same slow-mover thresholds
+1. extracts raw candidates from the slow-mover stack using:
+   - `masterSlowMoverSigmaMultiplier`
+   - `masterSlowMoverMinPixels`
+   - temporary `growSigmaMultiplier = masterSlowMoverGrowSigmaMultiplier`
+2. extracts comparison objects from the median master stack with the same slow-mover thresholds
 3. builds a boolean mask from the median-stack comparison objects
 4. computes a dynamic elongation threshold:
    - `medianElongation + MAD * slowMoverBaselineMadMultiplier`
-   - fallback threshold `3.0` if there are too few candidates
-5. keeps only objects that:
-   - exceed the dynamic elongation threshold
-   - are not flagged by `SourceExtractor.isIrregularStreakShape(...)`
-   - are not flagged by `SourceExtractor.isBinaryStarAnomaly(...)`
-   - do not overlap the median-stack mask by more than `85%`
+   - fallback `3.0` if too few objects are available
+5. rejects candidates that:
+   - fail the elongation threshold
+   - fail `SourceExtractor.isIrregularStreakShape(...)`
+   - fail `SourceExtractor.isBinaryStarAnomaly(...)`
+   - overlap the median-stack mask by more than `85%`
 
-The survivors become `PipelineResult.slowMoverCandidates`.
+The survivors are exported as `PipelineResult.slowMoverCandidates`, along with slow-mover telemetry.
 
-### 9. Streak Separation And Fast Streak Linking
+## 9. Streak Linking And Stationary-Star Veto Filtering
 
-`TrackLinker.filterTransients(...)` begins by splitting every frame into:
+`TrackLinker.findMovingObjects(...)` starts by delegating to `TrackLinker.filterTransients(...)`.
 
-- `validMovingStreaks`
-- point-like detections
+That function performs three important tasks before point-track linking begins.
 
-Streaks bypass the master-star veto and are linked first.
+### 9.1 Streak separation
+
+All detections are split into:
+
+- streak-like objects
+- point-like objects
+
+### 9.2 Fast streak linking
+
+Streaks bypass the stationary-star veto and are linked first.
 
 For each unmatched streak:
 
 1. start a new streak track
-2. search all later streaks for the closest valid continuation
-3. require orientation agreement between the streak angles
-4. establish a forward direction from the first successful jump
-5. require all later jumps to stay within `angleToleranceDegrees`
+2. search later streaks for the closest valid continuation
+3. require the streak angles to agree
+4. establish a forward direction from the first valid jump
+5. require later jumps to stay directionally consistent
 
-A single-frame streak is only exported if its `peakSigma` is at least `singleStreakMinPeakSigma`.
+Single-frame streaks are only kept if `peakSigma >= singleStreakMinPeakSigma`.
 
-### 10. Stationary-Star Veto Mask
+### 9.3 Stationary-star veto mask
 
-Still inside `filterTransients(...)`, the tracker builds a boolean veto mask from `masterStars`.
+Point detections are filtered against a boolean mask built from `masterStars`.
 
-For every pixel in every master-star footprint:
+For every master-star footprint pixel, the tracker paints a disk with radius:
 
-1. draw a circle into the mask
-2. use a dilation radius of `round(maxStarJitter / 2.0)`, with a minimum of `1`
+`round(maxStarJitter / 2.0)`, minimum `1`
 
-Then each point-source candidate is tested against that mask.
+Then each point-like object is checked:
 
-For a candidate object:
-
-1. count how many footprint pixels fall on the mask
+1. count how many footprint pixels touch the mask
 2. compute `overlapFraction = overlapCount / rawPixels.size()`
-3. purge it if `overlapFraction > maxMaskOverlapFraction`
+3. purge the object if `overlapFraction > maxMaskOverlapFraction`
 
-Point transients that survive this step are the inputs to the point-track linker. The export path merges them with the streaks so `PipelineResult.allTransients` contains both.
+The surviving point detections are the inputs to point-track linking. The exported `allTransients` list merges those surviving points with preserved streak detections.
 
-### 11. Time-Based Linking
+## 10. Time-Based Point Linking
 
-If timestamps are present, `TrackLinker.findMovingObjects(...)` tries time-aware linking before the geometric fallback.
+If timestamps are available, the tracker attempts time-aware linking before the geometric fallback.
 
-The algorithm:
+For each proposed baseline pair `p1 -> p2`:
 
-1. proposes baseline pairs `p1 -> p2` across later frames
-2. requires distance greater than `maxStarJitter`
-3. applies the morphology filter `isProfileConsistent(...)`
-4. optionally applies `strictExposureKinematics`
-5. computes velocity `distance / deltaTime`
-6. searches later frames for the best continuation using:
-   - velocity difference within `currentVelocity * timeBasedVelocityTolerance + maxStarJitter / dt`
-   - line error within `predictionTolerance`
-   - forward direction consistency
-   - morphology consistency
+1. require forward time flow
+2. require jump distance `> maxStarJitter`
+3. require morphology consistency from `isProfileConsistent(...)`
+4. optionally require `strictExposureKinematics`
+5. compute velocity `distance / deltaTime`
 
-When `strictExposureKinematics` is enabled, the maximum allowed jump is derived from the source footprint and exposure time:
+For later points, the tracker looks for the best continuation that satisfies:
+
+- velocity difference within:
+  - `currentVelocity * timeBasedVelocityTolerance`
+  - plus a slack term of `maxStarJitter / dt`
+- line error within `predictionTolerance`
+- directional consistency
+- morphology consistency
+
+When `strictExposureKinematics` is enabled, the allowed jump is bounded from exposure time and footprint size:
 
 `maxAllowedJump = (((sqrt(pixelArea) + maxStarJitter) / exposureDuration) * dt * 1.5) + maxStarJitter`
 
-Accepted candidates are ranked by length, coverage, span, line straightness, angle stability, and speed stability. The tracker then keeps only non-conflicting candidates, preferring longer and better-scored tracks.
+Candidate time-based tracks are ranked by:
 
-### 12. Geometric Fallback Linking
+- length
+- frame coverage
+- span
+- total distance
+- line straightness
+- angle stability
+- speed stability
 
-After the time-based pass, unused point transients go through a frame-agnostic geometric linker.
+The tracker then accepts the highest-ranked non-conflicting candidates first.
 
-The required track length is:
+## 11. Geometric Fallback Point Linking
+
+Unused point detections go through a time-agnostic geometric linker.
+
+The minimum track length is:
 
 `minPointsRequired = max(3, ceil(numFrames / trackMinFrameRatio))`
 
 and then capped by `absoluteMaxPointsRequired`.
 
-For each candidate baseline `p1 -> p2`:
+For a candidate baseline `p1 -> p2`:
 
 1. reject if the jump is below `maxStarJitter`
 2. reject if the jump is above `maxJumpPixels`
-3. reject if `isProfileConsistent(...)` fails
-4. optionally reject via `strictExposureKinematics`
-5. extend the track by searching later frames for points that satisfy:
-   - jump within `maxJumpPixels`
-   - line error within `predictionTolerance`
-   - forward direction consistency
-   - morphology consistency
+3. reject if morphology consistency fails
+4. optionally reject if `strictExposureKinematics` fails
 
-After extension the track is pruned:
+When searching later frames, candidate points must satisfy:
 
-- any step `<= maxStarJitter` is removed as a likely stationary-star hijack
+- jump within `maxJumpPixels`
+- line error within `predictionTolerance`
+- directional consistency
+- morphology consistency
 
-The pruned track must still meet `minPointsRequired`.
+The tracker keeps the best line-consistent continuation in each later frame.
 
-### 13. Rhythm Validation
+## 12. Anti-Hijack Pruning And Rhythm Validation
 
-Before a geometric track is accepted, `hasSteadyRhythm(...)` checks whether the jump distances are consistent enough to represent a real mover.
+Before a geometric track is accepted, the tracker runs two cleanup checks.
 
-1. compute all inter-point jump distances
-2. take the median jump
-3. reject immediately if the median jump is below `rhythmStationaryThreshold`
-4. for each jump, compare it against an integer multiple of the median jump
-5. count it as consistent if the error is within `rhythmAllowedVariance * multiplier`
-6. accept the track only if the ratio of consistent jumps is at least `rhythmMinConsistencyRatio`
+### 12.1 Anti-hijack pruning
 
-This allows skipped frames while still enforcing roughly steady motion.
+If a step in the candidate track is `<= maxStarJitter`, that point is removed. This prevents the trajectory from stalling on a background star that happened to lie on the projected line.
 
-### 14. Anomaly Rescue
+After pruning, the track must still satisfy `minPointsRequired`.
 
-If `enableAnomalyRescue` is enabled, the tracker scans the surviving point transients that were not consumed by any track.
+### 12.2 Rhythm validation
 
-A single detection is rescued as `isAnomaly = true` when:
+`hasSteadyRhythm(...)` then checks whether the step sizes are consistent enough to represent a real mover.
+
+It:
+
+1. computes all inter-point jump distances
+2. takes the median jump
+3. rejects the track immediately if the median jump is below `rhythmStationaryThreshold`
+4. compares each jump against an integer multiple of the median jump
+5. counts a jump as consistent if the error is within `rhythmAllowedVariance * multiplier`
+6. requires the fraction of consistent jumps to be at least `rhythmMinConsistencyRatio`
+
+This allows skipped frames while still rejecting erratic or mostly stationary tracks.
+
+## 13. Anomaly Rescue
+
+If `enableAnomalyRescue` is enabled, the tracker scans surviving point detections that were not consumed by any track.
+
+A single detection is rescued as an anomaly when:
 
 - `pixelArea >= anomalyMinPixels`
 - `peakSigma >= anomalyMinPeakSigma`
 
-This catches bright one-frame flashes that are too short-lived to form a multi-frame track.
+The resulting one-point track is exported with `isAnomaly = true`.
 
-### 15. Final Export Products
+## 14. Output Assembly
 
-`runPipeline(...)` returns a `PipelineResult` containing:
+At the end of the run, the engine assembles:
 
 - confirmed tracks
-- pipeline telemetry and tracker telemetry
+- pipeline telemetry
+- tracker telemetry
 - median master stack
 - master-star detections
 - slow-mover stack and candidates
 - merged per-frame transients
-- boolean master mask
-- drift diagnostics
-- a maximum-value stack
+- master veto mask
+- drift vectors
 
-The full engine always generates `masterMaximumStackData` at the end, even though the current code does not yet populate the reserved max-stack streak lists.
+It also generates `masterMaximumStackData` with `MasterMapGenerator.createMaximumMasterStack(...)`. This maximum stack is exported even though the current implementation does not yet populate the reserved max-stack streak lists.
 
-## Auto-Tuner
+## Resulting Behavior
 
-`JTransientAutoTuner` is a crop-based parameter search that returns an `AutoTunerResult`.
+The full algorithm is intentionally layered:
 
-### 1. Sampling Strategy
+1. detect as many plausible objects as possible
+2. remove bad frames
+3. learn the stationary sky from the median master stack
+4. veto stationary objects
+5. try the strictest track linker first
+6. fall back to looser geometry when timestamps are missing or insufficient
+7. rescue only very strong one-frame events at the end
 
-The tuner does not sweep the full dataset. It first evaluates all frames with `FrameQualityAnalyzer`.
-
-Frame quality is scored as:
-
-`qualityScore = backgroundNoise * medianFWHM`
-
-It then selects:
-
-- up to three best frames
-- plus additional median-quality frames
-
-The goal is to avoid tuning only on perfect frames.
-
-### 2. Crop Selection
-
-The tuner works on interior crops instead of full frames.
-
-Current defaults:
-
-- border margin: `200` px
-- preferred crop sizes: `1024`, then `768`
-- minimum crop size: `384`
-- crop locations: upper-left interior, center, lower-right interior
-
-Each sampled frame is cropped once per region and reused throughout the sweep.
-
-### 3. Initial Jitter Estimate
-
-Before the main sweep, the tuner performs a rough reciprocal nearest-neighbor match on extracted stars from adjacent cropped frames.
-
-This produces a provisional `maxStarJitter` used only during the sweep, so Phase 1 is not overly dependent on the caller's initial guess.
-
-### 4. Phase 1 Sweep
-
-The tuner sweeps combinations of:
-
-- `detectionSigmaMultiplier`
-- `growSigmaMultiplier` via `sigma - growDelta`
-- `minDetectionPixels`
-- `maxMaskOverlapFraction`
-
-For each crop and each tested combination it:
-
-1. builds a crop median master stack
-2. extracts crop master stars with the master-stack parameters
-3. builds a veto mask using the provisional jitter
-4. extracts every cropped frame with the tested parameters
-5. classifies non-streak detections as stable or transient by mask overlap
-
-Combinations are rejected early when, for example:
-
-- no master stars are found in a crop
-- mask coverage becomes too large
-- too few stable stars are found
-- transient leakage exceeds the selected profile's limit
-- total extracted object counts become obviously unreasonable
-
-Surviving combinations are scored using:
-
-- stable-star yield
-- transient overflow penalty
-- transient "sweet spot" preference
-- per-crop/frame stability
-- veto-mask area penalty
-- parameter harshness penalty
-- a low-sigma / too-small-minPixels guard
-
-The scoring behavior comes from `AutoTuneProfile`:
-
-- `CONSERVATIVE`
-- `BALANCED`
-- `AGGRESSIVE`
-
-### 5. Phase 2 Optical Calibration
-
-Once the best sweep result is chosen, the tuner measures the stable stars it found across all crops.
-
-It updates:
-
-- `maxStarJitter` from the 90th percentile of matched star displacements, scaled by a safety factor
-- `maxElongationForFwhm` from median elongation plus a buffer
-- `streakMinElongation` from median elongation plus a larger buffer
-
-The tuned config also retains the winning:
-
-- detection sigma
-- grow sigma
-- minimum pixels
-- mask overlap fraction
-
-### 6. Tuner Output
-
-On success:
-
-- `AutoTunerResult.success = true`
-- `optimizedConfig` is the tuned clone
-- `telemetryReport` contains a full textual summary
-
-On failure:
-
-- `success = false`
-- `optimizedConfig` falls back to the provided base config
-
-The tuner does not use extra scoring fields inside `DetectionConfig`. Its sweep bounds and scoring policy live in `JTransientAutoTuner` itself.
+That layering is what lets `runPipeline(...)` handle slow point-like movers, fast streaks, and one-frame flashes within the same overall engine.
