@@ -13,6 +13,7 @@ import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.core.TrackLinker;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -30,6 +31,8 @@ public class PipelineResult {
 
     /** Slow-mover stack produced from the configured middle band of sorted pixels. */
     public final short[][] slowMoverStackData;
+    /** Pixel mask built from objects extracted on the median stack with the slow-mover extraction thresholds. */
+    public final boolean[][] slowMoverMedianArtifactMask;
     /** Elongated candidates that survived the slow-mover artifact filters. */
     public final List<SourceExtractor.DetectedObject> slowMoverCandidates;
 
@@ -59,12 +62,38 @@ public class PipelineResult {
      * Diagnostic summary for the slow-mover detection branch.
      */
     public static class SlowMoverTelemetry {
+        /** Raw candidate count extracted from the slow-mover stack before any filtering. */
+        public int rawCandidatesExtracted;
+        /** Candidates that cleared the elongation baseline before morphology and median-support checks. */
+        public int candidatesAboveElongationThreshold;
+        /** Candidates that reached the median-support overlap stage after morphology filters. */
+        public int candidatesEvaluatedAgainstMasks;
+        /** Candidates rejected because the footprint shape is too irregular for a trustworthy mover. */
+        public int rejectedIrregularShape;
+        /** Candidates rejected because the footprint is more consistent with a merged binary star. */
+        public int rejectedBinaryAnomaly;
+        /** Candidates rejected by the slow-mover-only short/kinked shape veto. */
+        public int rejectedSlowMoverShape;
+        /** Candidates rejected because their median-stack overlap stayed below the configured support floor. */
+        public int rejectedLowMedianSupport;
+        /** Candidates rejected because their median-stack overlap exceeded the configured support ceiling. */
+        public int rejectedHighMedianSupport;
         /** Number of slow-mover candidates retained after all filters. */
         public int candidatesDetected;
         /** Median elongation measured from the raw slow-mover extraction pass. */
         public double medianElongation;
+        /** Median absolute deviation of the raw elongation distribution, after the safety floor. */
+        public double madElongation;
         /** Dynamic elongation threshold derived from the baseline elongation distribution. */
         public double dynamicElongationThreshold;
+        /** Minimum overlap fraction required for a slow mover to be considered supported by the median stack. */
+        public double medianSupportOverlapThreshold;
+        /** Maximum overlap fraction allowed before a slow mover is treated as too similar to the median stack. */
+        public double medianSupportMaxOverlapThreshold;
+        /** Mean overlap with the median-stack artifact mask across candidates that reached the mask stage. */
+        public double avgMedianSupportOverlap;
+        /** Per-candidate overlap fractions for accepted slow movers, in the same order as {@code slowMoverCandidates}. */
+        public final List<Double> candidateMedianSupportOverlaps = new ArrayList<>();
     }
 
     /**
@@ -75,6 +104,7 @@ public class PipelineResult {
                           short[][] masterStackData,
                           List<SourceExtractor.DetectedObject> masterStars,
                           short[][] slowMoverStackData,
+                          boolean[][] slowMoverMedianArtifactMask,
                           List<SourceExtractor.DetectedObject> slowMoverCandidates,
                           List<List<SourceExtractor.DetectedObject>> allTransients,
                           boolean[][] masterMask,
@@ -88,6 +118,7 @@ public class PipelineResult {
         this.masterStackData = masterStackData;
         this.masterStars = masterStars;
         this.slowMoverStackData = slowMoverStackData;
+        this.slowMoverMedianArtifactMask = slowMoverMedianArtifactMask;
         this.slowMoverCandidates = slowMoverCandidates;
         this.allTransients = allTransients;
         this.masterMask = masterMask;

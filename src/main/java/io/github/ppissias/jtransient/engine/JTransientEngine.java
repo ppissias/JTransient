@@ -639,6 +639,7 @@ public class JTransientEngine {
          * rather than only comparing overlap with the median-stack veto map
          */
         short[][] slowMoverStackData = null;
+        boolean[][] slowMoverMedianArtifactMask = null;
         List<SourceExtractor.DetectedObject> slowMoverCandidates = new ArrayList<>();
         PipelineResult.SlowMoverTelemetry smTelemetry = null;
 
@@ -674,85 +675,50 @@ public class JTransientEngine {
             // Restore original config
             config.growSigmaMultiplier = origGrow;
 
-            // --- BUILD MEDIAN ARTIFACT MASK ---
-            // Paint the median artifacts onto a fast 2D boolean array for pixel-perfect overlap checks
-            boolean[][] medianMask = new boolean[sensorHeight][sensorWidth];
-            for (SourceExtractor.DetectedObject medObj : medianArtifacts) {
-                for (SourceExtractor.Pixel p : medObj.rawPixels) {
-                    medianMask[p.y][p.x] = true;
-                }
-            }
+            smTelemetry = new PipelineResult.SlowMoverTelemetry();
+            boolean[][] medianMask = buildObjectMask(medianArtifacts, sensorWidth, sensorHeight, 0);
+            slowMoverMedianArtifactMask = medianMask;
 
-            // --- DYNAMIC ELONGATION STATISTICAL BASELINE ---
-            // Measure the elongation of all standard objects to establish the optical baseline (accounts for trailing/coma).
-            List<Double> elongations = new ArrayList<>();
-            for (SourceExtractor.DetectedObject obj : rawSlowMovers) {
-                elongations.add(obj.elongation);
-            }
-
-            // Default fallback threshold if there are not enough objects to form a statistical baseline
-            double dynamicElongationThreshold = 3.0;
-            double medianElong = 0.0;
-            if (elongations.size() >= 10) {
-                elongations.sort(Double::compareTo);
-                medianElong = elongations.get(elongations.size() / 2);
-
-                List<Double> deviations = new ArrayList<>();
-                for (double e : elongations) {
-                    deviations.add(Math.abs(e - medianElong));
-                }
-                deviations.sort(Double::compareTo);
-                double mad = deviations.get(deviations.size() / 2);
-                
-                // Safety floor to prevent hyper-sensitivity on perfectly round tracking nights
-                if (mad < 0.1) mad = 0.1; 
-
-                // A slow mover must be a massive statistical outlier
-                dynamicElongationThreshold = medianElong + (mad * config.slowMoverBaselineMadMultiplier);
-                
-                if (DEBUG) System.out.printf("DEBUG: Slow Mover Stats -> Median Elong: %.2f | MAD: %.2f | Dynamic Threshold: %.2f%n", medianElong, mad, dynamicElongationThreshold);
-            }
-
-            // Filter for true slow movers (must be elongated to prove they moved over time)
-            for (SourceExtractor.DetectedObject obj : rawSlowMovers) {
-                if (obj.elongation >= dynamicElongationThreshold) {
-                    
-                    // Apply strict morphological filters to reject merged binary stars and stacking artifacts
-                    boolean isIrregular = SourceExtractor.isIrregularStreakShape(obj);
-                    boolean isBinary = SourceExtractor.isBinaryStarAnomaly(slowMoverStackData, obj);
-
-                    if (!isIrregular && !isBinary) {
-                        
-                        // --- STATIC ARTIFACT REJECTION ---
-                        // Calculate the exact percentage of this object's pixels that also exist in the median stack.
-                        // A true slow mover (asteroid) will be largely erased in the median stack (low overlap).
-                        // A static double-star artifact will look almost identical in both stacks (high overlap).
-                        int overlapCount = 0;
-                        for (SourceExtractor.Pixel p : obj.rawPixels) {
-                            if (medianMask[p.y][p.x]) overlapCount++;
-                        }
-                        
-                        double overlapFraction = (double) overlapCount / obj.rawPixels.size();
-                        
-                        // Relaxed to 0.85 (85%). A static double star will have ~100% overlap.
-                        // A true slow mover might have up to 70% overlap if its center got baked into the median stack!
-                        boolean isStaticArtifact = overlapFraction > 0.85; 
-
-                        if (!isStaticArtifact) {
-                            slowMoverCandidates.add(obj);
-                        }
-                    }
-                }
-            }
+            slowMoverCandidates = filterSlowMoverCandidates(
+                    rawSlowMovers,
+                    slowMoverStackData,
+                    medianMask,
+                    config,
+                    smTelemetry
+            );
 
             if (DEBUG) {
-                System.out.println("DEBUG: Slow Mover analysis complete. Found " + slowMoverCandidates.size() + " highly elongated candidate(s).");
+                System.out.printf(
+                        "DEBUG: Slow Mover Stats -> Median Elong: %.2f | MAD: %.2f | Dynamic Threshold: %.2f%n",
+                        smTelemetry.medianElongation,
+                        smTelemetry.madElongation,
+                        smTelemetry.dynamicElongationThreshold
+                );
+                System.out.printf(
+                        "DEBUG: Slow Mover Filters -> Raw: %d | AboveElong: %d | MaskStage: %d | Irregular: %d | Binary: %d | SlowMoverShape: %d | LowMedianSupport: %d | HighMedianSupport: %d | Final: %d%n",
+                        smTelemetry.rawCandidatesExtracted,
+                        smTelemetry.candidatesAboveElongationThreshold,
+                        smTelemetry.candidatesEvaluatedAgainstMasks,
+                        smTelemetry.rejectedIrregularShape,
+                        smTelemetry.rejectedBinaryAnomaly,
+                        smTelemetry.rejectedSlowMoverShape,
+                        smTelemetry.rejectedLowMedianSupport,
+                        smTelemetry.rejectedHighMedianSupport,
+                        smTelemetry.candidatesDetected
+                );
+                System.out.printf(
+                        "DEBUG: Slow Mover Signals -> MinSupport: %.3f | MaxSupport: %.3f | AvgMedianSupportOverlap: %.3f%n",
+                        smTelemetry.medianSupportOverlapThreshold,
+                        smTelemetry.medianSupportMaxOverlapThreshold,
+                        smTelemetry.avgMedianSupportOverlap
+                );
+                if (!smTelemetry.candidateMedianSupportOverlaps.isEmpty()) {
+                    System.out.printf(
+                            "DEBUG: Accepted Slow Mover Overlaps -> %s%n",
+                            formatOverlapPercentages(smTelemetry.candidateMedianSupportOverlaps)
+                    );
+                }
             }
-
-            smTelemetry = new PipelineResult.SlowMoverTelemetry();
-            smTelemetry.candidatesDetected = slowMoverCandidates.size();
-            smTelemetry.medianElongation = medianElong;
-            smTelemetry.dynamicElongationThreshold = dynamicElongationThreshold;
         }
 
         // =================================================================
@@ -809,7 +775,7 @@ public class JTransientEngine {
 
         // Return the unified result with the new Master Data payloads!
         return new PipelineResult(trackResult.tracks, telemetry, masterStackData, masterStars,
-                slowMoverStackData, slowMoverCandidates, trackResult.allTransients,
+                slowMoverStackData, slowMoverMedianArtifactMask, slowMoverCandidates, trackResult.allTransients,
                 trackResult.masterMask, context.driftPoints, smTelemetry, masterMaximumStackData,
                 maxStackStreaks,
                 newMasterStackStreaks);
@@ -821,5 +787,287 @@ public class JTransientEngine {
      */
     public void shutdown() {
         executor.shutdown();
+    }
+
+    /**
+     * Applies the slow-mover morphology and mask filters while recording stage-by-stage telemetry.
+     */
+    private static List<SourceExtractor.DetectedObject> filterSlowMoverCandidates(
+            List<SourceExtractor.DetectedObject> rawSlowMovers,
+            short[][] slowMoverStackData,
+            boolean[][] medianMask,
+            DetectionConfig config,
+            PipelineResult.SlowMoverTelemetry telemetry
+    ) {
+        List<SourceExtractor.DetectedObject> filteredCandidates = new ArrayList<>();
+        telemetry.rawCandidatesExtracted = rawSlowMovers.size();
+
+        List<Double> elongations = new ArrayList<>(rawSlowMovers.size());
+        for (SourceExtractor.DetectedObject obj : rawSlowMovers) {
+            elongations.add(obj.elongation);
+        }
+
+        double medianElong = 0.0;
+        double madElong = 0.1;
+        if (!elongations.isEmpty()) {
+            elongations.sort(Double::compareTo);
+            medianElong = elongations.get(elongations.size() / 2);
+
+            List<Double> deviations = new ArrayList<>(elongations.size());
+            for (double e : elongations) {
+                deviations.add(Math.abs(e - medianElong));
+            }
+            deviations.sort(Double::compareTo);
+            madElong = Math.max(0.1, deviations.get(deviations.size() / 2));
+        }
+
+        double dynamicElongationThreshold = 3.0;
+        if (elongations.size() >= 10) {
+            dynamicElongationThreshold = medianElong + (madElong * config.slowMoverBaselineMadMultiplier);
+        }
+        double minMedianSupportOverlap = Math.max(0.0, Math.min(1.0, config.slowMoverMedianSupportOverlapFraction));
+        double maxMedianSupportOverlap = Math.max(minMedianSupportOverlap, Math.min(1.0, config.slowMoverMedianSupportMaxOverlapFraction));
+
+        double medianSupportOverlapSum = 0.0;
+
+        for (SourceExtractor.DetectedObject obj : rawSlowMovers) {
+            if (obj.elongation < dynamicElongationThreshold) {
+                continue;
+            }
+            telemetry.candidatesAboveElongationThreshold++;
+
+            if (SourceExtractor.isIrregularStreakShape(obj)) {
+                telemetry.rejectedIrregularShape++;
+                continue;
+            }
+
+            if (SourceExtractor.isBinaryStarAnomaly(slowMoverStackData, obj)) {
+                telemetry.rejectedBinaryAnomaly++;
+                continue;
+            }
+
+            if (failsSlowMoverSpecificShapeFilter(obj)) {
+                telemetry.rejectedSlowMoverShape++;
+                continue;
+            }
+
+            double medianSupportOverlap = computeMaskOverlapFraction(obj, medianMask);
+
+            telemetry.candidatesEvaluatedAgainstMasks++;
+            medianSupportOverlapSum += medianSupportOverlap;
+
+            if (medianSupportOverlap < minMedianSupportOverlap) {
+                telemetry.rejectedLowMedianSupport++;
+                continue;
+            }
+            if (medianSupportOverlap > maxMedianSupportOverlap) {
+                telemetry.rejectedHighMedianSupport++;
+                continue;
+            }
+
+            filteredCandidates.add(obj);
+            telemetry.candidateMedianSupportOverlaps.add(medianSupportOverlap);
+        }
+
+        telemetry.candidatesDetected = filteredCandidates.size();
+        telemetry.medianElongation = medianElong;
+        telemetry.madElongation = madElong;
+        telemetry.dynamicElongationThreshold = dynamicElongationThreshold;
+        telemetry.medianSupportOverlapThreshold = minMedianSupportOverlap;
+        telemetry.medianSupportMaxOverlapThreshold = maxMedianSupportOverlap;
+        telemetry.avgMedianSupportOverlap = computeAverage(medianSupportOverlapSum, telemetry.candidatesEvaluatedAgainstMasks);
+
+        return filteredCandidates;
+    }
+
+    /**
+     * Paints detected-object footprints into a boolean mask, with optional circular dilation.
+     */
+    private static boolean[][] buildObjectMask(
+            List<SourceExtractor.DetectedObject> objects,
+            int sensorWidth,
+            int sensorHeight,
+            int dilationRadius
+    ) {
+        boolean[][] mask = new boolean[sensorHeight][sensorWidth];
+        int effectiveRadius = Math.max(0, dilationRadius);
+
+        for (SourceExtractor.DetectedObject obj : objects) {
+            if (obj.rawPixels == null) {
+                continue;
+            }
+            for (SourceExtractor.Pixel p : obj.rawPixels) {
+                if (effectiveRadius == 0) {
+                    if (p.x >= 0 && p.x < sensorWidth && p.y >= 0 && p.y < sensorHeight) {
+                        mask[p.y][p.x] = true;
+                    }
+                    continue;
+                }
+
+                for (int dx = -effectiveRadius; dx <= effectiveRadius; dx++) {
+                    for (int dy = -effectiveRadius; dy <= effectiveRadius; dy++) {
+                        if (dx * dx + dy * dy > effectiveRadius * effectiveRadius) {
+                            continue;
+                        }
+                        int mx = p.x + dx;
+                        int my = p.y + dy;
+                        if (mx >= 0 && mx < sensorWidth && my >= 0 && my < sensorHeight) {
+                            mask[my][mx] = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return mask;
+    }
+
+    /**
+     * Measures what fraction of an object's footprint overlaps a precomputed boolean mask.
+     */
+    private static double computeMaskOverlapFraction(SourceExtractor.DetectedObject obj, boolean[][] mask) {
+        if (obj.rawPixels == null || obj.rawPixels.isEmpty()) {
+            return 0.0;
+        }
+
+        int overlapCount = 0;
+        int sensorHeight = mask.length;
+        int sensorWidth = sensorHeight > 0 ? mask[0].length : 0;
+        for (SourceExtractor.Pixel p : obj.rawPixels) {
+            if (p.x >= 0 && p.x < sensorWidth && p.y >= 0 && p.y < sensorHeight && mask[p.y][p.x]) {
+                overlapCount++;
+            }
+        }
+        return (double) overlapCount / obj.rawPixels.size();
+    }
+
+    /**
+     * Returns zero instead of NaN when a telemetry bucket had no contributing candidates.
+     */
+    private static double computeAverage(double sum, int count) {
+        return count > 0 ? sum / count : 0.0;
+    }
+
+    /**
+     * Additional slow-mover-only veto for tiny hooked residuals that still slip past the shared shape filters.
+     * A trustworthy deep-stack slow mover should trace one short, mostly straight centerline, not a compact dog-leg.
+     */
+    private static boolean failsSlowMoverSpecificShapeFilter(SourceExtractor.DetectedObject obj) {
+        if (obj.rawPixels == null || obj.rawPixels.isEmpty()) {
+            return true;
+        }
+
+        double dx = Math.cos(obj.angle);
+        double dy = Math.sin(obj.angle);
+
+        double minPar = Double.MAX_VALUE;
+        double maxPar = -Double.MAX_VALUE;
+        double minPerp = Double.MAX_VALUE;
+        double maxPerp = -Double.MAX_VALUE;
+
+        for (SourceExtractor.Pixel p : obj.rawPixels) {
+            double vx = p.x - obj.x;
+            double vy = p.y - obj.y;
+            double par = vx * dx + vy * dy;
+            double perp = -vx * dy + vy * dx;
+
+            if (par < minPar) minPar = par;
+            if (par > maxPar) maxPar = par;
+            if (perp < minPerp) minPerp = perp;
+            if (perp > maxPerp) maxPerp = perp;
+        }
+
+        double length = maxPar - minPar + 1.0;
+        double width = maxPerp - minPerp + 1.0;
+
+        // Tiny elongated residuals are the dominant false-positive class in the deep stack.
+        if (length < 6.0) {
+            return true;
+        }
+
+        int bins = Math.max(4, Math.min(8, (int) Math.round(length)));
+        double binSpan = Math.max(1.0, length / bins);
+        int[] binCounts = new int[bins];
+        double[] perpSums = new double[bins];
+
+        for (SourceExtractor.Pixel p : obj.rawPixels) {
+            double vx = p.x - obj.x;
+            double vy = p.y - obj.y;
+            double par = vx * dx + vy * dy;
+            double perp = -vx * dy + vy * dx;
+
+            int bin = (int) ((par - minPar) / binSpan);
+            if (bin < 0) bin = 0;
+            if (bin >= bins) bin = bins - 1;
+
+            binCounts[bin]++;
+            perpSums[bin] += perp;
+        }
+
+        int firstOccupied = -1;
+        int lastOccupied = -1;
+        int occupiedBins = 0;
+        for (int i = 0; i < bins; i++) {
+            if (binCounts[i] > 0) {
+                if (firstOccupied == -1) {
+                    firstOccupied = i;
+                }
+                lastOccupied = i;
+                occupiedBins++;
+            }
+        }
+
+        if (occupiedBins < Math.max(3, bins - 2)) {
+            return true;
+        }
+
+        for (int i = firstOccupied + 1; i < lastOccupied; i++) {
+            if (binCounts[i] == 0) {
+                return true;
+            }
+        }
+
+        double minPerpMean = Double.MAX_VALUE;
+        double maxPerpMean = -Double.MAX_VALUE;
+        double maxPerpJump = 0.0;
+        double previousPerpMean = 0.0;
+        boolean hasPrevious = false;
+
+        for (int i = 0; i < bins; i++) {
+            if (binCounts[i] == 0) {
+                continue;
+            }
+            double perpMean = perpSums[i] / binCounts[i];
+            if (perpMean < minPerpMean) minPerpMean = perpMean;
+            if (perpMean > maxPerpMean) maxPerpMean = perpMean;
+            if (hasPrevious) {
+                double jump = Math.abs(perpMean - previousPerpMean);
+                if (jump > maxPerpJump) {
+                    maxPerpJump = jump;
+                }
+            }
+            previousPerpMean = perpMean;
+            hasPrevious = true;
+        }
+
+        double centerlineExcursion = maxPerpMean - minPerpMean;
+        double allowedExcursion = Math.max(0.85, width * 0.50);
+        double allowedJump = Math.max(0.75, width * 0.45);
+        return centerlineExcursion > allowedExcursion || maxPerpJump > allowedJump;
+    }
+
+    /**
+     * Formats overlap fractions as percentages for the debug report.
+     */
+    private static String formatOverlapPercentages(List<Double> overlaps) {
+        StringBuilder builder = new StringBuilder("[");
+        for (int i = 0; i < overlaps.size(); i++) {
+            if (i > 0) {
+                builder.append(", ");
+            }
+            builder.append(String.format("%.1f%%", overlaps.get(i) * 100.0));
+        }
+        builder.append(']');
+        return builder.toString();
     }
 }

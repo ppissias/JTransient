@@ -129,6 +129,16 @@ public class DetectionConfig implements Cloneable {
      */
     public double slowMoverBaselineMadMultiplier = 4.5;
 
+    /** * Minimum fraction of a slow-mover footprint that must overlap the median-stack artifact mask.
+     * Higher values demand stronger support from the median stack before a candidate is kept.
+     */
+    public double slowMoverMedianSupportOverlapFraction = 0.00;
+
+    /** * Maximum fraction of a slow-mover footprint that may overlap the median-stack artifact mask.
+     * Lower values reject candidates that look too similar to stationary median-stack artifacts.
+     */
+    public double slowMoverMedianSupportMaxOverlapFraction = 0.65;
+
     // =================================================================
     // 2. FRAME QUALITY ANALYZER PARAMETERS
     // =================================================================

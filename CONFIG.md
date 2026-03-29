@@ -166,6 +166,28 @@ Controls the dynamic elongation threshold for slow-mover candidates.
 - larger values are stricter
 - smaller values are more sensitive to elongated residuals
 
+Slow-mover candidates now pass through a simpler artifact filter after this baseline check.
+
+- irregular or binary-like shapes are still rejected first
+- any surviving candidate must overlap the median-stack artifact mask within the configured support band
+- the stage-by-stage outcome is reported through `PipelineResult.slowMoverTelemetry`
+
+### `slowMoverMedianSupportOverlapFraction` (default `0.10`)
+
+Minimum fraction of a slow-mover footprint that must overlap the median-stack artifact mask.
+
+- `0.0` allows a blank-sky candidate through the lower bound
+- larger values require stronger support from the median stack
+- useful when faint star wobble still leaks through with only a token overlap
+
+### `slowMoverMedianSupportMaxOverlapFraction` (default `0.65`)
+
+Maximum fraction of a slow-mover footprint that may overlap the median-stack artifact mask.
+
+- lower values reject candidates that look too similar to stationary median-stack artifacts
+- should usually stay above `slowMoverMedianSupportOverlapFraction`
+- useful when deep-stack static artifacts still survive with very high median-stack overlap
+
 ## 3. Frame Quality Analysis
 
 ### `qualitySigmaMultiplier` (default `5.0`)

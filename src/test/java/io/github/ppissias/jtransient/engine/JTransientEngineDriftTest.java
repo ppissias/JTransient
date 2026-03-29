@@ -10,8 +10,17 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
+/**
+ * Regression tests for the private drift-analysis pre-pass inside JTransientEngine.
+ * These tests lock down how registration padding is measured and reported.
+ */
 public class JTransientEngineDriftTest {
 
+    /**
+     * Verifies drift analysis uses the true valid-image bounds, not a center-cross heuristic.
+     * The synthetic frame has its center burned out, but the method should still recover the
+     * correct left/top padding from the outer valid area.
+     */
     @Test
     public void analyzeDitherAndDriftUsesWholeFrameBoundsInsteadOfCenterCross() throws Exception {
         JTransientEngine engine = new JTransientEngine();
@@ -33,6 +42,10 @@ public class JTransientEngineDriftTest {
         }
     }
 
+    /**
+     * Verifies the engine raises voidProximityRadius to cover the largest measured padding extent.
+     * This protects later extraction passes from underestimating real registration voids.
+     */
     @Test
     public void analyzeDitherAndDriftRaisesVoidRadiusFromLargestPadding() throws Exception {
         JTransientEngine engine = new JTransientEngine();
@@ -54,6 +67,10 @@ public class JTransientEngineDriftTest {
         }
     }
 
+    /**
+     * Verifies the reported drift path is ordered by frame sequenceIndex, not by input list order.
+     * The helper receives frames out of order and should still return a time-ordered path.
+     */
     @Test
     public void analyzeDitherAndDriftReturnsSequenceOrderedPath() throws Exception {
         JTransientEngine engine = new JTransientEngine();
@@ -100,6 +117,7 @@ public class JTransientEngineDriftTest {
                                          int topPadding,
                                          int bottomPadding,
                                          short validValue) {
+        // Valid image area is filled with a constant while the padded border stays at Short.MIN_VALUE.
         short[][] frame = new short[height][width];
         for (int y = 0; y < height; y++) {
             Arrays.fill(frame[y], Short.MIN_VALUE);
@@ -118,6 +136,7 @@ public class JTransientEngineDriftTest {
     }
 
     private static void burnCenterCross(short[][] frame) {
+        // Simulates a bad center-cross heuristic by destroying the frame center after valid bounds are created.
         int centerX = frame[0].length / 2;
         int centerY = frame.length / 2;
         for (int x = 0; x < frame[0].length; x++) {
