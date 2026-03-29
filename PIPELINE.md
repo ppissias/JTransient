@@ -114,6 +114,7 @@ What it returns:
 - `AutoTunerResult.telemetryReport`
 - `AutoTunerResult.bestStarCount`
 - `AutoTunerResult.bestTransientRatio`
+- `AutoTunerResult.finalValidationTelemetry`
 
 What it does not do:
 

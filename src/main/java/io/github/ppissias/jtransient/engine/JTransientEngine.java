@@ -33,6 +33,8 @@ public class JTransientEngine {
 
     /** Global debug switch shared by the core library. */
     public static boolean DEBUG = false;
+    /** Pixels at the signed-short floor are treated as synthetic alignment padding, not real image data. */
+    private static final int DRIFT_VALID_PIXEL_THRESHOLD = Short.MIN_VALUE + 8;
 
     // Internal thread pool for the library
     private final ExecutorService executor = Executors.newCachedThreadPool();
@@ -47,6 +49,31 @@ public class JTransientEngine {
     }
 
     /**
+     * Frame-edge padding measurement used to recover the true per-frame translation vector.
+     */
+    private static class FrameDriftMeasurement {
+        public final int leftPadding;
+        public final int rightPadding;
+        public final int topPadding;
+        public final int bottomPadding;
+        public final int dx;
+        public final int dy;
+
+        private FrameDriftMeasurement(int leftPadding, int rightPadding, int topPadding, int bottomPadding) {
+            this.leftPadding = leftPadding;
+            this.rightPadding = rightPadding;
+            this.topPadding = topPadding;
+            this.bottomPadding = bottomPadding;
+            this.dx = leftPadding - rightPadding;
+            this.dy = topPadding - bottomPadding;
+        }
+
+        private int maxPadding() {
+            return Math.max(Math.max(leftPadding, rightPadding), Math.max(topPadding, bottomPadding));
+        }
+    }
+
+    /**
      * Shared context returned by the extraction and quality-filtering stages.
      */
     public static class FramesExtractedSources {
@@ -58,7 +85,7 @@ public class JTransientEngine {
         public PipelineTelemetry telemetry;
         /** Pipeline start timestamp used to calculate total runtime. */
         public long startTime;
-        /** Relative per-frame drift diagnostics derived from border padding analysis. */
+        /** Relative per-frame drift diagnostics derived from the valid image footprint. */
         public List<SourceExtractor.Pixel> driftPoints;
     }
 
@@ -397,7 +424,83 @@ public class JTransientEngine {
     }
 
     /**
-     * Analyzes sequence dither and corner drift by measuring the inward black padding.
+     * Measures the true valid-image footprint for one aligned frame.
+     * This is more robust than sampling only the central cross-section because dust lanes, dead rows,
+     * or bright structures near the center cannot hide real edge padding.
+     */
+    private static FrameDriftMeasurement measureFrameDrift(short[][] frame) {
+        int height = frame.length;
+        int width = frame[0].length;
+        int minX = 0;
+        int maxX = width - 1;
+        int minY = 0;
+        int maxY = height - 1;
+
+        // Require at least 5% of the line to contain valid pixels before treating it as real image content.
+        int minValidPixelsPerColumn = height / 20;
+        int minValidPixelsPerRow = width / 20;
+
+        for (int y = 0; y < height; y++) {
+            int validCount = 0;
+            for (int x = 0; x < width; x++) {
+                if (frame[y][x] > DRIFT_VALID_PIXEL_THRESHOLD) {
+                    validCount++;
+                }
+            }
+            if (validCount > minValidPixelsPerRow) {
+                minY = y;
+                break;
+            }
+        }
+
+        for (int y = height - 1; y >= 0; y--) {
+            int validCount = 0;
+            for (int x = 0; x < width; x++) {
+                if (frame[y][x] > DRIFT_VALID_PIXEL_THRESHOLD) {
+                    validCount++;
+                }
+            }
+            if (validCount > minValidPixelsPerRow) {
+                maxY = y;
+                break;
+            }
+        }
+
+        for (int x = 0; x < width; x++) {
+            int validCount = 0;
+            for (int y = 0; y < height; y++) {
+                if (frame[y][x] > DRIFT_VALID_PIXEL_THRESHOLD) {
+                    validCount++;
+                }
+            }
+            if (validCount > minValidPixelsPerColumn) {
+                minX = x;
+                break;
+            }
+        }
+
+        for (int x = width - 1; x >= 0; x--) {
+            int validCount = 0;
+            for (int y = 0; y < height; y++) {
+                if (frame[y][x] > DRIFT_VALID_PIXEL_THRESHOLD) {
+                    validCount++;
+                }
+            }
+            if (validCount > minValidPixelsPerColumn) {
+                maxX = x;
+                break;
+            }
+        }
+
+        int leftPadding = minX;
+        int rightPadding = (width - 1) - maxX;
+        int topPadding = minY;
+        int bottomPadding = (height - 1) - maxY;
+        return new FrameDriftMeasurement(leftPadding, rightPadding, topPadding, bottomPadding);
+    }
+
+    /**
+     * Analyzes sequence dither and corner drift by measuring the valid-image bounds per frame.
      * Dynamically overrides the void proximity radius if the drift exceeds the configured value.
      *
      * @param inputFrames frames to inspect
@@ -415,58 +518,15 @@ public class JTransientEngine {
             return driftPoints;
         }
 
-        int height = inputFrames.get(0).pixelData.length;
-        int width = inputFrames.get(0).pixelData[0].length;
         int maxDrift = 0;
+        List<ImageFrame> sortedFrames = new ArrayList<>(inputFrames);
+        sortedFrames.sort(Comparator.comparingInt(f -> f.sequenceIndex));
 
-        for (ImageFrame frame : inputFrames) {
-            // Robust center background estimate (11x11 median) to avoid single bright stars
-            int[] centerPixels = new int[121];
-            int idx = 0;
-            int cx = width / 2;
-            int cy = height / 2;
-            for (int dy = -5; dy <= 5; dy++) {
-                for (int dx = -5; dx <= 5; dx++) {
-                    centerPixels[idx++] = frame.pixelData[cy + dy][cx + dx] + 32768;
-                }
-            }
-            java.util.Arrays.sort(centerPixels);
-            int centerVal = centerPixels[60];
-            double voidThresh = centerVal * config.voidThresholdFraction;
-
-            int limit = Math.min(width, height) / 3;
-            int leftPad = 0, rightPad = 0, topPad = 0, bottomPad = 0;
-            int midX = width / 2;
-            int midY = height / 2;
-
-            // Scan Left edge inward
-            for (int i = 0; i < limit; i++) {
-                if (frame.pixelData[midY][i] + 32768 > voidThresh) { leftPad = i; break; }
-            }
-            // Scan Right edge inward
-            for (int i = 0; i < limit; i++) {
-                if (frame.pixelData[midY][width - 1 - i] + 32768 > voidThresh) { rightPad = i; break; }
-            }
-            // Scan Top edge inward
-            for (int i = 0; i < limit; i++) {
-                if (frame.pixelData[i][midX] + 32768 > voidThresh) { topPad = i; break; }
-            }
-            // Scan Bottom edge inward
-            for (int i = 0; i < limit; i++) {
-                if (frame.pixelData[height - 1 - i][midX] + 32768 > voidThresh) { bottomPad = i; break; }
-            }
-
-            // Calculate the single uniform translation (dx, dy) of the entire frame
-            int dx = leftPad - rightPad;
-            int dy = topPad - bottomPad;
-
-            // Store the exact relative movement vector (dx, dy) instead of absolute pixel coordinates
-            driftPoints.add(new SourceExtractor.Pixel(dx, dy, frame.sequenceIndex));
-
-            // Track global max drift for the Void Proximity Radius safety override
-            int frameMax = Math.max(Math.max(leftPad, rightPad), Math.max(topPad, bottomPad));
-            if (frameMax > maxDrift) {
-                maxDrift = frameMax;
+        for (ImageFrame frame : sortedFrames) {
+            FrameDriftMeasurement measurement = measureFrameDrift(frame.pixelData);
+            driftPoints.add(new SourceExtractor.Pixel(measurement.dx, measurement.dy, frame.sequenceIndex));
+            if (measurement.maxPadding() > maxDrift) {
+                maxDrift = measurement.maxPadding();
             }
         }
 

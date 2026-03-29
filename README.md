@@ -21,6 +21,7 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 - [PIPELINE.md](PIPELINE.md): what each public entrypoint runs and returns
 - [ALGORITHM.md](ALGORITHM.md): internal phases of `JTransientEngine.runPipeline(...)`
 - [CONFIG.md](CONFIG.md): `DetectionConfig` field-by-field reference
+- [AUTOTUNER.md](AUTOTUNER.md): detailed walkthrough of `JTransientAutoTuner.tune(...)`
 
 ## Build
 
@@ -78,6 +79,9 @@ JTransientAutoTuner.AutoTunerResult tuning = JTransientAutoTuner.tune(
 DetectionConfig config = tuning.optimizedConfig;
 System.out.println("Auto-tune success: " + tuning.success);
 System.out.println(tuning.telemetryReport);
+if (tuning.finalValidationTelemetry != null) {
+    System.out.println(tuning.finalValidationTelemetry.statusMessage);
+}
 ```
 
 If you do not need to pick a profile explicitly, use the three-argument overload. It defaults to `BALANCED`.
@@ -224,6 +228,7 @@ The extractor returns:
 - [PIPELINE.md](PIPELINE.md): what each public entrypoint runs and returns
 - [ALGORITHM.md](ALGORITHM.md): internal phases of `JTransientEngine.runPipeline(...)`
 - [CONFIG.md](CONFIG.md): `DetectionConfig` field-by-field reference
+- [AUTOTUNER.md](AUTOTUNER.md): detailed walkthrough of `JTransientAutoTuner.tune(...)`
 
 ## License
 

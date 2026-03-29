@@ -70,7 +70,7 @@ Elongation threshold for streak classification.
 
 - computed from image moments
 - a blob becomes a streak only if this threshold and `streakMinPixels` are both satisfied
-- the auto-tuner may increase it based on measured star elongation
+- the auto-tuner preserves the incoming value
 
 ### `streakMinPixels` (default `25`)
 
@@ -175,19 +175,27 @@ Seed threshold for the quality-analysis extraction pass.
 - used by `FrameQualityAnalyzer.evaluateFrame(...)`
 - usually kept fairly strict so the quality metrics are based on clear stars
 
+### `qualityGrowSigmaMultiplier` (default `3.0`)
+
+Secondary hysteresis threshold for the quality-analysis extraction pass.
+
+- controls how far a quality-analysis star is allowed to grow after seeding
+- keeps frame scoring independent from the main detection `growSigmaMultiplier`
+- only affects `FrameQualityAnalyzer.evaluateFrame(...)`
+
 ### `qualityMinDetectionPixels` (default `5`)
 
 Minimum blob size for the quality-analysis extraction pass.
 
 - used together with `qualitySigmaMultiplier`
 
-### `maxElongationForFwhm` (default `1.5`)
+### `qualityMaxElongationForFwhm` (default `1.5`)
 
 Upper elongation limit for stars that contribute to the frame's FWHM measurement.
 
 - elongated stars still contribute to the eccentricity metric
 - they are excluded from FWHM so trailing does not look like poor focus
-- the auto-tuner may increase this field based on measured star elongation
+- preserved by the auto-tuner; it is not auto-calibrated
 
 ### `errorFallbackValue` (default `999.0`)
 
@@ -371,8 +379,6 @@ The tuner actively optimizes or measures these `DetectionConfig` fields:
 - `minDetectionPixels`
 - `maxMaskOverlapFraction`
 - `maxStarJitter`
-- `maxElongationForFwhm`
-- `streakMinElongation`
 
 Everything else in the returned config comes from the base config you provided.
 

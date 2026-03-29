@@ -9,6 +9,8 @@
  */
 package io.github.ppissias.jtransient.config;
 
+import com.google.gson.annotations.SerializedName;
+
 /**
  * Master configuration object for the JTransient detection pipeline.
  * This class holds all tuning parameters for extraction, quality control, and track linking.
@@ -136,6 +138,11 @@ public class DetectionConfig implements Cloneable {
      */
     public double qualitySigmaMultiplier = 5.0;
 
+    /** * Secondary hysteresis threshold used only while expanding quality-analysis stars.
+     * Keeps frame scoring independent from the main detection grow threshold.
+     */
+    public double qualityGrowSigmaMultiplier = 3.0;
+
     /** * Minimum number of contiguous pixels a source must have to be evaluated as a valid reference star
      * for frame quality.
      */
@@ -144,7 +151,8 @@ public class DetectionConfig implements Cloneable {
     /** * Trailed stars (due to wind or mount errors) artificially inflate FWHM (focus) measurements.
      * Only stars with an elongation below this value are used to calculate the frame's median focus.
      */
-    public double maxElongationForFwhm = 1.5;
+    @SerializedName(value = "qualityMaxElongationForFwhm", alternate = {"maxElongationForFwhm"})
+    public double qualityMaxElongationForFwhm = 1.5;
 
     /** * If a frame is a total washout (e.g., thick clouds, completely black) and yields zero reference stars,
      * the engine assigns this terrible score so it is guaranteed to be rejected by the session evaluator.

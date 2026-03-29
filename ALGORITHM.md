@@ -135,6 +135,7 @@ If any virtual-edge test point is out of bounds or falls below the void threshol
 `FrameQualityAnalyzer.evaluateFrame(...)` runs a stricter extraction pass using:
 
 - `qualitySigmaMultiplier`
+- `qualityGrowSigmaMultiplier`
 - `qualityMinDetectionPixels`
 
 It computes:
@@ -148,7 +149,7 @@ It computes:
 Important detail:
 
 - eccentricity uses all non-streak detections
-- FWHM uses only non-streak detections whose elongation is below `maxElongationForFwhm`
+- FWHM uses only non-streak detections whose elongation is below `qualityMaxElongationForFwhm`
 
 If the analyzer cannot compute a meaningful median, it falls back to `errorFallbackValue`.
 
