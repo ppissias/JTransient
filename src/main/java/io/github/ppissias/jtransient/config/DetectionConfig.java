@@ -116,9 +116,14 @@ public class DetectionConfig implements Cloneable {
     public double slowMoverStackMiddleFraction = 0.75;
 
     /** * Enables the slow-mover shape veto stage.
-     * When disabled, the branch skips irregular, binary, and slow-mover-specific shape checks.
+     * When disabled, the branch skips the shared irregular and binary slow-mover shape checks.
      */
     public boolean enableSlowMoverShapeFiltering = true;
+
+    /** * Enables the extra slow-mover-only shape filter after the shared irregular/binary checks.
+     * Disable this to keep the shared slow-mover shape filters while bypassing the targeted compact-shape veto.
+     */
+    public boolean enableSlowMoverSpecificShapeFiltering = true;
 
     /** * Minimum pixel area required to flag an elongated object in the master stack as a slow mover candidate. */
     public int masterSlowMoverMinPixels = 15;

@@ -131,13 +131,18 @@ Master switch for the slow-mover branch.
 
 ### `enableSlowMoverShapeFiltering` (default `true`)
 
-Enables the shape-veto stage inside the slow-mover branch.
+Enables the shared shape-veto stage inside the slow-mover branch.
 
-- if enabled, candidates must pass `isIrregularStreakShape`, `isBinaryStarAnomaly`, and the extra slow-mover-only shape filter
-- if disabled, the branch keeps only the elongation and median-support overlap checks
-- useful for diagnosing why a known injected mover is being rejected
+- if enabled, candidates must pass `isIrregularStreakShape` and `isBinaryStarAnomaly`
+- if disabled, the branch skips those shared shape checks
 
-- when disabled, no slow-mover stack or candidate list is produced
+### `enableSlowMoverSpecificShapeFiltering` (default `true`)
+
+Enables the extra slow-mover-only shape filter after the shared slow-mover shape checks.
+
+- if enabled, candidates must also pass the targeted compact-shape veto used only by the slow-mover branch
+- if disabled, the shared irregular/binary checks can still run while the last targeted shape filter is bypassed
+- useful when you want to diagnose or temporarily relax only the final slow-mover-specific shape gate
 
 ### `slowMoverStackMiddleFraction` (default `0.75`)
 

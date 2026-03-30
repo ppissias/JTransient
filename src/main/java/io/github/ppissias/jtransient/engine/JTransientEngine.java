@@ -706,6 +706,17 @@ public class JTransientEngine {
                         smTelemetry.rejectedHighMedianSupport,
                         smTelemetry.candidatesDetected
                 );
+                if (smTelemetry.rejectedSlowMoverShape > 0) {
+                    System.out.printf(
+                            "DEBUG: Slow Mover Shape Breakdown -> TooShort: %d | LowFill: %d | SparseBins: %d | GappedBins: %d | CurvedCenterline: %d | BulgedWidth: %d%n",
+                            smTelemetry.rejectedSlowMoverShapeTooShort,
+                            smTelemetry.rejectedSlowMoverShapeLowFill,
+                            smTelemetry.rejectedSlowMoverShapeSparseBins,
+                            smTelemetry.rejectedSlowMoverShapeGappedBins,
+                            smTelemetry.rejectedSlowMoverShapeCurvedCenterline,
+                            smTelemetry.rejectedSlowMoverShapeBulgedWidth
+                    );
+                }
                 System.out.printf(
                         "DEBUG: Slow Mover Signals -> MinSupport: %.3f | MaxSupport: %.3f | AvgMedianSupportOverlap: %.3f%n",
                         smTelemetry.medianSupportOverlapThreshold,
@@ -847,9 +858,13 @@ public class JTransientEngine {
                     telemetry.rejectedBinaryAnomaly++;
                     continue;
                 }
+            }
 
-                if (failsSlowMoverSpecificShapeFilter(obj)) {
+            if (config.enableSlowMoverSpecificShapeFiltering) {
+                SlowMoverShapeRejectReason shapeRejectReason = evaluateSlowMoverSpecificShapeFilter(obj);
+                if (shapeRejectReason != SlowMoverShapeRejectReason.NONE) {
                     telemetry.rejectedSlowMoverShape++;
+                    incrementSlowMoverShapeRejectTelemetry(telemetry, shapeRejectReason);
                     continue;
                 }
             }
@@ -953,15 +968,64 @@ public class JTransientEngine {
 
     /**
      * Additional slow-mover-only veto for tiny hooked residuals that still slip past the shared shape filters.
-     * A trustworthy deep-stack slow mover should trace one short, mostly straight centerline, not a compact dog-leg.
+     * A trustworthy deep-stack slow mover should look like one compact elongated PSF:
+     * straight centerline, decent fill, and no strong side bulges along the major axis.
      */
-    private static boolean failsSlowMoverSpecificShapeFilter(SourceExtractor.DetectedObject obj) {
+    private enum SlowMoverShapeRejectReason {
+        NONE,
+        TOO_SHORT,
+        LOW_FILL,
+        SPARSE_BINS,
+        GAPPED_BINS,
+        CURVED_CENTERLINE,
+        BULGED_WIDTH
+    }
+
+    private static void incrementSlowMoverShapeRejectTelemetry(
+            PipelineResult.SlowMoverTelemetry telemetry,
+            SlowMoverShapeRejectReason reason
+    ) {
+        switch (reason) {
+            case TOO_SHORT -> telemetry.rejectedSlowMoverShapeTooShort++;
+            case LOW_FILL -> telemetry.rejectedSlowMoverShapeLowFill++;
+            case SPARSE_BINS -> telemetry.rejectedSlowMoverShapeSparseBins++;
+            case GAPPED_BINS -> telemetry.rejectedSlowMoverShapeGappedBins++;
+            case CURVED_CENTERLINE -> telemetry.rejectedSlowMoverShapeCurvedCenterline++;
+            case BULGED_WIDTH -> telemetry.rejectedSlowMoverShapeBulgedWidth++;
+            case NONE -> {
+                // No telemetry increment needed when the shape is accepted.
+            }
+        }
+    }
+
+    private static SlowMoverShapeRejectReason evaluateSlowMoverSpecificShapeFilter(SourceExtractor.DetectedObject obj) {
         if (obj.rawPixels == null || obj.rawPixels.isEmpty()) {
-            return true;
+            return SlowMoverShapeRejectReason.TOO_SHORT;
         }
 
-        double dx = Math.cos(obj.angle);
-        double dy = Math.sin(obj.angle);
+        double centroidX = 0.0;
+        double centroidY = 0.0;
+        for (SourceExtractor.Pixel p : obj.rawPixels) {
+            centroidX += p.x;
+            centroidY += p.y;
+        }
+        centroidX /= obj.rawPixels.size();
+        centroidY /= obj.rawPixels.size();
+
+        double covXX = 0.0;
+        double covYY = 0.0;
+        double covXY = 0.0;
+        for (SourceExtractor.Pixel p : obj.rawPixels) {
+            double vx = p.x - centroidX;
+            double vy = p.y - centroidY;
+            covXX += vx * vx;
+            covYY += vy * vy;
+            covXY += vx * vy;
+        }
+
+        double axisAngle = 0.5 * Math.atan2(2.0 * covXY, covXX - covYY);
+        double dx = Math.cos(axisAngle);
+        double dy = Math.sin(axisAngle);
 
         double minPar = Double.MAX_VALUE;
         double maxPar = -Double.MAX_VALUE;
@@ -969,8 +1033,8 @@ public class JTransientEngine {
         double maxPerp = -Double.MAX_VALUE;
 
         for (SourceExtractor.Pixel p : obj.rawPixels) {
-            double vx = p.x - obj.x;
-            double vy = p.y - obj.y;
+            double vx = p.x - centroidX;
+            double vy = p.y - centroidY;
             double par = vx * dx + vy * dy;
             double perp = -vx * dy + vy * dx;
 
@@ -982,20 +1046,47 @@ public class JTransientEngine {
 
         double length = maxPar - minPar + 1.0;
         double width = maxPerp - minPerp + 1.0;
+        double fillFactor = obj.rawPixels.size() / Math.max(1.0, length * width);
 
-        // Tiny elongated residuals are the dominant false-positive class in the deep stack.
-        if (length < 6.0) {
-            return true;
+        // Extremely tiny footprints still do not carry enough geometry to be trustworthy.
+        if (length < 3.5) {
+            return SlowMoverShapeRejectReason.TOO_SHORT;
+        }
+
+        // Compact slow movers can still be real if they are dense and elongated, even when they are only a
+        // few pixels long. Reserve the stricter longitudinal checks for longer candidates.
+        if (length < 5.0) {
+            if (fillFactor < 0.42) {
+                return SlowMoverShapeRejectReason.LOW_FILL;
+            }
+            double compactAspect = length / Math.max(1.0, width);
+            return compactAspect >= 1.20 ? SlowMoverShapeRejectReason.NONE : SlowMoverShapeRejectReason.TOO_SHORT;
+        }
+
+        // Longer slow movers should still fill their oriented bounding box reasonably well.
+        if (fillFactor < 0.48) {
+            return SlowMoverShapeRejectReason.LOW_FILL;
+        }
+
+        double compactAspect = length / Math.max(1.0, width);
+        if (fillFactor >= 0.62 && compactAspect >= 1.35 && compactAspect <= 2.40) {
+            return SlowMoverShapeRejectReason.NONE;
         }
 
         int bins = Math.max(4, Math.min(8, (int) Math.round(length)));
         double binSpan = Math.max(1.0, length / bins);
         int[] binCounts = new int[bins];
         double[] perpSums = new double[bins];
+        double[] binMinPerp = new double[bins];
+        double[] binMaxPerp = new double[bins];
+        for (int i = 0; i < bins; i++) {
+            binMinPerp[i] = Double.MAX_VALUE;
+            binMaxPerp[i] = -Double.MAX_VALUE;
+        }
 
         for (SourceExtractor.Pixel p : obj.rawPixels) {
-            double vx = p.x - obj.x;
-            double vy = p.y - obj.y;
+            double vx = p.x - centroidX;
+            double vy = p.y - centroidY;
             double par = vx * dx + vy * dy;
             double perp = -vx * dy + vy * dx;
 
@@ -1005,6 +1096,8 @@ public class JTransientEngine {
 
             binCounts[bin]++;
             perpSums[bin] += perp;
+            if (perp < binMinPerp[bin]) binMinPerp[bin] = perp;
+            if (perp > binMaxPerp[bin]) binMaxPerp[bin] = perp;
         }
 
         int firstOccupied = -1;
@@ -1020,20 +1113,25 @@ public class JTransientEngine {
             }
         }
 
-        if (occupiedBins < Math.max(3, bins - 2)) {
-            return true;
+        if (occupiedBins < Math.max(3, bins - 3)) {
+            return SlowMoverShapeRejectReason.SPARSE_BINS;
         }
 
         for (int i = firstOccupied + 1; i < lastOccupied; i++) {
             if (binCounts[i] == 0) {
-                return true;
+                return SlowMoverShapeRejectReason.GAPPED_BINS;
             }
         }
 
         double minPerpMean = Double.MAX_VALUE;
         double maxPerpMean = -Double.MAX_VALUE;
         double maxPerpJump = 0.0;
+        double minBinWidth = Double.MAX_VALUE;
+        double maxBinWidth = -Double.MAX_VALUE;
+        double maxBinWidthJump = 0.0;
+        int widestBin = -1;
         double previousPerpMean = 0.0;
+        double previousBinWidth = 0.0;
         boolean hasPrevious = false;
 
         for (int i = 0; i < bins; i++) {
@@ -1041,22 +1139,47 @@ public class JTransientEngine {
                 continue;
             }
             double perpMean = perpSums[i] / binCounts[i];
+            double binWidth = binMaxPerp[i] - binMinPerp[i] + 1.0;
             if (perpMean < minPerpMean) minPerpMean = perpMean;
             if (perpMean > maxPerpMean) maxPerpMean = perpMean;
+            if (binWidth < minBinWidth) minBinWidth = binWidth;
+            if (binWidth > maxBinWidth) {
+                maxBinWidth = binWidth;
+                widestBin = i;
+            }
             if (hasPrevious) {
                 double jump = Math.abs(perpMean - previousPerpMean);
                 if (jump > maxPerpJump) {
                     maxPerpJump = jump;
                 }
+                double widthJump = Math.abs(binWidth - previousBinWidth);
+                if (widthJump > maxBinWidthJump) {
+                    maxBinWidthJump = widthJump;
+                }
             }
             previousPerpMean = perpMean;
+            previousBinWidth = binWidth;
             hasPrevious = true;
         }
 
         double centerlineExcursion = maxPerpMean - minPerpMean;
-        double allowedExcursion = Math.max(0.85, width * 0.50);
-        double allowedJump = Math.max(0.75, width * 0.45);
-        return centerlineExcursion > allowedExcursion || maxPerpJump > allowedJump;
+        double allowedExcursion = Math.max(1.20, width * 0.80);
+        double allowedJump = Math.max(1.00, width * 0.65);
+        double allowedMaxBinWidth = Math.max(3.0, minBinWidth * 2.4);
+        double allowedBinWidthJump = Math.max(1.45, width * 0.60);
+        boolean endHeavyBulge = widestBin != -1
+                && (widestBin - firstOccupied <= 1 || lastOccupied - widestBin <= 1)
+                && maxBinWidth > Math.max(2.5, minBinWidth * 1.8);
+
+        if (centerlineExcursion > allowedExcursion || maxPerpJump > allowedJump) {
+            return SlowMoverShapeRejectReason.CURVED_CENTERLINE;
+        }
+        if (maxBinWidth > allowedMaxBinWidth
+                || maxBinWidthJump > allowedBinWidthJump
+                || endHeavyBulge) {
+            return SlowMoverShapeRejectReason.BULGED_WIDTH;
+        }
+        return SlowMoverShapeRejectReason.NONE;
     }
 
     /**

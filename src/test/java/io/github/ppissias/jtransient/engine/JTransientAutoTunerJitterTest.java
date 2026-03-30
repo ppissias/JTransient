@@ -136,6 +136,29 @@ public class JTransientAutoTunerJitterTest {
                 currentBest,
                 JTransientAutoTuner.AutoTuneProfile.BALANCED
         ));
+
+        assertTrue(isBetterSweepCandidate(
+                89.5,
+                4.0,
+                96.0,
+                currentBest,
+                JTransientAutoTuner.AutoTuneProfile.AGGRESSIVE
+        ));
+    }
+
+    /**
+     * Verifies the AGGRESSIVE profile keeps a stronger sigma preference while softening
+     * the low-sigma/minPixels guard enough for moderate minPixels to stay competitive.
+     */
+    @Test
+    public void aggressiveProfileUsesSofterLowSigmaMinPixGuard() throws Exception {
+        Object policy = getPolicy(JTransientAutoTuner.AutoTuneProfile.AGGRESSIVE);
+
+        assertEquals(8.0, JTransientAutoTuner.AGGRESSIVE_LOWER_SIGMA_SCORE_WINDOW, 0.0001);
+        assertEquals(34.0, getDoubleField(policy, "scoreWeightHarshness"), 0.0001);
+        assertEquals(0.90, getDoubleField(policy, "harshnessSigmaWeight"), 0.0001);
+        assertEquals(22.0, getDoubleField(policy, "lowSigmaMinPixGuardWeight"), 0.0001);
+        assertEquals(3.0, getDoubleField(policy, "lowSigmaMinPixSlope"), 0.0001);
     }
 
     /**
@@ -207,6 +230,21 @@ public class JTransientAutoTunerJitterTest {
         );
         method.setAccessible(true);
         return (Double) method.invoke(null, sigma, growDelta, baseConfig);
+    }
+
+    private static Object getPolicy(JTransientAutoTuner.AutoTuneProfile profile) throws Exception {
+        Method method = JTransientAutoTuner.class.getDeclaredMethod(
+                "getPolicy",
+                JTransientAutoTuner.AutoTuneProfile.class
+        );
+        method.setAccessible(true);
+        return method.invoke(null, profile);
+    }
+
+    private static double getDoubleField(Object target, String fieldName) throws Exception {
+        var field = target.getClass().getDeclaredField(fieldName);
+        field.setAccessible(true);
+        return field.getDouble(target);
     }
 
     private static void configureSingleSweepForTest() {

@@ -59,7 +59,7 @@ public class JTransientAutoTuner {
     // Penalize oversized veto masks
     public static double SOFT_MASK_COVERAGE_START = 0.08;
     public static double HARD_MASK_COVERAGE_REJECT = 0.25;
-    public static double AGGRESSIVE_LOWER_SIGMA_SCORE_WINDOW = 5.0;
+    public static double AGGRESSIVE_LOWER_SIGMA_SCORE_WINDOW = 8.0;
 
     // CV normalization anchors
     public static double STABLE_STARS_CV_ANCHOR = 0.25;
@@ -1753,13 +1753,13 @@ public class JTransientAutoTuner {
                         35.0,
                         50.0,
                         50.0,
-                        30.0,
-                        0.85, // harshnessSigmaWeight -> aggressively prefer lower sigma
+                        34.0,
+                        0.90, // harshnessSigmaWeight -> aggressively prefer lower sigma
                         0.00, // harshnessMinPixWeight -> do not reward tiny minPixels
                         0.15, // harshnessGrowDeltaWeight
-                        30.0, // lowSigmaMinPixGuardWeight -> but protect against sigma low + minPix tiny
+                        22.0, // lowSigmaMinPixGuardWeight -> still protect against unsafe sigma/minPix pairs, but less harshly
                         4.0,  // lowSigmaMinPixPivot
-                        4.0   // lowSigmaMinPixSlope
+                        3.0   // lowSigmaMinPixSlope
                 );
 
             case BALANCED:
