@@ -138,6 +138,19 @@ public class JTransientAutoTunerJitterTest {
         ));
     }
 
+    /**
+     * Verifies the Phase 1 grow-sigma sweep does not collapse to the master-map sigma.
+     * The tested grow sigma must stay at least `masterSigmaMultiplier + 0.5`.
+     */
+    @Test
+    public void deriveSweepGrowSigmaHonorsMasterSigmaFloor() throws Exception {
+        DetectionConfig config = new DetectionConfig();
+        config.masterSigmaMultiplier = 2.25;
+
+        assertEquals(2.75, deriveSweepGrowSigma(3.5, 1.75, config), 0.0001);
+        assertEquals(3.25, deriveSweepGrowSigma(4.0, 0.75, config), 0.0001);
+    }
+
     @SuppressWarnings("unchecked")
     private static double measureMaxStarJitter(List<List<?>> croppedFramesByRegion,
                                                DetectionConfig config,
@@ -181,6 +194,19 @@ public class JTransientAutoTunerJitterTest {
         );
         method.setAccessible(true);
         return (Boolean) method.invoke(null, candidateScore, candidateSigma, bestScore, bestConfig, profile);
+    }
+
+    private static double deriveSweepGrowSigma(double sigma,
+                                               double growDelta,
+                                               DetectionConfig baseConfig) throws Exception {
+        Method method = JTransientAutoTuner.class.getDeclaredMethod(
+                "deriveSweepGrowSigma",
+                double.class,
+                double.class,
+                DetectionConfig.class
+        );
+        method.setAccessible(true);
+        return (Double) method.invoke(null, sigma, growDelta, baseConfig);
     }
 
     private static void configureSingleSweepForTest() {

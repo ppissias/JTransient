@@ -50,6 +50,7 @@ public class JTransientAutoTuner {
 
     // growSigma = detectionSigma - growDelta
     public static double[] GROW_DELTAS_TO_TEST = {0.75, 1.25, 1.75};
+    public static double MIN_GROW_SIGMA_ABOVE_MASTER_SIGMA = 0.5;
 
     // Tune the actual binary-veto behavior as well
     public static double[] MASK_OVERLAP_TO_TEST = {0.65, 0.70, 0.75};
@@ -526,7 +527,15 @@ public class JTransientAutoTuner {
                     for (double overlapFraction : MASK_OVERLAP_TO_TEST) {
 
                         currentCombination++;
-                        double growSigma = Math.max(1.0, sigma - growDelta);
+                        double growSigma = deriveSweepGrowSigma(sigma, growDelta, baseConfig);
+                        if (growSigma >= sigma) {
+                            if (DEBUG) {
+                                System.out.println(" -> Skipping invalid hysteresis candidate: Sigma " + sigma
+                                        + " | GrowSigma floor " + growSigma
+                                        + " would meet/exceed the seed threshold.");
+                            }
+                            continue;
+                        }
 
                         if (listener != null) {
                             int progress = 8 + (int) (((double) currentCombination / totalCombinations) * 82.0);
@@ -1260,7 +1269,7 @@ public class JTransientAutoTuner {
         appendIntDelta(deltas, "masterMinPix", baseConfig.masterMinDetectionPixels, defaults.masterMinDetectionPixels);
 
         report.append(String.format(
-                "Phase 1 Baseline -> Edge: %d | VoidFrac: %.2f | VoidRadius: %d | BgClipIter: %d | BgClipFactor: %.2f | StreakElong: %.2f | StreakMinPix: %d | MasterSigma: %.2f | MasterMinPix: %d | CalibratedJitter: %.2f%n",
+                "Phase 1 Baseline -> Edge: %d | VoidFrac: %.2f | VoidRadius: %d | BgClipIter: %d | BgClipFactor: %.2f | StreakElong: %.2f | StreakMinPix: %d | MasterSigma: %.2f | MasterMinPix: %d | MinGrowSigmaFloor: %.2f | CalibratedJitter: %.2f%n",
                 baseConfig.edgeMarginPixels,
                 baseConfig.voidThresholdFraction,
                 baseConfig.voidProximityRadius,
@@ -1270,15 +1279,33 @@ public class JTransientAutoTuner {
                 baseConfig.streakMinPixels,
                 baseConfig.masterSigmaMultiplier,
                 baseConfig.masterMinDetectionPixels,
+                getMinimumSweepGrowSigma(baseConfig),
                 measuredMaxStarJitter
         ));
         report.append("Phase 1 inherited deltas from defaults: ")
                 .append(deltas.isEmpty() ? "none" : String.join(", ", deltas))
                 .append('\n');
         report.append(String.format(
-                "Phase 1 per-test overrides -> DetectSigma grid, GrowSigma grid, MinPix grid, Overlap grid, MaxStarJitter=%.2f; quality-side sampling thresholds are fixed from the input config%n",
+                "Phase 1 per-test overrides -> DetectSigma grid, GrowSigma grid with floor MasterSigma+%.2f, MinPix grid, Overlap grid, MaxStarJitter=%.2f; quality-side sampling thresholds are fixed from the input config%n",
+                MIN_GROW_SIGMA_ABOVE_MASTER_SIGMA,
                 measuredMaxStarJitter
         ));
+    }
+
+    /**
+     * Derives the effective grow sigma tested during Phase 1 while keeping hysteresis
+     * safely above the master-map grow level.
+     */
+    private static double deriveSweepGrowSigma(double sigma, double growDelta, DetectionConfig baseConfig) {
+        double growSigma = Math.max(1.0, sigma - growDelta);
+        return Math.max(growSigma, getMinimumSweepGrowSigma(baseConfig));
+    }
+
+    /**
+     * Returns the minimum grow sigma allowed during the detection sweep.
+     */
+    private static double getMinimumSweepGrowSigma(DetectionConfig baseConfig) {
+        return Math.max(1.0, baseConfig.masterSigmaMultiplier + MIN_GROW_SIGMA_ABOVE_MASTER_SIGMA);
     }
 
     /**
