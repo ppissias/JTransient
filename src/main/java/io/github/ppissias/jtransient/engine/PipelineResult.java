@@ -35,6 +35,8 @@ public class PipelineResult {
     public final boolean[][] slowMoverMedianArtifactMask;
     /** Elongated candidates that survived the slow-mover artifact filters. */
     public final List<SourceExtractor.DetectedObject> slowMoverCandidates;
+    /** Single-frame anomalies rescued after tracking without being treated as tracks. */
+    public final List<TrackLinker.AnomalyDetection> anomalies;
 
     /** A chronological, frame-by-frame list of all surviving transients */
     public final List<List<SourceExtractor.DetectedObject>> allTransients;
@@ -106,6 +108,7 @@ public class PipelineResult {
                           short[][] slowMoverStackData,
                           boolean[][] slowMoverMedianArtifactMask,
                           List<SourceExtractor.DetectedObject> slowMoverCandidates,
+                          List<TrackLinker.AnomalyDetection> anomalies,
                           List<List<SourceExtractor.DetectedObject>> allTransients,
                           boolean[][] masterMask,
                           List<SourceExtractor.Pixel> driftPoints,
@@ -120,6 +123,7 @@ public class PipelineResult {
         this.slowMoverStackData = slowMoverStackData;
         this.slowMoverMedianArtifactMask = slowMoverMedianArtifactMask;
         this.slowMoverCandidates = slowMoverCandidates;
+        this.anomalies = anomalies;
         this.allTransients = allTransients;
         this.masterMask = masterMask;
         this.driftPoints = driftPoints;

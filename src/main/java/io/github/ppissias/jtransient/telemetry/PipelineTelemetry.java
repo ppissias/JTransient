@@ -52,6 +52,7 @@ public class PipelineTelemetry {
     // --- PHASE 4: Tracking ---
     public int totalStationaryStarsIdentified = 0;
     public int totalMovingTargetsFound = 0;
+    public int totalAnomaliesFound = 0;
 
     // NEW: We nest the detailed TrackerTelemetry inside here!
     public TrackerTelemetry trackerTelemetry;
@@ -78,7 +79,8 @@ public class PipelineTelemetry {
         int stars = (trackerTelemetry != null) ? trackerTelemetry.totalStationaryStarsPurged : totalStationaryStarsIdentified;
         sb.append(String.format("Stationary Stars      : %d\n", stars));
 
-        sb.append(String.format("Moving Targets Found  : %d\n\n", totalMovingTargetsFound));
+        sb.append(String.format("Moving Targets Found  : %d\n", totalMovingTargetsFound));
+        sb.append(String.format("Anomalies Found       : %d\n\n", totalAnomaliesFound));
 
         if (!rejectedFrames.isEmpty()) {
             sb.append("--- QUALITY CONTROL: REJECTED FRAMES ---\n");

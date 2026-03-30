@@ -129,6 +129,14 @@ Minimum size for master-stack objects.
 
 Master switch for the slow-mover branch.
 
+### `enableSlowMoverShapeFiltering` (default `true`)
+
+Enables the shape-veto stage inside the slow-mover branch.
+
+- if enabled, candidates must pass `isIrregularStreakShape`, `isBinaryStarAnomaly`, and the extra slow-mover-only shape filter
+- if disabled, the branch keeps only the elongation and median-support overlap checks
+- useful for diagnosing why a known injected mover is being rejected
+
 - when disabled, no slow-mover stack or candidate list is produced
 
 ### `slowMoverStackMiddleFraction` (default `0.75`)
@@ -392,6 +400,13 @@ Minimum integrated significance required for the diffuse anomaly-rescue path.
 - based on `DetectedObject.integratedSigma`
 - helps rescue broader flashes whose energy is spread across more pixels
 
+### `anomalyMinIntegratedPixels` (default `25`)
+
+Minimum footprint size required for the integrated-sigma anomaly path.
+
+- only applies to the diffuse integrated-sigma rescue branch
+- suppresses tiny streak fragments and compact artifacts that happen to have enough total flux
+
 ### `anomalyMinPeakSigmaFloor` (default `3.0`)
 
 Minimum local peak required before the integrated-significance rescue path is allowed.
@@ -403,6 +418,7 @@ Minimum local peak required before the integrated-significance rescue path is al
 
 Minimum footprint size required for anomaly rescue.
 
+- acts as the general anomaly floor before either rescue branch is considered
 - protects against hot pixels and tiny defects
 
 ## 7. Interaction With The Auto-Tuner

@@ -754,6 +754,7 @@ public class JTransientEngine {
 
         // Map the track results back to our main telemetry object
         telemetry.totalMovingTargetsFound = trackResult.tracks.size();
+        telemetry.totalAnomaliesFound = trackResult.anomalies.size();
         telemetry.trackerTelemetry = trackResult.telemetry;
 
         telemetry.processingTimeMs = System.currentTimeMillis() - startTime;
@@ -775,7 +776,7 @@ public class JTransientEngine {
 
         // Return the unified result with the new Master Data payloads!
         return new PipelineResult(trackResult.tracks, telemetry, masterStackData, masterStars,
-                slowMoverStackData, slowMoverMedianArtifactMask, slowMoverCandidates, trackResult.allTransients,
+                slowMoverStackData, slowMoverMedianArtifactMask, slowMoverCandidates, trackResult.anomalies, trackResult.allTransients,
                 trackResult.masterMask, context.driftPoints, smTelemetry, masterMaximumStackData,
                 maxStackStreaks,
                 newMasterStackStreaks);
@@ -836,19 +837,21 @@ public class JTransientEngine {
             }
             telemetry.candidatesAboveElongationThreshold++;
 
-            if (SourceExtractor.isIrregularStreakShape(obj)) {
-                telemetry.rejectedIrregularShape++;
-                continue;
-            }
+            if (config.enableSlowMoverShapeFiltering) {
+                if (SourceExtractor.isIrregularStreakShape(obj)) {
+                    telemetry.rejectedIrregularShape++;
+                    continue;
+                }
 
-            if (SourceExtractor.isBinaryStarAnomaly(slowMoverStackData, obj)) {
-                telemetry.rejectedBinaryAnomaly++;
-                continue;
-            }
+                if (SourceExtractor.isBinaryStarAnomaly(slowMoverStackData, obj)) {
+                    telemetry.rejectedBinaryAnomaly++;
+                    continue;
+                }
 
-            if (failsSlowMoverSpecificShapeFilter(obj)) {
-                telemetry.rejectedSlowMoverShape++;
-                continue;
+                if (failsSlowMoverSpecificShapeFilter(obj)) {
+                    telemetry.rejectedSlowMoverShape++;
+                    continue;
+                }
             }
 
             double medianSupportOverlap = computeMaskOverlapFraction(obj, medianMask);

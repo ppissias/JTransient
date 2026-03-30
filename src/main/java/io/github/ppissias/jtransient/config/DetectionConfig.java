@@ -115,6 +115,11 @@ public class DetectionConfig implements Cloneable {
      */
     public double slowMoverStackMiddleFraction = 0.75;
 
+    /** * Enables the slow-mover shape veto stage.
+     * When disabled, the branch skips irregular, binary, and slow-mover-specific shape checks.
+     */
+    public boolean enableSlowMoverShapeFiltering = true;
+
     /** * Minimum pixel area required to flag an elongated object in the master stack as a slow mover candidate. */
     public int masterSlowMoverMinPixels = 15;
 
@@ -308,6 +313,11 @@ public class DetectionConfig implements Cloneable {
      * This complements peak sigma so faint but larger flashes can still be kept.
      */
     public double anomalyMinIntegratedSigma = 12;
+
+    /** * The minimum footprint size required for the integrated-sigma anomaly path.
+     * Keeps small streak fragments from being rescued just because their total energy is high enough.
+     */
+    public int anomalyMinIntegratedPixels = 25;
 
     /** * Safety floor for the diffuse anomaly-rescue path. Even broad anomalies must still show
      * at least some local prominence to avoid rescuing low-contrast mush.

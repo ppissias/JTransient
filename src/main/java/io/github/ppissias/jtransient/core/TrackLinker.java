@@ -40,8 +40,6 @@ public class TrackLinker {
         public List<SourceExtractor.DetectedObject> points = new ArrayList<>();
         /** Whether the track is composed of streak detections. */
         public boolean isStreakTrack = false;
-        /** Whether the track is a rescued single-frame anomaly. */
-        public boolean isAnomaly = false;
         /** Whether the track was accepted by the time-aware linker. */
         public boolean isTimeBasedTrack = false;
 
@@ -50,6 +48,29 @@ public class TrackLinker {
          */
         public void addPoint(SourceExtractor.DetectedObject obj) {
             points.add(obj);
+        }
+    }
+
+    /**
+     * Category assigned to rescued single-frame anomalies.
+     */
+    public enum AnomalyType {
+        PEAK_SIGMA,
+        INTEGRATED_SIGMA
+    }
+
+    /**
+     * One rescued single-frame anomaly that did not become a multi-frame track.
+     */
+    public static class AnomalyDetection {
+        /** The underlying extracted object. */
+        public final SourceExtractor.DetectedObject object;
+        /** The rescue path that accepted this anomaly. */
+        public final AnomalyType type;
+
+        private AnomalyDetection(SourceExtractor.DetectedObject object, AnomalyType type) {
+            this.object = object;
+            this.type = type;
         }
     }
 
@@ -79,6 +100,8 @@ public class TrackLinker {
     public static class TrackingResult {
         /** All confirmed moving-object tracks. */
         public List<Track> tracks;
+        /** Rescued single-frame anomalies that did not form tracks. */
+        public List<AnomalyDetection> anomalies;
         /** Tracker diagnostics covering all stages. */
         public TrackerTelemetry telemetry;
         /** Per-frame transients that survived filtering. */
@@ -89,8 +112,13 @@ public class TrackLinker {
         /**
          * Creates a tracking result bundle.
          */
-        public TrackingResult(List<Track> tracks, TrackerTelemetry telemetry, List<List<SourceExtractor.DetectedObject>> allTransients, boolean[][] masterMask) {
+        public TrackingResult(List<Track> tracks,
+                              List<AnomalyDetection> anomalies,
+                              TrackerTelemetry telemetry,
+                              List<List<SourceExtractor.DetectedObject>> allTransients,
+                              boolean[][] masterMask) {
             this.tracks = tracks;
+            this.anomalies = anomalies;
             this.telemetry = telemetry;
             this.allTransients = allTransients;
             this.masterMask = masterMask;
@@ -324,12 +352,17 @@ public class TrackLinker {
 
         if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3] Completed. Total pure transients across sequence: " + totalTransientsFound);
 
-        // Merge point transients and valid streaks together for final export
+        Set<SourceExtractor.DetectedObject> trackedStreakPoints = new HashSet<>();
+        for (Track streakTrack : confirmedStreakTracks) {
+            trackedStreakPoints.addAll(streakTrack.points);
+        }
+
+        // Merge point transients and only standalone streaks that were not already promoted to streak tracks.
         List<List<SourceExtractor.DetectedObject>> mergedTransients = new ArrayList<>();
         for (int i = 0; i < numFrames; i++) {
             List<SourceExtractor.DetectedObject> mergedFrame = new ArrayList<>(transients.get(i));
             for (SourceExtractor.DetectedObject obj : allFrames.get(i)) {
-                if (obj.isStreak && validMovingStreaks.contains(obj)) {
+                if (obj.isStreak && validMovingStreaks.contains(obj) && !trackedStreakPoints.contains(obj)) {
                     mergedFrame.add(obj);
                 }
             }
@@ -376,7 +409,7 @@ public class TrackLinker {
 
         if (numFrames < 3) {
             if (JTransientEngine.DEBUG) System.out.println("DEBUG: [ABORT] Less than 3 frames provided. Cannot form point tracks.");
-            return new TrackingResult(new ArrayList<>(), new TrackerTelemetry(), new ArrayList<>(), null);
+            return new TrackingResult(new ArrayList<>(), new ArrayList<>(), new TrackerTelemetry(), new ArrayList<>(), null);
         }
 
         TransientsFilterResult filterResult = filterTransients(allFrames, masterStars, config, listener, sensorWidth, sensorHeight);
@@ -783,6 +816,8 @@ public class TrackLinker {
         // PHASE 5: HIGH-ENERGY ANOMALY RESCUE (GLINTS & FLASHES)
         // =================================================================
         int anomaliesRescued = 0;
+        int integratedSigmaAnomaliesRescued = 0;
+        List<AnomalyDetection> anomalies = new ArrayList<>();
         if (config.enableAnomalyRescue) {
             if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 5] Scanning discarded transients for High-Energy Anomalies...");
 
@@ -791,13 +826,12 @@ public class TrackLinker {
                     if (!usedPoints.contains(orphan)) {
 
                         // Rescue either a sharp glint or a broader high-energy flash.
-                        if (qualifiesForAnomalyRescue(orphan, config)) {
-
-                            Track anomalyTrack = new Track();
-                            anomalyTrack.addPoint(orphan);
-                            anomalyTrack.isAnomaly = true;
-
-                            pointTracks.add(anomalyTrack);
+                        AnomalyType anomalyType = classifyAnomalyRescue(orphan, config);
+                        if (anomalyType != null) {
+                            anomalies.add(new AnomalyDetection(orphan, anomalyType));
+                            if (anomalyType == AnomalyType.INTEGRATED_SIGMA) {
+                                integratedSigmaAnomaliesRescued++;
+                            }
                             usedPoints.add(orphan);
                             anomaliesRescued++;
 
@@ -813,6 +847,8 @@ public class TrackLinker {
 
         telemetry.streakTracksFound = streakTracksFound;
         telemetry.pointTracksFound = pointTracks.size();
+        telemetry.anomaliesFound = anomaliesRescued;
+        telemetry.integratedSigmaAnomaliesFound = integratedSigmaAnomaliesRescued;
 
         if (JTransientEngine.DEBUG) {
             System.out.println("\n--------------------------------------------------");
@@ -839,6 +875,8 @@ public class TrackLinker {
             System.out.println("   - Fast Streak Tracks (Phase 2)  : " + telemetry.streakTracksFound);
             System.out.println("   - Slow Point Tracks (Phase 4)   : " + telemetry.pointTracksFound);
             System.out.println("   - TOTAL MOVING TARGETS FOUND    : " + (telemetry.streakTracksFound + telemetry.pointTracksFound));
+            System.out.println("   - Single-Frame Anomalies        : " + telemetry.anomaliesFound);
+            System.out.println("      -> Integrated-Sigma Rescue   : " + telemetry.integratedSigmaAnomaliesFound);
             System.out.println("--------------------------------------------------\n");
         }
 
@@ -847,23 +885,35 @@ public class TrackLinker {
         }
 
         confirmedTracks.addAll(pointTracks);
-        return new TrackingResult(confirmedTracks, telemetry, filterResult.mergedTransients, filterResult.masterMask);
+        return new TrackingResult(confirmedTracks, anomalies, telemetry, filterResult.mergedTransients, filterResult.masterMask);
     }
 
     /**
      * Accepts either a sharp single-frame glint or a broader anomaly with enough integrated energy.
      */
     static boolean qualifiesForAnomalyRescue(SourceExtractor.DetectedObject orphan, DetectionConfig config) {
+        return classifyAnomalyRescue(orphan, config) != null;
+    }
+
+    /**
+     * Classifies anomaly rescue so single-frame anomalies can be exported separately from tracks.
+     */
+    static AnomalyType classifyAnomalyRescue(SourceExtractor.DetectedObject orphan, DetectionConfig config) {
         if (orphan.pixelArea < config.anomalyMinPixels) {
-            return false;
+            return null;
         }
 
         if (orphan.peakSigma >= config.anomalyMinPeakSigma) {
-            return true;
+            return AnomalyType.PEAK_SIGMA;
         }
 
-        return orphan.integratedSigma >= config.anomalyMinIntegratedSigma
-                && orphan.peakSigma >= config.anomalyMinPeakSigmaFloor;
+        if (orphan.pixelArea >= config.anomalyMinIntegratedPixels
+                && orphan.integratedSigma >= config.anomalyMinIntegratedSigma
+                && orphan.peakSigma >= config.anomalyMinPeakSigmaFloor) {
+            return AnomalyType.INTEGRATED_SIGMA;
+        }
+
+        return null;
     }
 
     // =================================================================
