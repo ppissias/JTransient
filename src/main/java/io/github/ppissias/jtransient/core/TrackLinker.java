@@ -790,8 +790,8 @@ public class TrackLinker {
                 for (SourceExtractor.DetectedObject orphan : transients.get(i)) {
                     if (!usedPoints.contains(orphan)) {
 
-                        // Check if it meets the extreme thresholds AND is safely away from the edges!
-                        if (orphan.pixelArea >= config.anomalyMinPixels && orphan.peakSigma >= config.anomalyMinPeakSigma) {
+                        // Rescue either a sharp glint or a broader high-energy flash.
+                        if (qualifiesForAnomalyRescue(orphan, config)) {
 
                             Track anomalyTrack = new Track();
                             anomalyTrack.addPoint(orphan);
@@ -848,6 +848,22 @@ public class TrackLinker {
 
         confirmedTracks.addAll(pointTracks);
         return new TrackingResult(confirmedTracks, telemetry, filterResult.mergedTransients, filterResult.masterMask);
+    }
+
+    /**
+     * Accepts either a sharp single-frame glint or a broader anomaly with enough integrated energy.
+     */
+    static boolean qualifiesForAnomalyRescue(SourceExtractor.DetectedObject orphan, DetectionConfig config) {
+        if (orphan.pixelArea < config.anomalyMinPixels) {
+            return false;
+        }
+
+        if (orphan.peakSigma >= config.anomalyMinPeakSigma) {
+            return true;
+        }
+
+        return orphan.integratedSigma >= config.anomalyMinIntegratedSigma
+                && orphan.peakSigma >= config.anomalyMinPeakSigmaFloor;
     }
 
     // =================================================================

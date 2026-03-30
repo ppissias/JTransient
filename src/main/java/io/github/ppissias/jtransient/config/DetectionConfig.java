@@ -304,6 +304,16 @@ public class DetectionConfig implements Cloneable {
      * e.g., 50.0 means the brightest pixel in the object is 50x brighter than the background noise. */
     public double anomalyMinPeakSigma = 8;
 
+    /** * The minimum integrated signal-to-noise ratio required to rescue a broader single-frame anomaly.
+     * This complements peak sigma so faint but larger flashes can still be kept.
+     */
+    public double anomalyMinIntegratedSigma = 12;
+
+    /** * Safety floor for the diffuse anomaly-rescue path. Even broad anomalies must still show
+     * at least some local prominence to avoid rescuing low-contrast mush.
+     */
+    public double anomalyMinPeakSigmaFloor = 3;
+
     /** * The minimum physical size a single-frame point must have to be rescued.
      * Prevents single hot-pixels or cosmic rays from being flagged. */
     public int anomalyMinPixels = 15;

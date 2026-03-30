@@ -383,6 +383,21 @@ Enables the final single-frame rescue pass.
 Minimum peak significance required for anomaly rescue.
 
 - based on `DetectedObject.peakSigma`
+- sharp one-frame glints can still be rescued through this path alone
+
+### `anomalyMinIntegratedSigma` (default `12.0`)
+
+Minimum integrated significance required for the diffuse anomaly-rescue path.
+
+- based on `DetectedObject.integratedSigma`
+- helps rescue broader flashes whose energy is spread across more pixels
+
+### `anomalyMinPeakSigmaFloor` (default `3.0`)
+
+Minimum local peak required before the integrated-significance rescue path is allowed.
+
+- prevents broad low-contrast mush from being rescued just because it has enough total flux
+- does not affect the main sharp-glint path governed by `anomalyMinPeakSigma`
 
 ### `anomalyMinPixels` (default `15`)
 

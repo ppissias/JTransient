@@ -41,6 +41,8 @@ public class SourceExtractor {
         public int pixelCount;
         /** Peak signal-to-noise estimate used by anomaly rescue. */
         public double peakSigma;
+        /** Integrated signal-to-noise estimate used to rescue broader high-energy anomalies. */
+        public double integratedSigma;
 
         /** Exact blob footprint used for mask building and diagnostics. */
         public List<Pixel> rawPixels = null;
@@ -387,6 +389,8 @@ public class SourceExtractor {
         obj.x = m10 / m00;
         obj.y = m01 / m00;
         obj.totalFlux = m00;
+        double sigmaFloor = Math.max(bg.sigma, 1.0e-6);
+        obj.integratedSigma = m00 / (sigmaFloor * Math.sqrt(Math.max(blob.size(), 1)));
 
         double mu20 = 0, mu02 = 0, mu11 = 0;
         for (Pixel p : blob) {
