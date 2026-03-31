@@ -20,7 +20,7 @@ public class TrackerTelemetry {
     public long countP3NotLine, countP3WrongDirection, countP3Jump, countP3Size;
     public long countTrackTooShort, countTrackErraticRhythm, countTrackDuplicate;
     public int streakTracksFound, pointTracksFound;
-    public int anomaliesFound, integratedSigmaAnomaliesFound;
+    public int anomaliesFound, integratedSigmaAnomaliesFound, suspectedThresholdStreakTracksFound;
 
     // --- Phase 3 Star Map Stats ---
     public List<FrameStarMapStat> frameStarMapStats = new ArrayList<>();

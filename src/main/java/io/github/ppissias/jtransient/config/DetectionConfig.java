@@ -362,6 +362,11 @@ public class DetectionConfig implements Cloneable {
      */
     public double anomalyMinPeakSigmaFloor = 3;
 
+    /** * Integrated-sigma anomalies above this elongation are checked for same-frame collinear grouping.
+     * If multiple rescued anomalies line up, they are exported as suspected threshold streak tracks.
+     */
+    public double anomalySuspectedStreakMinElongation = 3.5;
+
 
     /**
      * Returns a copy of this configuration.

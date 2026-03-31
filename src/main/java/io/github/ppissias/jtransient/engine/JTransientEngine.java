@@ -766,6 +766,7 @@ public class JTransientEngine {
         // Map the track results back to our main telemetry object
         telemetry.totalMovingTargetsFound = trackResult.tracks.size();
         telemetry.totalAnomaliesFound = trackResult.anomalies.size();
+        telemetry.totalSuspectedThresholdStreakTracksFound = trackResult.suspectedThresholdStreakTracks.size();
         telemetry.trackerTelemetry = trackResult.telemetry;
 
         telemetry.processingTimeMs = System.currentTimeMillis() - startTime;
@@ -787,7 +788,8 @@ public class JTransientEngine {
 
         // Return the unified result with the new Master Data payloads!
         return new PipelineResult(trackResult.tracks, telemetry, masterStackData, masterStars,
-                slowMoverStackData, slowMoverMedianArtifactMask, slowMoverCandidates, trackResult.anomalies, trackResult.allTransients,
+                slowMoverStackData, slowMoverMedianArtifactMask, slowMoverCandidates, trackResult.anomalies,
+                trackResult.suspectedThresholdStreakTracks, trackResult.allTransients,
                 trackResult.masterMask, context.driftPoints, smTelemetry, masterMaximumStackData,
                 maxStackStreaks,
                 newMasterStackStreaks);

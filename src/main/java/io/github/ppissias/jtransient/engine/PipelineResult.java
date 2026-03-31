@@ -20,7 +20,7 @@ import java.util.List;
  * Aggregates all exported data products produced by a full pipeline run.
  */
 public class PipelineResult {
-    /** Confirmed moving-object tracks, including streaks, point tracks, and rescued anomalies. */
+    /** Confirmed moving-object tracks, including streaks and multi-frame point tracks. */
     public final List<TrackLinker.Track> tracks;
     /** Per-phase counters and diagnostics collected during processing. */
     public final PipelineTelemetry telemetry;
@@ -37,6 +37,8 @@ public class PipelineResult {
     public final List<SourceExtractor.DetectedObject> slowMoverCandidates;
     /** Single-frame anomalies rescued after tracking without being treated as tracks. */
     public final List<TrackLinker.AnomalyDetection> anomalies;
+    /** Same-frame groupings of integrated anomalies that likely belong to one faint streak. */
+    public final List<TrackLinker.Track> suspectedThresholdStreakTracks;
 
     /** A chronological, frame-by-frame list of all surviving transients */
     public final List<List<SourceExtractor.DetectedObject>> allTransients;
@@ -121,6 +123,7 @@ public class PipelineResult {
                           boolean[][] slowMoverMedianArtifactMask,
                           List<SourceExtractor.DetectedObject> slowMoverCandidates,
                           List<TrackLinker.AnomalyDetection> anomalies,
+                          List<TrackLinker.Track> suspectedThresholdStreakTracks,
                           List<List<SourceExtractor.DetectedObject>> allTransients,
                           boolean[][] masterMask,
                           List<SourceExtractor.Pixel> driftPoints,
@@ -136,6 +139,7 @@ public class PipelineResult {
         this.slowMoverMedianArtifactMask = slowMoverMedianArtifactMask;
         this.slowMoverCandidates = slowMoverCandidates;
         this.anomalies = anomalies;
+        this.suspectedThresholdStreakTracks = suspectedThresholdStreakTracks;
         this.allTransients = allTransients;
         this.masterMask = masterMask;
         this.driftPoints = driftPoints;

@@ -14,6 +14,7 @@ import io.github.ppissias.jtransient.engine.JTransientEngine;
 import io.github.ppissias.jtransient.engine.TransientEngineProgressListener;
 import io.github.ppissias.jtransient.telemetry.TrackerTelemetry;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -40,6 +41,8 @@ public class TrackLinker {
         public List<SourceExtractor.DetectedObject> points = new ArrayList<>();
         /** Whether the track is composed of streak detections. */
         public boolean isStreakTrack = false;
+        /** Whether the track groups same-frame integrated anomalies into a suspected faint streak. */
+        public boolean isSuspectedThresholdStreakTrack = false;
         /** Whether the track was accepted by the time-aware linker. */
         public boolean isTimeBasedTrack = false;
 
@@ -102,6 +105,8 @@ public class TrackLinker {
         public List<Track> tracks;
         /** Rescued single-frame anomalies that did not form tracks. */
         public List<AnomalyDetection> anomalies;
+        /** Same-frame groupings of integrated anomalies that likely belong to one faint streak. */
+        public List<Track> suspectedThresholdStreakTracks;
         /** Tracker diagnostics covering all stages. */
         public TrackerTelemetry telemetry;
         /** Per-frame transients that survived filtering. */
@@ -114,11 +119,13 @@ public class TrackLinker {
          */
         public TrackingResult(List<Track> tracks,
                               List<AnomalyDetection> anomalies,
+                              List<Track> suspectedThresholdStreakTracks,
                               TrackerTelemetry telemetry,
                               List<List<SourceExtractor.DetectedObject>> allTransients,
                               boolean[][] masterMask) {
             this.tracks = tracks;
             this.anomalies = anomalies;
+            this.suspectedThresholdStreakTracks = suspectedThresholdStreakTracks;
             this.telemetry = telemetry;
             this.allTransients = allTransients;
             this.masterMask = masterMask;
@@ -409,7 +416,7 @@ public class TrackLinker {
 
         if (numFrames < 3) {
             if (JTransientEngine.DEBUG) System.out.println("DEBUG: [ABORT] Less than 3 frames provided. Cannot form point tracks.");
-            return new TrackingResult(new ArrayList<>(), new ArrayList<>(), new TrackerTelemetry(), new ArrayList<>(), null);
+            return new TrackingResult(new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new TrackerTelemetry(), new ArrayList<>(), null);
         }
 
         TransientsFilterResult filterResult = filterTransients(allFrames, masterStars, config, listener, sensorWidth, sensorHeight);
@@ -793,9 +800,8 @@ public class TrackLinker {
         // =================================================================
         // PHASE 5: HIGH-ENERGY ANOMALY RESCUE (GLINTS & FLASHES)
         // =================================================================
-        int anomaliesRescued = 0;
-        int integratedSigmaAnomaliesRescued = 0;
         List<AnomalyDetection> anomalies = new ArrayList<>();
+        List<Track> suspectedThresholdStreakTracks = new ArrayList<>();
         if (config.enableAnomalyRescue) {
             if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 5] Scanning discarded transients for High-Energy Anomalies...");
 
@@ -807,11 +813,7 @@ public class TrackLinker {
                         AnomalyType anomalyType = classifyAnomalyRescue(orphan, config);
                         if (anomalyType != null) {
                             anomalies.add(new AnomalyDetection(orphan, anomalyType));
-                            if (anomalyType == AnomalyType.INTEGRATED_SIGMA) {
-                                integratedSigmaAnomaliesRescued++;
-                            }
                             usedPoints.add(orphan);
-                            anomaliesRescued++;
 
                             if (JTransientEngine.DEBUG) {
                                 //System.out.printf("         [ANOMALY RESCUED] Huge transient found at Frame %d (X:%.1f, Y:%.1f). Area: %.1f px, Peak Sigma: %.1f%n",
@@ -823,10 +825,29 @@ public class TrackLinker {
             }
         }
 
+        if (!anomalies.isEmpty()) {
+            suspectedThresholdStreakTracks = groupSuspectedThresholdStreakTracks(anomalies, config);
+            if (!suspectedThresholdStreakTracks.isEmpty()) {
+                Set<SourceExtractor.DetectedObject> groupedObjects = new HashSet<>();
+                for (Track track : suspectedThresholdStreakTracks) {
+                    groupedObjects.addAll(track.points);
+                }
+                anomalies.removeIf(anomaly -> groupedObjects.contains(anomaly.object));
+            }
+        }
+
+        int integratedSigmaAnomaliesRescued = 0;
+        for (AnomalyDetection anomaly : anomalies) {
+            if (anomaly.type == AnomalyType.INTEGRATED_SIGMA) {
+                integratedSigmaAnomaliesRescued++;
+            }
+        }
+
         telemetry.streakTracksFound = streakTracksFound;
         telemetry.pointTracksFound = pointTracks.size();
-        telemetry.anomaliesFound = anomaliesRescued;
+        telemetry.anomaliesFound = anomalies.size();
         telemetry.integratedSigmaAnomaliesFound = integratedSigmaAnomaliesRescued;
+        telemetry.suspectedThresholdStreakTracksFound = suspectedThresholdStreakTracks.size();
 
         if (JTransientEngine.DEBUG) {
             System.out.println("\n--------------------------------------------------");
@@ -855,6 +876,7 @@ public class TrackLinker {
             System.out.println("   - TOTAL MOVING TARGETS FOUND    : " + (telemetry.streakTracksFound + telemetry.pointTracksFound));
             System.out.println("   - Single-Frame Anomalies        : " + telemetry.anomaliesFound);
             System.out.println("      -> Integrated-Sigma Rescue   : " + telemetry.integratedSigmaAnomaliesFound);
+            System.out.println("   - Suspected Faint Streak Tracks : " + telemetry.suspectedThresholdStreakTracksFound);
             System.out.println("--------------------------------------------------\n");
         }
 
@@ -863,7 +885,7 @@ public class TrackLinker {
         }
 
         confirmedTracks.addAll(pointTracks);
-        return new TrackingResult(confirmedTracks, anomalies, telemetry, filterResult.mergedTransients, filterResult.masterMask);
+        return new TrackingResult(confirmedTracks, anomalies, suspectedThresholdStreakTracks, telemetry, filterResult.mergedTransients, filterResult.masterMask);
     }
 
     /**
@@ -892,6 +914,175 @@ public class TrackLinker {
         }
 
         return null;
+    }
+
+    /**
+     * Groups elongated integrated-sigma anomalies that align within one frame into suspected faint streak tracks.
+     */
+    private static List<Track> groupSuspectedThresholdStreakTracks(List<AnomalyDetection> anomalies, DetectionConfig config) {
+        List<Track> suspectedTracks = new ArrayList<>();
+        double angleToleranceRad = Math.toRadians(config.angleToleranceDegrees);
+
+        int maxFrameIndex = -1;
+        for (AnomalyDetection anomaly : anomalies) {
+            if (anomaly.type == AnomalyType.INTEGRATED_SIGMA
+                    && anomaly.object.elongation > config.anomalySuspectedStreakMinElongation
+                    && anomaly.object.sourceFrameIndex >= 0) {
+                maxFrameIndex = Math.max(maxFrameIndex, anomaly.object.sourceFrameIndex);
+            }
+        }
+
+        if (maxFrameIndex < 0) {
+            return suspectedTracks;
+        }
+
+        List<List<SourceExtractor.DetectedObject>> frameCandidates = new ArrayList<>();
+        for (int i = 0; i <= maxFrameIndex; i++) {
+            frameCandidates.add(new ArrayList<>());
+        }
+
+        for (AnomalyDetection anomaly : anomalies) {
+            if (anomaly.type == AnomalyType.INTEGRATED_SIGMA
+                    && anomaly.object.elongation > config.anomalySuspectedStreakMinElongation
+                    && anomaly.object.sourceFrameIndex >= 0) {
+                frameCandidates.get(anomaly.object.sourceFrameIndex).add(anomaly.object);
+            }
+        }
+
+        for (List<SourceExtractor.DetectedObject> frameObjects : frameCandidates) {
+            if (frameObjects.size() < 2) {
+                continue;
+            }
+
+            boolean[] visited = new boolean[frameObjects.size()];
+            for (int i = 0; i < frameObjects.size(); i++) {
+                if (visited[i]) {
+                    continue;
+                }
+
+                List<SourceExtractor.DetectedObject> component = collectSuspectedThresholdStreakComponent(
+                        frameObjects,
+                        visited,
+                        i,
+                        angleToleranceRad
+                );
+                if (component.size() < 2) {
+                    continue;
+                }
+
+                Track suspectedTrack = buildSuspectedThresholdStreakTrack(component, angleToleranceRad, config);
+                if (suspectedTrack != null) {
+                    suspectedTracks.add(suspectedTrack);
+                }
+            }
+        }
+
+        return suspectedTracks;
+    }
+
+    /**
+     * Collects one connected same-frame component of aligned integrated anomalies.
+     */
+    private static List<SourceExtractor.DetectedObject> collectSuspectedThresholdStreakComponent(
+            List<SourceExtractor.DetectedObject> frameObjects,
+            boolean[] visited,
+            int startIndex,
+            double angleToleranceRad) {
+        List<SourceExtractor.DetectedObject> component = new ArrayList<>();
+        ArrayDeque<Integer> queue = new ArrayDeque<>();
+        queue.add(startIndex);
+        visited[startIndex] = true;
+
+        while (!queue.isEmpty()) {
+            int currentIndex = queue.removeFirst();
+            SourceExtractor.DetectedObject current = frameObjects.get(currentIndex);
+            component.add(current);
+
+            for (int i = 0; i < frameObjects.size(); i++) {
+                if (visited[i]) {
+                    continue;
+                }
+
+                if (areSuspectedThresholdStreakNeighbors(current, frameObjects.get(i), angleToleranceRad)) {
+                    visited[i] = true;
+                    queue.addLast(i);
+                }
+            }
+        }
+
+        return component;
+    }
+
+    /**
+     * Returns whether two integrated anomalies are plausibly fragments of the same faint same-frame streak.
+     */
+    private static boolean areSuspectedThresholdStreakNeighbors(SourceExtractor.DetectedObject left,
+                                                                SourceExtractor.DetectedObject right,
+                                                                double angleToleranceRad) {
+        if (!anglesMatch(left.angle, right.angle, angleToleranceRad)) {
+            return false;
+        }
+
+        double dist = distance(left.x, left.y, right.x, right.y);
+        if (dist < 1.0) {
+            return false;
+        }
+
+        double trajectoryAngle = Math.atan2(right.y - left.y, right.x - left.x);
+        return anglesMatch(left.angle, trajectoryAngle, angleToleranceRad)
+                && anglesMatch(right.angle, trajectoryAngle, angleToleranceRad);
+    }
+
+    /**
+     * Orders one same-frame component into a track and rejects obviously non-collinear groupings.
+     */
+    private static Track buildSuspectedThresholdStreakTrack(List<SourceExtractor.DetectedObject> component,
+                                                            double angleToleranceRad,
+                                                            DetectionConfig config) {
+        if (component.size() < 2) {
+            return null;
+        }
+
+        double trackAngle = averageAxialAngle(component);
+        component.sort((left, right) -> Double.compare(
+                projectionAlongAngle(left, trackAngle),
+                projectionAlongAngle(right, trackAngle)
+        ));
+
+        for (int i = 0; i < component.size() - 1; i++) {
+            SourceExtractor.DetectedObject current = component.get(i);
+            SourceExtractor.DetectedObject next = component.get(i + 1);
+            if (distance(current.x, current.y, next.x, next.y) < 1.0) {
+                return null;
+            }
+
+            double segmentAngle = Math.atan2(next.y - current.y, next.x - current.x);
+            if (!anglesMatch(trackAngle, segmentAngle, angleToleranceRad)) {
+                return null;
+            }
+        }
+
+        if (component.size() > 2) {
+            SourceExtractor.DetectedObject start = component.get(0);
+            SourceExtractor.DetectedObject end = component.get(component.size() - 1);
+            double baselineDistance = distance(start.x, start.y, end.x, end.y);
+            if (baselineDistance < 1.0) {
+                return null;
+            }
+
+            double maxLineError = Math.max(config.predictionTolerance, config.maxStarJitter);
+            for (int i = 1; i < component.size() - 1; i++) {
+                if (distanceToLineOptimized(start, end, component.get(i), baselineDistance) > maxLineError) {
+                    return null;
+                }
+            }
+        }
+
+        Track suspectedTrack = new Track();
+        suspectedTrack.isStreakTrack = true;
+        suspectedTrack.isSuspectedThresholdStreakTrack = true;
+        suspectedTrack.points.addAll(component);
+        return suspectedTrack;
     }
 
     // =================================================================
@@ -1062,6 +1253,30 @@ public class TrackLinker {
             diff = (2.0 * Math.PI) - diff;
         }
         return diff;
+    }
+
+    /**
+     * Averages axial orientations where 0 and PI describe the same streak direction.
+     */
+    private static double averageAxialAngle(List<SourceExtractor.DetectedObject> objects) {
+        double sumSin = 0.0;
+        double sumCos = 0.0;
+
+        for (SourceExtractor.DetectedObject object : objects) {
+            sumSin += Math.sin(object.angle * 2.0);
+            sumCos += Math.cos(object.angle * 2.0);
+        }
+
+        return 0.5 * Math.atan2(sumSin, sumCos);
+    }
+
+    /**
+     * Projects one object onto the candidate streak axis for stable ordering.
+     */
+    private static double projectionAlongAngle(SourceExtractor.DetectedObject object, double angle) {
+        double dx = Math.cos(angle);
+        double dy = Math.sin(angle);
+        return (object.x * dx) + (object.y * dy);
     }
 
     /**
