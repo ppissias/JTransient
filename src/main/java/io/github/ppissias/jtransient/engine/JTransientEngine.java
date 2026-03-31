@@ -1069,7 +1069,9 @@ public class JTransientEngine {
         }
 
         double compactAspect = length / Math.max(1.0, width);
-        if (fillFactor >= 0.62 && compactAspect >= 1.35 && compactAspect <= 2.40) {
+        // Keep dense PSF-like masks scale-tolerant: upsampling the same footprint can preserve
+        // the fill while stretching the measured major/minor-axis ratio slightly.
+        if (fillFactor >= 0.60 && compactAspect >= 1.35 && compactAspect <= 3.20) {
             return SlowMoverShapeRejectReason.NONE;
         }
 

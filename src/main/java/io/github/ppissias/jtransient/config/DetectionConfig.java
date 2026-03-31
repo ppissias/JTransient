@@ -19,8 +19,21 @@ import com.google.gson.annotations.SerializedName;
 public class DetectionConfig implements Cloneable {
 
     // =================================================================
-    // 1. SOURCE EXTRACTOR PARAMETERS
+    // 1. EXTRACTION, BORDER, AND STREAK PARAMETERS
     // =================================================================
+
+    // --- Background model ---
+
+    /** * Number of passes used in the iterative histogram calculation to mathematically chop off
+     * bright stars so they don't corrupt the background sky noise calculation.
+     */
+    public int bgClippingIterations = 3;
+
+    /** * Threshold (in standard deviations) used to chop off pixels during the iterative background calculation.
+     */
+    public double bgClippingFactor = 3.0;
+
+    // --- Primary detection thresholds ---
 
     /** * The strict baseline requirement to even start looking at a pixel.
      * The engine calculates the background median and sigma (noise).
@@ -39,6 +52,8 @@ public class DetectionConfig implements Cloneable {
      */
     public int minDetectionPixels = 10;
 
+    // --- Border and void rejection ---
+
     /** * A safety border (dead zone). If the calculated mathematical centroid falls within this many pixels
      * of the absolute edge of the array, the object is discarded to prevent image alignment/stacking artifacts
      * from being misclassified as streaks.
@@ -56,6 +71,8 @@ public class DetectionConfig implements Cloneable {
      */
     public int voidProximityRadius = 20;
 
+    // --- Streak classification ---
+
     /** * Uses Image Moments (spatial variance) to determine shape. If the square root of the ratio of its
      * eigenvalues (elongation) is greater than this value, the blob is long and thin enough to be considered
      * a fast-moving satellite/meteor streak.
@@ -72,27 +89,11 @@ public class DetectionConfig implements Cloneable {
      */
     public double singleStreakMinPeakSigma = 7.0;
 
-
-    /** * Number of passes used in the iterative histogram calculation to mathematically chop off
-     * bright stars so they don't corrupt the background sky noise calculation.
-     */
-    public int bgClippingIterations = 3;
-
-    /** * Threshold (in standard deviations) used to chop off pixels during the iterative background calculation.
-     */
-    public double bgClippingFactor = 3.0;
-
-    /** * Strict Exposure Kinematics: If an object appears as a round point source in a long exposure,
-     * it physically cannot be moving fast. This mathematically bounds its maximum jump distance between
-     * frames based on its footprint and the exposure time.
-     * NOTE: Turn this OFF if tracking tumbling/flashing LEO satellites that only glint for a fraction of the exposure.
-     */
-    public boolean strictExposureKinematics = true;
-
     // =================================================================
-    // 1.5 MASTER MAP EXTRACTION PARAMETERS
+    // 2. MASTER-STACK AND SLOW-MOVER PARAMETERS
     // =================================================================
 
+    // --- Master star map extraction ---
 
     /** * The baseline requirement for extracting stars to build the Master Star Map. 
      * Typically lower than detectionSigmaMultiplier to ensure faint halos are masked.
@@ -103,6 +104,8 @@ public class DetectionConfig implements Cloneable {
      * Lower values allow capturing faint background stars to better protect against noise.
      */
     public int masterMinDetectionPixels = 3;
+
+    // --- Slow-mover stack generation ---
 
     /** * Master switch to enable the generation and analysis of the specialized Slow Mover stack.
      * Set to true to actively hunt for ultra-slow moving objects like distant asteroids.
@@ -115,15 +118,7 @@ public class DetectionConfig implements Cloneable {
      */
     public double slowMoverStackMiddleFraction = 0.75;
 
-    /** * Enables the slow-mover shape veto stage.
-     * When disabled, the branch skips the shared irregular and binary slow-mover shape checks.
-     */
-    public boolean enableSlowMoverShapeFiltering = true;
-
-    /** * Enables the extra slow-mover-only shape filter after the shared irregular/binary checks.
-     * Disable this to keep the shared slow-mover shape filters while bypassing the targeted compact-shape veto.
-     */
-    public boolean enableSlowMoverSpecificShapeFiltering = true;
+    // --- Slow-mover extraction thresholds ---
 
     /** * Minimum pixel area required to flag an elongated object in the master stack as a slow mover candidate. */
     public int masterSlowMoverMinPixels = 15;
@@ -139,6 +134,18 @@ public class DetectionConfig implements Cloneable {
      */
     public double slowMoverBaselineMadMultiplier = 4.5;
 
+    // --- Slow-mover shape and support filtering ---
+
+    /** * Enables the slow-mover shape veto stage.
+     * When disabled, the branch skips the shared irregular and binary slow-mover shape checks.
+     */
+    public boolean enableSlowMoverShapeFiltering = true;
+
+    /** * Enables the extra slow-mover-only shape filter after the shared irregular/binary checks.
+     * Disable this to keep the shared slow-mover shape filters while bypassing the targeted compact-shape veto.
+     */
+    public boolean enableSlowMoverSpecificShapeFiltering = true;
+
     /** * Minimum fraction of a slow-mover footprint that must overlap the median-stack artifact mask.
      * Higher values demand stronger support from the median stack before a candidate is kept.
      */
@@ -150,8 +157,10 @@ public class DetectionConfig implements Cloneable {
     public double slowMoverMedianSupportMaxOverlapFraction = 0.65;
 
     // =================================================================
-    // 2. FRAME QUALITY ANALYZER PARAMETERS
+    // 3. FRAME QUALITY ANALYSIS PARAMETERS
     // =================================================================
+
+    // --- Quality extraction ---
 
     /** * Sigma multiplier used to extract only strong, undeniable stars specifically for frame quality evaluation,
      * bypassing the standard extraction parameters.
@@ -168,6 +177,8 @@ public class DetectionConfig implements Cloneable {
      */
     public int qualityMinDetectionPixels = 5;
 
+    // --- Quality measurements and fallback ---
+
     /** * Trailed stars (due to wind or mount errors) artificially inflate FWHM (focus) measurements.
      * Only stars with an elongation below this value are used to calculate the frame's median focus.
      */
@@ -179,7 +190,7 @@ public class DetectionConfig implements Cloneable {
      */
     public double errorFallbackValue = 999.0;
 
-    // --- Absolute Minimum Tolerances ---
+    // --- Absolute minimum tolerances ---
 
     /** * An absolute floor for background deviation. Prevents frames from being rejected on perfectly stable nights
      * just because the sky background shifted by normal, microscopic read-noise amounts.
@@ -197,8 +208,10 @@ public class DetectionConfig implements Cloneable {
     public double minFwhmEnvelope = 0.5;
 
     // =================================================================
-    // 3. TRACK LINKER PARAMETERS
+    // 4. TRACKING AND STATIONARY-MASK PARAMETERS
     // =================================================================
+
+    // --- Stationary-star veto and overlap ---
 
     /** * Expected Star Jitter (in pixels). Represents the maximum atmospheric wobble (seeing) or focus bloat
      * between perfectly aligned frames. Used to dilate the Master Star Mask and as the minimum speed limit
@@ -212,6 +225,13 @@ public class DetectionConfig implements Cloneable {
      */
     public double maxMaskOverlapFraction = 0.75;
 
+    // --- Track construction and confirmation ---
+
+    /** * The cosmic speed limit. When looking for the next point in a track, any transient located
+     * further than this distance is ignored.
+     */
+    public double maxJumpPixels = 400.0;
+
     /** * Once a baseline vector is established (Points 1 and 2), Point 3 must fall within this many pixels
      * of the infinitely projected mathematical trajectory line.
      */
@@ -222,27 +242,36 @@ public class DetectionConfig implements Cloneable {
      */
     public double angleToleranceDegrees = 2;
 
-    /** * Determines how many points are needed to confirm a track by dividing the total number of frames
-     * by this ratio (e.g., 20 frames / 3.0 = ~7 points required).
-     */
-    public double trackMinFrameRatio = 3.0;
-
     /** * When valid timestamps are available, this defines the maximum allowed variance in velocity (speed).
      * A value of 0.10 means a 10% change in velocity between jumps is acceptable.
      * Tracks linked using time bypass the maxJumpPixels constraint.
      */
     public double timeBasedVelocityTolerance = 0.10;
 
+    /** * Strict Exposure Kinematics: If an object appears as a round point source in a long exposure,
+     * it physically cannot be moving fast. This bounds the time-based linker using the source footprint
+     * and the exposure time when valid timestamps are available.
+     * NOTE: Turn this OFF if tracking tumbling/flashing LEO satellites that only glint for a fraction of the exposure.
+     */
+    public boolean strictExposureKinematics = true;
+
+    /** * Controls whether the frame-agnostic geometric point-track linker runs when timestamps are available.
+     * Keep this enabled unless the time-based linker is preferred exclusively.
+     * If timestamps are missing, the engine still forces geometric linking because it is the only point-track fallback.
+     */
+    public boolean enableGeometricTrackLinking = true;
+
+    /** * Determines how many points are needed to confirm a track by dividing the total number of frames
+     * by this ratio (e.g., 20 frames / 3.0 = ~7 points required).
+     */
+    public double trackMinFrameRatio = 3.0;
+
     /** * A hard ceiling on the required track length so the algorithm doesn't demand mathematically
      * impossible track lengths for massive frame batches (e.g., requiring 166 points in a 500 frame session).
      */
     public int absoluteMaxPointsRequired = 5;
 
-    /** * The cosmic speed limit. When looking for the next point in a track, any transient located
-     * further than this distance is ignored.
-     */
-    public double maxJumpPixels = 400.0;
-
+    // --- Morphology consistency ---
 
     /** * Morphological Filter: FWHM represents the optical focus/spread. Real targets share similar optical blurring.
      * A value of 2.0 means the FWHM cannot more than double between frames. 0 to disable. */
@@ -251,6 +280,13 @@ public class DetectionConfig implements Cloneable {
     /** * Morphological Filter: Surface Brightness (Flux / Area) identifies the density of the light.
      * Prevents linking a concentrated cosmic ray to a diffuse noise smudge. 0 to disable. */
     public double maxSurfaceBrightnessRatio = 2.0;
+
+    // --- Speed rhythm checks ---
+
+    /** * Kinematic Speed Check: If the median jump of a track is smaller than this, it is dismissed
+     * as stationary noise that accidentally bypassed the star map.
+     */
+    public double rhythmStationaryThreshold = 0.5;
 
     /** * Kinematic Speed Check: Max allowed pixel deviation from the expected median speed to still
      * be considered part of a "steady rhythm".
@@ -262,15 +298,8 @@ public class DetectionConfig implements Cloneable {
      */
     public double rhythmMinConsistencyRatio = 0.70;
 
-    /** * Kinematic Speed Check: If the median jump of a track is smaller than this, it is dismissed
-     * as stationary noise that accidentally bypassed the star map.
-     */
-    public double rhythmStationaryThreshold = 0.5;
-
-
-
     // =================================================================
-    // 4. SESSION EVALUATOR PARAMETERS
+    // 5. SESSION REJECTION PARAMETERS
     // =================================================================
 
     /** * The statistical engine requires a minimum sample size to calculate standard deviations.
@@ -304,34 +333,34 @@ public class DetectionConfig implements Cloneable {
     public double zeroSigmaFallback = 0.001;
 
     // =================================================================
-    // 5. ANOMALY DETECTION PARAMETERS (Optical Flashes / Glints)
+    // 6. SINGLE-FRAME ANOMALY RESCUE PARAMETERS
     // =================================================================
 
     /** * Enable the rescue of single-frame, ultra-bright point sources that failed to form a multi-frame track. */
     public boolean enableAnomalyRescue = true;
 
+    /** * The minimum physical size a single-frame point must have to be rescued.
+     * Prevents single hot-pixels or cosmic rays from being flagged. */
+    public int anomalyMinPixels = 15;
+
     /** * The minimum Peak Signal-to-Noise ratio (Sigma) a single-frame point must have to be rescued.
      * e.g., 50.0 means the brightest pixel in the object is 50x brighter than the background noise. */
     public double anomalyMinPeakSigma = 8;
-
-    /** * The minimum integrated signal-to-noise ratio required to rescue a broader single-frame anomaly.
-     * This complements peak sigma so faint but larger flashes can still be kept.
-     */
-    public double anomalyMinIntegratedSigma = 12;
 
     /** * The minimum footprint size required for the integrated-sigma anomaly path.
      * Keeps small streak fragments from being rescued just because their total energy is high enough.
      */
     public int anomalyMinIntegratedPixels = 25;
 
+    /** * The minimum integrated signal-to-noise ratio required to rescue a broader single-frame anomaly.
+     * This complements peak sigma so faint but larger flashes can still be kept.
+     */
+    public double anomalyMinIntegratedSigma = 12;
+
     /** * Safety floor for the diffuse anomaly-rescue path. Even broad anomalies must still show
      * at least some local prominence to avoid rescuing low-contrast mush.
      */
     public double anomalyMinPeakSigmaFloor = 3;
-
-    /** * The minimum physical size a single-frame point must have to be rescued.
-     * Prevents single hot-pixels or cosmic rays from being flagged. */
-    public int anomalyMinPixels = 15;
 
 
     /**

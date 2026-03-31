@@ -9,7 +9,6 @@ import java.awt.image.BufferedImage;
 import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -20,6 +19,18 @@ import static org.junit.Assert.assertSame;
  * Candidates now need their median-stack overlap to stay inside a configured support band.
  */
 public class JTransientEngineSlowMoverTest {
+    private static final List<String> REAL_SLOW_MOVER_MASKS = List.of(
+            "real-slow-mover-01.png",
+            "real-slow-mover-02.png",
+            "real-slow-mover-03.png",
+            "real-slow-mover-04.png",
+            "real-slow-mover-05.png",
+            "real-slow-mover-06.png",
+            "real-slow-mover-07.png",
+            "real-slow-mover-08.png",
+            "real-slow-mover-09.png"
+    );
+
 
     /**
      * Verifies the slow-mover branch honors the configured overlap band and keeps only
@@ -352,26 +363,27 @@ public class JTransientEngineSlowMoverTest {
      */
     @Test
     public void evaluateSlowMoverSpecificShapeFilterAcceptsProvidedRealSlowMoverMasks() throws Exception {
-        Method method = JTransientEngine.class.getDeclaredMethod(
-                "evaluateSlowMoverSpecificShapeFilter",
-                SourceExtractor.DetectedObject.class
-        );
-        method.setAccessible(true);
+        Method method = slowMoverSpecificShapeFilterMethod();
 
-        for (String resourceName : Arrays.asList(
-                "ai-chat-attachment-8710367876546616463.png",
-                "ai-chat-attachment-15630020435602834813.png",
-                "ai-chat-attachment-17415788837001566039.png",
-                "ai-chat-attachment-6005561503223715668.png",
-                "ai-chat-attachment-14227915432735727801.png",
-                "ai-chat-attachment-7609679457048802107.png",
-                "ai-chat-attachment-7209687416030349058.png",
-                "ai-chat-attachment-14224585506225806192.png",
-                "ai-chat-attachment-18433158696961081303.png"
-        )) {
+        for (String resourceName : REAL_SLOW_MOVER_MASKS) {
             SourceExtractor.DetectedObject obj = loadObjectFromMaskResource(resourceName);
             Object result = method.invoke(null, obj);
             assertEquals(resourceName, "NONE", result.toString());
+        }
+    }
+
+    /**
+     * Verifies the targeted slow-mover-only shape filter also accepts the exact same real masks
+     * after they are scaled up to a larger pixel footprint.
+     */
+    @Test
+    public void evaluateSlowMoverSpecificShapeFilterAcceptsScaledRealSlowMoverMasks() throws Exception {
+        Method method = slowMoverSpecificShapeFilterMethod();
+
+        for (String resourceName : REAL_SLOW_MOVER_MASKS) {
+            SourceExtractor.DetectedObject scaledObj = scaleObject(loadObjectFromMaskResource(resourceName), 2);
+            Object result = method.invoke(null, scaledObj);
+            assertEquals(resourceName + " @2x", "NONE", result.toString());
         }
     }
 
@@ -409,6 +421,15 @@ public class JTransientEngineSlowMoverTest {
                 + telemetry.rejectedSlowMoverShapeGappedBins
                 + telemetry.rejectedSlowMoverShapeCurvedCenterline
                 + telemetry.rejectedSlowMoverShapeBulgedWidth;
+    }
+
+    private static Method slowMoverSpecificShapeFilterMethod() throws Exception {
+        Method method = JTransientEngine.class.getDeclaredMethod(
+                "evaluateSlowMoverSpecificShapeFilter",
+                SourceExtractor.DetectedObject.class
+        );
+        method.setAccessible(true);
+        return method;
     }
 
     private static SourceExtractor.DetectedObject loadObjectFromMaskResource(String resourceName) throws Exception {
@@ -451,6 +472,40 @@ public class JTransientEngineSlowMoverTest {
             obj.elongation = 4.5;
             return obj;
         }
+    }
+
+    private static SourceExtractor.DetectedObject scaleObject(SourceExtractor.DetectedObject source, int scaleFactor) {
+        if (scaleFactor <= 1) {
+            return source;
+        }
+
+        List<SourceExtractor.Pixel> scaledPixels = new ArrayList<>(source.rawPixels.size() * scaleFactor * scaleFactor);
+        double sumX = 0.0;
+        double sumY = 0.0;
+
+        for (SourceExtractor.Pixel pixel : source.rawPixels) {
+            for (int dy = 0; dy < scaleFactor; dy++) {
+                for (int dx = 0; dx < scaleFactor; dx++) {
+                    int scaledX = pixel.x * scaleFactor + dx;
+                    int scaledY = pixel.y * scaleFactor + dy;
+                    scaledPixels.add(new SourceExtractor.Pixel(scaledX, scaledY, pixel.value));
+                    sumX += scaledX;
+                    sumY += scaledY;
+                }
+            }
+        }
+
+        SourceExtractor.DetectedObject scaled = new SourceExtractor.DetectedObject(
+                sumX / scaledPixels.size(),
+                sumY / scaledPixels.size(),
+                source.totalFlux * scaleFactor * scaleFactor,
+                scaledPixels.size()
+        );
+        scaled.rawPixels = scaledPixels;
+        scaled.pixelArea = scaledPixels.size();
+        scaled.elongation = source.elongation;
+        scaled.angle = source.angle;
+        return scaled;
     }
 
     private static SourceExtractor.DetectedObject createLinearCandidate(
