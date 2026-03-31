@@ -156,6 +156,38 @@ public class TrackLinkerAnomalyRescueTest {
     }
 
     /**
+     * Suspected threshold streak grouping uses its own angle tolerance because weak integrated anomalies
+     * can have noisier moment-derived angles than the main tracker allows.
+     */
+    @Test
+    public void findMovingObjectsUsesDedicatedAngleToleranceForSuspectedThresholdStreaks() {
+        DetectionConfig config = new DetectionConfig();
+        config.angleToleranceDegrees = 2.0;
+        config.anomalySuspectedStreakAngleToleranceDegrees = 6.0;
+
+        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
+        frames.add(List.of(
+                createFrameAnomaly(10, 10, 30, 4.0, 14.0, (short) 120, 0, 4.2, Math.toRadians(4.0)),
+                createFrameAnomaly(22, 10, 30, 4.3, 15.0, (short) 120, 0, 4.1, Math.toRadians(4.0)),
+                createFrameAnomaly(34, 10, 30, 4.1, 13.8, (short) 120, 0, 4.0, Math.toRadians(4.0))
+        ));
+        frames.add(new ArrayList<>());
+        frames.add(new ArrayList<>());
+
+        TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
+                frames,
+                new ArrayList<>(),
+                config,
+                null,
+                64,
+                64
+        );
+
+        assertEquals(1, result.suspectedThresholdStreakTracks.size());
+        assertEquals(0, result.anomalies.size());
+    }
+
+    /**
      * Integrated anomalies that stay isolated should remain in the anomaly bucket.
      */
     @Test

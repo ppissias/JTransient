@@ -367,6 +367,11 @@ public class DetectionConfig implements Cloneable {
      */
     public double anomalySuspectedStreakMinElongation = 3.5;
 
+    /** * Dedicated angular tolerance for linking suspected threshold streaks from weak integrated anomalies.
+     * This is intentionally looser than the main tracker angle because faint blobs can have noisy moment angles.
+     */
+    public double anomalySuspectedStreakAngleToleranceDegrees = 6.0;
+
 
     /**
      * Returns a copy of this configuration.

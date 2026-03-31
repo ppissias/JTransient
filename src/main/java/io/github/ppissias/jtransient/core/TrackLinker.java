@@ -929,7 +929,7 @@ public class TrackLinker {
      */
     private static List<Track> groupSuspectedThresholdStreakTracks(List<AnomalyDetection> anomalies, DetectionConfig config) {
         List<Track> suspectedTracks = new ArrayList<>();
-        double angleToleranceRad = Math.toRadians(config.angleToleranceDegrees);
+        double angleToleranceRad = Math.toRadians(config.anomalySuspectedStreakAngleToleranceDegrees);
 
         int maxFrameIndex = -1;
         for (AnomalyDetection anomaly : anomalies) {

@@ -14,7 +14,7 @@ The implementation expects:
 - `sequenceIndex` to represent chronological order
 - timestamps in milliseconds when time-based linking should be enabled
 
-`runPipeline(...)` sorts frames by `sequenceIndex` before the main extraction work. If timestamps are missing, the engine still runs, but it falls back to geometric linking for point-like movers.
+`runPipeline(...)` sorts frames by `sequenceIndex` before the main extraction work. If timestamps are missing, the engine still runs, but point-like mover discovery must rely on geometric linking. When timestamps are available, the time-based linker runs first and the geometric linker becomes an optional secondary pass controlled by `enableGeometricTrackLinking`.
 
 ## High-Level Flow
 
@@ -28,9 +28,33 @@ The full run is organized into these major phases:
 6. optional slow-mover analysis
 7. streak linking and stationary-star veto filtering
 8. time-based point linking
-9. geometric fallback point linking
-10. anomaly rescue
+9. optional geometric point linking
+10. anomaly rescue and suspected-threshold streak grouping
 11. output assembly and maximum-stack export
+
+## Filtering Overview
+
+Filtering happens at several different levels of the pipeline, and not all of it is shape-based.
+
+- extraction-level object filtering:
+  - blobs below `minPixels` never reach shape analysis
+  - surviving blobs get per-object measurements such as `peakSigma`, `integratedSigma`, elongation, angle, and `fwhm`
+  - shape is first used here to classify an object as streak-like or point-like
+  - non-streaks are then filtered against physical edges and registration voids
+- frame-level filtering:
+  - `FrameQualityAnalyzer` computes shape-derived frame statistics such as median eccentricity and median `fwhm`
+  - `SessionEvaluator` uses those statistics to reject bad frames from the run
+- slow-mover candidate filtering:
+  - slow-mover candidates are filtered by elongation, multiple shape-veto functions, and median-stack overlap
+- streak filtering:
+  - fast streak discovery filters by angle consistency, directional consistency, `singleStreakMinPeakSigma`, and the binary-star-like streak-shape veto
+- point-track filtering:
+  - point detections are first filtered by the stationary-star veto mask
+  - both time-based and geometric point linking require morphology consistency
+  - time-based linking can additionally reject a pair through `strictExposureKinematics`
+- anomaly filtering:
+  - peak-sigma and integrated-sigma rescue filter by object area and significance
+  - suspected-threshold streak grouping is the anomaly-stage shape-aware pass, using elongation, angle consistency, and same-frame line consistency
 
 ## 1. Border Drift Diagnostics
 
@@ -110,9 +134,12 @@ The extractor computes:
 - intensity-weighted centroid
 - background-subtracted total flux
 - `peakSigma`
+- `integratedSigma`
 - elongation from second moments
 - dominant angle
 - approximate `fwhm`
+
+This is the first stage where object shape is measured. At this point, shape is primarily used to classify detections into streak-like versus point-like objects.
 
 An object is marked as a streak only when:
 
@@ -150,6 +177,8 @@ Important detail:
 
 - eccentricity uses all non-streak detections
 - FWHM uses only non-streak detections whose elongation is below `qualityMaxElongationForFwhm`
+
+These are frame-quality filters, not object-track filters. Shape is used here only to decide whether an entire frame is trustworthy enough to keep.
 
 If the analyzer cannot compute a meaningful median, it falls back to `errorFallbackValue`.
 
@@ -241,9 +270,12 @@ The engine then:
    - fail the elongation threshold
    - fail `SourceExtractor.isIrregularStreakShape(...)`
    - fail `SourceExtractor.isBinaryStarAnomaly(...)`
+   - optionally fail the slow-mover-specific shape filter when `enableSlowMoverSpecificShapeFiltering` is enabled
    - overlap the median-stack mask by more than `85%`
 
 The survivors are exported as `PipelineResult.slowMoverCandidates`, along with slow-mover telemetry.
+
+The slow-mover-specific shape filter is stricter than the generic streak-shape veto and can reject candidates for being too short, too sparse, internally gapped, too curved, or too bulged in width.
 
 ## 9. Streak Linking And Stationary-Star Veto Filtering
 
@@ -258,6 +290,8 @@ All detections are split into:
 - streak-like objects
 - point-like objects
 
+This split uses the streak classification assigned earlier during extraction from elongation and blob size. No new shape measurement is performed here.
+
 ### 9.2 Fast streak linking
 
 Streaks bypass the stationary-star veto and are linked first.
@@ -265,12 +299,17 @@ Streaks bypass the stationary-star veto and are linked first.
 For each unmatched streak:
 
 1. start a new streak track
-2. search later streaks for the closest valid continuation
+2. search later streaks for the closest valid continuation, including same-frame streak fragments
 3. require the streak angles to agree
 4. establish a forward direction from the first valid jump
 5. require later jumps to stay directionally consistent
 
-Single-frame streaks are only kept if `peakSigma >= singleStreakMinPeakSigma`.
+Single-frame streaks are only kept if:
+
+- `peakSigma >= singleStreakMinPeakSigma`
+- `SourceExtractor.isBinaryStarLikeStreakShape(...)` does not identify the footprint as a double-star impostor
+
+Rejected binary-star-like streaks increment `TrackerTelemetry.rejectedBinaryStarStreakShape`. They are removed from the fast-streak results and are also excluded from the preserved standalone streak export, so they do not reappear later as generic surviving transients.
 
 ### 9.3 Stationary-star veto mask
 
@@ -290,7 +329,7 @@ The surviving point detections are the inputs to point-track linking. The export
 
 ## 10. Time-Based Point Linking
 
-If timestamps are available, the tracker attempts time-aware linking before the geometric fallback.
+If timestamps are available, the tracker attempts time-aware linking before any optional geometric linking.
 
 For each proposed baseline pair `p1 -> p2`:
 
@@ -299,6 +338,11 @@ For each proposed baseline pair `p1 -> p2`:
 3. require morphology consistency from `isProfileConsistent(...)`
 4. optionally require `strictExposureKinematics`
 5. compute velocity `distance / deltaTime`
+
+Here, morphology consistency means:
+
+- similar `fwhm`, limited by `maxFwhmRatio`
+- similar surface brightness (`totalFlux / pixelArea`), limited by `maxSurfaceBrightnessRatio`
 
 For later points, the tracker looks for the best continuation that satisfies:
 
@@ -325,9 +369,16 @@ Candidate time-based tracks are ranked by:
 
 The tracker then accepts the highest-ranked non-conflicting candidates first.
 
-## 11. Geometric Fallback Point Linking
+## 11. Geometric Point Linking
 
-Unused point detections go through a time-agnostic geometric linker.
+Unused point detections can go through a time-agnostic geometric linker.
+
+This stage runs when either:
+
+- timestamps are missing, in which case geometric linking is forced on because there is no time-based point-linking path
+- timestamps are available and `enableGeometricTrackLinking` is `true`
+
+If timestamps are available and `enableGeometricTrackLinking` is `false`, this stage is skipped.
 
 The minimum track length is:
 
@@ -340,7 +391,11 @@ For a candidate baseline `p1 -> p2`:
 1. reject if the jump is below `maxStarJitter`
 2. reject if the jump is above `maxJumpPixels`
 3. reject if morphology consistency fails
-4. optionally reject if `strictExposureKinematics` fails
+
+As in the time-based linker, morphology consistency here compares:
+
+- `fwhm`
+- surface brightness (`totalFlux / pixelArea`)
 
 When searching later frames, candidate points must satisfy:
 
@@ -380,18 +435,54 @@ This allows skipped frames while still rejecting erratic or mostly stationary tr
 
 If `enableAnomalyRescue` is enabled, the tracker scans surviving point detections that were not consumed by any track.
 
-A single detection is rescued as an anomaly when:
+### 13.1 Peak-sigma rescue
+
+A single detection is rescued as a `PEAK_SIGMA` anomaly when:
 
 - `pixelArea >= anomalyMinPixels`
 - `peakSigma >= anomalyMinPeakSigma`
 
-The resulting one-point track is exported with `isAnomaly = true`.
+### 13.2 Integrated-sigma rescue
+
+A single detection is rescued as an `INTEGRATED_SIGMA` anomaly when:
+
+- it did not already qualify as `PEAK_SIGMA`
+- `pixelArea >= anomalyMinPixels`
+- `pixelArea >= anomalyMinIntegratedPixels`
+- `integratedSigma >= anomalyMinIntegratedSigma`
+- `peakSigma >= anomalyMinPeakSigmaFloor`
+
+These rescued anomalies are exported as standalone anomaly results through `TrackingResult.anomalies` and `PipelineResult.anomalies`, rather than as one-point tracks.
+
+The `PEAK_SIGMA` and `INTEGRATED_SIGMA` rescue checks are energy- and size-based. They do not apply a dedicated shape veto at this stage.
+
+### 13.3 Suspected-threshold streak grouping
+
+After anomaly rescue, the tracker runs a same-frame grouping pass over the rescued `INTEGRATED_SIGMA` anomalies.
+
+Only anomalies that satisfy:
+
+- `elongation > anomalySuspectedStreakMinElongation`
+- same-frame collinearity with other rescued integrated anomalies
+- angle agreement within `anomalySuspectedStreakAngleToleranceDegrees`
+
+are eligible to become `suspectedThresholdStreakTracks`.
+
+The grouping pass only links against other rescued integrated anomalies from the same frame. It does not search nearby orphan blobs. The final grouped line must still fit within `max(predictionTolerance, maxStarJitter)`.
+
+If an integrated anomaly is absorbed into a `suspectedThresholdStreakTrack`, it is removed from the standalone anomaly list. The final returned categories are therefore mutually exclusive:
+
+- confirmed tracks in `TrackingResult.tracks` and `PipelineResult.tracks`
+- standalone anomalies (`PEAK_SIGMA` or `INTEGRATED_SIGMA`) in `TrackingResult.anomalies` and `PipelineResult.anomalies`
+- `suspectedThresholdStreakTracks` in `TrackingResult.suspectedThresholdStreakTracks` and `PipelineResult.suspectedThresholdStreakTracks`
 
 ## 14. Output Assembly
 
 At the end of the run, the engine assembles:
 
 - confirmed tracks
+- standalone anomalies
+- suspected-threshold streak tracks
 - pipeline telemetry
 - tracker telemetry
 - median master stack
@@ -400,6 +491,12 @@ At the end of the run, the engine assembles:
 - merged per-frame transients
 - master veto mask
 - drift vectors
+
+The main UI-facing tracking outputs are therefore:
+
+- `PipelineResult.tracks`
+- `PipelineResult.anomalies`
+- `PipelineResult.suspectedThresholdStreakTracks`
 
 It also generates `masterMaximumStackData` with `MasterMapGenerator.createMaximumMasterStack(...)`. This maximum stack is exported even though the current implementation does not yet populate the reserved max-stack streak lists.
 
@@ -412,7 +509,8 @@ The full algorithm is intentionally layered:
 3. learn the stationary sky from the median master stack
 4. veto stationary objects
 5. try the strictest track linker first
-6. fall back to looser geometry when timestamps are missing or insufficient
-7. rescue only very strong one-frame events at the end
+6. optionally fall back to looser geometry when timestamps are available, and require it when timestamps are missing
+7. rescue strong one-frame events at the end as either peak-sigma or integrated-sigma anomalies
+8. regroup some faint integrated anomalies into same-frame suspected-threshold streak tracks
 
-That layering is what lets `runPipeline(...)` handle slow point-like movers, fast streaks, and one-frame flashes within the same overall engine.
+That layering is what lets `runPipeline(...)` handle slow point-like movers, fast streaks, faint same-frame streak fragments, and one-frame flashes within the same overall engine.
