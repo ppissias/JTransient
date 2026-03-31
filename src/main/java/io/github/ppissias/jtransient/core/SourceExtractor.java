@@ -513,6 +513,152 @@ public class SourceExtractor {
     }
 
     /**
+     * Rejects short dumbbell / peanut streak footprints that are more consistent with two nearby stars
+     * than with a continuously illuminated moving streak. This is shape-only and scale-aware.
+     *
+     * @param obj streak candidate to inspect
+     * @return {@code true} when the footprint looks like a close binary-star pair
+     */
+    public static boolean isBinaryStarLikeStreakShape(SourceExtractor.DetectedObject obj) {
+        if (obj.rawPixels == null || obj.rawPixels.size() < 10) return false;
+
+        double dx = Math.cos(obj.angle);
+        double dy = Math.sin(obj.angle);
+
+        double minPar = Double.MAX_VALUE;
+        double maxPar = -Double.MAX_VALUE;
+        double minPerp = Double.MAX_VALUE;
+        double maxPerp = -Double.MAX_VALUE;
+        for (SourceExtractor.Pixel p : obj.rawPixels) {
+            double vx = p.x - obj.x;
+            double vy = p.y - obj.y;
+            double par = vx * dx + vy * dy;
+            double perp = -vx * dy + vy * dx;
+            if (par < minPar) minPar = par;
+            if (par > maxPar) maxPar = par;
+            if (perp < minPerp) minPerp = perp;
+            if (perp > maxPerp) maxPerp = perp;
+        }
+
+        double length = maxPar - minPar + 1.0;
+        double width = maxPerp - minPerp + 1.0;
+        if (length < 6.0 || width < 2.0) return false;
+
+        double fillFactor = obj.pixelArea / Math.max(1.0, length * width);
+        if (fillFactor < 0.35) return false;
+
+        int bins = Math.max(6, Math.min(8, (int) Math.round(length)));
+        double binSpan = Math.max(1.0, length / bins);
+        int[] counts = new int[bins];
+        double[] binMinPerp = new double[bins];
+        double[] binMaxPerp = new double[bins];
+        for (int i = 0; i < bins; i++) {
+            binMinPerp[i] = Double.MAX_VALUE;
+            binMaxPerp[i] = -Double.MAX_VALUE;
+        }
+
+        for (SourceExtractor.Pixel p : obj.rawPixels) {
+            double vx = p.x - obj.x;
+            double vy = p.y - obj.y;
+            double par = vx * dx + vy * dy;
+            double perp = -vx * dy + vy * dx;
+
+            int bin = (int) ((par - minPar) / binSpan);
+            if (bin < 0) bin = 0;
+            if (bin >= bins) bin = bins - 1;
+
+            counts[bin]++;
+            if (perp < binMinPerp[bin]) binMinPerp[bin] = perp;
+            if (perp > binMaxPerp[bin]) binMaxPerp[bin] = perp;
+        }
+
+        int firstOccupied = -1;
+        int lastOccupied = -1;
+        for (int i = 0; i < bins; i++) {
+            if (counts[i] > 0) {
+                if (firstOccupied == -1) {
+                    firstOccupied = i;
+                }
+                lastOccupied = i;
+            }
+        }
+
+        if (firstOccupied == -1 || lastOccupied - firstOccupied < 4) {
+            return false;
+        }
+
+        int span = lastOccupied - firstOccupied + 1;
+        int middleStart = firstOccupied + (span / 3);
+        int middleEnd = lastOccupied - (span / 3);
+        int leftEnd = middleStart - 1;
+        int rightStart = middleEnd + 1;
+        if (leftEnd < firstOccupied || rightStart > lastOccupied) {
+            return false;
+        }
+
+        int leftPeakCount = 0;
+        int rightPeakCount = 0;
+        double leftPeakWidth = 0.0;
+        double rightPeakWidth = 0.0;
+        int middleMinCount = Integer.MAX_VALUE;
+        double middleMinWidth = Double.MAX_VALUE;
+
+        for (int i = firstOccupied; i <= leftEnd; i++) {
+            if (counts[i] > leftPeakCount) {
+                leftPeakCount = counts[i];
+            }
+            if (counts[i] > 0) {
+                double binWidth = binMaxPerp[i] - binMinPerp[i] + 1.0;
+                if (binWidth > leftPeakWidth) {
+                    leftPeakWidth = binWidth;
+                }
+            }
+        }
+
+        for (int i = rightStart; i <= lastOccupied; i++) {
+            if (counts[i] > rightPeakCount) {
+                rightPeakCount = counts[i];
+            }
+            if (counts[i] > 0) {
+                double binWidth = binMaxPerp[i] - binMinPerp[i] + 1.0;
+                if (binWidth > rightPeakWidth) {
+                    rightPeakWidth = binWidth;
+                }
+            }
+        }
+
+        for (int i = middleStart; i <= middleEnd; i++) {
+            middleMinCount = Math.min(middleMinCount, counts[i]);
+            if (counts[i] > 0) {
+                middleMinWidth = Math.min(middleMinWidth, binMaxPerp[i] - binMinPerp[i] + 1.0);
+            } else {
+                middleMinWidth = 0.0;
+            }
+        }
+
+        if (leftPeakCount == 0 || rightPeakCount == 0) {
+            return false;
+        }
+
+        int minPeakCount = Math.min(leftPeakCount, rightPeakCount);
+        int maxPeakCount = Math.max(leftPeakCount, rightPeakCount);
+        if (maxPeakCount > Math.max(4, minPeakCount * 2.8)) {
+            return false;
+        }
+
+        double minPeakWidth = Math.min(leftPeakWidth, rightPeakWidth);
+        double maxPeakWidth = Math.max(leftPeakWidth, rightPeakWidth);
+        if (maxPeakWidth > Math.max(4.0, minPeakWidth * 2.8)) {
+            return false;
+        }
+
+        boolean middleCountSuppressed = middleMinCount == 0 || middleMinCount < (minPeakCount * 0.55);
+        boolean middleWidthSuppressed = middleMinWidth == 0.0 || middleMinWidth < (minPeakWidth * 0.72);
+
+        return middleCountSuppressed && middleWidthSuppressed;
+    }
+
+    /**
      * Analyzes the morphological boundaries of a streak to ensure it forms a consistent,
      * straight capsule shape. Throws out "L", "V", and highly asymmetric blob shapes.
      *

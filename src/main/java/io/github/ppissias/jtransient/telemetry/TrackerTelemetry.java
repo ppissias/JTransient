@@ -19,6 +19,7 @@ public class TrackerTelemetry {
     public long countBaselineJitter, countBaselineJump, countBaselineSize;
     public long countP3NotLine, countP3WrongDirection, countP3Jump, countP3Size;
     public long countTrackTooShort, countTrackErraticRhythm, countTrackDuplicate;
+    public int rejectedBinaryStarStreakShape;
     public int streakTracksFound, pointTracksFound;
     public int anomaliesFound, integratedSigmaAnomaliesFound, suspectedThresholdStreakTracksFound;
 

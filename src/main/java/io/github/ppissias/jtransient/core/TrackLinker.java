@@ -197,6 +197,7 @@ public class TrackLinker {
         // =================================================================
         if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 2] Linking fast-moving streaks... Candidates: " + validMovingStreaks.size());
         boolean[] streakMatched = new boolean[validMovingStreaks.size()];
+        Set<SourceExtractor.DetectedObject> rejectedBinaryStarStreaks = new HashSet<>();
         int streakTracksFound = 0;
 
         for (int i = 0; i < validMovingStreaks.size(); i++) {
@@ -273,7 +274,10 @@ public class TrackLinker {
             }
 
             if (continuousStreakTrack.points.size() == 1) {
-                if (baseStreak.peakSigma >= config.singleStreakMinPeakSigma) {
+                if (SourceExtractor.isBinaryStarLikeStreakShape(baseStreak)) {
+                    rejectedBinaryStarStreaks.add(baseStreak);
+                    telemetry.rejectedBinaryStarStreakShape++;
+                } else if (baseStreak.peakSigma >= config.singleStreakMinPeakSigma) {
                     confirmedStreakTracks.add(continuousStreakTrack);
                     streakTracksFound++;
                 }
@@ -369,7 +373,10 @@ public class TrackLinker {
         for (int i = 0; i < numFrames; i++) {
             List<SourceExtractor.DetectedObject> mergedFrame = new ArrayList<>(transients.get(i));
             for (SourceExtractor.DetectedObject obj : allFrames.get(i)) {
-                if (obj.isStreak && validMovingStreaks.contains(obj) && !trackedStreakPoints.contains(obj)) {
+                if (obj.isStreak
+                        && validMovingStreaks.contains(obj)
+                        && !trackedStreakPoints.contains(obj)
+                        && !rejectedBinaryStarStreaks.contains(obj)) {
                     mergedFrame.add(obj);
                 }
             }
@@ -872,6 +879,7 @@ public class TrackLinker {
 
             System.out.println("\n4. Valid Tracks Confirmed:");
             System.out.println("   - Fast Streak Tracks (Phase 2)  : " + telemetry.streakTracksFound);
+            System.out.println("   - Binary-Star Streak Rejects    : " + telemetry.rejectedBinaryStarStreakShape);
             System.out.println("   - Slow Point Tracks (Phase 4)   : " + telemetry.pointTracksFound);
             System.out.println("   - TOTAL MOVING TARGETS FOUND    : " + (telemetry.streakTracksFound + telemetry.pointTracksFound));
             System.out.println("   - Single-Frame Anomalies        : " + telemetry.anomaliesFound);
