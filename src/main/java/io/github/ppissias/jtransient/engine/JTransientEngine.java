@@ -632,12 +632,7 @@ public class JTransientEngine {
         // =================================================================
         // PHASE 0.5 (Slow Mover Detection
         // =================================================================
-        /*
-         * Also, I still think the strongest variant is likely:
-         * Qm - Sm and then
-         * detect residual elongated/asymmetric structures
-         * rather than only comparing overlap with the median-stack veto map
-         */
+
         short[][] slowMoverStackData = null;
         boolean[][] slowMoverMedianArtifactMask = null;
         List<SourceExtractor.DetectedObject> slowMoverCandidates = new ArrayList<>();

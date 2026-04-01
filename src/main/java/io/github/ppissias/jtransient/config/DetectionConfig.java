@@ -89,6 +89,11 @@ public class DetectionConfig implements Cloneable {
      */
     public double singleStreakMinPeakSigma = 7.0;
 
+    /** * Enable the Binary-Star shape veto for streaks.
+     * When disabled, the engine will not reject short, wide single-frame streaks that look like merged double stars.
+     */
+    public boolean enableBinaryStarLikeStreakShapeVeto = true;
+
     // =================================================================
     // 2. MASTER-STACK AND SLOW-MOVER PARAMETERS
     // =================================================================
@@ -224,8 +229,6 @@ public class DetectionConfig implements Cloneable {
      * that happen to graze the protective halo of a background star.
      */
     public double maxMaskOverlapFraction = 0.75;
-
-    // --- Track construction and confirmation ---
 
     /** * The cosmic speed limit. When looking for the next point in a track, any transient located
      * further than this distance is ignored.

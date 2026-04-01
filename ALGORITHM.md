@@ -58,17 +58,17 @@ Filtering happens at several different levels of the pipeline, and not all of it
 
 ## 1. Border Drift Diagnostics
 
-Before extracting sources, `JTransientEngine` scans the sequence for black border padding introduced by dithering plus external registration.
+Before extracting sources, `JTransientEngine` scans the sequence for black border padding introduced by dithering plus external registration. This is done by `analyzeDitherAndDrift`, which calls `measureFrameDrift` for each frame.
 
-For each frame:
+For each frame, `measureFrameDrift` determines the valid image footprint by finding the bounding box of real image data:
 
-1. it samples an `11 x 11` patch around the image center
-2. it uses the patch median as a local background estimate
-3. it computes `voidThreshold = centerMedian * voidThresholdFraction`
-4. it scans inward from the middle of the left, right, top, and bottom edges until the scan rises above that threshold
-5. it derives a translation vector:
-   - `dx = leftPad - rightPad`
-   - `dy = topPad - bottomPad`
+1. It considers a pixel to be valid if its value is above a low threshold (`DRIFT_VALID_PIXEL_THRESHOLD`).
+2. It finds the first and last rows containing a significant number of valid pixels (at least 5% of the frame width). This determines the top (`minY`) and bottom (`maxY`) of the valid area.
+3. It finds the first and last columns containing a significant number of valid pixels (at least 5% of the frame height). This determines the left (`minX`) and right (`maxX`) of the valid area.
+4. It calculates the padding on each side from this bounding box (e.g., `leftPadding = minX`).
+5. It derives a translation vector:
+   - `dx = leftPadding - rightPadding`
+   - `dy = topPadding - bottomPad`
 
 The vectors are exported as `PipelineResult.driftPoints`.
 
@@ -271,7 +271,7 @@ The engine then:
    - fail `SourceExtractor.isIrregularStreakShape(...)`
    - fail `SourceExtractor.isBinaryStarAnomaly(...)`
    - optionally fail the slow-mover-specific shape filter when `enableSlowMoverSpecificShapeFiltering` is enabled
-   - overlap the median-stack mask by more than `85%`
+   - overlap the median-stack mask by more than the configured `slowMoverMedianSupportMaxOverlapFraction`
 
 The survivors are exported as `PipelineResult.slowMoverCandidates`, along with slow-mover telemetry.
 

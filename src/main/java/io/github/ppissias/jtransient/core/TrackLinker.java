@@ -177,25 +177,106 @@ public class TrackLinker {
         // =================================================================
         // PHASE 1: Separate Streaks
         // =================================================================
-        List<SourceExtractor.DetectedObject> validMovingStreaks = new ArrayList<>();
+        List<SourceExtractor.DetectedObject> allStreaks = new ArrayList<>();
         List<List<SourceExtractor.DetectedObject>> pointSourcesOnly = new ArrayList<>();
 
         for (int i = 0; i < allFrames.size(); i++) {
             pointSourcesOnly.add(new ArrayList<>());
             for (SourceExtractor.DetectedObject obj : allFrames.get(i)) {
-                if (obj.isStreak) validMovingStreaks.add(obj);
+                if (obj.isStreak) allStreaks.add(obj);
                 else pointSourcesOnly.get(i).add(obj);
             }
         }
 
         if (listener != null) {
-            listener.onProgressUpdate(15, "Linking fast-moving streaks...");
+            listener.onProgressUpdate(10, "Building Veto Mask...");
         }
 
         // =================================================================
-        // PHASE 2: LINK FAST-MOVING STREAKS
+        // PHASE 2: BINARY MASK MASTER STAR MAP VETO
         // =================================================================
-        if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 2] Linking fast-moving streaks... Candidates: " + validMovingStreaks.size());
+        if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 2] Building Binary Footprint Mask from Master Map...");
+
+        boolean[][] masterMask = new boolean[sensorHeight][sensorWidth];
+        int dilationRadius = (int) Math.max(1, Math.round(config.maxStarJitter / 2.0));
+
+        for (SourceExtractor.DetectedObject mStar : masterStars) {
+            for (SourceExtractor.Pixel p : mStar.rawPixels) {
+                for (int dx = -dilationRadius; dx <= dilationRadius; dx++) {
+                    for (int dy = -dilationRadius; dy <= dilationRadius; dy++) {
+                        if (dx * dx + dy * dy <= dilationRadius * dilationRadius) {
+                            int mx = p.x + dx;
+                            int my = p.y + dy;
+                            if (mx >= 0 && mx < sensorWidth && my >= 0 && my < sensorHeight) {
+                                masterMask[my][mx] = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // --- PHASE 2A: Veto Point Sources ---
+        List<List<SourceExtractor.DetectedObject>> transients = new ArrayList<>();
+        int totalTransientsFound = 0;
+
+        for (int i = 0; i < numFrames; i++) {
+            if (listener != null) {
+                int progress = 15 + (int) (((double) i / numFrames) * 10.0);
+                listener.onProgressUpdate(progress, "Vetoing stationary sources: Frame " + (i + 1) + " of " + numFrames);
+            }
+
+            List<SourceExtractor.DetectedObject> currentFrame = pointSourcesOnly.get(i);
+            List<SourceExtractor.DetectedObject> frameTransients = new ArrayList<>();
+            int purgedCount = 0;
+
+            for (SourceExtractor.DetectedObject candidateObj : currentFrame) {
+                double overlapFraction = computeMaskOverlapFraction(candidateObj, masterMask);
+                if (overlapFraction > config.maxMaskOverlapFraction) {
+                    purgedCount++;
+                } else {
+                    frameTransients.add(candidateObj);
+                }
+            }
+
+            transients.add(frameTransients);
+            totalTransientsFound += frameTransients.size();
+            telemetry.totalStationaryStarsPurged += purgedCount;
+
+            TrackerTelemetry.FrameStarMapStat stat = new TrackerTelemetry.FrameStarMapStat();
+            stat.frameIndex = i;
+            stat.initialPointSources = currentFrame.size();
+            stat.survivingTransients = frameTransients.size();
+            stat.purgedStars = purgedCount;
+            telemetry.frameStarMapStats.add(stat);
+        }
+
+        // --- PHASE 2B: Veto Streaks ---
+        List<SourceExtractor.DetectedObject> validMovingStreaks = new ArrayList<>();
+        int purgedStreakCount = 0;
+        for (SourceExtractor.DetectedObject streak : allStreaks) {
+            double overlapFraction = computeMaskOverlapFraction(streak, masterMask);
+            if (overlapFraction > config.maxMaskOverlapFraction) {
+                purgedStreakCount++;
+            } else {
+                validMovingStreaks.add(streak);
+            }
+        }
+        telemetry.totalStationaryStreaksPurged = purgedStreakCount;
+
+        if (JTransientEngine.DEBUG) {
+            System.out.println("DEBUG: [PHASE 2] Completed. Total pure point transients: " + totalTransientsFound);
+            System.out.println("DEBUG: [PHASE 2] Purged " + purgedStreakCount + " stationary streaks. " + validMovingStreaks.size() + " remain.");
+        }
+
+        if (listener != null) {
+            listener.onProgressUpdate(25, "Linking fast-moving streaks...");
+        }
+
+        // =================================================================
+        // PHASE 3: LINK FAST-MOVING STREAKS
+        // =================================================================
+        if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3] Linking fast-moving streaks... Candidates: " + validMovingStreaks.size());
         boolean[] streakMatched = new boolean[validMovingStreaks.size()];
         Set<SourceExtractor.DetectedObject> rejectedBinaryStarStreaks = new HashSet<>();
         int streakTracksFound = 0;
@@ -274,7 +355,7 @@ public class TrackLinker {
             }
 
             if (continuousStreakTrack.points.size() == 1) {
-                if (SourceExtractor.isBinaryStarLikeStreakShape(baseStreak)) {
+                if (config.enableBinaryStarLikeStreakShapeVeto && SourceExtractor.isBinaryStarLikeStreakShape(baseStreak)) {
                     rejectedBinaryStarStreaks.add(baseStreak);
                     telemetry.rejectedBinaryStarStreakShape++;
                 } else if (baseStreak.peakSigma >= config.singleStreakMinPeakSigma) {
@@ -286,82 +367,7 @@ public class TrackLinker {
                 streakTracksFound++;
             }
         }
-        if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 2] Completed. Found " + streakTracksFound + " streak track(s).");
-
-        if (listener != null) {
-            listener.onProgressUpdate(25, "Building Binary Veto Mask...");
-        }
-
-        // =================================================================
-        // PHASE 3: BINARY MASK MASTER STAR MAP VETO
-        // =================================================================
-        if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3] Building Binary Footprint Mask from Master Map...");
-        int totalTransientsFound = 0;
-
-        boolean[][] masterMask = new boolean[sensorHeight][sensorWidth];
-        // The Master Map represents the median (center) of the atmospheric wobble cloud.
-        // Therefore, we only dilate by half the frame-to-frame maximum jitter to safely cover the seeing disk!
-        int dilationRadius = (int) Math.max(1, Math.round(config.maxStarJitter / 2.0));
-
-        for (SourceExtractor.DetectedObject mStar : masterStars) {
-            for (SourceExtractor.Pixel p : mStar.rawPixels) {
-                for (int dx = -dilationRadius; dx <= dilationRadius; dx++) {
-                    for (int dy = -dilationRadius; dy <= dilationRadius; dy++) {
-                        if (dx * dx + dy * dy <= dilationRadius * dilationRadius) {
-                            int mx = p.x + dx;
-                            int my = p.y + dy;
-                            if (mx >= 0 && mx < sensorWidth && my >= 0 && my < sensorHeight) {
-                                masterMask[my][mx] = true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        List<List<SourceExtractor.DetectedObject>> transients = new ArrayList<>();
-
-        for (int i = 0; i < numFrames; i++) {
-            if (listener != null) {
-                int progress = 25 + (int) (((double) i / numFrames) * 25.0);
-                listener.onProgressUpdate(progress, "Applying Veto Mask: Frame " + (i + 1) + " of " + numFrames);
-            }
-
-            List<SourceExtractor.DetectedObject> currentFrame = pointSourcesOnly.get(i);
-            List<SourceExtractor.DetectedObject> frameTransients = new ArrayList<>();
-            int purgedCount = 0;
-
-            for (SourceExtractor.DetectedObject candidateObj : currentFrame) {
-                boolean isPurged = false;
-                int overlapCount = 0;
-                for (SourceExtractor.Pixel p : candidateObj.rawPixels) {
-                    if (p.x >= 0 && p.x < sensorWidth && p.y >= 0 && p.y < sensorHeight && masterMask[p.y][p.x]) {
-                        overlapCount++;
-                    }
-                }
-                double overlapFraction = (double) overlapCount / candidateObj.rawPixels.size();
-                if (overlapFraction > config.maxMaskOverlapFraction) isPurged = true;
-
-                if (isPurged) {
-                    purgedCount++;
-                } else {
-                    frameTransients.add(candidateObj);
-                }
-            }
-
-            transients.add(frameTransients);
-            totalTransientsFound += frameTransients.size();
-            telemetry.totalStationaryStarsPurged += purgedCount;
-
-            TrackerTelemetry.FrameStarMapStat stat = new TrackerTelemetry.FrameStarMapStat();
-            stat.frameIndex = i;
-            stat.initialPointSources = currentFrame.size();
-            stat.survivingTransients = frameTransients.size();
-            stat.purgedStars = purgedCount;
-            telemetry.frameStarMapStats.add(stat);
-        }
-
-        if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3] Completed. Total pure transients across sequence: " + totalTransientsFound);
+        if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3] Completed. Found " + streakTracksFound + " streak track(s).");
 
         Set<SourceExtractor.DetectedObject> trackedStreakPoints = new HashSet<>();
         for (Track streakTrack : confirmedStreakTracks) {
@@ -1096,6 +1102,25 @@ public class TrackLinker {
     // =================================================================
     // HELPER METHODS
     // =================================================================
+
+    /**
+     * Measures what fraction of an object's footprint overlaps a precomputed boolean mask.
+     */
+    private static double computeMaskOverlapFraction(SourceExtractor.DetectedObject obj, boolean[][] mask) {
+        if (obj.rawPixels == null || obj.rawPixels.isEmpty()) {
+            return 0.0;
+        }
+
+        int overlapCount = 0;
+        int sensorHeight = mask.length;
+        int sensorWidth = sensorHeight > 0 ? mask[0].length : 0;
+        for (SourceExtractor.Pixel p : obj.rawPixels) {
+            if (p.x >= 0 && p.x < sensorWidth && p.y >= 0 && p.y < sensorHeight && mask[p.y][p.x]) {
+                overlapCount++;
+            }
+        }
+        return (double) overlapCount / obj.rawPixels.size();
+    }
 
     /**
      * Scores time-based track candidates so that longer, straighter, and more uniformly paced tracks rank first.

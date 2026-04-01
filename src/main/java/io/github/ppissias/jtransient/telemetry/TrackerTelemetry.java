@@ -26,6 +26,7 @@ public class TrackerTelemetry {
     // --- Phase 3 Star Map Stats ---
     public List<FrameStarMapStat> frameStarMapStats = new ArrayList<>();
     public int totalStationaryStarsPurged = 0;
+    public int totalStationaryStreaksPurged = 0;
 
     /**
      * Per-frame summary of the stationary-star veto pass.
