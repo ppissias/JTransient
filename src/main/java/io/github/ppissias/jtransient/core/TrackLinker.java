@@ -14,7 +14,6 @@ import io.github.ppissias.jtransient.engine.JTransientEngine;
 import io.github.ppissias.jtransient.engine.TransientEngineProgressListener;
 import io.github.ppissias.jtransient.telemetry.TrackerTelemetry;
 
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -41,8 +40,8 @@ public class TrackLinker {
         public List<SourceExtractor.DetectedObject> points = new ArrayList<>();
         /** Whether the track is composed of streak detections. */
         public boolean isStreakTrack = false;
-        /** Whether the track groups same-frame integrated anomalies into a suspected faint streak. */
-        public boolean isSuspectedThresholdStreakTrack = false;
+        /** Whether the track groups same-frame rescued anomalies into a suspected faint streak. */
+        public boolean isSuspectedStreakTrack = false;
         /** Whether the track was accepted by the time-aware linker. */
         public boolean isTimeBasedTrack = false;
 
@@ -91,44 +90,40 @@ public class TrackLinker {
         public TrackerTelemetry telemetry;
         /** Number of streak tracks accepted during the fast-streak phase. */
         public int streakTracksFound;
-        /** Final export list that merges point transients and surviving streaks per frame. */
-        public List<List<SourceExtractor.DetectedObject>> mergedTransients;
+        /** Final export list that merges point transients and preserved standalone streaks per frame. */
+        public List<List<SourceExtractor.DetectedObject>> remainingTransients;
         /** Pixel-accurate stationary-star veto mask built from the master stack. */
-        public boolean[][] masterMask;
+        public boolean[][] masterVetoMask;
     }
 
     /**
      * Output of the complete tracking stage.
      */
     public static class TrackingResult {
-        /** All confirmed moving-object tracks. */
+        /** All returned track-like detections, including suspected same-frame streak groupings. */
         public List<Track> tracks;
         /** Rescued single-frame anomalies that did not form tracks. */
         public List<AnomalyDetection> anomalies;
-        /** Same-frame groupings of integrated anomalies that likely belong to one faint streak. */
-        public List<Track> suspectedThresholdStreakTracks;
         /** Tracker diagnostics covering all stages. */
         public TrackerTelemetry telemetry;
-        /** Per-frame transients that survived filtering. */
-        public List<List<SourceExtractor.DetectedObject>> allTransients;
+        /** Per-frame transient detections still remaining after accepted tracks are removed. */
+        public List<List<SourceExtractor.DetectedObject>> allRemainingTransients;
         /** Pixel veto mask generated from the master star map. */
-        public boolean[][] masterMask;
+        public boolean[][] masterVetoMask;
 
         /**
          * Creates a tracking result bundle.
          */
         public TrackingResult(List<Track> tracks,
                               List<AnomalyDetection> anomalies,
-                              List<Track> suspectedThresholdStreakTracks,
                               TrackerTelemetry telemetry,
-                              List<List<SourceExtractor.DetectedObject>> allTransients,
-                              boolean[][] masterMask) {
+                              List<List<SourceExtractor.DetectedObject>> allRemainingTransients,
+                              boolean[][] masterVetoMask) {
             this.tracks = tracks;
             this.anomalies = anomalies;
-            this.suspectedThresholdStreakTracks = suspectedThresholdStreakTracks;
             this.telemetry = telemetry;
-            this.allTransients = allTransients;
-            this.masterMask = masterMask;
+            this.allRemainingTransients = allRemainingTransients;
+            this.masterVetoMask = masterVetoMask;
         }
     }
 
@@ -197,7 +192,7 @@ public class TrackLinker {
         // =================================================================
         if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 2] Building Binary Footprint Mask from Master Map...");
 
-        boolean[][] masterMask = new boolean[sensorHeight][sensorWidth];
+        boolean[][] masterVetoMask = new boolean[sensorHeight][sensorWidth];
         int dilationRadius = (int) Math.max(1, Math.round(config.maxStarJitter / 2.0));
 
         for (SourceExtractor.DetectedObject mStar : masterStars) {
@@ -208,7 +203,7 @@ public class TrackLinker {
                             int mx = p.x + dx;
                             int my = p.y + dy;
                             if (mx >= 0 && mx < sensorWidth && my >= 0 && my < sensorHeight) {
-                                masterMask[my][mx] = true;
+                                masterVetoMask[my][mx] = true;
                             }
                         }
                     }
@@ -231,7 +226,7 @@ public class TrackLinker {
             int purgedCount = 0;
 
             for (SourceExtractor.DetectedObject candidateObj : currentFrame) {
-                double overlapFraction = computeMaskOverlapFraction(candidateObj, masterMask);
+                double overlapFraction = computeMaskOverlapFraction(candidateObj, masterVetoMask);
                 if (overlapFraction > config.maxMaskOverlapFraction) {
                     purgedCount++;
                 } else {
@@ -255,7 +250,7 @@ public class TrackLinker {
         List<SourceExtractor.DetectedObject> validMovingStreaks = new ArrayList<>();
         int purgedStreakCount = 0;
         for (SourceExtractor.DetectedObject streak : allStreaks) {
-            double overlapFraction = computeMaskOverlapFraction(streak, masterMask);
+            double overlapFraction = computeMaskOverlapFraction(streak, masterVetoMask);
             if (overlapFraction > config.maxMaskOverlapFraction) {
                 purgedStreakCount++;
             } else {
@@ -278,7 +273,7 @@ public class TrackLinker {
         // =================================================================
         if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3] Linking fast-moving streaks... Candidates: " + validMovingStreaks.size());
         boolean[] streakMatched = new boolean[validMovingStreaks.size()];
-        Set<SourceExtractor.DetectedObject> rejectedBinaryStarStreaks = new HashSet<>();
+        List<SourceExtractor.DetectedObject> unmatchedSingleStreaks = new ArrayList<>();
         int streakTracksFound = 0;
 
         for (int i = 0; i < validMovingStreaks.size(); i++) {
@@ -354,39 +349,49 @@ public class TrackLinker {
                 }
             }
 
-            if (continuousStreakTrack.points.size() == 1) {
-                if (config.enableBinaryStarLikeStreakShapeVeto && SourceExtractor.isBinaryStarLikeStreakShape(baseStreak)) {
-                    rejectedBinaryStarStreaks.add(baseStreak);
-                    telemetry.rejectedBinaryStarStreakShape++;
-                } else if (baseStreak.peakSigma >= config.singleStreakMinPeakSigma) {
-                    confirmedStreakTracks.add(continuousStreakTrack);
-                    streakTracksFound++;
-                }
-            } else {
+            if (continuousStreakTrack.points.size() > 1) {
                 confirmedStreakTracks.add(continuousStreakTrack);
                 streakTracksFound++;
+            } else {
+                unmatchedSingleStreaks.add(baseStreak);
+            }
+        }
+
+        List<SourceExtractor.DetectedObject> preservedStandaloneStreaks = new ArrayList<>();
+        for (SourceExtractor.DetectedObject singleStreak : unmatchedSingleStreaks) {
+            boolean rejectedByBinaryStarVeto = config.enableBinaryStarLikeStreakShapeVeto
+                    && SourceExtractor.isBinaryStarLikeStreakShape(singleStreak);
+
+            if (rejectedByBinaryStarVeto) {
+                telemetry.rejectedBinaryStarStreakShape++;
+            }
+
+            if (!rejectedByBinaryStarVeto && singleStreak.peakSigma >= config.singleStreakMinPeakSigma) {
+                Track singleStreakTrack = new Track();
+                singleStreakTrack.isStreakTrack = true;
+                singleStreakTrack.addPoint(singleStreak);
+                confirmedStreakTracks.add(singleStreakTrack);
+                streakTracksFound++;
+            } else {
+                preservedStandaloneStreaks.add(singleStreak);
             }
         }
         if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3] Completed. Found " + streakTracksFound + " streak track(s).");
 
-        Set<SourceExtractor.DetectedObject> trackedStreakPoints = new HashSet<>();
-        for (Track streakTrack : confirmedStreakTracks) {
-            trackedStreakPoints.addAll(streakTrack.points);
+        List<List<SourceExtractor.DetectedObject>> preservedStandaloneStreaksByFrame = new ArrayList<>();
+        for (int i = 0; i < numFrames; i++) {
+            preservedStandaloneStreaksByFrame.add(new ArrayList<>());
+        }
+        for (SourceExtractor.DetectedObject streak : preservedStandaloneStreaks) {
+            preservedStandaloneStreaksByFrame.get(streak.sourceFrameIndex).add(streak);
         }
 
-        // Merge point transients and only standalone streaks that were not already promoted to streak tracks.
-        List<List<SourceExtractor.DetectedObject>> mergedTransients = new ArrayList<>();
+        // Merge point transients with only the leftover streaks that were not promoted to tracks.
+        List<List<SourceExtractor.DetectedObject>> remainingTransients = new ArrayList<>();
         for (int i = 0; i < numFrames; i++) {
             List<SourceExtractor.DetectedObject> mergedFrame = new ArrayList<>(transients.get(i));
-            for (SourceExtractor.DetectedObject obj : allFrames.get(i)) {
-                if (obj.isStreak
-                        && validMovingStreaks.contains(obj)
-                        && !trackedStreakPoints.contains(obj)
-                        && !rejectedBinaryStarStreaks.contains(obj)) {
-                    mergedFrame.add(obj);
-                }
-            }
-            mergedTransients.add(mergedFrame);
+            mergedFrame.addAll(preservedStandaloneStreaksByFrame.get(i));
+            remainingTransients.add(mergedFrame);
         }
 
         TransientsFilterResult result = new TransientsFilterResult();
@@ -395,8 +400,8 @@ public class TrackLinker {
         result.streakTracks = confirmedStreakTracks;
         result.telemetry = telemetry;
         result.streakTracksFound = streakTracksFound;
-        result.mergedTransients = mergedTransients;
-        result.masterMask = masterMask;
+        result.remainingTransients = remainingTransients;
+        result.masterVetoMask = masterVetoMask;
 
         return result;
     }
@@ -429,7 +434,7 @@ public class TrackLinker {
 
         if (numFrames < 3) {
             if (JTransientEngine.DEBUG) System.out.println("DEBUG: [ABORT] Less than 3 frames provided. Cannot form point tracks.");
-            return new TrackingResult(new ArrayList<>(), new ArrayList<>(), new ArrayList<>(), new TrackerTelemetry(), new ArrayList<>(), null);
+            return new TrackingResult(new ArrayList<>(), new ArrayList<>(), new TrackerTelemetry(), new ArrayList<>(), null);
         }
 
         TransientsFilterResult filterResult = filterTransients(allFrames, masterStars, config, listener, sensorWidth, sensorHeight);
@@ -465,6 +470,30 @@ public class TrackLinker {
             }
         }
 
+        if (JTransientEngine.DEBUG) {
+            System.out.println("DEBUG: [PHASE 3.5] Timestamp probe per frame:");
+            for (int i = 0; i < allFrames.size(); i++) {
+                List<SourceExtractor.DetectedObject> frame = allFrames.get(i);
+                if (frame.isEmpty()) {
+                    System.out.printf("   Frame %d -> empty%n", i);
+                } else {
+                    SourceExtractor.DetectedObject sample = frame.get(0);
+                    System.out.printf(
+                            "   Frame %d -> objects=%d sampleTimestamp=%d sampleExposure=%d%n",
+                            i,
+                            frame.size(),
+                            sample.timestamp,
+                            sample.exposureDuration
+                    );
+                }
+            }
+            System.out.printf(
+                    "DEBUG: [PHASE 3.5] hasTimestamps=%s enableGeometricTrackLinking=%s%n",
+                    hasTimestamps,
+                    config.enableGeometricTrackLinking
+            );
+        }
+
         if (hasTimestamps) {
             if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3.5] Timestamps detected. Running Time-Based Velocity Linking...");
             if (listener != null) listener.onProgressUpdate(50, "Analyzing precise velocity kinematics...");
@@ -496,13 +525,22 @@ public class TrackLinker {
                             if (usedPoints.contains(p2)) continue;
 
                             double dt12 = p2.timestamp - p1.timestamp;
-                            if (dt12 <= 0) continue; // Prevent div by zero
+                            if (dt12 <= 0) {
+                                telemetry.countBaselineNonPositiveDelta++;
+                                continue;
+                            }
 
                             double dist12 = distance(p1.x, p1.y, p2.x, p2.y);
-                            if (dist12 < config.maxStarJitter) continue;
+                            if (dist12 < config.maxStarJitter) {
+                                telemetry.countBaselineJitter++;
+                                continue;
+                            }
 
                             // Morphological profile check (maxJumpPixels explicitly bypassed for extreme speeds)
-                            if (!isProfileConsistent(p1, p2, config)) continue;
+                            if (!isProfileConsistent(p1, p2, config)) {
+                                telemetry.countBaselineSize++;
+                                continue;
+                            }
 
                             // --- STRICT EXPOSURE KINEMATICS ---
                             if (config.strictExposureKinematics && p1.timestamp != -1 && p2.timestamp != -1 && p1.exposureDuration > 0) {
@@ -512,6 +550,7 @@ public class TrackLinker {
                                 double maxAllowedJump = (maxVelocity * dt12) * 1.5 + config.maxStarJitter; // 50% safety buffer
 
                                 if (dist12 > maxAllowedJump) {
+                                    telemetry.countBaselineJump++;
                                     continue;
                                 }
                             }
@@ -534,7 +573,10 @@ public class TrackLinker {
                                     if (usedPoints.contains(p3)) continue;
 
                                     double dt23 = p3.timestamp - currentLineAnchor.timestamp;
-                                    if (dt23 <= 0) continue;
+                                    if (dt23 <= 0) {
+                                        telemetry.countP3NonPositiveDelta++;
+                                        continue;
+                                    }
 
                                     double dist23 = distance(currentLineAnchor.x, currentLineAnchor.y, p3.x, p3.y);
 
@@ -545,6 +587,7 @@ public class TrackLinker {
                                         double maxAllowedJump = (maxVelocity * dt23) * 1.5 + config.maxStarJitter;
 
                                         if (dist23 > maxAllowedJump) {
+                                            telemetry.countP3Jump++;
                                             continue;
                                         }
                                     }
@@ -556,29 +599,38 @@ public class TrackLinker {
                                     // Allowed variance is a combination of the percentage tolerance AND the physical sub-pixel seeing jitter
                                     double allowedVDiff = (currentVelocity * config.timeBasedVelocityTolerance) + (config.maxStarJitter / dt23);
 
-                                    if (vDiff <= allowedVDiff) {
+                                    if (vDiff > allowedVDiff) {
+                                        telemetry.countP3VelocityMismatch++;
+                                        continue;
+                                    }
 
-                                        // Ensure the point physically lies on the exact trajectory line
-                                        double currentBaselineDist = distance(p1.x, p1.y, currentLineAnchor.x, currentLineAnchor.y);
-                                        double lineError = distanceToLineOptimized(p1, currentLineAnchor, p3, currentBaselineDist);
+                                    // Ensure the point physically lies on the exact trajectory line
+                                    double currentBaselineDist = distance(p1.x, p1.y, currentLineAnchor.x, currentLineAnchor.y);
+                                    double lineError = distanceToLineOptimized(p1, currentLineAnchor, p3, currentBaselineDist);
 
-                                        if (lineError <= config.predictionTolerance) {
+                                    if (lineError > config.predictionTolerance) {
+                                        telemetry.countP3NotLine++;
+                                        continue;
+                                    }
 
-                                            double actualAngle = Math.atan2(p3.y - currentLineAnchor.y, p3.x - currentLineAnchor.x);
-                                            // Dynamically relax the angle tolerance for short jumps where sub-pixel jitter causes massive angular swings
-                                            double dynamicAngleTolerance = Math.max(angleToleranceRad, Math.atan2(config.maxStarJitter + 1.0, dist23));
+                                    double actualAngle = Math.atan2(p3.y - currentLineAnchor.y, p3.x - currentLineAnchor.x);
+                                    // Dynamically relax the angle tolerance for short jumps where sub-pixel jitter causes massive angular swings
+                                    double dynamicAngleTolerance = Math.max(angleToleranceRad, Math.atan2(config.maxStarJitter + 1.0, dist23));
 
-                                            if (isDirectionConsistent(expectedAngle, actualAngle, dynamicAngleTolerance)) {
-                                                if (isProfileConsistent(currentLineAnchor, p3, config)) {
+                                    if (!isDirectionConsistent(expectedAngle, actualAngle, dynamicAngleTolerance)) {
+                                        telemetry.countP3WrongDirection++;
+                                        continue;
+                                    }
 
-                                                    // Prioritize the point that best matches the expected velocity
-                                                    if (vDiff < bestVError) {
-                                                        bestVError = vDiff;
-                                                        bestMatch = p3;
-                                                    }
-                                                }
-                                            }
-                                        }
+                                    if (!isProfileConsistent(currentLineAnchor, p3, config)) {
+                                        telemetry.countP3Size++;
+                                        continue;
+                                    }
+
+                                    // Prioritize the point that best matches the expected velocity
+                                    if (vDiff < bestVError) {
+                                        bestVError = vDiff;
+                                        bestMatch = p3;
                                     }
                                 }
 
@@ -601,6 +653,8 @@ public class TrackLinker {
                                         currentTrack,
                                         scoreTimeBasedTrackCandidate(currentTrack)));
                                 generatedTimeTracks++;
+                            } else {
+                                telemetry.countTrackTooShort++;
                             }
                         }
                     }
@@ -619,6 +673,14 @@ public class TrackLinker {
                 pointTracks.add(candidate.track);
                 usedPoints.addAll(candidate.track.points);
                 timeTracksFound++;
+                if (JTransientEngine.DEBUG) {
+                    System.out.printf(
+                            "DEBUG: [PHASE 3.5] Accepted time-based point track -> points=%d startFrame=%d endFrame=%d%n",
+                            candidate.track.points.size(),
+                            candidate.track.points.get(0).sourceFrameIndex,
+                            candidate.track.points.get(candidate.track.points.size() - 1).sourceFrameIndex
+                    );
+                }
             }
 
             if (JTransientEngine.DEBUG) {
@@ -628,6 +690,14 @@ public class TrackLinker {
         }
 
         boolean runGeometricTrackLinking = config.enableGeometricTrackLinking || !hasTimestamps;
+        if (JTransientEngine.DEBUG) {
+            System.out.printf(
+                    "DEBUG: [PHASE 4] runGeometricTrackLinking=%s (enableGeometricTrackLinking=%s, hasTimestamps=%s)%n",
+                    runGeometricTrackLinking,
+                    config.enableGeometricTrackLinking,
+                    hasTimestamps
+            );
+        }
 
         // =================================================================
         // PHASE 4: GEOMETRIC COLLINEAR LINKING (Optional / Timestamp Fallback)
@@ -768,6 +838,19 @@ public class TrackLinker {
                                         if (!isTrackAlreadyFound(pointTracks, currentTrack)) {
                                             pointTracks.add(currentTrack);
                                             usedPoints.addAll(currentTrack.points);
+                                            if (JTransientEngine.DEBUG) {
+                                                System.out.printf(
+                                                        "DEBUG: [PHASE 4] Accepted geometric point track -> points=%d startFrame=%d endFrame=%d enableGeometricTrackLinking=%s hasTimestamps=%s%n",
+                                                        currentTrack.points.size(),
+                                                        currentTrack.points.get(0).sourceFrameIndex,
+                                                        currentTrack.points.get(currentTrack.points.size() - 1).sourceFrameIndex,
+                                                        config.enableGeometricTrackLinking,
+                                                        hasTimestamps
+                                                );
+                                                if (hasTimestamps && !config.enableGeometricTrackLinking) {
+                                                    System.out.println("DEBUG: [PHASE 4] INVARIANT WARNING: geometric point track accepted even though timestamps are available and geometric linking is disabled.");
+                                                }
+                                            }
 
                                             if (JTransientEngine.DEBUG) {
                                                 SourceExtractor.DetectedObject trackStart = currentTrack.points.get(0);
@@ -814,12 +897,19 @@ public class TrackLinker {
         // PHASE 5: HIGH-ENERGY ANOMALY RESCUE (GLINTS & FLASHES)
         // =================================================================
         List<AnomalyDetection> anomalies = new ArrayList<>();
-        List<Track> suspectedThresholdStreakTracks = new ArrayList<>();
+        List<Track> suspectedStreakTracks = new ArrayList<>();
+        List<List<SourceExtractor.DetectedObject>> anomalyCandidates = buildPhase5AnomalyCandidates(
+                filterResult.remainingTransients,
+                confirmedTracks,
+                pointTracks
+        );
         if (config.enableAnomalyRescue) {
-            if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 5] Scanning discarded transients for High-Energy Anomalies...");
+            if (JTransientEngine.DEBUG) {
+                System.out.println("DEBUG: [PHASE 5] Scanning merged transients for High-Energy Anomalies...");
+            }
 
             for (int i = 0; i < numFrames; i++) {
-                for (SourceExtractor.DetectedObject orphan : transients.get(i)) {
+                for (SourceExtractor.DetectedObject orphan : anomalyCandidates.get(i)) {
                     if (!usedPoints.contains(orphan)) {
 
                         // Rescue either a sharp glint or a broader high-energy flash.
@@ -827,22 +917,18 @@ public class TrackLinker {
                         if (anomalyType != null) {
                             anomalies.add(new AnomalyDetection(orphan, anomalyType));
                             usedPoints.add(orphan);
-
-                            if (JTransientEngine.DEBUG) {
-                                //System.out.printf("         [ANOMALY RESCUED] Huge transient found at Frame %d (X:%.1f, Y:%.1f). Area: %.1f px, Peak Sigma: %.1f%n",
-                                //       orphan.sourceFrameIndex, orphan.x, orphan.y, orphan.pixelArea, orphan.peakSigma);
-                            }
                         }
                     }
                 }
             }
         }
 
+        //now search for suspected streak tracks
         if (!anomalies.isEmpty()) {
-            suspectedThresholdStreakTracks = groupSuspectedThresholdStreakTracks(anomalies, config);
-            if (!suspectedThresholdStreakTracks.isEmpty()) {
+            suspectedStreakTracks = groupSuspectedStreakTracks(anomalies, config);
+            if (!suspectedStreakTracks.isEmpty()) {
                 Set<SourceExtractor.DetectedObject> groupedObjects = new HashSet<>();
-                for (Track track : suspectedThresholdStreakTracks) {
+                for (Track track : suspectedStreakTracks) {
                     groupedObjects.addAll(track.points);
                 }
                 anomalies.removeIf(anomaly -> groupedObjects.contains(anomaly.object));
@@ -860,7 +946,7 @@ public class TrackLinker {
         telemetry.pointTracksFound = pointTracks.size();
         telemetry.anomaliesFound = anomalies.size();
         telemetry.integratedSigmaAnomaliesFound = integratedSigmaAnomaliesRescued;
-        telemetry.suspectedThresholdStreakTracksFound = suspectedThresholdStreakTracks.size();
+        telemetry.suspectedStreakTracksFound = suspectedStreakTracks.size();
 
         if (JTransientEngine.DEBUG) {
             System.out.println("\n--------------------------------------------------");
@@ -868,10 +954,13 @@ public class TrackLinker {
             System.out.println("--------------------------------------------------");
             System.out.println("1. Baseline Generation (p1 -> p2) Rejections:");
             System.out.println("   - Stationary / Jitter           : " + telemetry.countBaselineJitter);
+            System.out.println("   - Non-Positive Time Delta       : " + telemetry.countBaselineNonPositiveDelta);
             System.out.println("   - Exceeded Max Jump Velocity    : " + telemetry.countBaselineJump);
             System.out.println("   - Morphological Profile Mismatch: " + telemetry.countBaselineSize);
 
             System.out.println("\n2. Point 3+ (p3, p4...) Search Rejections:");
+            System.out.println("   - Non-Positive Time Delta       : " + telemetry.countP3NonPositiveDelta);
+            System.out.println("   - Velocity Mismatch             : " + telemetry.countP3VelocityMismatch);
             System.out.println("   - Not Collinear (Off-line)      : " + telemetry.countP3NotLine);
             System.out.println("   - Wrong Direction / Angle       : " + telemetry.countP3WrongDirection);
             System.out.println("   - Exceeded Max Jump Velocity    : " + telemetry.countP3Jump);
@@ -887,10 +976,11 @@ public class TrackLinker {
             System.out.println("   - Fast Streak Tracks (Phase 2)  : " + telemetry.streakTracksFound);
             System.out.println("   - Binary-Star Streak Rejects    : " + telemetry.rejectedBinaryStarStreakShape);
             System.out.println("   - Slow Point Tracks (Phase 4)   : " + telemetry.pointTracksFound);
-            System.out.println("   - TOTAL MOVING TARGETS FOUND    : " + (telemetry.streakTracksFound + telemetry.pointTracksFound));
+            System.out.println("   - Suspected Streak Tracks       : " + telemetry.suspectedStreakTracksFound);
+            System.out.println("   - TOTAL RETURNED TRACKS         : "
+                    + (telemetry.streakTracksFound + telemetry.pointTracksFound + telemetry.suspectedStreakTracksFound));
             System.out.println("   - Single-Frame Anomalies        : " + telemetry.anomaliesFound);
             System.out.println("      -> Integrated-Sigma Rescue   : " + telemetry.integratedSigmaAnomaliesFound);
-            System.out.println("   - Suspected Faint Streak Tracks : " + telemetry.suspectedThresholdStreakTracksFound);
             System.out.println("--------------------------------------------------\n");
         }
 
@@ -899,7 +989,34 @@ public class TrackLinker {
         }
 
         confirmedTracks.addAll(pointTracks);
-        return new TrackingResult(confirmedTracks, anomalies, suspectedThresholdStreakTracks, telemetry, filterResult.mergedTransients, filterResult.masterMask);
+        confirmedTracks.addAll(suspectedStreakTracks);
+        if (JTransientEngine.DEBUG) {
+            int finalStreakTracks = 0;
+            int finalSuspectedTracks = 0;
+            int finalTimeBasedPointTracks = 0;
+            int finalGeometricPointTracks = 0;
+
+            for (Track track : confirmedTracks) {
+                if (track.isSuspectedStreakTrack) {
+                    finalSuspectedTracks++;
+                } else if (track.isStreakTrack) {
+                    finalStreakTracks++;
+                } else if (track.isTimeBasedTrack) {
+                    finalTimeBasedPointTracks++;
+                } else {
+                    finalGeometricPointTracks++;
+                }
+            }
+
+            System.out.printf(
+                    "DEBUG: [FINAL TRACK SUMMARY] streak=%d suspected=%d timeBasedPoint=%d geometricPoint=%d%n",
+                    finalStreakTracks,
+                    finalSuspectedTracks,
+                    finalTimeBasedPointTracks,
+                    finalGeometricPointTracks
+            );
+        }
+        return new TrackingResult(confirmedTracks, anomalies, telemetry, filterResult.remainingTransients, filterResult.masterVetoMask);
     }
 
     /**
@@ -931,17 +1048,14 @@ public class TrackLinker {
     }
 
     /**
-     * Groups elongated integrated-sigma anomalies that align within one frame into suspected faint streak tracks.
+     * Groups elongated rescued anomalies into one best same-frame collinear streak candidate per frame.
      */
-    private static List<Track> groupSuspectedThresholdStreakTracks(List<AnomalyDetection> anomalies, DetectionConfig config) {
+    private static List<Track> groupSuspectedStreakTracks(List<AnomalyDetection> anomalies, DetectionConfig config) {
         List<Track> suspectedTracks = new ArrayList<>();
-        double angleToleranceRad = Math.toRadians(config.anomalySuspectedStreakAngleToleranceDegrees);
 
         int maxFrameIndex = -1;
         for (AnomalyDetection anomaly : anomalies) {
-            if (anomaly.type == AnomalyType.INTEGRATED_SIGMA
-                    && anomaly.object.elongation > config.anomalySuspectedStreakMinElongation
-                    && anomaly.object.sourceFrameIndex >= 0) {
+            if (isSuspectedStreakCandidate(anomaly, config)) {
                 maxFrameIndex = Math.max(maxFrameIndex, anomaly.object.sourceFrameIndex);
             }
         }
@@ -956,38 +1070,19 @@ public class TrackLinker {
         }
 
         for (AnomalyDetection anomaly : anomalies) {
-            if (anomaly.type == AnomalyType.INTEGRATED_SIGMA
-                    && anomaly.object.elongation > config.anomalySuspectedStreakMinElongation
-                    && anomaly.object.sourceFrameIndex >= 0) {
+            if (isSuspectedStreakCandidate(anomaly, config)) {
                 frameCandidates.get(anomaly.object.sourceFrameIndex).add(anomaly.object);
             }
         }
 
         for (List<SourceExtractor.DetectedObject> frameObjects : frameCandidates) {
-            if (frameObjects.size() < 2) {
+            if (frameObjects.size() < 3) {
                 continue;
             }
 
-            boolean[] visited = new boolean[frameObjects.size()];
-            for (int i = 0; i < frameObjects.size(); i++) {
-                if (visited[i]) {
-                    continue;
-                }
-
-                List<SourceExtractor.DetectedObject> component = collectSuspectedThresholdStreakComponent(
-                        frameObjects,
-                        visited,
-                        i,
-                        angleToleranceRad
-                );
-                if (component.size() < 2) {
-                    continue;
-                }
-
-                Track suspectedTrack = buildSuspectedThresholdStreakTrack(component, angleToleranceRad, config);
-                if (suspectedTrack != null) {
-                    suspectedTracks.add(suspectedTrack);
-                }
+            Track suspectedTrack = buildLongestSuspectedStreakTrack(frameObjects, config);
+            if (suspectedTrack != null) {
+                suspectedTracks.add(suspectedTrack);
             }
         }
 
@@ -995,108 +1090,120 @@ public class TrackLinker {
     }
 
     /**
-     * Collects one connected same-frame component of aligned integrated anomalies.
+     * Returns whether a rescued anomaly is elongated enough to participate in same-frame faint-streak grouping.
      */
-    private static List<SourceExtractor.DetectedObject> collectSuspectedThresholdStreakComponent(
-            List<SourceExtractor.DetectedObject> frameObjects,
-            boolean[] visited,
-            int startIndex,
-            double angleToleranceRad) {
-        List<SourceExtractor.DetectedObject> component = new ArrayList<>();
-        ArrayDeque<Integer> queue = new ArrayDeque<>();
-        queue.add(startIndex);
-        visited[startIndex] = true;
-
-        while (!queue.isEmpty()) {
-            int currentIndex = queue.removeFirst();
-            SourceExtractor.DetectedObject current = frameObjects.get(currentIndex);
-            component.add(current);
-
-            for (int i = 0; i < frameObjects.size(); i++) {
-                if (visited[i]) {
-                    continue;
-                }
-
-                if (areSuspectedThresholdStreakNeighbors(current, frameObjects.get(i), angleToleranceRad)) {
-                    visited[i] = true;
-                    queue.addLast(i);
-                }
-            }
-        }
-
-        return component;
+    private static boolean isSuspectedStreakCandidate(AnomalyDetection anomaly, DetectionConfig config) {
+        return anomaly.object.elongation > config.anomalySuspectedStreakMinElongation
+                && anomaly.object.sourceFrameIndex >= 0;
     }
 
     /**
-     * Returns whether two integrated anomalies are plausibly fragments of the same faint same-frame streak.
+     * Finds the longest same-frame collinear grouping of rescued anomalies and exports it as one suspected streak.
      */
-    private static boolean areSuspectedThresholdStreakNeighbors(SourceExtractor.DetectedObject left,
-                                                                SourceExtractor.DetectedObject right,
-                                                                double angleToleranceRad) {
-        if (!anglesMatch(left.angle, right.angle, angleToleranceRad)) {
-            return false;
-        }
-
-        double dist = distance(left.x, left.y, right.x, right.y);
-        if (dist < 1.0) {
-            return false;
-        }
-
-        double trajectoryAngle = Math.atan2(right.y - left.y, right.x - left.x);
-        return anglesMatch(left.angle, trajectoryAngle, angleToleranceRad)
-                && anglesMatch(right.angle, trajectoryAngle, angleToleranceRad);
-    }
-
-    /**
-     * Orders one same-frame component into a track and rejects obviously non-collinear groupings.
-     */
-    private static Track buildSuspectedThresholdStreakTrack(List<SourceExtractor.DetectedObject> component,
-                                                            double angleToleranceRad,
-                                                            DetectionConfig config) {
-        if (component.size() < 2) {
+    private static Track buildLongestSuspectedStreakTrack(List<SourceExtractor.DetectedObject> frameObjects,
+                                                          DetectionConfig config) {
+        if (frameObjects.size() < 3) {
             return null;
         }
 
-        double trackAngle = averageAxialAngle(component);
-        component.sort((left, right) -> Double.compare(
-                projectionAlongAngle(left, trackAngle),
-                projectionAlongAngle(right, trackAngle)
-        ));
+        List<SourceExtractor.DetectedObject> bestLine = null;
+        double bestSpan = -1.0;
+        double maxLineError = getSuspectedStreakLineTolerance(config);
 
-        for (int i = 0; i < component.size() - 1; i++) {
-            SourceExtractor.DetectedObject current = component.get(i);
-            SourceExtractor.DetectedObject next = component.get(i + 1);
-            if (distance(current.x, current.y, next.x, next.y) < 1.0) {
-                return null;
-            }
+        for (int i = 0; i < frameObjects.size() - 1; i++) {
+            for (int j = i + 1; j < frameObjects.size(); j++) {
+                SourceExtractor.DetectedObject start = frameObjects.get(i);
+                SourceExtractor.DetectedObject end = frameObjects.get(j);
+                double baselineDistance = distance(start.x, start.y, end.x, end.y);
+                if (baselineDistance < 1.0) {
+                    continue;
+                }
 
-            double segmentAngle = Math.atan2(next.y - current.y, next.x - current.x);
-            if (!anglesMatch(trackAngle, segmentAngle, angleToleranceRad)) {
-                return null;
-            }
-        }
+                List<SourceExtractor.DetectedObject> collinearObjects = new ArrayList<>();
+                for (SourceExtractor.DetectedObject candidate : frameObjects) {
+                    if (distanceToLineOptimized(start, end, candidate, baselineDistance) <= maxLineError) {
+                        collinearObjects.add(candidate);
+                    }
+                }
 
-        if (component.size() > 2) {
-            SourceExtractor.DetectedObject start = component.get(0);
-            SourceExtractor.DetectedObject end = component.get(component.size() - 1);
-            double baselineDistance = distance(start.x, start.y, end.x, end.y);
-            if (baselineDistance < 1.0) {
-                return null;
-            }
+                if (collinearObjects.size() < 3) {
+                    continue;
+                }
 
-            double maxLineError = Math.max(config.predictionTolerance, config.maxStarJitter);
-            for (int i = 1; i < component.size() - 1; i++) {
-                if (distanceToLineOptimized(start, end, component.get(i), baselineDistance) > maxLineError) {
-                    return null;
+                orderObjectsAlongLine(collinearObjects, start, end);
+                double span = distance(
+                        collinearObjects.get(0).x,
+                        collinearObjects.get(0).y,
+                        collinearObjects.get(collinearObjects.size() - 1).x,
+                        collinearObjects.get(collinearObjects.size() - 1).y
+                );
+
+                if (bestLine == null
+                        || span > bestSpan
+                        || (Math.abs(span - bestSpan) < 1e-6 && collinearObjects.size() > bestLine.size())) {
+                    bestLine = collinearObjects;
+                    bestSpan = span;
                 }
             }
         }
 
+        if (bestLine == null) {
+            return null;
+        }
+
         Track suspectedTrack = new Track();
-        suspectedTrack.isStreakTrack = true;
-        suspectedTrack.isSuspectedThresholdStreakTrack = true;
-        suspectedTrack.points.addAll(component);
+        suspectedTrack.isSuspectedStreakTrack = true;
+        suspectedTrack.points.addAll(bestLine);
         return suspectedTrack;
+    }
+
+    /**
+     * Returns the dedicated same-frame line tolerance used by suspected streak grouping.
+     */
+    private static double getSuspectedStreakLineTolerance(DetectionConfig config) {
+        return Math.max(0.0, config.suspectedStreakLineTolerance);
+    }
+
+    /**
+     * Orders same-frame collinear anomalies along the candidate line so the exported track is stable.
+     */
+    private static void orderObjectsAlongLine(List<SourceExtractor.DetectedObject> objects,
+                                              SourceExtractor.DetectedObject start,
+                                              SourceExtractor.DetectedObject end) {
+        double dx = end.x - start.x;
+        double dy = end.y - start.y;
+        objects.sort((left, right) -> Double.compare(
+                projectionAlongLine(left, start.x, start.y, dx, dy),
+                projectionAlongLine(right, start.x, start.y, dx, dy)
+        ));
+    }
+
+    /**
+     * Removes any detection already consumed by an accepted track before Phase 5 anomaly rescue.
+     */
+    static List<List<SourceExtractor.DetectedObject>> buildPhase5AnomalyCandidates(
+            List<List<SourceExtractor.DetectedObject>> remainingTransients,
+            List<Track> streakTracks,
+            List<Track> pointTracks) {
+        Set<SourceExtractor.DetectedObject> trackedObjects = new HashSet<>();
+        for (Track track : streakTracks) {
+            trackedObjects.addAll(track.points);
+        }
+        for (Track track : pointTracks) {
+            trackedObjects.addAll(track.points);
+        }
+
+        List<List<SourceExtractor.DetectedObject>> anomalyCandidates = new ArrayList<>(remainingTransients.size());
+        for (List<SourceExtractor.DetectedObject> frameObjects : remainingTransients) {
+            List<SourceExtractor.DetectedObject> filteredFrame = new ArrayList<>();
+            for (SourceExtractor.DetectedObject object : frameObjects) {
+                if (!trackedObjects.contains(object)) {
+                    filteredFrame.add(object);
+                }
+            }
+            anomalyCandidates.add(filteredFrame);
+        }
+        return anomalyCandidates;
     }
 
     // =================================================================
@@ -1289,27 +1396,14 @@ public class TrackLinker {
     }
 
     /**
-     * Averages axial orientations where 0 and PI describe the same streak direction.
+     * Projects one object onto a candidate same-frame line for stable ordering.
      */
-    private static double averageAxialAngle(List<SourceExtractor.DetectedObject> objects) {
-        double sumSin = 0.0;
-        double sumCos = 0.0;
-
-        for (SourceExtractor.DetectedObject object : objects) {
-            sumSin += Math.sin(object.angle * 2.0);
-            sumCos += Math.cos(object.angle * 2.0);
-        }
-
-        return 0.5 * Math.atan2(sumSin, sumCos);
-    }
-
-    /**
-     * Projects one object onto the candidate streak axis for stable ordering.
-     */
-    private static double projectionAlongAngle(SourceExtractor.DetectedObject object, double angle) {
-        double dx = Math.cos(angle);
-        double dy = Math.sin(angle);
-        return (object.x * dx) + (object.y * dy);
+    private static double projectionAlongLine(SourceExtractor.DetectedObject object,
+                                              double originX,
+                                              double originY,
+                                              double dx,
+                                              double dy) {
+        return ((object.x - originX) * dx) + ((object.y - originY) * dy);
     }
 
     /**

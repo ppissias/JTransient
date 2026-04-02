@@ -16,10 +16,10 @@ public class TrackLinkerStreakExportTest {
 
     /**
      * Streaks that already belong to an accepted streak track should not be re-exported
-     * as standalone detections in the merged transient list.
+     * as standalone detections in the remaining transient export list.
      */
     @Test
-    public void filterTransientsDoesNotDuplicateTrackedStreaksInMergedTransients() {
+    public void filterTransientsDoesNotDuplicateTrackedStreaksInRemainingTransients() {
         DetectionConfig config = new DetectionConfig();
         List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
         frames.add(List.of(createStreak(10.0, 10.0, 0)));
@@ -37,9 +37,34 @@ public class TrackLinkerStreakExportTest {
 
         assertEquals(1, result.streakTracks.size());
         assertEquals(2, result.streakTracks.get(0).points.size());
-        assertTrue(result.mergedTransients.get(0).isEmpty());
-        assertTrue(result.mergedTransients.get(1).isEmpty());
-        assertTrue(result.mergedTransients.get(2).isEmpty());
+        assertTrue(result.remainingTransients.get(0).isEmpty());
+        assertTrue(result.remainingTransients.get(1).isEmpty());
+        assertTrue(result.remainingTransients.get(2).isEmpty());
+    }
+
+    @Test
+    public void filterTransientsPreservesLowSigmaSingleStreakInRemainingTransients() {
+        DetectionConfig config = new DetectionConfig();
+        SourceExtractor.DetectedObject lowSigmaStreak = createStreak(10.0, 10.0, 0);
+        lowSigmaStreak.peakSigma = config.singleStreakMinPeakSigma - 1.0;
+
+        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
+        frames.add(List.of(lowSigmaStreak));
+        frames.add(new ArrayList<>());
+        frames.add(new ArrayList<>());
+
+        TrackLinker.TransientsFilterResult result = TrackLinker.filterTransients(
+                frames,
+                new ArrayList<>(),
+                config,
+                null,
+                64,
+                64
+        );
+
+        assertTrue(result.streakTracks.isEmpty());
+        assertEquals(1, result.remainingTransients.get(0).size());
+        assertTrue(result.remainingTransients.get(0).contains(lowSigmaStreak));
     }
 
     private static SourceExtractor.DetectedObject createStreak(double x, double y, int frameIndex) {

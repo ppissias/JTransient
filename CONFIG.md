@@ -83,7 +83,7 @@ Minimum footprint size required for an elongated blob to be considered a streak.
 Minimum `peakSigma` required for a one-point streak track.
 
 - used after streak linking
-- single-frame streaks below this significance are discarded
+- unmatched single-frame streaks below this significance stay as preserved standalone streak detections instead of becoming one-point streak tracks
 
 ### `bgClippingIterations` (default `3`)
 
@@ -183,7 +183,7 @@ Slow-mover candidates now pass through a simpler artifact filter after this base
 
 - irregular or binary-like shapes are still rejected first
 - any surviving candidate must overlap the median-stack artifact mask within the configured support band
-- the stage-by-stage outcome is reported through `PipelineResult.slowMoverTelemetry`
+- the stage-by-stage outcome is reported through `PipelineResult.telemetry.slowMoverTelemetry`
 
 ### `slowMoverMedianSupportOverlapFraction` (default `0.10`)
 
@@ -389,7 +389,8 @@ Fallback sigma used when a MAD-derived sigma would be exactly zero.
 
 Enables the final single-frame rescue pass.
 
-- only affects detections that survived stationary-star masking but were not consumed by tracks
+- scans the exported merged transient list after tracking, so preserved standalone streak detections are eligible too
+- only rescues detections that were not consumed by accepted tracks
 
 ### `anomalyMinPeakSigma` (default `8.0`)
 
@@ -425,6 +426,22 @@ Minimum footprint size required for anomaly rescue.
 
 - acts as the general anomaly floor before either rescue branch is considered
 - protects against hot pixels and tiny defects
+
+### `anomalySuspectedStreakMinElongation` (default `3.5`)
+
+Minimum elongation required before a rescued anomaly is even considered for same-frame suspected streak grouping.
+
+- only affects the post-rescue grouping pass
+- larger values restrict grouping to more obviously elongated fragments
+
+### `suspectedStreakLineTolerance` (default `6.0`)
+
+Maximum perpendicular centroid error allowed when rescued same-frame anomalies are grouped into one suspected streak line.
+
+- this is separate from `predictionTolerance`
+- larger values make same-frame faint-streak grouping more permissive
+- smaller values require tighter collinearity
+- does not affect the main multi-frame point-track linker
 
 ## 7. Interaction With The Auto-Tuner
 

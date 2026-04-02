@@ -110,19 +110,80 @@ public class TrackLinkerAnomalyRescueTest {
 
         assertEquals(0, result.tracks.size());
         assertEquals(1, result.anomalies.size());
-        assertEquals(0, result.suspectedThresholdStreakTracks.size());
+        assertTrue(suspectedStreakTracks(result).isEmpty());
         assertEquals(TrackLinker.AnomalyType.PEAK_SIGMA, result.anomalies.get(0).type);
         assertSame(frames.get(0).get(0), result.anomalies.get(0).object);
         assertEquals(1, result.telemetry.anomaliesFound);
         assertEquals(0, result.telemetry.integratedSigmaAnomaliesFound);
-        assertEquals(0, result.telemetry.suspectedThresholdStreakTracksFound);
+        assertEquals(0, result.telemetry.suspectedStreakTracksFound);
+    }
+
+    /**
+     * Phase 5 should never even consider detections that were already consumed by accepted tracks.
+     */
+    @Test
+    public void buildPhase5AnomalyCandidatesExcludesObjectsAlreadyConsumedByTracks() {
+        SourceExtractor.DetectedObject trackedStreak = createFrameStreak(10, 10, 20, 9.0, 6.0, (short) 120, 0, 4.2, 0.0);
+        SourceExtractor.DetectedObject trackedPoint = createFrameAnomaly(20, 20, 20, 9.0, 6.0, (short) 120, 0);
+        SourceExtractor.DetectedObject leftover = createFrameAnomaly(30, 30, 20, 9.0, 6.0, (short) 120, 0);
+
+        TrackLinker.Track streakTrack = new TrackLinker.Track();
+        streakTrack.isStreakTrack = true;
+        streakTrack.addPoint(trackedStreak);
+
+        TrackLinker.Track pointTrack = new TrackLinker.Track();
+        pointTrack.addPoint(trackedPoint);
+
+        List<List<SourceExtractor.DetectedObject>> remainingTransients = new ArrayList<>();
+        remainingTransients.add(List.of(trackedStreak, trackedPoint, leftover));
+
+        List<List<SourceExtractor.DetectedObject>> result = TrackLinker.buildPhase5AnomalyCandidates(
+                remainingTransients,
+                List.of(streakTrack),
+                List.of(pointTrack)
+        );
+
+        assertEquals(1, result.size());
+        assertEquals(1, result.get(0).size());
+        assertSame(leftover, result.get(0).get(0));
+    }
+
+    /**
+     * Preserved standalone streaks should also participate in anomaly rescue once they survive the streak phase
+     * without being promoted to one-point streak tracks.
+     */
+    @Test
+    public void findMovingObjectsRescuesPreservedStandaloneSingleStreakAsAnomaly() {
+        DetectionConfig config = new DetectionConfig();
+        config.singleStreakMinPeakSigma = 10.0;
+
+        SourceExtractor.DetectedObject preservedStreak = createFrameStreak(10, 10, 20, 9.0, 6.0, (short) 120, 0, 4.2, 0.0);
+        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
+        frames.add(List.of(preservedStreak));
+        frames.add(new ArrayList<>());
+        frames.add(new ArrayList<>());
+
+        TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
+                frames,
+                new ArrayList<>(),
+                config,
+                null,
+                64,
+                64
+        );
+
+        assertEquals(0, result.tracks.size());
+        assertEquals(1, result.anomalies.size());
+        assertEquals(TrackLinker.AnomalyType.PEAK_SIGMA, result.anomalies.get(0).type);
+        assertSame(preservedStreak, result.anomalies.get(0).object);
+        assertTrue(suspectedStreakTracks(result).isEmpty());
     }
 
     /**
      * Collinear integrated anomalies in one frame should be promoted into a separate suspected streak bucket.
      */
     @Test
-    public void findMovingObjectsPromotesAlignedIntegratedAnomaliesToSuspectedThresholdStreakTrack() {
+    public void findMovingObjectsPromotesAlignedIntegratedAnomaliesToSuspectedStreakTrack() {
         DetectionConfig config = new DetectionConfig();
         List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
         frames.add(List.of(
@@ -142,34 +203,33 @@ public class TrackLinkerAnomalyRescueTest {
                 64
         );
 
-        assertEquals(0, result.tracks.size());
+        assertEquals(1, result.tracks.size());
         assertEquals(0, result.anomalies.size());
-        assertEquals(1, result.suspectedThresholdStreakTracks.size());
-        assertTrue(result.suspectedThresholdStreakTracks.get(0).isSuspectedThresholdStreakTrack);
-        assertEquals(3, result.suspectedThresholdStreakTracks.get(0).points.size());
-        assertSame(frames.get(0).get(0), result.suspectedThresholdStreakTracks.get(0).points.get(0));
-        assertSame(frames.get(0).get(1), result.suspectedThresholdStreakTracks.get(0).points.get(1));
-        assertSame(frames.get(0).get(2), result.suspectedThresholdStreakTracks.get(0).points.get(2));
+        assertEquals(1, suspectedStreakTracks(result).size());
+        assertTrue(suspectedStreakTracks(result).get(0).isSuspectedStreakTrack);
+        assertEquals(3, suspectedStreakTracks(result).get(0).points.size());
+        assertSame(frames.get(0).get(0), suspectedStreakTracks(result).get(0).points.get(0));
+        assertSame(frames.get(0).get(1), suspectedStreakTracks(result).get(0).points.get(1));
+        assertSame(frames.get(0).get(2), suspectedStreakTracks(result).get(0).points.get(2));
         assertEquals(0, result.telemetry.anomaliesFound);
         assertEquals(0, result.telemetry.integratedSigmaAnomaliesFound);
-        assertEquals(1, result.telemetry.suspectedThresholdStreakTracksFound);
+        assertEquals(1, result.telemetry.suspectedStreakTracksFound);
     }
 
     /**
-     * Suspected threshold streak grouping uses its own angle tolerance because weak integrated anomalies
-     * can have noisier moment-derived angles than the main tracker allows.
+     * Preserved standalone streak fragments rescued as anomalies should also be groupable into one
+     * suspected same-frame streak when they remain roughly collinear.
      */
     @Test
-    public void findMovingObjectsUsesDedicatedAngleToleranceForSuspectedThresholdStreaks() {
+    public void findMovingObjectsPromotesAlignedPreservedStreakAnomaliesToSuspectedStreakTrack() {
         DetectionConfig config = new DetectionConfig();
-        config.angleToleranceDegrees = 2.0;
-        config.anomalySuspectedStreakAngleToleranceDegrees = 6.0;
+        config.singleStreakMinPeakSigma = 10.0;
 
         List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
         frames.add(List.of(
-                createFrameAnomaly(10, 10, 30, 4.0, 14.0, (short) 120, 0, 4.2, Math.toRadians(4.0)),
-                createFrameAnomaly(22, 10, 30, 4.3, 15.0, (short) 120, 0, 4.1, Math.toRadians(4.0)),
-                createFrameAnomaly(34, 10, 30, 4.1, 13.8, (short) 120, 0, 4.0, Math.toRadians(4.0))
+                createFrameStreak(10, 10, 20, 9.0, 6.0, (short) 120, 0, 4.2, 0.0),
+                createFrameStreak(22, 11, 20, 8.8, 6.0, (short) 120, 0, 4.4, Math.toRadians(3.0)),
+                createFrameStreak(34, 12, 20, 8.9, 6.0, (short) 120, 0, 4.1, Math.toRadians(6.0))
         ));
         frames.add(new ArrayList<>());
         frames.add(new ArrayList<>());
@@ -183,8 +243,115 @@ public class TrackLinkerAnomalyRescueTest {
                 64
         );
 
-        assertEquals(1, result.suspectedThresholdStreakTracks.size());
+        assertEquals(1, result.tracks.size());
         assertEquals(0, result.anomalies.size());
+        assertEquals(1, suspectedStreakTracks(result).size());
+        assertEquals(3, suspectedStreakTracks(result).get(0).points.size());
+        assertTrue(suspectedStreakTracks(result).get(0).isSuspectedStreakTrack);
+    }
+
+    /**
+     * Same-frame suspected streak grouping should ignore each anomaly's measured angle and rely
+     * only on elongation plus line membership.
+     */
+    @Test
+    public void findMovingObjectsIgnoresAnomalyAnglesWhenGroupingSuspectedStreaks() {
+        DetectionConfig config = new DetectionConfig();
+
+        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
+        frames.add(List.of(
+                createFrameAnomaly(10, 10, 30, 4.0, 14.0, (short) 120, 0, 4.2, Math.toRadians(5.0)),
+                createFrameAnomaly(22, 10, 30, 4.3, 15.0, (short) 120, 0, 4.1, Math.toRadians(65.0)),
+                createFrameAnomaly(34, 10, 30, 4.1, 13.8, (short) 120, 0, 4.0, Math.toRadians(120.0))
+        ));
+        frames.add(new ArrayList<>());
+        frames.add(new ArrayList<>());
+
+        TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
+                frames,
+                new ArrayList<>(),
+                config,
+                null,
+                64,
+                64
+        );
+
+        assertEquals(1, suspectedStreakTracks(result).size());
+        assertEquals(0, result.anomalies.size());
+    }
+
+    /**
+     * Same-frame suspected streak grouping should use its dedicated line tolerance rather than the
+     * stricter multi-frame prediction tolerance.
+     */
+    @Test
+    public void findMovingObjectsUsesDedicatedSuspectedStreakLineTolerance() {
+        DetectionConfig config = new DetectionConfig();
+        config.predictionTolerance = 3.0;
+        config.maxStarJitter = 1.5;
+        config.suspectedStreakLineTolerance = 6.0;
+
+        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
+        frames.add(List.of(
+                createFrameAnomaly(10, 10, 30, 4.0, 14.0, (short) 120, 0, 4.2, 0.0),
+                createFrameAnomaly(22, 14, 30, 4.1, 14.1, (short) 120, 0, 4.3, Math.toRadians(40.0)),
+                createFrameAnomaly(34, 10, 30, 4.2, 14.2, (short) 120, 0, 4.1, Math.toRadians(90.0))
+        ));
+        frames.add(new ArrayList<>());
+        frames.add(new ArrayList<>());
+
+        TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
+                frames,
+                new ArrayList<>(),
+                config,
+                null,
+                64,
+                64
+        );
+
+        assertEquals(1, suspectedStreakTracks(result).size());
+        assertEquals(0, result.anomalies.size());
+        assertEquals(3, suspectedStreakTracks(result).get(0).points.size());
+    }
+
+    /**
+     * When multiple same-frame collinear groups exist, only the longest line should be exported as
+     * a suspected streak track and the shorter group should remain in the anomaly list.
+     */
+    @Test
+    public void findMovingObjectsKeepsOnlyLongestSameFrameSuspectedStreakLine() {
+        DetectionConfig config = new DetectionConfig();
+        config.suspectedStreakLineTolerance = 3.0;
+
+        SourceExtractor.DetectedObject longLine1 = createFrameAnomaly(10, 10, 30, 4.0, 14.0, (short) 120, 0, 4.2, 0.0);
+        SourceExtractor.DetectedObject longLine2 = createFrameAnomaly(40, 10, 30, 4.1, 14.2, (short) 120, 0, 4.3, Math.toRadians(80.0));
+        SourceExtractor.DetectedObject longLine3 = createFrameAnomaly(70, 10, 30, 4.2, 14.4, (short) 120, 0, 4.4, Math.toRadians(135.0));
+
+        SourceExtractor.DetectedObject shortLine1 = createFrameAnomaly(10, 30, 30, 4.0, 14.0, (short) 120, 0, 4.2, Math.toRadians(20.0));
+        SourceExtractor.DetectedObject shortLine2 = createFrameAnomaly(20, 30, 30, 4.0, 14.1, (short) 120, 0, 4.2, Math.toRadians(45.0));
+        SourceExtractor.DetectedObject shortLine3 = createFrameAnomaly(30, 30, 30, 4.1, 14.2, (short) 120, 0, 4.1, Math.toRadians(70.0));
+        SourceExtractor.DetectedObject shortLine4 = createFrameAnomaly(40, 30, 30, 4.2, 14.3, (short) 120, 0, 4.3, Math.toRadians(110.0));
+
+        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
+        frames.add(List.of(longLine1, longLine2, longLine3, shortLine1, shortLine2, shortLine3, shortLine4));
+        frames.add(new ArrayList<>());
+        frames.add(new ArrayList<>());
+
+        TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
+                frames,
+                new ArrayList<>(),
+                config,
+                null,
+                128,
+                64
+        );
+
+        assertEquals(1, suspectedStreakTracks(result).size());
+        assertEquals(4, result.anomalies.size());
+        assertEquals(3, suspectedStreakTracks(result).get(0).points.size());
+        assertSame(longLine1, suspectedStreakTracks(result).get(0).points.get(0));
+        assertSame(longLine2, suspectedStreakTracks(result).get(0).points.get(1));
+        assertSame(longLine3, suspectedStreakTracks(result).get(0).points.get(2));
     }
 
     /**
@@ -212,10 +379,20 @@ public class TrackLinkerAnomalyRescueTest {
         assertEquals(1, result.anomalies.size());
         assertEquals(TrackLinker.AnomalyType.INTEGRATED_SIGMA, result.anomalies.get(0).type);
         assertSame(integratedAnomaly, result.anomalies.get(0).object);
-        assertTrue(result.suspectedThresholdStreakTracks.isEmpty());
+        assertTrue(suspectedStreakTracks(result).isEmpty());
         assertEquals(1, result.telemetry.anomaliesFound);
         assertEquals(1, result.telemetry.integratedSigmaAnomaliesFound);
-        assertEquals(0, result.telemetry.suspectedThresholdStreakTracksFound);
+        assertEquals(0, result.telemetry.suspectedStreakTracksFound);
+    }
+
+    private static List<TrackLinker.Track> suspectedStreakTracks(TrackLinker.TrackingResult result) {
+        List<TrackLinker.Track> suspectedTracks = new ArrayList<>();
+        for (TrackLinker.Track track : result.tracks) {
+            if (track.isSuspectedStreakTrack) {
+                suspectedTracks.add(track);
+            }
+        }
+        return suspectedTracks;
     }
 
     private static SourceExtractor.DetectedObject createAnomaly(int pixelArea, double peakSigma, double integratedSigma) {
@@ -262,6 +439,32 @@ public class TrackLinkerAnomalyRescueTest {
         for (int i = 0; i < pixelArea; i++) {
             obj.rawPixels.add(new SourceExtractor.Pixel(x + i, y, signal));
         }
+        return obj;
+    }
+
+    private static SourceExtractor.DetectedObject createFrameStreak(
+            int x,
+            int y,
+            int pixelArea,
+            double peakSigma,
+            double integratedSigma,
+            short signal,
+            int frameIndex,
+            double elongation,
+            double angle
+    ) {
+        SourceExtractor.DetectedObject obj = createFrameAnomaly(
+                x,
+                y,
+                pixelArea,
+                peakSigma,
+                integratedSigma,
+                signal,
+                frameIndex,
+                elongation,
+                angle
+        );
+        obj.isStreak = true;
         return obj;
     }
 }

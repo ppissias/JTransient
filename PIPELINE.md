@@ -256,13 +256,13 @@ What it returns:
 - `PipelineResult.masterStars`
 - `PipelineResult.slowMoverStackData`
 - `PipelineResult.slowMoverCandidates`
-- `PipelineResult.allTransients`
-- `PipelineResult.masterMask`
+- `PipelineResult.allRemainingTransients`
+- `PipelineResult.masterVetoMask`
 - `PipelineResult.driftPoints`
-- `PipelineResult.slowMoverTelemetry`
-- `PipelineResult.masterMaximumStackData`
+- `PipelineResult.telemetry.slowMoverTelemetry`
+- `PipelineResult.maximumStackData`
 
-Use this when you want the library to go end-to-end and return confirmed tracks.
+Use this when you want the library to go end-to-end and return all track-like detections.
 
 ## What Changes When You Pass `providedMasterStack`
 

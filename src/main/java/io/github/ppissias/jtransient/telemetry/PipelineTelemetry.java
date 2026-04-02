@@ -50,13 +50,70 @@ public class PipelineTelemetry {
     public List<FrameRejectionStat> rejectedFrames = new ArrayList<>();
 
     // --- PHASE 4: Tracking ---
-    public int totalStationaryStarsIdentified = 0;
-    public int totalMovingTargetsFound = 0;
+    public int totalMasterStarsIdentified = 0;
+    public int totalTracksFound = 0;
     public int totalAnomaliesFound = 0;
-    public int totalSuspectedThresholdStreakTracksFound = 0;
+    public int totalSuspectedStreakTracksFound = 0;
 
-    // NEW: We nest the detailed TrackerTelemetry inside here!
+    /**
+     * Detailed diagnostics emitted by the track-linking stages.
+     */
     public TrackerTelemetry trackerTelemetry;
+
+    /**
+     * Diagnostic summary for the slow-mover detection branch.
+     */
+    public SlowMoverTelemetry slowMoverTelemetry;
+
+    /**
+     * Diagnostic counters for the slow-mover detection branch.
+     */
+    public static class SlowMoverTelemetry {
+        /** Raw candidate count extracted from the slow-mover stack before any filtering. */
+        public int rawCandidatesExtracted;
+        /** Candidates that cleared the elongation baseline before morphology and median-support checks. */
+        public int candidatesAboveElongationThreshold;
+        /** Candidates that reached the median-support overlap stage after morphology filters. */
+        public int candidatesEvaluatedAgainstMasks;
+        /** Candidates rejected because the footprint shape is too irregular for a trustworthy mover. */
+        public int rejectedIrregularShape;
+        /** Candidates rejected because the footprint is more consistent with a merged binary star. */
+        public int rejectedBinaryAnomaly;
+        /** Candidates rejected by the slow-mover-only short/kinked shape veto. */
+        public int rejectedSlowMoverShape;
+        /** Slow-mover shape rejects caused by a footprint that is too short along its binary major axis. */
+        public int rejectedSlowMoverShapeTooShort;
+        /** Slow-mover shape rejects caused by an elongated footprint that is too sparse inside its oriented box. */
+        public int rejectedSlowMoverShapeLowFill;
+        /** Slow-mover shape rejects caused by too few occupied longitudinal bins along the fitted major axis. */
+        public int rejectedSlowMoverShapeSparseBins;
+        /** Slow-mover shape rejects caused by internal empty bins along the fitted major axis. */
+        public int rejectedSlowMoverShapeGappedBins;
+        /** Slow-mover shape rejects caused by a binary footprint whose fitted centerline bends too much. */
+        public int rejectedSlowMoverShapeCurvedCenterline;
+        /** Slow-mover shape rejects caused by strong width bulges or abrupt width changes along the footprint. */
+        public int rejectedSlowMoverShapeBulgedWidth;
+        /** Candidates rejected because their median-stack overlap stayed below the configured support floor. */
+        public int rejectedLowMedianSupport;
+        /** Candidates rejected because their median-stack overlap exceeded the configured support ceiling. */
+        public int rejectedHighMedianSupport;
+        /** Number of slow-mover candidates retained after all filters. */
+        public int candidatesDetected;
+        /** Median elongation measured from the raw slow-mover extraction pass. */
+        public double medianElongation;
+        /** Median absolute deviation of the raw elongation distribution, after the safety floor. */
+        public double madElongation;
+        /** Dynamic elongation threshold derived from the baseline elongation distribution. */
+        public double dynamicElongationThreshold;
+        /** Minimum overlap fraction required for a slow mover to be considered supported by the median stack. */
+        public double medianSupportOverlapThreshold;
+        /** Maximum overlap fraction allowed before a slow mover is treated as too similar to the median stack. */
+        public double medianSupportMaxOverlapThreshold;
+        /** Mean overlap with the median-stack veto mask across candidates that reached the mask stage. */
+        public double avgMedianSupportOverlap;
+        /** Per-candidate overlap fractions for accepted slow movers, in the same order as the exported detections. */
+        public final List<Double> candidateMedianSupportOverlaps = new ArrayList<>();
+    }
 
     // --- Processing ---
     public long processingTimeMs = 0;
@@ -76,13 +133,11 @@ public class PipelineTelemetry {
         sb.append(String.format("Frames Kept / Rejected: %d / %d\n", totalFramesKept, totalFramesRejected));
         sb.append(String.format("Total Raw Objects     : %d\n", totalRawObjectsExtracted));
 
-        // Pull the star count directly from the nested tracker telemetry if it exists
-        int stars = (trackerTelemetry != null) ? trackerTelemetry.totalStationaryStarsPurged : totalStationaryStarsIdentified;
-        sb.append(String.format("Stationary Stars      : %d\n", stars));
+        sb.append(String.format("Master Stars          : %d\n", totalMasterStarsIdentified));
 
-        sb.append(String.format("Moving Targets Found  : %d\n", totalMovingTargetsFound));
+        sb.append(String.format("Tracks Returned       : %d\n", totalTracksFound));
         sb.append(String.format("Anomalies Found       : %d\n", totalAnomaliesFound));
-        sb.append(String.format("Suspected Faint Streaks: %d\n\n", totalSuspectedThresholdStreakTracksFound));
+        sb.append(String.format("Suspected Streak Tracks: %d\n\n", totalSuspectedStreakTracksFound));
 
         if (!rejectedFrames.isEmpty()) {
             sb.append("--- QUALITY CONTROL: REJECTED FRAMES ---\n");

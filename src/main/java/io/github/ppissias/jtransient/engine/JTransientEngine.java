@@ -272,7 +272,7 @@ public class JTransientEngine {
         for (int i = 0; i < context.cleanFrames.size(); i++) {
             finalResult.add(new FrameTransients(
                     context.cleanFrames.get(i).filename,
-                    filterResult.mergedTransients.get(i),
+                    filterResult.remainingTransients.get(i),
                     context.cleanFramesData.get(i)
             ));
         }
@@ -634,9 +634,9 @@ public class JTransientEngine {
         // =================================================================
 
         short[][] slowMoverStackData = null;
-        boolean[][] slowMoverMedianArtifactMask = null;
+        boolean[][] slowMoverMedianVetoMask = null;
         List<SourceExtractor.DetectedObject> slowMoverCandidates = new ArrayList<>();
-        PipelineResult.SlowMoverTelemetry smTelemetry = null;
+        PipelineTelemetry.SlowMoverTelemetry smTelemetry = null;
 
         if (config.enableSlowMoverDetection) {
             if (DEBUG) {
@@ -670,9 +670,9 @@ public class JTransientEngine {
             // Restore original config
             config.growSigmaMultiplier = origGrow;
 
-            smTelemetry = new PipelineResult.SlowMoverTelemetry();
+            smTelemetry = new PipelineTelemetry.SlowMoverTelemetry();
             boolean[][] medianMask = buildObjectMask(medianArtifacts, sensorWidth, sensorHeight, 0);
-            slowMoverMedianArtifactMask = medianMask;
+            slowMoverMedianVetoMask = medianMask;
 
             slowMoverCandidates = filterSlowMoverCandidates(
                     rawSlowMovers,
@@ -749,6 +749,22 @@ public class JTransientEngine {
             cleanFramesObjects.add(extRes.objects);
         }
 
+        if (DEBUG) {
+            System.out.println("DEBUG: TrackLinker input frame timing summary:");
+            for (int i = 0; i < cleanFrames.size(); i++) {
+                ImageFrame frame = cleanFrames.get(i);
+                int objectCount = cleanFramesData.get(i).objects.size();
+                System.out.printf(
+                        "   Frame %d [%s] -> timestamp=%d exposure=%d detectedObjects=%d%n",
+                        frame.sequenceIndex,
+                        frame.filename,
+                        frame.timestamp,
+                        frame.exposureDuration,
+                        objectCount
+                );
+            }
+        }
+
         TrackLinker.TrackingResult trackResult = TrackLinker.findMovingObjects(
                 cleanFramesObjects,
                 masterStars,
@@ -759,10 +775,12 @@ public class JTransientEngine {
         );
 
         // Map the track results back to our main telemetry object
-        telemetry.totalMovingTargetsFound = trackResult.tracks.size();
+        telemetry.totalMasterStarsIdentified = masterStars.size();
+        telemetry.totalTracksFound = trackResult.tracks.size();
         telemetry.totalAnomaliesFound = trackResult.anomalies.size();
-        telemetry.totalSuspectedThresholdStreakTracksFound = trackResult.suspectedThresholdStreakTracks.size();
+        telemetry.totalSuspectedStreakTracksFound = trackResult.telemetry.suspectedStreakTracksFound;
         telemetry.trackerTelemetry = trackResult.telemetry;
+        telemetry.slowMoverTelemetry = smTelemetry;
 
         telemetry.processingTimeMs = System.currentTimeMillis() - startTime;
 
@@ -771,23 +789,17 @@ public class JTransientEngine {
         }
 
         // --- FINAL POST-PROCESSING ---
-        short[][] masterMaximumStackData = MasterMapGenerator.createMaximumMasterStack(cleanFrames);
+        short[][] maximumStackData = MasterMapGenerator.createMaximumMasterStack(cleanFrames);
 
         // --- MASTER MAXIMUM STACK EXPORT ONLY ---
         if (listener != null) {
             listener.onProgressUpdate(100, "Maximum Stack generation complete.");
         }
 
-        List<SourceExtractor.DetectedObject> maxStackStreaks = java.util.Collections.emptyList();
-        List<SourceExtractor.DetectedObject> newMasterStackStreaks = java.util.Collections.emptyList();
-
-        // Return the unified result with the new Master Data payloads!
         return new PipelineResult(trackResult.tracks, telemetry, masterStackData, masterStars,
-                slowMoverStackData, slowMoverMedianArtifactMask, slowMoverCandidates, trackResult.anomalies,
-                trackResult.suspectedThresholdStreakTracks, trackResult.allTransients,
-                trackResult.masterMask, context.driftPoints, smTelemetry, masterMaximumStackData,
-                maxStackStreaks,
-                newMasterStackStreaks);
+                slowMoverStackData, slowMoverMedianVetoMask, slowMoverCandidates, trackResult.anomalies,
+                trackResult.allRemainingTransients, trackResult.masterVetoMask, context.driftPoints,
+                maximumStackData);
     }
 
     /**
@@ -806,7 +818,7 @@ public class JTransientEngine {
             short[][] slowMoverStackData,
             boolean[][] medianMask,
             DetectionConfig config,
-            PipelineResult.SlowMoverTelemetry telemetry
+            PipelineTelemetry.SlowMoverTelemetry telemetry
     ) {
         List<SourceExtractor.DetectedObject> filteredCandidates = new ArrayList<>();
         telemetry.rawCandidatesExtracted = rawSlowMovers.size();
@@ -979,7 +991,7 @@ public class JTransientEngine {
     }
 
     private static void incrementSlowMoverShapeRejectTelemetry(
-            PipelineResult.SlowMoverTelemetry telemetry,
+            PipelineTelemetry.SlowMoverTelemetry telemetry,
             SlowMoverShapeRejectReason reason
     ) {
         switch (reason) {

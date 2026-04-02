@@ -29,7 +29,7 @@ The full run is organized into these major phases:
 7. streak linking and stationary-star veto filtering
 8. time-based point linking
 9. optional geometric point linking
-10. anomaly rescue and suspected-threshold streak grouping
+10. anomaly rescue and suspected streak grouping
 11. output assembly and maximum-stack export
 
 ## Filtering Overview
@@ -54,7 +54,7 @@ Filtering happens at several different levels of the pipeline, and not all of it
   - time-based linking can additionally reject a pair through `strictExposureKinematics`
 - anomaly filtering:
   - peak-sigma and integrated-sigma rescue filter by object area and significance
-  - suspected-threshold streak grouping is the anomaly-stage shape-aware pass, using elongation, angle consistency, and same-frame line consistency
+- suspected streak grouping is the anomaly-stage shape-aware pass, using elongation and same-frame line consistency
 
 ## 1. Border Drift Diagnostics
 
@@ -309,7 +309,12 @@ Single-frame streaks are only kept if:
 - `peakSigma >= singleStreakMinPeakSigma`
 - `SourceExtractor.isBinaryStarLikeStreakShape(...)` does not identify the footprint as a double-star impostor
 
-Rejected binary-star-like streaks increment `TrackerTelemetry.rejectedBinaryStarStreakShape`. They are removed from the fast-streak results and are also excluded from the preserved standalone streak export, so they do not reappear later as generic surviving transients.
+After multi-point streak linking finishes, the unmatched single streaks are evaluated separately:
+
+- streaks that pass both checks above become one-point `streakTracks`
+- all other unmatched streaks remain preserved standalone streak detections and are merged into the exported transient list
+
+Rejected binary-star-like streaks still increment `TrackerTelemetry.rejectedBinaryStarStreakShape`, but they are rejected only from single-streak track promotion, not from standalone export.
 
 ### 9.3 Stationary-star veto mask
 
@@ -325,7 +330,7 @@ Then each point-like object is checked:
 2. compute `overlapFraction = overlapCount / rawPixels.size()`
 3. purge the object if `overlapFraction > maxMaskOverlapFraction`
 
-The surviving point detections are the inputs to point-track linking. The exported `allTransients` list merges those surviving points with preserved streak detections.
+The surviving point detections are the inputs to point-track linking. The exported `allRemainingTransients` list merges those surviving points with preserved streak detections that were not consumed by accepted tracks.
 
 ## 10. Time-Based Point Linking
 
@@ -433,7 +438,7 @@ This allows skipped frames while still rejecting erratic or mostly stationary tr
 
 ## 13. Anomaly Rescue
 
-If `enableAnomalyRescue` is enabled, the tracker scans surviving point detections that were not consumed by any track.
+If `enableAnomalyRescue` is enabled, the tracker scans merged transient detections that were not consumed by any accepted track.
 
 ### 13.1 Peak-sigma rescue
 
@@ -456,25 +461,24 @@ These rescued anomalies are exported as standalone anomaly results through `Trac
 
 The `PEAK_SIGMA` and `INTEGRATED_SIGMA` rescue checks are energy- and size-based. They do not apply a dedicated shape veto at this stage.
 
-### 13.3 Suspected-threshold streak grouping
+### 13.3 Suspected streak grouping
 
-After anomaly rescue, the tracker runs a same-frame grouping pass over the rescued `INTEGRATED_SIGMA` anomalies.
+After anomaly rescue, the tracker runs a same-frame grouping pass over the rescued anomalies from one frame.
 
-Only anomalies that satisfy:
+Only rescued anomalies that satisfy:
 
 - `elongation > anomalySuspectedStreakMinElongation`
-- same-frame collinearity with other rescued integrated anomalies
-- angle agreement within `anomalySuspectedStreakAngleToleranceDegrees`
+- same-frame collinearity with other rescued anomalies
 
-are eligible to become `suspectedThresholdStreakTracks`.
+are eligible to become suspected streak tracks inside the returned `tracks` list.
 
-The grouping pass only links against other rescued integrated anomalies from the same frame. It does not search nearby orphan blobs. The final grouped line must still fit within `max(predictionTolerance, maxStarJitter)`.
+The grouping pass only links against other rescued anomalies from the same frame. It does not search nearby orphan blobs. The final grouped line must still fit within `suspectedStreakLineTolerance`.
 
-If an integrated anomaly is absorbed into a `suspectedThresholdStreakTrack`, it is removed from the standalone anomaly list. The final returned categories are therefore mutually exclusive:
+If an integrated anomaly is absorbed into a suspected streak track, it is removed from the standalone anomaly list. The final returned categories are therefore mutually exclusive:
 
-- confirmed tracks in `TrackingResult.tracks` and `PipelineResult.tracks`
+- tracks in `TrackingResult.tracks` and `PipelineResult.tracks`
+- suspected same-frame streak groupings are still returned through those same `tracks` lists, flagged by `Track.isSuspectedStreakTrack`
 - standalone anomalies (`PEAK_SIGMA` or `INTEGRATED_SIGMA`) in `TrackingResult.anomalies` and `PipelineResult.anomalies`
-- `suspectedThresholdStreakTracks` in `TrackingResult.suspectedThresholdStreakTracks` and `PipelineResult.suspectedThresholdStreakTracks`
 
 ## 14. Output Assembly
 
@@ -482,7 +486,7 @@ At the end of the run, the engine assembles:
 
 - confirmed tracks
 - standalone anomalies
-- suspected-threshold streak tracks
+- suspected streak tracks folded into the returned track list
 - pipeline telemetry
 - tracker telemetry
 - median master stack
@@ -496,9 +500,9 @@ The main UI-facing tracking outputs are therefore:
 
 - `PipelineResult.tracks`
 - `PipelineResult.anomalies`
-- `PipelineResult.suspectedThresholdStreakTracks`
+- `Track.isSuspectedStreakTrack` on entries inside `PipelineResult.tracks`
 
-It also generates `masterMaximumStackData` with `MasterMapGenerator.createMaximumMasterStack(...)`. This maximum stack is exported even though the current implementation does not yet populate the reserved max-stack streak lists.
+It also generates `maximumStackData` with `MasterMapGenerator.createMaximumMasterStack(...)`. This maximum stack is exported for visualization or downstream analysis.
 
 ## Resulting Behavior
 
@@ -511,6 +515,6 @@ The full algorithm is intentionally layered:
 5. try the strictest track linker first
 6. optionally fall back to looser geometry when timestamps are available, and require it when timestamps are missing
 7. rescue strong one-frame events at the end as either peak-sigma or integrated-sigma anomalies
-8. regroup some faint integrated anomalies into same-frame suspected-threshold streak tracks
+8. regroup some faint integrated anomalies into same-frame suspected streak tracks
 
 That layering is what lets `runPipeline(...)` handle slow point-like movers, fast streaks, faint same-frame streak fragments, and one-frame flashes within the same overall engine.

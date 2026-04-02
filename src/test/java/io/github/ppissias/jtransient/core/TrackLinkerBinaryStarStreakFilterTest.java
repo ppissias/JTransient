@@ -32,7 +32,7 @@ public class TrackLinkerBinaryStarStreakFilterTest {
     }
 
     @Test
-    public void filterTransientsRejectsSingleFrameBinaryStarLikeStreakAndCountsTelemetry() throws Exception {
+    public void filterTransientsPreservesSingleFrameBinaryStarLikeStreakButRejectsItAsSingleTrack() throws Exception {
         DetectionConfig config = new DetectionConfig();
         SourceExtractor.DetectedObject obj = loadStreakObjectFromMaskResource(BINARY_STREAK_MASKS[0]);
         obj.sourceFrameIndex = 0;
@@ -53,7 +53,8 @@ public class TrackLinkerBinaryStarStreakFilterTest {
 
         assertTrue(result.streakTracks.isEmpty());
         assertEquals(1, result.telemetry.rejectedBinaryStarStreakShape);
-        assertTrue(result.mergedTransients.get(0).isEmpty());
+        assertEquals(1, result.remainingTransients.get(0).size());
+        assertTrue(result.remainingTransients.get(0).contains(obj));
     }
 
     @Test

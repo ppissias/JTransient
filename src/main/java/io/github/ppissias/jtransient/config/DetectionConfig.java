@@ -365,15 +365,16 @@ public class DetectionConfig implements Cloneable {
      */
     public double anomalyMinPeakSigmaFloor = 3;
 
-    /** * Integrated-sigma anomalies above this elongation are checked for same-frame collinear grouping.
-     * If multiple rescued anomalies line up, they are exported as suspected threshold streak tracks.
+    /** * Rescued anomalies above this elongation are checked for same-frame collinear grouping.
+     * If multiple rescued anomalies line up, they are exported as suspected streak tracks.
      */
     public double anomalySuspectedStreakMinElongation = 3.5;
 
-    /** * Dedicated angular tolerance for linking suspected threshold streaks from weak integrated anomalies.
-     * This is intentionally looser than the main tracker angle because faint blobs can have noisy moment angles.
+    /** * Maximum perpendicular centroid distance allowed when grouping rescued same-frame anomalies
+     * into a suspected streak line. This is intentionally separate from the multi-frame
+     * point-track prediction tolerance so faint streak fragments can be grouped more permissively.
      */
-    public double anomalySuspectedStreakAngleToleranceDegrees = 6.0;
+    public double suspectedStreakLineTolerance = 6.0;
 
 
     /**

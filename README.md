@@ -122,15 +122,15 @@ try {
 
 Key `PipelineResult` fields:
 
-- `tracks`: confirmed `TrackLinker.Track` objects
-- `allTransients`: per-frame export of veto-surviving point transients plus preserved streak detections
+- `tracks`: returned `TrackLinker.Track` objects, including confirmed tracks and suspected same-frame streak groupings
+- `allRemainingTransients`: per-frame export of veto-surviving point transients plus preserved streak detections that were not consumed by accepted tracks
 - `masterStackData`: median master stack used to extract stationary stars
-- `masterMaximumStackData`: maximum stack exported for visualization/post-processing
+- `maximumStackData`: maximum stack exported for visualization/post-processing
 - `masterStars`: stationary objects extracted from the master stack
-- `masterMask`: boolean veto mask used to purge stationary stars
-- `slowMoverStackData` and `slowMoverCandidates`: optional slow-mover products
+- `masterVetoMask`: boolean veto mask used to purge stationary stars
+- `slowMoverStackData`, `slowMoverMedianVetoMask`, and `slowMoverCandidates`: optional slow-mover products
 - `driftPoints`: per-frame border-drift diagnostics
-- `telemetry`: pipeline and tracker counters
+- `telemetry`: pipeline and tracker counters, including nested `slowMoverTelemetry`
 
 ### 3. Reuse a precomputed master stack
 

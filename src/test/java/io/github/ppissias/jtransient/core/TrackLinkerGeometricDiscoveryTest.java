@@ -101,6 +101,50 @@ public class TrackLinkerGeometricDiscoveryTest {
         assertEquals(1, result.telemetry.pointTracksFound);
     }
 
+    /**
+     * Time-based candidate rejection reasons should populate the same telemetry buckets instead of
+     * silently disappearing when timestamps are present and geometric linking is disabled.
+     */
+    @Test
+    public void findMovingObjectsPopulatesTimeBasedRejectionTelemetry() {
+        DetectionConfig config = new DetectionConfig();
+        config.enableGeometricTrackLinking = false;
+        config.strictExposureKinematics = false;
+
+        SourceExtractor.DetectedObject baselineNonPositiveDelta = createPoint(14.0, 10.0, 1, 500L, 500L);
+        SourceExtractor.DetectedObject baselineJitter = createPoint(10.5, 10.0, 1, 1500L, 500L);
+        SourceExtractor.DetectedObject baselineSizeMismatch = createPoint(16.0, 10.0, 1, 1700L, 500L);
+        baselineSizeMismatch.fwhm = 10.0;
+        SourceExtractor.DetectedObject validBaseline = createPoint(20.0, 10.0, 1, 2000L, 500L);
+
+        List<List<SourceExtractor.DetectedObject>> frames = List.of(
+                List.of(createPoint(10.0, 10.0, 0, 1000L, 500L)),
+                List.of(baselineNonPositiveDelta, baselineJitter, baselineSizeMismatch, validBaseline),
+                List.of(
+                        createPoint(25.0, 10.0, 2, 1500L, 500L),
+                        createPoint(60.0, 10.0, 2, 3000L, 500L)
+                )
+        );
+
+        TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
+                frames,
+                new ArrayList<>(),
+                config,
+                null,
+                64,
+                64
+        );
+
+        assertEquals(0, result.tracks.size());
+        assertEquals(0, result.telemetry.pointTracksFound);
+        assertEquals(1, result.telemetry.countBaselineNonPositiveDelta);
+        assertEquals(1, result.telemetry.countBaselineJitter);
+        assertEquals(1, result.telemetry.countBaselineSize);
+        assertEquals(1, result.telemetry.countP3NonPositiveDelta);
+        assertEquals(1, result.telemetry.countP3VelocityMismatch);
+        assertEquals(1, result.telemetry.countTrackTooShort);
+    }
+
     private static SourceExtractor.DetectedObject createPoint(
             double x,
             double y,

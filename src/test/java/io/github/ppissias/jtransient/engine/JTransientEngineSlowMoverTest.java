@@ -2,6 +2,7 @@ package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.SourceExtractor;
+import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 import org.junit.Test;
 
 import javax.imageio.ImageIO;
@@ -41,7 +42,7 @@ public class JTransientEngineSlowMoverTest {
         DetectionConfig config = new DetectionConfig();
         config.slowMoverMedianSupportOverlapFraction = 0.10;
         config.slowMoverMedianSupportMaxOverlapFraction = 0.65;
-        PipelineResult.SlowMoverTelemetry telemetry = new PipelineResult.SlowMoverTelemetry();
+        PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
         short[][] slowMoverImage = new short[80][80];
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
@@ -98,7 +99,7 @@ public class JTransientEngineSlowMoverTest {
         DetectionConfig config = new DetectionConfig();
         config.slowMoverMedianSupportOverlapFraction = 0.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
-        PipelineResult.SlowMoverTelemetry telemetry = new PipelineResult.SlowMoverTelemetry();
+        PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
         short[][] slowMoverImage = new short[80][80];
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
@@ -144,7 +145,7 @@ public class JTransientEngineSlowMoverTest {
         DetectionConfig config = new DetectionConfig();
         config.slowMoverMedianSupportOverlapFraction = 0.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
-        PipelineResult.SlowMoverTelemetry telemetry = new PipelineResult.SlowMoverTelemetry();
+        PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
         short[][] slowMoverImage = new short[80][80];
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
@@ -190,7 +191,7 @@ public class JTransientEngineSlowMoverTest {
         config.enableSlowMoverSpecificShapeFiltering = false;
         config.slowMoverMedianSupportOverlapFraction = 0.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
-        PipelineResult.SlowMoverTelemetry telemetry = new PipelineResult.SlowMoverTelemetry();
+        PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
         short[][] slowMoverImage = new short[80][80];
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
@@ -239,7 +240,7 @@ public class JTransientEngineSlowMoverTest {
         config.enableSlowMoverSpecificShapeFiltering = false;
         config.slowMoverMedianSupportOverlapFraction = 0.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
-        PipelineResult.SlowMoverTelemetry telemetry = new PipelineResult.SlowMoverTelemetry();
+        PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
         short[][] slowMoverImage = new short[80][80];
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
@@ -285,7 +286,7 @@ public class JTransientEngineSlowMoverTest {
         DetectionConfig config = new DetectionConfig();
         config.slowMoverMedianSupportOverlapFraction = 0.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
-        PipelineResult.SlowMoverTelemetry telemetry = new PipelineResult.SlowMoverTelemetry();
+        PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
         short[][] slowMoverImage = new short[80][80];
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
@@ -326,7 +327,7 @@ public class JTransientEngineSlowMoverTest {
         DetectionConfig config = new DetectionConfig();
         config.slowMoverMedianSupportOverlapFraction = 0.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
-        PipelineResult.SlowMoverTelemetry telemetry = new PipelineResult.SlowMoverTelemetry();
+        PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
         short[][] slowMoverImage = new short[80][80];
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
@@ -393,7 +394,7 @@ public class JTransientEngineSlowMoverTest {
             short[][] slowMoverImage,
             boolean[][] medianMask,
             DetectionConfig config,
-            PipelineResult.SlowMoverTelemetry telemetry
+            PipelineTelemetry.SlowMoverTelemetry telemetry
     ) throws Exception {
         Method method = JTransientEngine.class.getDeclaredMethod(
                 "filterSlowMoverCandidates",
@@ -401,7 +402,7 @@ public class JTransientEngineSlowMoverTest {
                 short[][].class,
                 boolean[][].class,
                 DetectionConfig.class,
-                PipelineResult.SlowMoverTelemetry.class
+                PipelineTelemetry.SlowMoverTelemetry.class
         );
         method.setAccessible(true);
         return (List<SourceExtractor.DetectedObject>) method.invoke(
@@ -414,7 +415,7 @@ public class JTransientEngineSlowMoverTest {
         );
     }
 
-    private static int totalDetailedSlowMoverShapeRejects(PipelineResult.SlowMoverTelemetry telemetry) {
+    private static int totalDetailedSlowMoverShapeRejects(PipelineTelemetry.SlowMoverTelemetry telemetry) {
         return telemetry.rejectedSlowMoverShapeTooShort
                 + telemetry.rejectedSlowMoverShapeLowFill
                 + telemetry.rejectedSlowMoverShapeSparseBins
