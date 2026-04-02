@@ -262,7 +262,7 @@ public class DetectionConfig implements Cloneable {
      * Keep this enabled unless the time-based linker is preferred exclusively.
      * If timestamps are missing, the engine still forces geometric linking because it is the only point-track fallback.
      */
-    public boolean enableGeometricTrackLinking = true;
+    public boolean enableGeometricTrackLinking = false;
 
     /** * Determines how many points are needed to confirm a track by dividing the total number of frames
      * by this ratio (e.g., 20 frames / 3.0 = ~7 points required).
