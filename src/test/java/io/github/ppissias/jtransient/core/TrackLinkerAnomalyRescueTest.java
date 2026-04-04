@@ -8,6 +8,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
@@ -217,6 +218,39 @@ public class TrackLinkerAnomalyRescueTest {
     }
 
     /**
+     * Same-frame grouping should be seeded by elongated anomalies but may absorb aligned rescued
+     * anomalies whose elongation stays below the seeding threshold.
+     */
+    @Test
+    public void findMovingObjectsAbsorbsAlignedLowElongationAnomaliesIntoSuspectedStreakTrack() {
+        DetectionConfig config = new DetectionConfig();
+        SourceExtractor.DetectedObject seed1 = createFrameAnomaly(10, 10, 30, 4.0, 14.0, (short) 120, 0, 4.2, 0.0);
+        SourceExtractor.DetectedObject absorbed = createFrameAnomaly(22, 10, 30, 4.3, 15.0, (short) 120, 0, 3.2, 0.0);
+        SourceExtractor.DetectedObject seed2 = createFrameAnomaly(34, 10, 30, 4.1, 13.8, (short) 120, 0, 4.1, 0.0);
+
+        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
+        frames.add(List.of(seed1, absorbed, seed2));
+        frames.add(new ArrayList<>());
+        frames.add(new ArrayList<>());
+
+        TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
+                frames,
+                new ArrayList<>(),
+                config,
+                null,
+                64,
+                64
+        );
+
+        assertEquals(1, suspectedStreakTracks(result).size());
+        assertEquals(0, result.anomalies.size());
+        assertEquals(3, suspectedStreakTracks(result).get(0).points.size());
+        assertSame(seed1, suspectedStreakTracks(result).get(0).points.get(0));
+        assertSame(absorbed, suspectedStreakTracks(result).get(0).points.get(1));
+        assertSame(seed2, suspectedStreakTracks(result).get(0).points.get(2));
+    }
+
+    /**
      * Preserved standalone streak fragments rescued as anomalies should also be groupable into one
      * suspected same-frame streak when they remain roughly collinear.
      */
@@ -315,11 +349,11 @@ public class TrackLinkerAnomalyRescueTest {
     }
 
     /**
-     * When multiple same-frame collinear groups exist, only the longest line should be exported as
-     * a suspected streak track and the shorter group should remain in the anomaly list.
+     * When multiple same-frame collinear groups exist, each disjoint seeded line should be exported
+     * as its own suspected streak track.
      */
     @Test
-    public void findMovingObjectsKeepsOnlyLongestSameFrameSuspectedStreakLine() {
+    public void findMovingObjectsReturnsMultipleSameFrameSuspectedStreakLines() {
         DetectionConfig config = new DetectionConfig();
         config.suspectedStreakLineTolerance = 3.0;
 
@@ -346,12 +380,25 @@ public class TrackLinkerAnomalyRescueTest {
                 64
         );
 
-        assertEquals(1, suspectedStreakTracks(result).size());
-        assertEquals(4, result.anomalies.size());
-        assertEquals(3, suspectedStreakTracks(result).get(0).points.size());
-        assertSame(longLine1, suspectedStreakTracks(result).get(0).points.get(0));
-        assertSame(longLine2, suspectedStreakTracks(result).get(0).points.get(1));
-        assertSame(longLine3, suspectedStreakTracks(result).get(0).points.get(2));
+        assertEquals(2, suspectedStreakTracks(result).size());
+        assertEquals(0, result.anomalies.size());
+
+        TrackLinker.Track longTrack = suspectedStreakTrackContaining(result, longLine1);
+        TrackLinker.Track shortTrack = suspectedStreakTrackContaining(result, shortLine1);
+
+        assertNotNull(longTrack);
+        assertNotNull(shortTrack);
+
+        assertEquals(3, longTrack.points.size());
+        assertSame(longLine1, longTrack.points.get(0));
+        assertSame(longLine2, longTrack.points.get(1));
+        assertSame(longLine3, longTrack.points.get(2));
+
+        assertEquals(4, shortTrack.points.size());
+        assertSame(shortLine1, shortTrack.points.get(0));
+        assertSame(shortLine2, shortTrack.points.get(1));
+        assertSame(shortLine3, shortTrack.points.get(2));
+        assertSame(shortLine4, shortTrack.points.get(3));
     }
 
     /**
@@ -393,6 +440,16 @@ public class TrackLinkerAnomalyRescueTest {
             }
         }
         return suspectedTracks;
+    }
+
+    private static TrackLinker.Track suspectedStreakTrackContaining(TrackLinker.TrackingResult result,
+                                                                    SourceExtractor.DetectedObject object) {
+        for (TrackLinker.Track track : suspectedStreakTracks(result)) {
+            if (track.points.contains(object)) {
+                return track;
+            }
+        }
+        return null;
     }
 
     private static SourceExtractor.DetectedObject createAnomaly(int pixelArea, double peakSigma, double integratedSigma) {

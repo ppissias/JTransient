@@ -470,9 +470,13 @@ Only rescued anomalies that satisfy:
 - `elongation > anomalySuspectedStreakMinElongation`
 - same-frame collinearity with other rescued anomalies
 
-are eligible to become suspected streak tracks inside the returned `tracks` list.
+can seed suspected streak tracks inside the returned `tracks` list.
 
 The grouping pass only links against other rescued anomalies from the same frame. It does not search nearby orphan blobs. The final grouped line must still fit within `suspectedStreakLineTolerance`.
+
+Once an elongated seed line is accepted, lower-elongation rescued anomalies from that same frame may still be absorbed into the line if they also fall within the same collinearity tolerance.
+
+The pass can return multiple disjoint suspected streak tracks from one frame. It repeatedly removes the accepted line and searches the remaining rescued anomalies again.
 
 If an integrated anomaly is absorbed into a suspected streak track, it is removed from the standalone anomaly list. The final returned categories are therefore mutually exclusive:
 

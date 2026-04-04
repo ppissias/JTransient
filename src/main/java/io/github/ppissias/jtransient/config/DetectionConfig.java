@@ -365,8 +365,9 @@ public class DetectionConfig implements Cloneable {
      */
     public double anomalyMinPeakSigmaFloor = 3;
 
-    /** * Rescued anomalies above this elongation are checked for same-frame collinear grouping.
-     * If multiple rescued anomalies line up, they are exported as suspected streak tracks.
+    /** * Rescued anomalies above this elongation seed same-frame suspected streak grouping.
+     * Once a seeded line is selected, aligned lower-elongation rescued anomalies from the same frame
+     * may still be absorbed into that returned suspected streak track.
      */
     public double anomalySuspectedStreakMinElongation = 3.5;
 

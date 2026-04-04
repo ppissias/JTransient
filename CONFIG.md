@@ -429,10 +429,11 @@ Minimum footprint size required for anomaly rescue.
 
 ### `anomalySuspectedStreakMinElongation` (default `3.5`)
 
-Minimum elongation required before a rescued anomaly is even considered for same-frame suspected streak grouping.
+Minimum elongation required before a rescued anomaly can seed same-frame suspected streak grouping.
 
 - only affects the post-rescue grouping pass
-- larger values restrict grouping to more obviously elongated fragments
+- larger values restrict which rescued fragments can define the same-frame streak axis
+- aligned lower-elongation rescued anomalies can still be absorbed once a seeded line is accepted
 
 ### `suspectedStreakLineTolerance` (default `6.0`)
 
@@ -441,6 +442,7 @@ Maximum perpendicular centroid error allowed when rescued same-frame anomalies a
 - this is separate from `predictionTolerance`
 - larger values make same-frame faint-streak grouping more permissive
 - smaller values require tighter collinearity
+- multiple disjoint suspected streaks can be returned from one frame when separate seeded lines survive
 - does not affect the main multi-frame point-track linker
 
 ## 7. Interaction With The Auto-Tuner
