@@ -245,6 +245,7 @@ What it does:
    - time-based point linking when timestamps are available
    - geometric fallback point linking
    - anomaly rescue
+   - residual transient analysis on leftover non-streak point detections
 6. records pipeline and tracker telemetry
 7. builds the maximum stack for export
 
@@ -256,7 +257,10 @@ What it returns:
 - `PipelineResult.masterStars`
 - `PipelineResult.slowMoverStackData`
 - `PipelineResult.slowMoverCandidates`
-- `PipelineResult.allRemainingTransients`
+- `PipelineResult.anomalies`
+- `PipelineResult.allTransients`
+- `PipelineResult.unclassifiedTransients`
+- `PipelineResult.residualTransientAnalysis`
 - `PipelineResult.masterVetoMask`
 - `PipelineResult.driftPoints`
 - `PipelineResult.telemetry.slowMoverTelemetry`

@@ -444,7 +444,73 @@ Maximum perpendicular centroid error allowed when rescued same-frame anomalies a
 - multiple disjoint suspected streaks can be returned from one frame when separate same-frame lines survive
 - does not affect the main multi-frame point-track linker
 
-## 7. Interaction With The Auto-Tuner
+## 7. Residual Transient Analysis
+
+### `enableResidualTransientAnalysis` (default `true`)
+
+Master switch for post-processing leftover non-streak point detections after normal tracking.
+
+- runs on `PipelineResult.unclassifiedTransients`
+- exports results through `PipelineResult.residualTransientAnalysis`
+
+### `enableLocalRescueCandidates` (default `true`)
+
+Enables the object-like local rescue candidate pass.
+
+- returns weak heuristic candidates as `MICRO_DRIFT`, `SPARSE_LOCAL_DRIFT`, or `LOCAL_REPEAT`
+- these are kept separate from ordinary confirmed tracks
+
+### `enableLocalActivityClusters` (default `true`)
+
+Enables the broader leftover-point activity clustering pass after accepted local rescue candidates are removed.
+
+- uses the same per-cluster metrics structure as local rescue candidates
+- never reuses points already consumed by accepted local rescue candidates
+
+### `localActivityClusterRadiusPixels` (default `20.0`)
+
+Linkage radius used for broad residual activity clustering.
+
+- larger values merge nearby leftovers into bigger review clusters
+- smaller values keep the review bucket more fragmented
+
+### `localActivityClusterMinFrames` (default `2`)
+
+Minimum number of unique frames required before a broad local activity cluster is exported.
+
+### Residual Rescue Threshold Fields
+
+The ported local-rescue thresholds are also exposed directly in `DetectionConfig` so they can be tuned like the rest of the pipeline:
+
+- `localRescueMinRepeatPoints`
+- `localRescueMinMotionPoints`
+- `localRescueMaxFrameGap`
+- `localRescueMaxStepPixelsPerFrame`
+- `localRescueEdgeDistanceBiasPixels`
+- `localRescueMaxChainRadiusPixels`
+- `localRescueMinTotalDisplacementPixels`
+- `localRescueMaxTotalDisplacementPixels`
+- `localRescueMaxLinearityRmsePixels`
+- `localRescueMinFrameCoverage`
+- `localRepeatMaxTotalDisplacementPixels`
+- `localRepeatMaxClusterRadiusPixels`
+- `localRepeatMaxAverageStepPixels`
+- `localRepeatMaxLinearityRmsePixels`
+- `localRepeatMinFrameCoverage`
+- `localRepeatMinAverageSignal`
+- `localRepeatMinMultiPointDisplacementPixels`
+- `sparseLocalDriftMinTotalDisplacementPixels`
+- `sparseLocalDriftMaxTotalDisplacementPixels`
+- `sparseLocalDriftMaxClusterRadiusPixels`
+- `sparseLocalDriftMaxAverageStepPixels`
+- `sparseLocalDriftMaxLinearityRmsePixels`
+- `sparseLocalDriftMinFrameCoverage`
+- `sparseLocalDriftMinAverageSignal`
+- `sparseLocalDriftMaxStepPixels`
+- `residualClassifiedMatchRadiusPixels`
+- `localRescueClusterLinkRadiusPixels`
+
+## 8. Interaction With The Auto-Tuner
 
 `JTransientAutoTuner` does not read extra scoring fields from `DetectionConfig`. The tuning sweep and scoring policy are implemented as static fields and `AutoTuneProfile` presets inside `JTransientAutoTuner`.
 
@@ -458,7 +524,7 @@ The tuner actively optimizes or measures these `DetectionConfig` fields:
 
 Everything else in the returned config comes from the base config you provided.
 
-## 8. Practical Starting Point
+## 9. Practical Starting Point
 
 If you do not have strong prior knowledge of the dataset:
 

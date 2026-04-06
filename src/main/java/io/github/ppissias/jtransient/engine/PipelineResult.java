@@ -36,8 +36,13 @@ public class PipelineResult {
     /** Single-frame anomalies rescued after tracking without being treated as tracks. */
     public final List<TrackLinker.AnomalyDetection> anomalies;
 
-    /** A chronological, frame-by-frame list of the remaining transient detections exported after tracking. */
-    public final List<List<SourceExtractor.DetectedObject>> allRemainingTransients;
+    /** A chronological, frame-by-frame list of all non-stationary transient detections carried through tracking. */
+    public final List<List<SourceExtractor.DetectedObject>> allTransients;
+    /** A chronological, frame-by-frame list of detections still uncategorized after tracks and anomalies are exported. */
+    public final List<List<SourceExtractor.DetectedObject>> unclassifiedTransients;
+
+    /** Residual-transient analysis of leftover point detections after normal classification. */
+    public final ResidualTransientAnalysis residualTransientAnalysis;
 
     /** The pixel-perfect Boolean veto mask generated from the master star map. */
     public final boolean[][] masterVetoMask;
@@ -59,7 +64,9 @@ public class PipelineResult {
                           boolean[][] slowMoverMedianVetoMask,
                           List<SourceExtractor.DetectedObject> slowMoverCandidates,
                           List<TrackLinker.AnomalyDetection> anomalies,
-                          List<List<SourceExtractor.DetectedObject>> allRemainingTransients,
+                          List<List<SourceExtractor.DetectedObject>> allTransients,
+                          List<List<SourceExtractor.DetectedObject>> unclassifiedTransients,
+                          ResidualTransientAnalysis residualTransientAnalysis,
                           boolean[][] masterVetoMask,
                           List<SourceExtractor.Pixel> driftPoints,
                           short[][] maximumStackData) {
@@ -71,7 +78,9 @@ public class PipelineResult {
         this.slowMoverMedianVetoMask = slowMoverMedianVetoMask;
         this.slowMoverCandidates = slowMoverCandidates;
         this.anomalies = anomalies;
-        this.allRemainingTransients = allRemainingTransients;
+        this.allTransients = allTransients;
+        this.unclassifiedTransients = unclassifiedTransients;
+        this.residualTransientAnalysis = residualTransientAnalysis;
         this.masterVetoMask = masterVetoMask;
         this.driftPoints = driftPoints;
         this.maximumStackData = maximumStackData;

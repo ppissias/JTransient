@@ -90,8 +90,8 @@ public class TrackLinker {
         public TrackerTelemetry telemetry;
         /** Number of streak tracks accepted during the fast-streak phase. */
         public int streakTracksFound;
-        /** Final export list that merges point transients and preserved standalone streaks per frame. */
-        public List<List<SourceExtractor.DetectedObject>> remainingTransients;
+        /** Full post-veto transient population, merging point transients with all mobile streak detections per frame. */
+        public List<List<SourceExtractor.DetectedObject>> allTransients;
         /** Pixel-accurate stationary-star veto mask built from the master stack. */
         public boolean[][] masterVetoMask;
     }
@@ -106,8 +106,10 @@ public class TrackLinker {
         public List<AnomalyDetection> anomalies;
         /** Tracker diagnostics covering all stages. */
         public TrackerTelemetry telemetry;
-        /** Per-frame transient detections still remaining after accepted tracks are removed. */
-        public List<List<SourceExtractor.DetectedObject>> allRemainingTransients;
+        /** All non-stationary transient detections carried through tracking, grouped by frame. */
+        public List<List<SourceExtractor.DetectedObject>> allTransients;
+        /** Per-frame transient detections that remain uncategorized after tracks and anomalies are exported. */
+        public List<List<SourceExtractor.DetectedObject>> unclassifiedTransients;
         /** Pixel veto mask generated from the master star map. */
         public boolean[][] masterVetoMask;
 
@@ -117,12 +119,14 @@ public class TrackLinker {
         public TrackingResult(List<Track> tracks,
                               List<AnomalyDetection> anomalies,
                               TrackerTelemetry telemetry,
-                              List<List<SourceExtractor.DetectedObject>> allRemainingTransients,
+                              List<List<SourceExtractor.DetectedObject>> allTransients,
+                              List<List<SourceExtractor.DetectedObject>> unclassifiedTransients,
                               boolean[][] masterVetoMask) {
             this.tracks = tracks;
             this.anomalies = anomalies;
             this.telemetry = telemetry;
-            this.allRemainingTransients = allRemainingTransients;
+            this.allTransients = allTransients;
+            this.unclassifiedTransients = unclassifiedTransients;
             this.masterVetoMask = masterVetoMask;
         }
     }
@@ -371,7 +375,6 @@ public class TrackLinker {
             }
         }
 
-        List<SourceExtractor.DetectedObject> preservedStandaloneStreaks = new ArrayList<>();
         for (SourceExtractor.DetectedObject singleStreak : unmatchedSingleStreaks) {
             boolean rejectedByBinaryStarVeto = config.enableBinaryStarLikeStreakShapeVeto
                     && SourceExtractor.isBinaryStarLikeStreakShape(singleStreak);
@@ -386,27 +389,15 @@ public class TrackLinker {
                 singleStreakTrack.addPoint(singleStreak);
                 confirmedStreakTracks.add(singleStreakTrack);
                 streakTracksFound++;
-            } else {
-                preservedStandaloneStreaks.add(singleStreak);
             }
         }
         if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3] Completed. Found " + streakTracksFound + " streak track(s).");
 
-        List<List<SourceExtractor.DetectedObject>> preservedStandaloneStreaksByFrame = new ArrayList<>();
-        for (int i = 0; i < numFrames; i++) {
-            preservedStandaloneStreaksByFrame.add(new ArrayList<>());
-        }
-        for (SourceExtractor.DetectedObject streak : preservedStandaloneStreaks) {
-            preservedStandaloneStreaksByFrame.get(streak.sourceFrameIndex).add(streak);
-        }
-
-        // Merge point transients with only the leftover streaks that were not promoted to tracks.
-        List<List<SourceExtractor.DetectedObject>> remainingTransients = new ArrayList<>();
-        for (int i = 0; i < numFrames; i++) {
-            List<SourceExtractor.DetectedObject> mergedFrame = new ArrayList<>(transients.get(i));
-            mergedFrame.addAll(preservedStandaloneStreaksByFrame.get(i));
-            remainingTransients.add(mergedFrame);
-        }
+        List<List<SourceExtractor.DetectedObject>> allTransients = buildAllTransients(
+                transients,
+                validMovingStreaks,
+                numFrames
+        );
 
         TransientsFilterResult result = new TransientsFilterResult();
         result.pointTransients = transients;
@@ -414,7 +405,7 @@ public class TrackLinker {
         result.streakTracks = confirmedStreakTracks;
         result.telemetry = telemetry;
         result.streakTracksFound = streakTracksFound;
-        result.remainingTransients = remainingTransients;
+        result.allTransients = allTransients;
         result.masterVetoMask = masterVetoMask;
 
         return result;
@@ -448,7 +439,14 @@ public class TrackLinker {
 
         if (numFrames < 3) {
             if (JTransientEngine.DEBUG) System.out.println("DEBUG: [ABORT] Less than 3 frames provided. Cannot form point tracks.");
-            return new TrackingResult(new ArrayList<>(), new ArrayList<>(), new TrackerTelemetry(), new ArrayList<>(), null);
+            return new TrackingResult(
+                    new ArrayList<>(),
+                    new ArrayList<>(),
+                    new TrackerTelemetry(),
+                    new ArrayList<>(),
+                    new ArrayList<>(),
+                    null
+            );
         }
 
         TransientsFilterResult filterResult = filterTransients(allFrames, masterStars, config, listener, sensorWidth, sensorHeight);
@@ -913,7 +911,7 @@ public class TrackLinker {
         List<AnomalyDetection> anomalies = new ArrayList<>();
         List<Track> suspectedStreakTracks = new ArrayList<>();
         List<List<SourceExtractor.DetectedObject>> anomalyCandidates = buildPhase5AnomalyCandidates(
-                filterResult.remainingTransients,
+                filterResult.allTransients,
                 confirmedTracks,
                 pointTracks
         );
@@ -1030,7 +1028,20 @@ public class TrackLinker {
                     finalGeometricPointTracks
             );
         }
-        return new TrackingResult(confirmedTracks, anomalies, telemetry, filterResult.remainingTransients, filterResult.masterVetoMask);
+        List<List<SourceExtractor.DetectedObject>> allTransients = filterResult.allTransients;
+        List<List<SourceExtractor.DetectedObject>> unclassifiedTransients = buildUnclassifiedTransients(
+                allTransients,
+                confirmedTracks,
+                anomalies
+        );
+        return new TrackingResult(
+                confirmedTracks,
+                anomalies,
+                telemetry,
+                allTransients,
+                unclassifiedTransients,
+                filterResult.masterVetoMask
+        );
     }
 
     /**
@@ -1218,7 +1229,7 @@ public class TrackLinker {
      * Removes any detection already consumed by an accepted track before Phase 5 anomaly rescue.
      */
     static List<List<SourceExtractor.DetectedObject>> buildPhase5AnomalyCandidates(
-            List<List<SourceExtractor.DetectedObject>> remainingTransients,
+            List<List<SourceExtractor.DetectedObject>> allTransients,
             List<Track> streakTracks,
             List<Track> pointTracks) {
         Set<SourceExtractor.DetectedObject> trackedObjects = new HashSet<>();
@@ -1229,8 +1240,8 @@ public class TrackLinker {
             trackedObjects.addAll(track.points);
         }
 
-        List<List<SourceExtractor.DetectedObject>> anomalyCandidates = new ArrayList<>(remainingTransients.size());
-        for (List<SourceExtractor.DetectedObject> frameObjects : remainingTransients) {
+        List<List<SourceExtractor.DetectedObject>> anomalyCandidates = new ArrayList<>(allTransients.size());
+        for (List<SourceExtractor.DetectedObject> frameObjects : allTransients) {
             List<SourceExtractor.DetectedObject> filteredFrame = new ArrayList<>();
             for (SourceExtractor.DetectedObject object : frameObjects) {
                 if (!trackedObjects.contains(object)) {
@@ -1240,6 +1251,71 @@ public class TrackLinker {
             anomalyCandidates.add(filteredFrame);
         }
         return anomalyCandidates;
+    }
+
+    /**
+     * Builds the full post-veto transient population per frame from point transients and mobile streaks.
+     */
+    static List<List<SourceExtractor.DetectedObject>> buildAllTransients(
+            List<List<SourceExtractor.DetectedObject>> pointTransients,
+            List<SourceExtractor.DetectedObject> validMovingStreaks,
+            int numFrames) {
+        List<List<SourceExtractor.DetectedObject>> allTransients = new ArrayList<>(numFrames);
+        for (int i = 0; i < numFrames; i++) {
+            List<SourceExtractor.DetectedObject> frameObjects = new ArrayList<>();
+            if (pointTransients != null && i < pointTransients.size() && pointTransients.get(i) != null) {
+                frameObjects.addAll(pointTransients.get(i));
+            }
+            allTransients.add(frameObjects);
+        }
+
+        if (validMovingStreaks != null) {
+            for (SourceExtractor.DetectedObject streak : validMovingStreaks) {
+                if (streak == null || streak.sourceFrameIndex < 0 || streak.sourceFrameIndex >= numFrames) {
+                    continue;
+                }
+                allTransients.get(streak.sourceFrameIndex).add(streak);
+            }
+        }
+        return allTransients;
+    }
+
+    /**
+     * Removes all detections that were consumed by accepted tracks or surviving standalone anomalies.
+     */
+    static List<List<SourceExtractor.DetectedObject>> buildUnclassifiedTransients(
+            List<List<SourceExtractor.DetectedObject>> allTransients,
+            List<Track> tracks,
+            List<AnomalyDetection> anomalies) {
+        Set<SourceExtractor.DetectedObject> classifiedObjects = new HashSet<>();
+        if (tracks != null) {
+            for (Track track : tracks) {
+                if (track != null && track.points != null) {
+                    classifiedObjects.addAll(track.points);
+                }
+            }
+        }
+        if (anomalies != null) {
+            for (AnomalyDetection anomaly : anomalies) {
+                if (anomaly != null && anomaly.object != null) {
+                    classifiedObjects.add(anomaly.object);
+                }
+            }
+        }
+
+        List<List<SourceExtractor.DetectedObject>> unclassifiedTransients = new ArrayList<>(allTransients.size());
+        for (List<SourceExtractor.DetectedObject> frameObjects : allTransients) {
+            List<SourceExtractor.DetectedObject> frameUnclassified = new ArrayList<>();
+            if (frameObjects != null) {
+                for (SourceExtractor.DetectedObject object : frameObjects) {
+                    if (!classifiedObjects.contains(object)) {
+                        frameUnclassified.add(object);
+                    }
+                }
+            }
+            unclassifiedTransients.add(frameUnclassified);
+        }
+        return unclassifiedTransients;
     }
 
     // =================================================================

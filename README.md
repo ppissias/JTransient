@@ -123,7 +123,10 @@ try {
 Key `PipelineResult` fields:
 
 - `tracks`: returned `TrackLinker.Track` objects, including confirmed tracks and suspected same-frame streak groupings
-- `allRemainingTransients`: per-frame export of veto-surviving point transients plus preserved streak detections that were not consumed by accepted tracks
+- `anomalies`: rescued single-frame anomalies kept separate from normal tracks
+- `allTransients`: per-frame export of the full post-veto transient population carried through tracking, including point detections and mobile streak detections
+- `unclassifiedTransients`: the true leftover detections that remain after tracks and anomalies are exported
+- `residualTransientAnalysis`: post-processing of `unclassifiedTransients` into weak local rescue candidates and broad activity clusters
 - `masterStackData`: median master stack used to extract stationary stars
 - `maximumStackData`: maximum stack exported for visualization/post-processing
 - `masterStars`: stationary objects extracted from the master stack

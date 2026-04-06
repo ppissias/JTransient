@@ -90,12 +90,12 @@ public class JTransientEngine {
     }
 
     /**
-     * Pairing of one frame label with the transients that survived stationary-star vetoing.
+     * Pairing of one frame label with the post-veto transient detections exported for that frame.
      */
     public static class FrameTransients {
         /** Source frame label. */
         public final String filename;
-        /** Surviving transient objects for the frame. */
+        /** Post-veto transient objects for the frame. */
         public final List<SourceExtractor.DetectedObject> transients;
         /** Full extraction result for the same frame. */
         public final SourceExtractor.ExtractionResult extractionResult;
@@ -272,7 +272,7 @@ public class JTransientEngine {
         for (int i = 0; i < context.cleanFrames.size(); i++) {
             finalResult.add(new FrameTransients(
                     context.cleanFrames.get(i).filename,
-                    filterResult.remainingTransients.get(i),
+                    filterResult.allTransients.get(i),
                     context.cleanFramesData.get(i)
             ));
         }
@@ -785,6 +785,15 @@ public class JTransientEngine {
         telemetry.processingTimeMs = System.currentTimeMillis() - startTime;
 
         if (listener != null) {
+            listener.onProgressUpdate(96, "Analyzing residual transients...");
+        }
+
+        ResidualTransientAnalysis residualTransientAnalysis = ResidualTransientAnalyzer.analyze(
+                trackResult.unclassifiedTransients,
+                config
+        );
+
+        if (listener != null) {
             listener.onProgressUpdate(100, "Processing Complete!");
         }
 
@@ -798,7 +807,8 @@ public class JTransientEngine {
 
         return new PipelineResult(trackResult.tracks, telemetry, masterStackData, masterStars,
                 slowMoverStackData, slowMoverMedianVetoMask, slowMoverCandidates, trackResult.anomalies,
-                trackResult.allRemainingTransients, trackResult.masterVetoMask, context.driftPoints,
+                trackResult.allTransients, trackResult.unclassifiedTransients,
+                residualTransientAnalysis, trackResult.masterVetoMask, context.driftPoints,
                 maximumStackData);
     }
 

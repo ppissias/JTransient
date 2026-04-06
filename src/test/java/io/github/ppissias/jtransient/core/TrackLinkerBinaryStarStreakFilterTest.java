@@ -53,8 +53,8 @@ public class TrackLinkerBinaryStarStreakFilterTest {
 
         assertTrue(result.streakTracks.isEmpty());
         assertEquals(1, result.telemetry.rejectedBinaryStarStreakShape);
-        assertEquals(1, result.remainingTransients.get(0).size());
-        assertTrue(result.remainingTransients.get(0).contains(obj));
+        assertEquals(1, result.allTransients.get(0).size());
+        assertTrue(result.allTransients.get(0).contains(obj));
     }
 
     @Test

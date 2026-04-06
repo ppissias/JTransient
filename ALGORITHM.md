@@ -330,7 +330,7 @@ Then each point-like object is checked:
 2. compute `overlapFraction = overlapCount / rawPixels.size()`
 3. purge the object if `overlapFraction > maxMaskOverlapFraction`
 
-The surviving point detections are the inputs to point-track linking. The exported `allRemainingTransients` list merges those surviving points with preserved streak detections that were not consumed by accepted tracks.
+The surviving point detections are the inputs to point-track linking. The exported `allTransients` list contains the full post-veto transient population carried through tracking, while `unclassifiedTransients` contains only the detections that remain after tracks and anomalies are assigned.
 
 ## 10. Time-Based Point Linking
 
