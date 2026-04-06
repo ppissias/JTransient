@@ -218,8 +218,8 @@ public class TrackLinkerAnomalyRescueTest {
     }
 
     /**
-     * Same-frame grouping should be seeded by elongated anomalies but may absorb aligned rescued
-     * anomalies whose elongation stays below the seeding threshold.
+     * Same-frame grouping should still absorb aligned rescued anomalies whose elongation is lower
+     * than older seeding thresholds.
      */
     @Test
     public void findMovingObjectsAbsorbsAlignedLowElongationAnomaliesIntoSuspectedStreakTrack() {
@@ -248,6 +248,41 @@ public class TrackLinkerAnomalyRescueTest {
         assertSame(seed1, suspectedStreakTracks(result).get(0).points.get(0));
         assertSame(absorbed, suspectedStreakTracks(result).get(0).points.get(1));
         assertSame(seed2, suspectedStreakTracks(result).get(0).points.get(2));
+    }
+
+    /**
+     * Same-frame grouping should not require any elongated seed fragments once anomalies have
+     * already been rescued and are found to be collinear within the same frame.
+     */
+    @Test
+    public void findMovingObjectsPromotesAlignedLowElongationAnomaliesWithoutElongatedSeed() {
+        DetectionConfig config = new DetectionConfig();
+        config.anomalySuspectedStreakMinElongation = 10.0;
+
+        SourceExtractor.DetectedObject fragment1 = createFrameAnomaly(10, 10, 30, 4.0, 14.0, (short) 120, 0, 1.4, 0.0);
+        SourceExtractor.DetectedObject fragment2 = createFrameAnomaly(22, 10, 30, 4.3, 15.0, (short) 120, 0, 1.2, 0.0);
+        SourceExtractor.DetectedObject fragment3 = createFrameAnomaly(34, 10, 30, 4.1, 13.8, (short) 120, 0, 1.3, 0.0);
+
+        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
+        frames.add(List.of(fragment1, fragment2, fragment3));
+        frames.add(new ArrayList<>());
+        frames.add(new ArrayList<>());
+
+        TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
+                frames,
+                new ArrayList<>(),
+                config,
+                null,
+                64,
+                64
+        );
+
+        assertEquals(1, suspectedStreakTracks(result).size());
+        assertEquals(0, result.anomalies.size());
+        assertEquals(3, suspectedStreakTracks(result).get(0).points.size());
+        assertSame(fragment1, suspectedStreakTracks(result).get(0).points.get(0));
+        assertSame(fragment2, suspectedStreakTracks(result).get(0).points.get(1));
+        assertSame(fragment3, suspectedStreakTracks(result).get(0).points.get(2));
     }
 
     /**
@@ -286,7 +321,7 @@ public class TrackLinkerAnomalyRescueTest {
 
     /**
      * Same-frame suspected streak grouping should ignore each anomaly's measured angle and rely
-     * only on elongation plus line membership.
+     * only on same-frame line membership.
      */
     @Test
     public void findMovingObjectsIgnoresAnomalyAnglesWhenGroupingSuspectedStreaks() {
@@ -312,6 +347,39 @@ public class TrackLinkerAnomalyRescueTest {
 
         assertEquals(1, suspectedStreakTracks(result).size());
         assertEquals(0, result.anomalies.size());
+    }
+
+    /**
+     * Same-frame anomaly grouping must remain frame-local even if rescued anomalies would line up
+     * across different frames.
+     */
+    @Test
+    public void findMovingObjectsDoesNotGroupRescuedAnomaliesAcrossFrames() {
+        DetectionConfig config = new DetectionConfig();
+
+        SourceExtractor.DetectedObject frame0a = createFrameAnomaly(10, 10, 30, 4.0, 14.0, (short) 120, 0, 1.3, 0.0);
+        SourceExtractor.DetectedObject frame0b = createFrameAnomaly(22, 10, 30, 4.1, 14.1, (short) 120, 0, 1.2, 0.0);
+        SourceExtractor.DetectedObject frame1 = createFrameAnomaly(34, 10, 30, 4.2, 14.2, (short) 120, 1, 1.1, 0.0);
+
+        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
+        frames.add(List.of(frame0a, frame0b));
+        frames.add(List.of(frame1));
+        frames.add(new ArrayList<>());
+
+        TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
+                frames,
+                new ArrayList<>(),
+                config,
+                null,
+                64,
+                64
+        );
+
+        assertTrue(suspectedStreakTracks(result).isEmpty());
+        assertEquals(3, result.anomalies.size());
+        assertSame(frame0a, result.anomalies.get(0).object);
+        assertSame(frame0b, result.anomalies.get(1).object);
+        assertSame(frame1, result.anomalies.get(2).object);
     }
 
     /**

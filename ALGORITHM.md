@@ -54,7 +54,7 @@ Filtering happens at several different levels of the pipeline, and not all of it
   - time-based linking can additionally reject a pair through `strictExposureKinematics`
 - anomaly filtering:
   - peak-sigma and integrated-sigma rescue filter by object area and significance
-- suspected streak grouping is the anomaly-stage shape-aware pass, using elongation and same-frame line consistency
+- suspected streak grouping is the anomaly-stage same-frame line pass, using rescued anomaly collinearity within one frame
 
 ## 1. Border Drift Diagnostics
 
@@ -465,18 +465,13 @@ The `PEAK_SIGMA` and `INTEGRATED_SIGMA` rescue checks are energy- and size-based
 
 After anomaly rescue, the tracker runs a same-frame grouping pass over the rescued anomalies from one frame.
 
-Only rescued anomalies that satisfy:
-
-- `elongation > anomalySuspectedStreakMinElongation`
-- same-frame collinearity with other rescued anomalies
-
-can seed suspected streak tracks inside the returned `tracks` list.
+Any rescued anomalies from the same frame that form a collinear group can be promoted into a suspected streak track inside the returned `tracks` list.
 
 The grouping pass only links against other rescued anomalies from the same frame. It does not search nearby orphan blobs. The final grouped line must still fit within `suspectedStreakLineTolerance`.
 
-Once an elongated seed line is accepted, lower-elongation rescued anomalies from that same frame may still be absorbed into the line if they also fall within the same collinearity tolerance.
+Elongation and measured blob angle are not required to seed the line. Once a same-frame line is accepted, every rescued anomaly from that frame that also falls within the same collinearity tolerance is absorbed into that returned suspected streak track.
 
-The pass can return multiple disjoint suspected streak tracks from one frame. It repeatedly removes the accepted line and searches the remaining rescued anomalies again.
+The pass can return multiple disjoint suspected streak tracks from one frame. It repeatedly removes the accepted line and searches the remaining rescued anomalies from that frame again.
 
 If an integrated anomaly is absorbed into a suspected streak track, it is removed from the standalone anomaly list. The final returned categories are therefore mutually exclusive:
 

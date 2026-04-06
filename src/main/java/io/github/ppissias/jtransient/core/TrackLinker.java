@@ -145,14 +145,11 @@ public class TrackLinker {
      */
     private static class SuspectedStreakLineCandidate {
         private final List<SourceExtractor.DetectedObject> objects;
-        private final int seedCount;
         private final double span;
 
         private SuspectedStreakLineCandidate(List<SourceExtractor.DetectedObject> objects,
-                                             int seedCount,
                                              double span) {
             this.objects = objects;
-            this.seedCount = seedCount;
             this.span = span;
         }
     }
@@ -1067,8 +1064,8 @@ public class TrackLinker {
     /**
      * Groups rescued anomalies into one or more same-frame suspected streak tracks per frame.
      *
-     * <p>Elongated anomalies seed candidate lines, then aligned lower-elongation anomalies from the
-     * same frame can be absorbed into the accepted grouping.</p>
+     * <p>All rescued anomalies from the same frame are evaluated for collinearity. Any accepted
+     * grouping stays frame-local and never links across frames.</p>
      */
     private static List<Track> groupSuspectedStreakTracks(List<AnomalyDetection> anomalies, DetectionConfig config) {
         List<Track> suspectedTracks = new ArrayList<>();
@@ -1103,14 +1100,6 @@ public class TrackLinker {
     }
 
     /**
-     * Returns whether a rescued anomaly is elongated enough to seed same-frame faint-streak grouping.
-     */
-    private static boolean isSuspectedStreakSeed(SourceExtractor.DetectedObject object, DetectionConfig config) {
-        return object.elongation > config.anomalySuspectedStreakMinElongation
-                && object.sourceFrameIndex >= 0;
-    }
-
-    /**
      * Repeatedly extracts disjoint same-frame suspected streaks so parallel fragments can all be returned.
      */
     private static List<Track> buildSuspectedStreakTracksForFrame(List<SourceExtractor.DetectedObject> frameObjects,
@@ -1138,48 +1127,34 @@ public class TrackLinker {
     }
 
     /**
-     * Finds the strongest same-frame collinear grouping seeded by elongated anomalies, then absorbs
-     * aligned lower-elongation anomalies from the same frame into that line.
+     * Finds the strongest same-frame collinear grouping among rescued anomalies from one frame.
      */
     private static SuspectedStreakLineCandidate buildBestSuspectedStreakTrack(List<SourceExtractor.DetectedObject> frameObjects,
                                                                               DetectionConfig config) {
-        List<SourceExtractor.DetectedObject> seedObjects = new ArrayList<>();
-        Set<SourceExtractor.DetectedObject> seedSet = new HashSet<>();
-        for (SourceExtractor.DetectedObject object : frameObjects) {
-            if (isSuspectedStreakSeed(object, config)) {
-                seedObjects.add(object);
-                seedSet.add(object);
-            }
-        }
-
-        if (seedObjects.size() < 2) {
+        if (frameObjects.size() < 3) {
             return null;
         }
 
         SuspectedStreakLineCandidate bestLine = null;
         double maxLineError = getSuspectedStreakLineTolerance(config);
 
-        for (int i = 0; i < seedObjects.size() - 1; i++) {
-            for (int j = i + 1; j < seedObjects.size(); j++) {
-                SourceExtractor.DetectedObject start = seedObjects.get(i);
-                SourceExtractor.DetectedObject end = seedObjects.get(j);
+        for (int i = 0; i < frameObjects.size() - 1; i++) {
+            for (int j = i + 1; j < frameObjects.size(); j++) {
+                SourceExtractor.DetectedObject start = frameObjects.get(i);
+                SourceExtractor.DetectedObject end = frameObjects.get(j);
                 double baselineDistance = distance(start.x, start.y, end.x, end.y);
                 if (baselineDistance < 1.0) {
                     continue;
                 }
 
                 List<SourceExtractor.DetectedObject> collinearObjects = new ArrayList<>();
-                int seedCount = 0;
                 for (SourceExtractor.DetectedObject candidate : frameObjects) {
                     if (distanceToLineOptimized(start, end, candidate, baselineDistance) <= maxLineError) {
                         collinearObjects.add(candidate);
-                        if (seedSet.contains(candidate)) {
-                            seedCount++;
-                        }
                     }
                 }
 
-                if (collinearObjects.size() < 3 || seedCount < 2) {
+                if (collinearObjects.size() < 3) {
                     continue;
                 }
 
@@ -1193,7 +1168,6 @@ public class TrackLinker {
 
                 SuspectedStreakLineCandidate currentLine = new SuspectedStreakLineCandidate(
                         collinearObjects,
-                        seedCount,
                         span
                 );
                 if (isBetterSuspectedStreakLineCandidate(currentLine, bestLine)) {
@@ -1206,15 +1180,12 @@ public class TrackLinker {
     }
 
     /**
-     * Prefers lines with more elongated seed fragments, then denser total support, then larger span.
+     * Prefers lines with denser total support, then larger span.
      */
     private static boolean isBetterSuspectedStreakLineCandidate(SuspectedStreakLineCandidate currentLine,
                                                                 SuspectedStreakLineCandidate bestLine) {
         if (bestLine == null) {
             return true;
-        }
-        if (currentLine.seedCount != bestLine.seedCount) {
-            return currentLine.seedCount > bestLine.seedCount;
         }
         if (currentLine.objects.size() != bestLine.objects.size()) {
             return currentLine.objects.size() > bestLine.objects.size();
