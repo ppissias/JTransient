@@ -45,7 +45,7 @@ Filtering happens at several different levels of the pipeline, and not all of it
   - `FrameQualityAnalyzer` computes shape-derived frame statistics such as median eccentricity and median `fwhm`
   - `SessionEvaluator` uses those statistics to reject bad frames from the run
 - slow-mover candidate filtering:
-  - slow-mover candidates are filtered by elongation, multiple shape-veto functions, and median-stack overlap
+  - slow-mover candidates are filtered by elongation, multiple shape-veto functions, median-stack overlap, and optional centered residual support in `slowMoverStack - medianStack`
 - streak filtering:
   - fast streak discovery filters by angle consistency, directional consistency, `singleStreakMinPeakSigma`, and the binary-star-like streak-shape veto
 - point-track filtering:
@@ -224,7 +224,7 @@ This erases many transient or moving features while preserving the stationary sk
 
 ## 7. Master-Star Extraction
 
-The engine next extracts stationary objects from the median master stack. During this extraction it temporarily changes the config:
+The engine next extracts stationary objects from the median master stack using a stage-local extraction config:
 
 - `growSigmaMultiplier = masterSigmaMultiplier`
 - `edgeMarginPixels = 5`
@@ -241,7 +241,7 @@ SourceExtractor.extractSources(
 )
 ```
 
-The resulting `masterStars` are the stationary reference objects used for veto masking. After extraction, the temporary config changes are restored.
+The resulting `masterStars` are the stationary reference objects used for veto masking. The caller's live `DetectionConfig` is left unchanged by this stage.
 
 ## 8. Optional Slow-Mover Analysis
 
@@ -271,6 +271,7 @@ The engine then:
    - fail `SourceExtractor.isIrregularStreakShape(...)`
    - fail `SourceExtractor.isBinaryStarAnomaly(...)`
    - optionally fail the slow-mover-specific shape filter when `enableSlowMoverSpecificShapeFiltering` is enabled
+   - optionally fail the centered residual-core check in `slowMoverStack - medianStack` when `enableSlowMoverResidualCoreFiltering` is enabled
    - overlap the median-stack mask by more than the configured `slowMoverMedianSupportMaxOverlapFraction`
 
 The survivors are exported as `PipelineResult.slowMoverCandidates`, along with slow-mover telemetry.

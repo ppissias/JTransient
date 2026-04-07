@@ -105,13 +105,12 @@ public class ResidualTransientAnalyzerTest {
 
         List<List<SourceExtractor.DetectedObject>> filtered = ResidualTransientAnalyzer.filterExcludedDetections(
                 remaining,
-                excluded,
-                config
+                excluded
         );
 
         assertTrue(filtered.get(1).isEmpty());
         assertTrue(filtered.get(2).isEmpty());
-        assertTrue(ResidualTransientAnalyzer.findLocalRescueCandidates(filtered, config).isEmpty());
+        assertTrue(ResidualTransientAnalyzer.findLocalRescueCandidates(filtered).isEmpty());
     }
 
     @Test
@@ -119,8 +118,8 @@ public class ResidualTransientAnalyzerTest {
         DetectionConfig config = new DetectionConfig();
         List<List<SourceExtractor.DetectedObject>> remaining = emptyFrameList(6);
         addPoint(remaining, 1, 300.0, 300.0, 2.0, 2.5);
-        addPoint(remaining, 3, 312.0, 308.0, 2.1, 2.4);
-        addPoint(remaining, 5, 318.0, 310.0, 1.9, 2.2);
+        addPoint(remaining, 3, 306.0, 306.0, 2.1, 2.4);
+        addPoint(remaining, 5, 312.0, 309.0, 1.9, 2.2);
 
         ResidualTransientAnalysis analysis = ResidualTransientAnalyzer.analyze(
                 remaining,
@@ -131,7 +130,7 @@ public class ResidualTransientAnalyzerTest {
         assertEquals(1, analysis.localActivityClusters.size());
         assertEquals(3, analysis.localActivityClusters.get(0).points.size());
         assertEquals(3, analysis.localActivityClusters.get(0).metrics.uniqueFrameCount);
-        assertEquals(20.0, analysis.localActivityClusters.get(0).linkageRadiusPixels, 0.0);
+        assertEquals(10.0, analysis.localActivityClusters.get(0).linkageRadiusPixels, 0.0);
     }
 
     @Test

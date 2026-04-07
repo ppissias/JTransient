@@ -161,6 +161,21 @@ public class DetectionConfig implements Cloneable {
      */
     public double slowMoverMedianSupportMaxOverlapFraction = 0.65;
 
+    /** * Enables the centered residual-support veto in the slow-mover branch.
+     * When enabled, candidates must retain positive signal near their centroid in slowMoverStack - medianStack.
+     */
+    public boolean enableSlowMoverResidualCoreFiltering = true;
+
+    /** * Radius, in pixels, of the centroid-centered footprint core evaluated against slowMoverStack - medianStack.
+     * Larger values make the residual-support check more tolerant of broader compact slow movers.
+     */
+    public double slowMoverResidualCoreRadiusPixels = 2.0;
+
+    /** * Minimum fraction of core footprint pixels that must remain positive in slowMoverStack - medianStack.
+     * Lower values relax the residual-core veto; higher values demand stronger centered excess.
+     */
+    public double slowMoverResidualCoreMinPositiveFraction = 0.50;
+
     // =================================================================
     // 3. FRAME QUALITY ANALYSIS PARAMETERS
     // =================================================================
@@ -391,91 +406,10 @@ public class DetectionConfig implements Cloneable {
     public boolean enableLocalActivityClusters = true;
 
     /** * Linkage radius for the broad local activity cluster review pass. */
-    public double localActivityClusterRadiusPixels = 20.0;
+    public double localActivityClusterRadiusPixels = 10.0;
 
     /** * Minimum number of unique frames required before a broad local activity cluster is exported. */
-    public int localActivityClusterMinFrames = 2;
-
-    /** * Minimum support required before a leftover local chain is even considered. */
-    public int localRescueMinRepeatPoints = 2;
-
-    /** * Minimum support required before a candidate can qualify as motion-like rather than a repeat. */
-    public int localRescueMinMotionPoints = 4;
-
-    /** * Maximum allowed frame gap while growing a local rescue chain. */
-    public int localRescueMaxFrameGap = 2;
-
-    /** * Maximum step size per frame while extending a local rescue chain. */
-    public double localRescueMaxStepPixelsPerFrame = 4.0;
-
-    /** * Small additive bias that makes chain growth less brittle near the edge of the allowed step envelope. */
-    public double localRescueEdgeDistanceBiasPixels = 1.25;
-
-    /** * Maximum centroid-relative radius allowed while growing a local rescue chain. */
-    public double localRescueMaxChainRadiusPixels = 18.0;
-
-    /** * Minimum total displacement required for a candidate to qualify as a coherent micro drift. */
-    public double localRescueMinTotalDisplacementPixels = 1.25;
-
-    /** * Maximum total displacement allowed for a coherent micro drift candidate. */
-    public double localRescueMaxTotalDisplacementPixels = 32.0;
-
-    /** * Maximum linear-fit RMSE allowed for a coherent micro drift candidate. */
-    public double localRescueMaxLinearityRmsePixels = 1.8;
-
-    /** * Minimum point-per-span coverage required for a coherent micro drift candidate. */
-    public double localRescueMinFrameCoverage = 0.55;
-
-    /** * Maximum total displacement allowed for a same-location repeat candidate. */
-    public double localRepeatMaxTotalDisplacementPixels = 3.0;
-
-    /** * Maximum centroid radius allowed for a same-location repeat candidate. */
-    public double localRepeatMaxClusterRadiusPixels = 2.5;
-
-    /** * Maximum mean inter-point step allowed for a same-location repeat candidate. */
-    public double localRepeatMaxAverageStepPixels = 1.75;
-
-    /** * Maximum linear-fit RMSE allowed for a same-location repeat candidate. */
-    public double localRepeatMaxLinearityRmsePixels = 0.9;
-
-    /** * Minimum point-per-span coverage required for a same-location repeat candidate. */
-    public double localRepeatMinFrameCoverage = 0.4;
-
-    /** * Minimum average signal required for a same-location repeat candidate. */
-    public double localRepeatMinAverageSignal = 5.0;
-
-    /** * Minimum total displacement still required once a same-location repeat has four or more points. */
-    public double localRepeatMinMultiPointDisplacementPixels = 0.35;
-
-    /** * Minimum total displacement required for a sparse local drift candidate. */
-    public double sparseLocalDriftMinTotalDisplacementPixels = 2.0;
-
-    /** * Maximum total displacement allowed for a sparse local drift candidate. */
-    public double sparseLocalDriftMaxTotalDisplacementPixels = 10.0;
-
-    /** * Maximum centroid radius allowed for a sparse local drift candidate. */
-    public double sparseLocalDriftMaxClusterRadiusPixels = 4.5;
-
-    /** * Maximum mean inter-point step allowed for a sparse local drift candidate. */
-    public double sparseLocalDriftMaxAverageStepPixels = 2.75;
-
-    /** * Maximum linear-fit RMSE allowed for a sparse local drift candidate. */
-    public double sparseLocalDriftMaxLinearityRmsePixels = 0.45;
-
-    /** * Minimum point-per-span coverage required for a sparse local drift candidate. */
-    public double sparseLocalDriftMinFrameCoverage = 0.25;
-
-    /** * Minimum average signal required for a sparse local drift candidate. */
-    public double sparseLocalDriftMinAverageSignal = 5.0;
-
-    /** * Maximum single jump allowed for a sparse local drift candidate. */
-    public double sparseLocalDriftMaxStepPixels = 3.5;
-
-    /** * Match radius used when filtering leftover detections that were already classified elsewhere. */
-    public double residualClassifiedMatchRadiusPixels = 0.75;
-
-    /** * Spatial linkage radius used by the cluster-seeded local rescue candidate discovery pass. */
-    public double localRescueClusterLinkRadiusPixels = 4.0;
+    public int localActivityClusterMinFrames = 3;
 
 
     /**

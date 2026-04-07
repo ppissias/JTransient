@@ -5,7 +5,7 @@
 All fields are public and mutable. A few implementation details matter when you use it:
 
 - `JTransientEngine` may raise `voidProximityRadius` during drift diagnostics if the data demands it
-- the engine temporarily overrides some fields internally while extracting the master stack and slow-mover stack, then restores them
+- the engine uses stage-local config overrides for master-star and slow-mover extraction so the caller's config object is not left mutated afterward
 - `JTransientAutoTuner.tune(...)` clones the supplied config and returns an optimized clone; it does not mutate the original reference unless you reuse the returned object
 
 This document tracks the fields that actually exist in `src/main/java/io/github/ppissias/jtransient/config/DetectionConfig.java`.
@@ -28,7 +28,7 @@ Secondary hysteresis threshold used while the BFS expands a blob.
 - lower than the seed threshold by design
 - controls how much faint edge structure is retained
 - too low can leak into noise
-- the engine temporarily sets this to `masterSigmaMultiplier` when extracting master stars
+- master-star extraction uses a stage-local `growSigmaMultiplier = masterSigmaMultiplier`
 - the engine temporarily sets this to `masterSlowMoverGrowSigmaMultiplier` during slow-mover extraction
 - the auto-tuner actively searches this field
 
@@ -183,9 +183,10 @@ Slow-mover candidates now pass through a simpler artifact filter after this base
 
 - irregular or binary-like shapes are still rejected first
 - any surviving candidate must overlap the median-stack artifact mask within the configured support band
+- the branch can also require centered positive support in `slowMoverStack - medianStack`
 - the stage-by-stage outcome is reported through `PipelineResult.telemetry.slowMoverTelemetry`
 
-### `slowMoverMedianSupportOverlapFraction` (default `0.10`)
+### `slowMoverMedianSupportOverlapFraction` (default `0.00`)
 
 Minimum fraction of a slow-mover footprint that must overlap the median-stack artifact mask.
 
@@ -200,6 +201,28 @@ Maximum fraction of a slow-mover footprint that may overlap the median-stack art
 - lower values reject candidates that look too similar to stationary median-stack artifacts
 - should usually stay above `slowMoverMedianSupportOverlapFraction`
 - useful when deep-stack static artifacts still survive with very high median-stack overlap
+
+### `enableSlowMoverResidualCoreFiltering` (default `true`)
+
+Enables the centered residual-support veto in the slow-mover branch.
+
+- when enabled, the engine evaluates `slowMoverStack - medianStack` near the candidate centroid
+- useful for rejecting candidates whose deep-stack excess disappears in the center and survives only in the wings
+- disable only for diagnostics or compatibility testing
+
+### `slowMoverResidualCoreRadiusPixels` (default `2.0`)
+
+Radius of the centroid-centered candidate core evaluated in `slowMoverStack - medianStack`.
+
+- smaller values focus the check tightly on the center
+- larger values make the filter more tolerant of broader compact slow movers
+
+### `slowMoverResidualCoreMinPositiveFraction` (default `0.50`)
+
+Minimum fraction of core footprint pixels that must stay positive in `slowMoverStack - medianStack`.
+
+- lower values relax the centered-residual veto
+- higher values demand a stronger positive core before the candidate is kept
 
 ## 3. Frame Quality Analysis
 
@@ -467,48 +490,24 @@ Enables the broader leftover-point activity clustering pass after accepted local
 - uses the same per-cluster metrics structure as local rescue candidates
 - never reuses points already consumed by accepted local rescue candidates
 
-### `localActivityClusterRadiusPixels` (default `20.0`)
+### `localActivityClusterRadiusPixels` (default `10.0`)
 
 Linkage radius used for broad residual activity clustering.
 
 - larger values merge nearby leftovers into bigger review clusters
 - smaller values keep the review bucket more fragmented
 
-### `localActivityClusterMinFrames` (default `2`)
+### `localActivityClusterMinFrames` (default `3`)
 
 Minimum number of unique frames required before a broad local activity cluster is exported.
 
-### Residual Rescue Threshold Fields
+### Residual Rescue Heuristics
 
-The ported local-rescue thresholds are also exposed directly in `DetectionConfig` so they can be tuned like the rest of the pipeline:
+The detailed local-rescue thresholds are now engine-internal rather than public `DetectionConfig` fields.
 
-- `localRescueMinRepeatPoints`
-- `localRescueMinMotionPoints`
-- `localRescueMaxFrameGap`
-- `localRescueMaxStepPixelsPerFrame`
-- `localRescueEdgeDistanceBiasPixels`
-- `localRescueMaxChainRadiusPixels`
-- `localRescueMinTotalDisplacementPixels`
-- `localRescueMaxTotalDisplacementPixels`
-- `localRescueMaxLinearityRmsePixels`
-- `localRescueMinFrameCoverage`
-- `localRepeatMaxTotalDisplacementPixels`
-- `localRepeatMaxClusterRadiusPixels`
-- `localRepeatMaxAverageStepPixels`
-- `localRepeatMaxLinearityRmsePixels`
-- `localRepeatMinFrameCoverage`
-- `localRepeatMinAverageSignal`
-- `localRepeatMinMultiPointDisplacementPixels`
-- `sparseLocalDriftMinTotalDisplacementPixels`
-- `sparseLocalDriftMaxTotalDisplacementPixels`
-- `sparseLocalDriftMaxClusterRadiusPixels`
-- `sparseLocalDriftMaxAverageStepPixels`
-- `sparseLocalDriftMaxLinearityRmsePixels`
-- `sparseLocalDriftMinFrameCoverage`
-- `sparseLocalDriftMinAverageSignal`
-- `sparseLocalDriftMaxStepPixels`
-- `residualClassifiedMatchRadiusPixels`
-- `localRescueClusterLinkRadiusPixels`
+- this keeps the public config surface small
+- the three rescue kinds still use the same underlying heuristics and metrics
+- if we need more control later, the better direction is a small profile-style knob rather than exposing 20+ raw thresholds again
 
 ## 8. Interaction With The Auto-Tuner
 

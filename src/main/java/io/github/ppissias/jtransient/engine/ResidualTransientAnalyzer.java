@@ -28,6 +28,7 @@ import java.util.Set;
  * Mines leftover per-frame point detections for weak local motion and broader repeat activity.
  */
 public final class ResidualTransientAnalyzer {
+    private static final LocalRescueThresholds LOCAL_RESCUE_THRESHOLDS = new LocalRescueThresholds();
 
     private ResidualTransientAnalyzer() {
     }
@@ -43,7 +44,7 @@ public final class ResidualTransientAnalyzer {
         }
 
         List<ResidualTransientAnalysis.LocalRescueCandidate> localRescueCandidates = config.enableLocalRescueCandidates
-                ? findLocalRescueCandidates(unclassifiedTransients, config)
+                ? findLocalRescueCandidates(unclassifiedTransients)
                 : Collections.emptyList();
 
         Set<SourceExtractor.DetectedObject> rescueConsumedDetections = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -89,8 +90,7 @@ public final class ResidualTransientAnalyzer {
     }
 
     static List<List<SourceExtractor.DetectedObject>> filterExcludedDetections(List<List<SourceExtractor.DetectedObject>> transients,
-                                                                               List<SourceExtractor.DetectedObject> excludedDetections,
-                                                                               DetectionConfig config) {
+                                                                               List<SourceExtractor.DetectedObject> excludedDetections) {
         if (transients == null || transients.isEmpty()) {
             return Collections.emptyList();
         }
@@ -117,7 +117,7 @@ public final class ResidualTransientAnalyzer {
             if (frameDetections != null) {
                 List<SourceExtractor.DetectedObject> frameExcluded = excludedByFrame.get(frameIndex);
                 for (SourceExtractor.DetectedObject detection : frameDetections) {
-                    if (!matchesExcludedDetection(detection, frameExcluded, identityExcluded, config)) {
+                    if (!matchesExcludedDetection(detection, frameExcluded, identityExcluded)) {
                         accepted.add(detection);
                     }
                 }
@@ -128,25 +128,24 @@ public final class ResidualTransientAnalyzer {
     }
 
     static List<ResidualTransientAnalysis.LocalRescueCandidate> findLocalRescueCandidates(
-            List<List<SourceExtractor.DetectedObject>> transients,
-            DetectionConfig config) {
+            List<List<SourceExtractor.DetectedObject>> transients) {
         if (transients == null || transients.isEmpty()) {
             return Collections.emptyList();
         }
 
         List<Node> nodes = collectNodes(transients);
-        if (nodes.size() < config.localRescueMinRepeatPoints) {
+        if (nodes.size() < LOCAL_RESCUE_THRESHOLDS.minRepeatPoints) {
             return Collections.emptyList();
         }
 
         List<LocalRescueCandidateScore> rawCandidates = new ArrayList<>();
         for (Node start : nodes) {
-            LocalRescueCandidateScore candidate = growLocalRescueCandidate(start, nodes, config);
+            LocalRescueCandidateScore candidate = growLocalRescueCandidate(start, nodes);
             if (candidate != null) {
                 rawCandidates.add(candidate);
             }
         }
-        rawCandidates.addAll(buildClusterCandidates(nodes, config));
+        rawCandidates.addAll(buildClusterCandidates(nodes));
 
         rawCandidates.sort((left, right) -> {
             int scoreComparison = Double.compare(right.score, left.score);
@@ -247,8 +246,7 @@ public final class ResidualTransientAnalyzer {
     }
 
     private static LocalRescueCandidateScore growLocalRescueCandidate(Node start,
-                                                                      List<Node> nodes,
-                                                                      DetectionConfig config) {
+                                                                      List<Node> nodes) {
         List<Node> chain = new ArrayList<>();
         chain.add(start);
 
@@ -279,7 +277,8 @@ public final class ResidualTransientAnalyzer {
             centroidY /= chain.size();
 
             for (Node candidate : nodes) {
-                if (candidate.frameIndex <= lastFrame || candidate.frameIndex > lastFrame + config.localRescueMaxFrameGap) {
+                if (candidate.frameIndex <= lastFrame
+                        || candidate.frameIndex > lastFrame + LOCAL_RESCUE_THRESHOLDS.maxFrameGap) {
                     continue;
                 }
 
@@ -287,14 +286,14 @@ public final class ResidualTransientAnalyzer {
                 double dx = candidate.detection.x - chain.get(chain.size() - 1).detection.x;
                 double dy = candidate.detection.y - chain.get(chain.size() - 1).detection.y;
                 double distanceToLast = Math.hypot(dx, dy);
-                double maxAllowedStep = (config.localRescueMaxStepPixelsPerFrame * frameGap)
-                        + config.localRescueEdgeDistanceBiasPixels;
+                double maxAllowedStep = (LOCAL_RESCUE_THRESHOLDS.maxStepPixelsPerFrame * frameGap)
+                        + LOCAL_RESCUE_THRESHOLDS.edgeDistanceBiasPixels;
                 if (distanceToLast > maxAllowedStep) {
                     continue;
                 }
 
                 double chainRadius = Math.hypot(candidate.detection.x - centroidX, candidate.detection.y - centroidY);
-                if (chainRadius > config.localRescueMaxChainRadiusPixels) {
+                if (chainRadius > LOCAL_RESCUE_THRESHOLDS.maxChainRadiusPixels) {
                     continue;
                 }
 
@@ -315,26 +314,25 @@ public final class ResidualTransientAnalyzer {
             lastFrame = bestNext.frameIndex;
         }
 
-        if (chain.size() < config.localRescueMinRepeatPoints) {
+        if (chain.size() < LOCAL_RESCUE_THRESHOLDS.minRepeatPoints) {
             return null;
         }
 
-        return evaluateCandidate(orderPoints(chain), config);
+        return evaluateCandidate(orderPoints(chain));
     }
 
-    private static List<LocalRescueCandidateScore> buildClusterCandidates(List<Node> nodes,
-                                                                          DetectionConfig config) {
-        if (nodes.size() < config.localRescueMinRepeatPoints) {
+    private static List<LocalRescueCandidateScore> buildClusterCandidates(List<Node> nodes) {
+        if (nodes.size() < LOCAL_RESCUE_THRESHOLDS.minRepeatPoints) {
             return Collections.emptyList();
         }
 
         List<LocalRescueCandidateScore> candidates = new ArrayList<>();
-        for (List<Node> clusterNodes : clusterNodesByProximity(nodes, config.localRescueClusterLinkRadiusPixels)) {
-            if (clusterNodes.size() < config.localRescueMinRepeatPoints) {
+        for (List<Node> clusterNodes : clusterNodesByProximity(nodes, LOCAL_RESCUE_THRESHOLDS.clusterLinkRadiusPixels)) {
+            if (clusterNodes.size() < LOCAL_RESCUE_THRESHOLDS.minRepeatPoints) {
                 continue;
             }
 
-            LocalRescueCandidateScore candidate = evaluateCandidate(orderPoints(clusterNodes), config);
+            LocalRescueCandidateScore candidate = evaluateCandidate(orderPoints(clusterNodes));
             if (candidate != null) {
                 candidates.add(candidate);
             }
@@ -342,10 +340,9 @@ public final class ResidualTransientAnalyzer {
         return candidates;
     }
 
-    private static LocalRescueCandidateScore evaluateCandidate(List<SourceExtractor.DetectedObject> points,
-                                                               DetectionConfig config) {
+    private static LocalRescueCandidateScore evaluateCandidate(List<SourceExtractor.DetectedObject> points) {
         ResidualTransientAnalysis.LocalTransientMetrics metrics = computeMetrics(points);
-        ResidualTransientAnalysis.LocalRescueKind kind = classifyLocalRescueKind(metrics, config);
+        ResidualTransientAnalysis.LocalRescueKind kind = classifyLocalRescueKind(metrics);
         if (kind == null) {
             return null;
         }
@@ -367,45 +364,44 @@ public final class ResidualTransientAnalyzer {
     }
 
     private static ResidualTransientAnalysis.LocalRescueKind classifyLocalRescueKind(
-            ResidualTransientAnalysis.LocalTransientMetrics metrics,
-            DetectionConfig config) {
-        double absoluteMaxStep = (config.localRescueMaxStepPixelsPerFrame * config.localRescueMaxFrameGap)
-                + config.localRescueEdgeDistanceBiasPixels;
-        boolean microDrift = metrics.pointCount >= config.localRescueMinMotionPoints
-                && metrics.totalDisplacementPixels >= config.localRescueMinTotalDisplacementPixels
-                && metrics.totalDisplacementPixels <= config.localRescueMaxTotalDisplacementPixels
-                && metrics.frameCoverage >= config.localRescueMinFrameCoverage
-                && metrics.linearityRmsePixels <= config.localRescueMaxLinearityRmsePixels
+            ResidualTransientAnalysis.LocalTransientMetrics metrics) {
+        double absoluteMaxStep = (LOCAL_RESCUE_THRESHOLDS.maxStepPixelsPerFrame * LOCAL_RESCUE_THRESHOLDS.maxFrameGap)
+                + LOCAL_RESCUE_THRESHOLDS.edgeDistanceBiasPixels;
+        boolean microDrift = metrics.pointCount >= LOCAL_RESCUE_THRESHOLDS.minMotionPoints
+                && metrics.totalDisplacementPixels >= LOCAL_RESCUE_THRESHOLDS.microDriftMinTotalDisplacementPixels
+                && metrics.totalDisplacementPixels <= LOCAL_RESCUE_THRESHOLDS.microDriftMaxTotalDisplacementPixels
+                && metrics.frameCoverage >= LOCAL_RESCUE_THRESHOLDS.microDriftMinFrameCoverage
+                && metrics.linearityRmsePixels <= LOCAL_RESCUE_THRESHOLDS.microDriftMaxLinearityRmsePixels
                 && metrics.maxStepPixels <= absoluteMaxStep;
         if (microDrift) {
             return ResidualTransientAnalysis.LocalRescueKind.MICRO_DRIFT;
         }
 
-        boolean sparseLocalDrift = metrics.pointCount >= config.localRescueMinMotionPoints
-                && metrics.totalDisplacementPixels >= config.sparseLocalDriftMinTotalDisplacementPixels
-                && metrics.totalDisplacementPixels <= config.sparseLocalDriftMaxTotalDisplacementPixels
-                && metrics.clusterRadiusPixels <= config.sparseLocalDriftMaxClusterRadiusPixels
-                && metrics.averageStepPixels <= config.sparseLocalDriftMaxAverageStepPixels
-                && metrics.linearityRmsePixels <= config.sparseLocalDriftMaxLinearityRmsePixels
-                && metrics.frameCoverage >= config.sparseLocalDriftMinFrameCoverage
-                && metrics.averageSignal >= config.sparseLocalDriftMinAverageSignal
-                && metrics.maxStepPixels <= config.sparseLocalDriftMaxStepPixels
+        boolean sparseLocalDrift = metrics.pointCount >= LOCAL_RESCUE_THRESHOLDS.minMotionPoints
+                && metrics.totalDisplacementPixels >= LOCAL_RESCUE_THRESHOLDS.sparseDriftMinTotalDisplacementPixels
+                && metrics.totalDisplacementPixels <= LOCAL_RESCUE_THRESHOLDS.sparseDriftMaxTotalDisplacementPixels
+                && metrics.clusterRadiusPixels <= LOCAL_RESCUE_THRESHOLDS.sparseDriftMaxClusterRadiusPixels
+                && metrics.averageStepPixels <= LOCAL_RESCUE_THRESHOLDS.sparseDriftMaxAverageStepPixels
+                && metrics.linearityRmsePixels <= LOCAL_RESCUE_THRESHOLDS.sparseDriftMaxLinearityRmsePixels
+                && metrics.frameCoverage >= LOCAL_RESCUE_THRESHOLDS.sparseDriftMinFrameCoverage
+                && metrics.averageSignal >= LOCAL_RESCUE_THRESHOLDS.sparseDriftMinAverageSignal
+                && metrics.maxStepPixels <= LOCAL_RESCUE_THRESHOLDS.sparseDriftMaxStepPixels
                 && metrics.frameSpan <= (metrics.pointCount * 4);
         if (sparseLocalDrift) {
             return ResidualTransientAnalysis.LocalRescueKind.SPARSE_LOCAL_DRIFT;
         }
 
-        boolean localRepeat = metrics.pointCount >= config.localRescueMinRepeatPoints
-                && metrics.totalDisplacementPixels <= config.localRepeatMaxTotalDisplacementPixels
-                && metrics.clusterRadiusPixels <= config.localRepeatMaxClusterRadiusPixels
-                && metrics.averageStepPixels <= config.localRepeatMaxAverageStepPixels
-                && metrics.linearityRmsePixels <= config.localRepeatMaxLinearityRmsePixels
-                && metrics.frameCoverage >= config.localRepeatMinFrameCoverage
-                && metrics.averageSignal >= config.localRepeatMinAverageSignal
-                && metrics.maxStepPixels <= config.localRepeatMaxTotalDisplacementPixels
+        boolean localRepeat = metrics.pointCount >= LOCAL_RESCUE_THRESHOLDS.minRepeatPoints
+                && metrics.totalDisplacementPixels <= LOCAL_RESCUE_THRESHOLDS.localRepeatMaxTotalDisplacementPixels
+                && metrics.clusterRadiusPixels <= LOCAL_RESCUE_THRESHOLDS.localRepeatMaxClusterRadiusPixels
+                && metrics.averageStepPixels <= LOCAL_RESCUE_THRESHOLDS.localRepeatMaxAverageStepPixels
+                && metrics.linearityRmsePixels <= LOCAL_RESCUE_THRESHOLDS.localRepeatMaxLinearityRmsePixels
+                && metrics.frameCoverage >= LOCAL_RESCUE_THRESHOLDS.localRepeatMinFrameCoverage
+                && metrics.averageSignal >= LOCAL_RESCUE_THRESHOLDS.localRepeatMinAverageSignal
+                && metrics.maxStepPixels <= LOCAL_RESCUE_THRESHOLDS.localRepeatMaxTotalDisplacementPixels
                 && (metrics.pointCount <= 3
-                || metrics.totalDisplacementPixels >= config.localRepeatMinMultiPointDisplacementPixels)
-                && metrics.frameSpan <= (metrics.pointCount + config.localRescueMaxFrameGap);
+                || metrics.totalDisplacementPixels >= LOCAL_RESCUE_THRESHOLDS.localRepeatMinMultiPointDisplacementPixels)
+                && metrics.frameSpan <= (metrics.pointCount + LOCAL_RESCUE_THRESHOLDS.maxFrameGap);
         return localRepeat ? ResidualTransientAnalysis.LocalRescueKind.LOCAL_REPEAT : null;
     }
 
@@ -615,8 +611,7 @@ public final class ResidualTransientAnalyzer {
 
     private static boolean matchesExcludedDetection(SourceExtractor.DetectedObject detection,
                                                     List<SourceExtractor.DetectedObject> excludedInFrame,
-                                                    Set<SourceExtractor.DetectedObject> identityExcluded,
-                                                    DetectionConfig config) {
+                                                    Set<SourceExtractor.DetectedObject> identityExcluded) {
         if (detection == null) {
             return true;
         }
@@ -637,7 +632,7 @@ public final class ResidualTransientAnalyzer {
                 continue;
             }
             double distance = Math.hypot(detection.x - excluded.x, detection.y - excluded.y);
-            if (distance <= config.residualClassifiedMatchRadiusPixels) {
+            if (distance <= LOCAL_RESCUE_THRESHOLDS.classifiedMatchRadiusPixels) {
                 return true;
             }
         }
@@ -716,5 +711,38 @@ public final class ResidualTransientAnalyzer {
         private ResidualTransientAnalysis.LocalRescueCandidate materialize() {
             return new ResidualTransientAnalysis.LocalRescueCandidate(kind, points, metrics, score);
         }
+    }
+
+    /**
+     * Internal rescue heuristics kept out of DetectionConfig so the public config surface stays compact.
+     */
+    private static final class LocalRescueThresholds {
+        private final int minRepeatPoints = 2;
+        private final int minMotionPoints = 4;
+        private final int maxFrameGap = 2;
+        private final double maxStepPixelsPerFrame = 4.0;
+        private final double edgeDistanceBiasPixels = 1.25;
+        private final double maxChainRadiusPixels = 18.0;
+        private final double microDriftMinTotalDisplacementPixels = 1.25;
+        private final double microDriftMaxTotalDisplacementPixels = 32.0;
+        private final double microDriftMaxLinearityRmsePixels = 1.8;
+        private final double microDriftMinFrameCoverage = 0.55;
+        private final double localRepeatMaxTotalDisplacementPixels = 3.0;
+        private final double localRepeatMaxClusterRadiusPixels = 2.5;
+        private final double localRepeatMaxAverageStepPixels = 1.75;
+        private final double localRepeatMaxLinearityRmsePixels = 0.9;
+        private final double localRepeatMinFrameCoverage = 0.4;
+        private final double localRepeatMinAverageSignal = 5.0;
+        private final double localRepeatMinMultiPointDisplacementPixels = 0.35;
+        private final double sparseDriftMinTotalDisplacementPixels = 2.0;
+        private final double sparseDriftMaxTotalDisplacementPixels = 10.0;
+        private final double sparseDriftMaxClusterRadiusPixels = 4.5;
+        private final double sparseDriftMaxAverageStepPixels = 2.75;
+        private final double sparseDriftMaxLinearityRmsePixels = 0.45;
+        private final double sparseDriftMinFrameCoverage = 0.25;
+        private final double sparseDriftMinAverageSignal = 5.0;
+        private final double sparseDriftMaxStepPixels = 3.5;
+        private final double classifiedMatchRadiusPixels = 0.75;
+        private final double clusterLinkRadiusPixels = 4.0;
     }
 }

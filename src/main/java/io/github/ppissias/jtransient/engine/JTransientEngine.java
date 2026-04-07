@@ -10,6 +10,7 @@
 package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.core.MasterReferenceAnalyzer;
 import io.github.ppissias.jtransient.core.MasterMapGenerator;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.core.TrackLinker;
@@ -224,34 +225,24 @@ public class JTransientEngine {
      */
     public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
         FramesExtractedSources context = extractSourcesFromFrames(inputFrames, config, listener);
-        
-        short[][] masterStackData;
+
         if (providedMasterStack != null) {
-            masterStackData = providedMasterStack;
+            if (listener != null) listener.onProgressUpdate(45, "Using pre-computed Master Stack for Veto Mask...");
         } else {
             if (listener != null) listener.onProgressUpdate(45, "Generating Median Master Stack for Veto Mask...");
-            masterStackData = MasterMapGenerator.createMedianMasterStack(context.cleanFrames);
         }
 
         if (listener != null) listener.onProgressUpdate(48, "Extracting Master Star Map...");
 
-        double originalGrowSigma = config.growSigmaMultiplier;
-        config.growSigmaMultiplier = config.masterSigmaMultiplier;
-        int originalEdgeMargin = config.edgeMarginPixels;
-        int originalVoidProximity = config.voidProximityRadius;
-
-        config.edgeMarginPixels = 5;
-        config.voidProximityRadius = 5;
-
-        List<SourceExtractor.DetectedObject> masterStars = SourceExtractor.extractSources(
-                masterStackData, config.masterSigmaMultiplier, config.masterMinDetectionPixels, config).objects;
-
-        config.edgeMarginPixels = originalEdgeMargin;
-        config.voidProximityRadius = originalVoidProximity;
-        config.growSigmaMultiplier = originalGrowSigma;
-
-        int sensorHeight = context.cleanFrames.get(0).pixelData.length;
-        int sensorWidth = context.cleanFrames.get(0).pixelData[0].length;
+        MasterReferenceAnalyzer.MasterReferenceAnalysis masterReference = MasterReferenceAnalyzer.analyze(
+                context.cleanFrames,
+                providedMasterStack,
+                config
+        );
+        short[][] masterStackData = masterReference.masterStackData;
+        List<SourceExtractor.DetectedObject> masterStars = masterReference.masterStars;
+        int sensorHeight = masterReference.sensorHeight;
+        int sensorWidth = masterReference.sensorWidth;
 
         TransientEngineProgressListener proxyListener = null;
         if (listener != null) {
@@ -561,8 +552,6 @@ public class JTransientEngine {
         // =================================================================
         // PHASE 0 (Generate Deep Master Star Map)
         // =================================================================
-        short[][] masterStackData;
-
         if (providedMasterStack != null) {
             if (DEBUG) {
                 System.out.println("\n--- JTRANSIENT: PHASE 0 (Using Pre-Computed Master Stack) ---");
@@ -570,7 +559,6 @@ public class JTransientEngine {
             if (listener != null) {
                 listener.onProgressUpdate(45, "Using pre-computed Master Stack...");
             }
-            masterStackData = providedMasterStack;
         } else {
             if (DEBUG) {
                 System.out.println("\n--- JTRANSIENT: PHASE 0 (Master Map Generation) ---");
@@ -578,52 +566,26 @@ public class JTransientEngine {
             if (listener != null) {
                 listener.onProgressUpdate(45, "Generating Median Master Stack...");
             }
-            // 1. Mathematically stack the surviving frames to erase transients
-            masterStackData = MasterMapGenerator.createMedianMasterStack(cleanFrames);
         }
-
-        int sensorHeight = masterStackData.length;
-        int sensorWidth = masterStackData[0].length;
-
-        // --- MASTER MAP PARAMETERS ---
-        double masterSigma = config.masterSigmaMultiplier;
-        int masterMinPix = config.masterMinDetectionPixels;
-
-        // --- SAFE CORE-ONLY EXTRACTION ---
-        // Explicitly tie the grow multiplier to the master sigma. 
-        // This disables fuzzy halo expansion, guaranteeing consistently tight and relaxed Veto Masks.
-        double originalGrowSigma = config.growSigmaMultiplier;
-        config.growSigmaMultiplier = masterSigma;
 
         if (DEBUG) {
             System.out.printf("DEBUG: Master Map Config -> Master Sigma: %.2f | Master Grow: %.2f | Master MinPix: %d%n",
-                    masterSigma, config.growSigmaMultiplier, masterMinPix);
+                    config.masterSigmaMultiplier, config.masterSigmaMultiplier, config.masterMinDetectionPixels);
         }
 
         if (listener != null) {
             listener.onProgressUpdate(48, "Extracting Master Star Map...");
         }
 
-        // --- NARROW MARGIN TRICK FOR MASTER MAP ---
-        // Force extraction to the very edge of the sensor to map edge artifacts
-        int originalEdgeMargin = config.edgeMarginPixels;
-        int originalVoidProximity = config.voidProximityRadius;
-
-        config.edgeMarginPixels = 5;
-        config.voidProximityRadius = 5;
-
-        // 2. Extract every stable star and galaxy from the deep stack
-        List<SourceExtractor.DetectedObject> masterStars = SourceExtractor.extractSources(
-                masterStackData,
-                masterSigma,
-                masterMinPix,
+        MasterReferenceAnalyzer.MasterReferenceAnalysis masterReference = MasterReferenceAnalyzer.analyze(
+                cleanFrames,
+                providedMasterStack,
                 config
-        ).objects;
-
-        // --- RESTORE ORIGINAL CONFIGURATION ---
-        config.edgeMarginPixels = originalEdgeMargin;
-        config.voidProximityRadius = originalVoidProximity;
-        config.growSigmaMultiplier = originalGrowSigma;
+        );
+        short[][] masterStackData = masterReference.masterStackData;
+        List<SourceExtractor.DetectedObject> masterStars = masterReference.masterStars;
+        int sensorHeight = masterReference.sensorHeight;
+        int sensorWidth = masterReference.sensorWidth;
 
         if (DEBUG) {
             System.out.println("DEBUG: Master Stack generated. Found " + masterStars.size() + " deep stationary objects.");
@@ -677,6 +639,7 @@ public class JTransientEngine {
             slowMoverCandidates = filterSlowMoverCandidates(
                     rawSlowMovers,
                     slowMoverStackData,
+                    masterStackData,
                     medianMask,
                     config,
                     smTelemetry
@@ -690,7 +653,7 @@ public class JTransientEngine {
                         smTelemetry.dynamicElongationThreshold
                 );
                 System.out.printf(
-                        "DEBUG: Slow Mover Filters -> Raw: %d | AboveElong: %d | MaskStage: %d | Irregular: %d | Binary: %d | SlowMoverShape: %d | LowMedianSupport: %d | HighMedianSupport: %d | Final: %d%n",
+                        "DEBUG: Slow Mover Filters -> Raw: %d | AboveElong: %d | MaskStage: %d | Irregular: %d | Binary: %d | SlowMoverShape: %d | LowMedianSupport: %d | HighMedianSupport: %d | LowResidualCore: %d | Final: %d%n",
                         smTelemetry.rawCandidatesExtracted,
                         smTelemetry.candidatesAboveElongationThreshold,
                         smTelemetry.candidatesEvaluatedAgainstMasks,
@@ -699,6 +662,7 @@ public class JTransientEngine {
                         smTelemetry.rejectedSlowMoverShape,
                         smTelemetry.rejectedLowMedianSupport,
                         smTelemetry.rejectedHighMedianSupport,
+                        smTelemetry.rejectedLowResidualCoreSupport,
                         smTelemetry.candidatesDetected
                 );
                 if (smTelemetry.rejectedSlowMoverShape > 0) {
@@ -713,10 +677,12 @@ public class JTransientEngine {
                     );
                 }
                 System.out.printf(
-                        "DEBUG: Slow Mover Signals -> MinSupport: %.3f | MaxSupport: %.3f | AvgMedianSupportOverlap: %.3f%n",
+                        "DEBUG: Slow Mover Signals -> MinSupport: %.3f | MaxSupport: %.3f | AvgMedianSupportOverlap: %.3f | MinResidualCore: %.3f | AvgResidualCore: %.3f%n",
                         smTelemetry.medianSupportOverlapThreshold,
                         smTelemetry.medianSupportMaxOverlapThreshold,
-                        smTelemetry.avgMedianSupportOverlap
+                        smTelemetry.avgMedianSupportOverlap,
+                        smTelemetry.residualCoreMinPositiveFractionThreshold,
+                        smTelemetry.avgResidualCorePositiveFraction
                 );
                 if (!smTelemetry.candidateMedianSupportOverlaps.isEmpty()) {
                     System.out.printf(
@@ -821,11 +787,12 @@ public class JTransientEngine {
     }
 
     /**
-     * Applies the slow-mover morphology and mask filters while recording stage-by-stage telemetry.
+     * Applies the slow-mover morphology, median-support, and residual-core filters while recording telemetry.
      */
     private static List<SourceExtractor.DetectedObject> filterSlowMoverCandidates(
             List<SourceExtractor.DetectedObject> rawSlowMovers,
             short[][] slowMoverStackData,
+            short[][] medianStackData,
             boolean[][] medianMask,
             DetectionConfig config,
             PipelineTelemetry.SlowMoverTelemetry telemetry
@@ -856,10 +823,15 @@ public class JTransientEngine {
         if (elongations.size() >= 10) {
             dynamicElongationThreshold = medianElong + (madElong * config.slowMoverBaselineMadMultiplier);
         }
+        boolean residualCoreFilteringEnabled = config.enableSlowMoverResidualCoreFiltering
+                && slowMoverStackData != null
+                && medianStackData != null;
         double minMedianSupportOverlap = Math.max(0.0, Math.min(1.0, config.slowMoverMedianSupportOverlapFraction));
         double maxMedianSupportOverlap = Math.max(minMedianSupportOverlap, Math.min(1.0, config.slowMoverMedianSupportMaxOverlapFraction));
+        double minResidualCorePositiveFraction = Math.max(0.0, Math.min(1.0, config.slowMoverResidualCoreMinPositiveFraction));
 
         double medianSupportOverlapSum = 0.0;
+        double residualCorePositiveFractionSum = 0.0;
 
         for (SourceExtractor.DetectedObject obj : rawSlowMovers) {
             if (obj.elongation < dynamicElongationThreshold) {
@@ -902,6 +874,21 @@ public class JTransientEngine {
                 continue;
             }
 
+            double residualCorePositiveFraction = 0.0;
+            if (residualCoreFilteringEnabled) {
+                residualCorePositiveFraction = computeResidualCorePositiveFraction(
+                        obj,
+                        slowMoverStackData,
+                        medianStackData,
+                        config.slowMoverResidualCoreRadiusPixels
+                );
+                if (residualCorePositiveFraction < minResidualCorePositiveFraction) {
+                    telemetry.rejectedLowResidualCoreSupport++;
+                    continue;
+                }
+                residualCorePositiveFractionSum += residualCorePositiveFraction;
+            }
+
             filteredCandidates.add(obj);
             telemetry.candidateMedianSupportOverlaps.add(medianSupportOverlap);
         }
@@ -913,8 +900,60 @@ public class JTransientEngine {
         telemetry.medianSupportOverlapThreshold = minMedianSupportOverlap;
         telemetry.medianSupportMaxOverlapThreshold = maxMedianSupportOverlap;
         telemetry.avgMedianSupportOverlap = computeAverage(medianSupportOverlapSum, telemetry.candidatesEvaluatedAgainstMasks);
+        telemetry.residualCoreMinPositiveFractionThreshold = residualCoreFilteringEnabled
+                ? minResidualCorePositiveFraction
+                : 0.0;
+        telemetry.avgResidualCorePositiveFraction = residualCoreFilteringEnabled
+                ? computeAverage(residualCorePositiveFractionSum, filteredCandidates.size())
+                : 0.0;
 
         return filteredCandidates;
+    }
+
+    /**
+     * Measures how much of the centroid-centered candidate core remains positive after subtracting the median stack.
+     * This rejects candidates whose excess signal lives only in the wings or disappears entirely at the center.
+     */
+    private static double computeResidualCorePositiveFraction(
+            SourceExtractor.DetectedObject obj,
+            short[][] slowMoverStackData,
+            short[][] medianStackData,
+            double radiusPixels
+    ) {
+        if (obj.rawPixels == null || obj.rawPixels.isEmpty()
+                || slowMoverStackData == null || medianStackData == null
+                || slowMoverStackData.length == 0 || medianStackData.length == 0) {
+            return 0.0;
+        }
+
+        double effectiveRadius = Math.max(0.5, radiusPixels);
+        double radiusSquared = effectiveRadius * effectiveRadius;
+        int positiveCorePixels = 0;
+        int corePixels = 0;
+
+        for (SourceExtractor.Pixel p : obj.rawPixels) {
+            double dx = p.x - obj.x;
+            double dy = p.y - obj.y;
+            if ((dx * dx) + (dy * dy) > radiusSquared) {
+                continue;
+            }
+            if (p.y < 0 || p.y >= slowMoverStackData.length || p.y >= medianStackData.length) {
+                continue;
+            }
+            if (p.x < 0 || p.x >= slowMoverStackData[p.y].length || p.x >= medianStackData[p.y].length) {
+                continue;
+            }
+
+            corePixels++;
+            if (((int) slowMoverStackData[p.y][p.x]) - ((int) medianStackData[p.y][p.x]) > 0) {
+                positiveCorePixels++;
+            }
+        }
+
+        if (corePixels == 0) {
+            return 0.0;
+        }
+        return (double) positiveCorePixels / corePixels;
     }
 
     /**
