@@ -139,17 +139,7 @@ public class DetectionConfig implements Cloneable {
      */
     public double slowMoverBaselineMadMultiplier = 4.5;
 
-    // --- Slow-mover shape and support filtering ---
-
-    /** * Enables the slow-mover shape veto stage.
-     * When disabled, the branch skips the shared irregular and binary slow-mover shape checks.
-     */
-    public boolean enableSlowMoverShapeFiltering = true;
-
-    /** * Enables the extra slow-mover-only shape filter after the shared irregular/binary checks.
-     * Disable this to keep the shared slow-mover shape filters while bypassing the targeted compact-shape veto.
-     */
-    public boolean enableSlowMoverSpecificShapeFiltering = true;
+    // --- Slow-mover support filtering ---
 
     /** * Minimum fraction of a slow-mover footprint that must overlap the median-stack artifact mask.
      * Higher values demand stronger support from the median stack before a candidate is kept.

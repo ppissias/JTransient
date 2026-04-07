@@ -485,29 +485,15 @@ public class JTransientEngine {
                         smTelemetry.dynamicElongationThreshold
                 );
                 System.out.printf(
-                        "DEBUG: Slow Mover Filters -> Raw: %d | AboveElong: %d | MaskStage: %d | Irregular: %d | Binary: %d | SlowMoverShape: %d | LowMedianSupport: %d | HighMedianSupport: %d | LowResidualFootprint: %d | Final: %d%n",
+                        "DEBUG: Slow Mover Filters -> Raw: %d | AboveElong: %d | MaskStage: %d | LowMedianSupport: %d | HighMedianSupport: %d | LowResidualFootprint: %d | Final: %d%n",
                         smTelemetry.rawCandidatesExtracted,
                         smTelemetry.candidatesAboveElongationThreshold,
                         smTelemetry.candidatesEvaluatedAgainstMasks,
-                        smTelemetry.rejectedIrregularShape,
-                        smTelemetry.rejectedBinaryAnomaly,
-                        smTelemetry.rejectedSlowMoverShape,
                         smTelemetry.rejectedLowMedianSupport,
                         smTelemetry.rejectedHighMedianSupport,
                         smTelemetry.rejectedLowResidualFootprintSupport,
                         smTelemetry.candidatesDetected
                 );
-                if (smTelemetry.rejectedSlowMoverShape > 0) {
-                    System.out.printf(
-                            "DEBUG: Slow Mover Shape Breakdown -> TooShort: %d | LowFill: %d | SparseBins: %d | GappedBins: %d | CurvedCenterline: %d | BulgedWidth: %d%n",
-                            smTelemetry.rejectedSlowMoverShapeTooShort,
-                            smTelemetry.rejectedSlowMoverShapeLowFill,
-                            smTelemetry.rejectedSlowMoverShapeSparseBins,
-                            smTelemetry.rejectedSlowMoverShapeGappedBins,
-                            smTelemetry.rejectedSlowMoverShapeCurvedCenterline,
-                            smTelemetry.rejectedSlowMoverShapeBulgedWidth
-                    );
-                }
                 System.out.printf(
                         "DEBUG: Slow Mover Signals -> MinSupport: %.3f | MaxSupport: %.3f | AvgMedianSupportOverlap: %.3f | MinResidualFootprint: %.3f | AvgResidualFootprint: %.3f%n",
                         smTelemetry.medianSupportOverlapThreshold,

@@ -268,15 +268,10 @@ The engine then:
    - fallback `3.0` if too few objects are available
 5. rejects candidates that:
    - fail the elongation threshold
-   - fail `SourceExtractor.isIrregularStreakShape(...)`
-   - fail `SourceExtractor.isBinaryStarAnomaly(...)`
-   - optionally fail the slow-mover-specific shape filter when `enableSlowMoverSpecificShapeFiltering` is enabled
    - optionally fail the candidate-footprint residual-flux check in `slowMoverStack - medianStack` when `enableSlowMoverResidualFootprintFiltering` is enabled
    - overlap the median-stack mask by more than the configured `slowMoverMedianSupportMaxOverlapFraction`
 
 The survivors are exported as `PipelineResult.slowMoverAnalysis.candidates`, with per-candidate diagnostics and aggregate slow-mover telemetry. The legacy `PipelineResult.slowMoverCandidates` export is still populated temporarily for compatibility.
-
-The slow-mover-specific shape filter is stricter than the generic streak-shape veto and can reject candidates for being too short, too sparse, internally gapped, too curved, or too bulged in width.
 
 ## 9. Streak Linking And Stationary-Star Veto Filtering
 

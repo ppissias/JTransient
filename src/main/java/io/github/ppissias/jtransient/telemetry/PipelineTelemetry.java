@@ -71,28 +71,10 @@ public class PipelineTelemetry {
     public static class SlowMoverTelemetry {
         /** Raw candidate count extracted from the slow-mover stack before any filtering. */
         public int rawCandidatesExtracted;
-        /** Candidates that cleared the elongation baseline before morphology and median-support checks. */
+        /** Candidates that cleared the elongation baseline before median-support and residual checks. */
         public int candidatesAboveElongationThreshold;
-        /** Candidates that reached the median-support overlap stage after morphology filters. */
+        /** Candidates that reached the median-support overlap stage after the elongation baseline. */
         public int candidatesEvaluatedAgainstMasks;
-        /** Candidates rejected because the footprint shape is too irregular for a trustworthy mover. */
-        public int rejectedIrregularShape;
-        /** Candidates rejected because the footprint is more consistent with a merged binary star. */
-        public int rejectedBinaryAnomaly;
-        /** Candidates rejected by the slow-mover-only short/kinked shape veto. */
-        public int rejectedSlowMoverShape;
-        /** Slow-mover shape rejects caused by a footprint that is too short along its binary major axis. */
-        public int rejectedSlowMoverShapeTooShort;
-        /** Slow-mover shape rejects caused by an elongated footprint that is too sparse inside its oriented box. */
-        public int rejectedSlowMoverShapeLowFill;
-        /** Slow-mover shape rejects caused by too few occupied longitudinal bins along the fitted major axis. */
-        public int rejectedSlowMoverShapeSparseBins;
-        /** Slow-mover shape rejects caused by internal empty bins along the fitted major axis. */
-        public int rejectedSlowMoverShapeGappedBins;
-        /** Slow-mover shape rejects caused by a binary footprint whose fitted centerline bends too much. */
-        public int rejectedSlowMoverShapeCurvedCenterline;
-        /** Slow-mover shape rejects caused by strong width bulges or abrupt width changes along the footprint. */
-        public int rejectedSlowMoverShapeBulgedWidth;
         /** Candidates rejected because their median-stack overlap stayed below the configured support floor. */
         public int rejectedLowMedianSupport;
         /** Candidates rejected because their median-stack overlap exceeded the configured support ceiling. */

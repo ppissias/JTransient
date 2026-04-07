@@ -129,21 +129,6 @@ Minimum size for master-stack objects.
 
 Master switch for the slow-mover branch.
 
-### `enableSlowMoverShapeFiltering` (default `true`)
-
-Enables the shared shape-veto stage inside the slow-mover branch.
-
-- if enabled, candidates must pass `isIrregularStreakShape` and `isBinaryStarAnomaly`
-- if disabled, the branch skips those shared shape checks
-
-### `enableSlowMoverSpecificShapeFiltering` (default `true`)
-
-Enables the extra slow-mover-only shape filter after the shared slow-mover shape checks.
-
-- if enabled, candidates must also pass the targeted compact-shape veto used only by the slow-mover branch
-- if disabled, the shared irregular/binary checks can still run while the last targeted shape filter is bypassed
-- useful when you want to diagnose or temporarily relax only the final slow-mover-specific shape gate
-
 ### `slowMoverStackMiddleFraction` (default `0.75`)
 
 Controls how the slow-mover stack is built.
@@ -181,7 +166,6 @@ Controls the dynamic elongation threshold for slow-mover candidates.
 
 Slow-mover candidates now pass through a simpler artifact filter after this baseline check.
 
-- irregular or binary-like shapes are still rejected first
 - any surviving candidate must overlap the median-stack artifact mask within the configured support band
 - the branch can also require enough positive residual flux on the candidate's own detected footprint in `slowMoverStack - medianStack`
 - the stage-by-stage outcome is reported through `PipelineResult.telemetry.slowMoverTelemetry`
