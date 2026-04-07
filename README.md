@@ -104,7 +104,7 @@ try {
     );
 
     System.out.println("Tracks found: " + result.tracks.size());
-    System.out.println("Slow mover candidates: " + result.slowMoverCandidates.size());
+    System.out.println("Slow mover candidates: " + result.slowMoverAnalysis.candidates.size());
     System.out.println(result.telemetry.generateReport());
 
     result.tracks.forEach(track -> {
@@ -131,7 +131,8 @@ Key `PipelineResult` fields:
 - `maximumStackData`: maximum stack exported for visualization/post-processing
 - `masterStars`: stationary objects extracted from the master stack
 - `masterVetoMask`: boolean veto mask used to purge stationary stars
-- `slowMoverStackData`, `slowMoverMedianVetoMask`, and `slowMoverCandidates`: optional slow-mover products
+- `slowMoverAnalysis`: grouped slow-mover result with per-candidate diagnostics and aggregate stage telemetry
+- `slowMoverStackData`, `slowMoverMedianVetoMask`, and `slowMoverCandidates`: legacy slow-mover exports kept temporarily for compatibility
 - `driftPoints`: per-frame border-drift diagnostics
 - `telemetry`: pipeline and tracker counters, including nested `slowMoverTelemetry`
 
@@ -140,6 +141,10 @@ Key `PipelineResult` fields:
 If you are iterating on parameters or running UI workflows, you can precompute the median master stack once and pass it into the overloads that accept `providedMasterStack`.
 
 ```java
+import io.github.ppissias.jtransient.engine.FrameTransients;
+import io.github.ppissias.jtransient.engine.JTransientEngine;
+import io.github.ppissias.jtransient.engine.PipelineResult;
+
 JTransientEngine engine = new JTransientEngine();
 
 try {
@@ -147,7 +152,7 @@ try {
 
     PipelineResult pipeline = engine.runPipeline(frames, config, null, masterStack);
 
-    List<JTransientEngine.FrameTransients> transients =
+    List<FrameTransients> transients =
             engine.detectTransients(frames, config, null, masterStack);
 } finally {
     engine.shutdown();
@@ -161,13 +166,16 @@ try {
 `detectTransients(...)` runs the same early stages as the full engine and returns the per-frame export produced after stationary-star filtering, with preserved streak detections included.
 
 ```java
+import io.github.ppissias.jtransient.engine.FrameTransients;
+import io.github.ppissias.jtransient.engine.JTransientEngine;
+
 JTransientEngine engine = new JTransientEngine();
 
 try {
-    List<JTransientEngine.FrameTransients> frameTransients =
+    List<FrameTransients> frameTransients =
             engine.detectTransients(frames, config, null);
 
-    for (JTransientEngine.FrameTransients frame : frameTransients) {
+    for (FrameTransients frame : frameTransients) {
         System.out.println(frame.filename + " -> " + frame.transients.size() + " transients");
         System.out.println("Seed threshold: " + frame.extractionResult.seedThreshold);
         System.out.println("Grow threshold: " + frame.extractionResult.growThreshold);

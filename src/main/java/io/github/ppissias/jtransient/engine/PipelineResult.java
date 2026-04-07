@@ -9,6 +9,8 @@
  */
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.core.ResidualTransientAnalysis;
+import io.github.ppissias.jtransient.core.SlowMoverAnalysis;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.core.TrackLinker;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
@@ -27,11 +29,14 @@ public class PipelineResult {
     /** Stationary objects extracted from the median master stack. */
     public final List<SourceExtractor.DetectedObject> masterStars;
 
-    /** Slow-mover stack produced from the configured middle band of sorted pixels. */
+    /** Grouped slow-mover stage output with per-candidate diagnostics. */
+    public final SlowMoverAnalysis slowMoverAnalysis;
+
+    /** Legacy slow-mover stack export kept temporarily for compatibility. */
     public final short[][] slowMoverStackData;
-    /** Pixel veto mask built from objects extracted on the median stack with the slow-mover extraction thresholds. */
+    /** Legacy slow-mover median veto mask export kept temporarily for compatibility. */
     public final boolean[][] slowMoverMedianVetoMask;
-    /** Elongated candidates that survived the slow-mover artifact filters. */
+    /** Legacy accepted slow-mover object export kept temporarily for compatibility. */
     public final List<SourceExtractor.DetectedObject> slowMoverCandidates;
     /** Single-frame anomalies rescued after tracking without being treated as tracks. */
     public final List<TrackLinker.AnomalyDetection> anomalies;
@@ -70,10 +75,32 @@ public class PipelineResult {
                           boolean[][] masterVetoMask,
                           List<SourceExtractor.Pixel> driftPoints,
                           short[][] maximumStackData) {
+        this(tracks, telemetry, masterStackData, masterStars, SlowMoverAnalysis.empty(),
+                slowMoverStackData, slowMoverMedianVetoMask, slowMoverCandidates, anomalies,
+                allTransients, unclassifiedTransients, residualTransientAnalysis,
+                masterVetoMask, driftPoints, maximumStackData);
+    }
+
+    public PipelineResult(List<TrackLinker.Track> tracks,
+                          PipelineTelemetry telemetry,
+                          short[][] masterStackData,
+                          List<SourceExtractor.DetectedObject> masterStars,
+                          SlowMoverAnalysis slowMoverAnalysis,
+                          short[][] slowMoverStackData,
+                          boolean[][] slowMoverMedianVetoMask,
+                          List<SourceExtractor.DetectedObject> slowMoverCandidates,
+                          List<TrackLinker.AnomalyDetection> anomalies,
+                          List<List<SourceExtractor.DetectedObject>> allTransients,
+                          List<List<SourceExtractor.DetectedObject>> unclassifiedTransients,
+                          ResidualTransientAnalysis residualTransientAnalysis,
+                          boolean[][] masterVetoMask,
+                          List<SourceExtractor.Pixel> driftPoints,
+                          short[][] maximumStackData) {
         this.tracks = tracks;
         this.telemetry = telemetry;
         this.masterStackData = masterStackData;
         this.masterStars = masterStars;
+        this.slowMoverAnalysis = slowMoverAnalysis != null ? slowMoverAnalysis : SlowMoverAnalysis.empty();
         this.slowMoverStackData = slowMoverStackData;
         this.slowMoverMedianVetoMask = slowMoverMedianVetoMask;
         this.slowMoverCandidates = slowMoverCandidates;

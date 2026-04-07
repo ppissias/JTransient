@@ -1,8 +1,6 @@
-package io.github.ppissias.jtransient.engine;
+package io.github.ppissias.jtransient.core;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
-import io.github.ppissias.jtransient.core.SourceExtractor;
-import io.github.ppissias.jtransient.core.TrackLinker;
 import org.junit.Test;
 
 import java.util.ArrayList;

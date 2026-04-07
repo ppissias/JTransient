@@ -7,9 +7,7 @@
  * author: Petros Pissias <petrospis at gmail.com>
  *
  */
-package io.github.ppissias.jtransient.engine;
-
-import io.github.ppissias.jtransient.core.SourceExtractor;
+package io.github.ppissias.jtransient.core;
 
 import java.util.ArrayList;
 import java.util.Collections;

@@ -58,9 +58,9 @@ Filtering happens at several different levels of the pipeline, and not all of it
 
 ## 1. Border Drift Diagnostics
 
-Before extracting sources, `JTransientEngine` scans the sequence for black border padding introduced by dithering plus external registration. This is done by `analyzeDitherAndDrift`, which calls `measureFrameDrift` for each frame.
+Before extracting sources, `JTransientEngine` delegates border-padding measurement to `FrameDriftAnalyzer.analyze(...)`.
 
-For each frame, `measureFrameDrift` determines the valid image footprint by finding the bounding box of real image data:
+For each frame, `FrameDriftAnalyzer` determines the valid image footprint by finding the bounding box of real image data:
 
 1. It considers a pixel to be valid if its value is above a low threshold (`DRIFT_VALID_PIXEL_THRESHOLD`).
 2. It finds the first and last rows containing a significant number of valid pixels (at least 5% of the frame width). This determines the top (`minY`) and bottom (`maxY`) of the valid area.
@@ -72,7 +72,7 @@ For each frame, `measureFrameDrift` determines the valid image footprint by find
 
 The vectors are exported as `PipelineResult.driftPoints`.
 
-Across the whole sequence, the engine also tracks the maximum inward padding depth. If `maxDrift + 10` is larger than the configured `voidProximityRadius`, it raises `voidProximityRadius` in place before extraction starts. That makes the later alignment-void rejection more conservative when the dataset actually needs it.
+Across the whole sequence, the analyzer also returns the maximum inward padding depth and a recommended safe `voidProximityRadius`. `JTransientEngine` applies that recommendation only if it is larger than the current config value. That keeps the measurement logic pure while preserving the existing conservative extraction behavior.
 
 ## 2. Parallel Extraction And Quality Measurement
 
@@ -260,7 +260,7 @@ The engine then:
 1. extracts raw candidates from the slow-mover stack using:
    - `masterSlowMoverSigmaMultiplier`
    - `masterSlowMoverMinPixels`
-   - temporary `growSigmaMultiplier = masterSlowMoverGrowSigmaMultiplier`
+   - stage-local `growSigmaMultiplier = masterSlowMoverGrowSigmaMultiplier`
 2. extracts comparison objects from the median master stack with the same slow-mover thresholds
 3. builds a boolean mask from the median-stack comparison objects
 4. computes a dynamic elongation threshold:
@@ -274,7 +274,7 @@ The engine then:
    - optionally fail the centered residual-core check in `slowMoverStack - medianStack` when `enableSlowMoverResidualCoreFiltering` is enabled
    - overlap the median-stack mask by more than the configured `slowMoverMedianSupportMaxOverlapFraction`
 
-The survivors are exported as `PipelineResult.slowMoverCandidates`, along with slow-mover telemetry.
+The survivors are exported as `PipelineResult.slowMoverAnalysis.candidates`, with per-candidate diagnostics and aggregate slow-mover telemetry. The legacy `PipelineResult.slowMoverCandidates` export is still populated temporarily for compatibility.
 
 The slow-mover-specific shape filter is stricter than the generic streak-shape veto and can reject candidates for being too short, too sparse, internally gapped, too curved, or too bulged in width.
 

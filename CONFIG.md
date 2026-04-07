@@ -29,7 +29,7 @@ Secondary hysteresis threshold used while the BFS expands a blob.
 - controls how much faint edge structure is retained
 - too low can leak into noise
 - master-star extraction uses a stage-local `growSigmaMultiplier = masterSigmaMultiplier`
-- the engine temporarily sets this to `masterSlowMoverGrowSigmaMultiplier` during slow-mover extraction
+- slow-mover extraction uses a stage-local `growSigmaMultiplier = masterSlowMoverGrowSigmaMultiplier`
 - the auto-tuner actively searches this field
 
 ### `minDetectionPixels` (default `10`)
@@ -169,7 +169,7 @@ Seed threshold for the slow-mover extraction pass.
 
 Temporary grow threshold used only during the slow-mover extraction pass.
 
-- the engine swaps this into `growSigmaMultiplier` while extracting slow-mover candidates
+- slow-mover extraction uses a stage-local `growSigmaMultiplier = masterSlowMoverGrowSigmaMultiplier`
 
 ### `slowMoverBaselineMadMultiplier` (default `4.5`)
 
@@ -185,6 +185,7 @@ Slow-mover candidates now pass through a simpler artifact filter after this base
 - any surviving candidate must overlap the median-stack artifact mask within the configured support band
 - the branch can also require centered positive support in `slowMoverStack - medianStack`
 - the stage-by-stage outcome is reported through `PipelineResult.telemetry.slowMoverTelemetry`
+- accepted candidates and their per-candidate diagnostics are exported through `PipelineResult.slowMoverAnalysis`
 
 ### `slowMoverMedianSupportOverlapFraction` (default `0.00`)
 

@@ -162,13 +162,13 @@ Use this when you want to reuse the same master stack across repeated `detectTra
 Signatures:
 
 ```java
-List<JTransientEngine.FrameTransients> detectTransients(
+List<FrameTransients> detectTransients(
         List<ImageFrame> inputFrames,
         DetectionConfig config,
         TransientEngineProgressListener listener
 )
 
-List<JTransientEngine.FrameTransients> detectTransients(
+List<FrameTransients> detectTransients(
         List<ImageFrame> inputFrames,
         DetectionConfig config,
         TransientEngineProgressListener listener,
@@ -255,7 +255,9 @@ What it returns:
 - `PipelineResult.telemetry`
 - `PipelineResult.masterStackData`
 - `PipelineResult.masterStars`
+- `PipelineResult.slowMoverAnalysis`
 - `PipelineResult.slowMoverStackData`
+- `PipelineResult.slowMoverMedianVetoMask`
 - `PipelineResult.slowMoverCandidates`
 - `PipelineResult.anomalies`
 - `PipelineResult.allTransients`

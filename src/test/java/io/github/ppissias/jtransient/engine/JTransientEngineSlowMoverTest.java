@@ -1,6 +1,9 @@
 package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.core.SlowMoverAnalysis;
+import io.github.ppissias.jtransient.core.SlowMoverAnalyzer;
+import io.github.ppissias.jtransient.core.SlowMoverCandidateResult;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 import org.junit.Test;
@@ -13,7 +16,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Regression tests for slow-mover filtering.
@@ -63,7 +69,7 @@ public class JTransientEngineSlowMoverTest {
         markFirstPixels(medianMask, medianSupportedKeep, 5);
         markFirstPixels(medianMask, highMedianSupportReject, 8);
 
-        List<SourceExtractor.DetectedObject> filtered = filterSlowMoverCandidates(
+        List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
                 rawSlowMovers,
                 slowMoverImage,
                 medianMask,
@@ -72,7 +78,7 @@ public class JTransientEngineSlowMoverTest {
         );
 
         assertEquals(1, filtered.size());
-        assertSame(medianSupportedKeep, filtered.get(0));
+        assertSame(medianSupportedKeep, filtered.get(0).object);
 
         assertEquals(11, telemetry.rawCandidatesExtracted);
         assertEquals(3, telemetry.candidatesAboveElongationThreshold);
@@ -117,7 +123,7 @@ public class JTransientEngineSlowMoverTest {
         markFirstPixels(medianMask, hookedReject, hookedReject.rawPixels.size());
         markFirstPixels(medianMask, straightKeep, straightKeep.rawPixels.size());
 
-        List<SourceExtractor.DetectedObject> filtered = filterSlowMoverCandidates(
+        List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
                 rawSlowMovers,
                 slowMoverImage,
                 medianMask,
@@ -126,7 +132,7 @@ public class JTransientEngineSlowMoverTest {
         );
 
         assertEquals(1, filtered.size());
-        assertSame(straightKeep, filtered.get(0));
+        assertSame(straightKeep, filtered.get(0).object);
         assertEquals(2, telemetry.candidatesAboveElongationThreshold);
         assertEquals(1, telemetry.candidatesEvaluatedAgainstMasks);
         assertEquals(1, telemetry.rejectedSlowMoverShape);
@@ -163,7 +169,7 @@ public class JTransientEngineSlowMoverTest {
         markFirstPixels(medianMask, bulgedReject, bulgedReject.rawPixels.size());
         markFirstPixels(medianMask, straightKeep, straightKeep.rawPixels.size());
 
-        List<SourceExtractor.DetectedObject> filtered = filterSlowMoverCandidates(
+        List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
                 rawSlowMovers,
                 slowMoverImage,
                 medianMask,
@@ -172,7 +178,7 @@ public class JTransientEngineSlowMoverTest {
         );
 
         assertEquals(1, filtered.size());
-        assertSame(straightKeep, filtered.get(0));
+        assertSame(straightKeep, filtered.get(0).object);
         assertEquals(2, telemetry.candidatesAboveElongationThreshold);
         assertEquals(1, telemetry.candidatesEvaluatedAgainstMasks);
         assertEquals(1, telemetry.rejectedSlowMoverShape);
@@ -209,7 +215,7 @@ public class JTransientEngineSlowMoverTest {
         markFirstPixels(medianMask, hookedKeep, hookedKeep.rawPixels.size());
         markFirstPixels(medianMask, straightKeep, straightKeep.rawPixels.size());
 
-        List<SourceExtractor.DetectedObject> filtered = filterSlowMoverCandidates(
+        List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
                 rawSlowMovers,
                 slowMoverImage,
                 medianMask,
@@ -218,8 +224,8 @@ public class JTransientEngineSlowMoverTest {
         );
 
         assertEquals(2, filtered.size());
-        assertSame(hookedKeep, filtered.get(0));
-        assertSame(straightKeep, filtered.get(1));
+        assertSame(hookedKeep, filtered.get(0).object);
+        assertSame(straightKeep, filtered.get(1).object);
         assertEquals(2, telemetry.candidatesAboveElongationThreshold);
         assertEquals(2, telemetry.candidatesEvaluatedAgainstMasks);
         assertEquals(0, telemetry.rejectedIrregularShape);
@@ -258,7 +264,7 @@ public class JTransientEngineSlowMoverTest {
         markFirstPixels(medianMask, hookedKeep, hookedKeep.rawPixels.size());
         markFirstPixels(medianMask, straightKeep, straightKeep.rawPixels.size());
 
-        List<SourceExtractor.DetectedObject> filtered = filterSlowMoverCandidates(
+        List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
                 rawSlowMovers,
                 slowMoverImage,
                 medianMask,
@@ -267,8 +273,8 @@ public class JTransientEngineSlowMoverTest {
         );
 
         assertEquals(2, filtered.size());
-        assertSame(hookedKeep, filtered.get(0));
-        assertSame(straightKeep, filtered.get(1));
+        assertSame(hookedKeep, filtered.get(0).object);
+        assertSame(straightKeep, filtered.get(1).object);
         assertEquals(2, telemetry.candidatesEvaluatedAgainstMasks);
         assertEquals(0, telemetry.rejectedIrregularShape);
         assertEquals(0, telemetry.rejectedBinaryAnomaly);
@@ -302,7 +308,7 @@ public class JTransientEngineSlowMoverTest {
         boolean[][] medianMask = new boolean[80][80];
         markFirstPixels(medianMask, wrongAngleKeep, wrongAngleKeep.rawPixels.size());
 
-        List<SourceExtractor.DetectedObject> filtered = filterSlowMoverCandidates(
+        List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
                 rawSlowMovers,
                 slowMoverImage,
                 medianMask,
@@ -311,7 +317,7 @@ public class JTransientEngineSlowMoverTest {
         );
 
         assertEquals(1, filtered.size());
-        assertSame(wrongAngleKeep, filtered.get(0));
+        assertSame(wrongAngleKeep, filtered.get(0).object);
         assertEquals(1, telemetry.candidatesEvaluatedAgainstMasks);
         assertEquals(0, telemetry.rejectedSlowMoverShape);
         assertEquals(0, totalDetailedSlowMoverShapeRejects(telemetry));
@@ -342,7 +348,7 @@ public class JTransientEngineSlowMoverTest {
         boolean[][] medianMask = new boolean[80][80];
         markFirstPixels(medianMask, compactKeep, compactKeep.rawPixels.size());
 
-        List<SourceExtractor.DetectedObject> filtered = filterSlowMoverCandidates(
+        List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
                 rawSlowMovers,
                 slowMoverImage,
                 medianMask,
@@ -351,7 +357,7 @@ public class JTransientEngineSlowMoverTest {
         );
 
         assertEquals(1, filtered.size());
-        assertSame(compactKeep, filtered.get(0));
+        assertSame(compactKeep, filtered.get(0).object);
         assertEquals(1, telemetry.candidatesEvaluatedAgainstMasks);
         assertEquals(0, telemetry.rejectedSlowMoverShape);
         assertEquals(0, totalDetailedSlowMoverShapeRejects(telemetry));
@@ -389,7 +395,7 @@ public class JTransientEngineSlowMoverTest {
         copyPixelValues(medianImage, centeredSupportKeep, 0, 2);
         copyPixelValues(medianImage, centeredSupportKeep, 6, 8);
 
-        List<SourceExtractor.DetectedObject> filtered = filterSlowMoverCandidates(
+        List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
                 rawSlowMovers,
                 slowMoverImage,
                 medianImage,
@@ -399,7 +405,7 @@ public class JTransientEngineSlowMoverTest {
         );
 
         assertEquals(1, filtered.size());
-        assertSame(centeredSupportKeep, filtered.get(0));
+        assertSame(centeredSupportKeep, filtered.get(0).object);
         assertEquals(2, telemetry.candidatesAboveElongationThreshold);
         assertEquals(2, telemetry.candidatesEvaluatedAgainstMasks);
         assertEquals(1, telemetry.rejectedLowResidualCoreSupport);
@@ -433,7 +439,7 @@ public class JTransientEngineSlowMoverTest {
         rawSlowMovers.add(noCoreSupportKeep);
         copyPixelValues(medianImage, noCoreSupportKeep, 2, 6);
 
-        List<SourceExtractor.DetectedObject> filtered = filterSlowMoverCandidates(
+        List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
                 rawSlowMovers,
                 slowMoverImage,
                 medianImage,
@@ -443,10 +449,245 @@ public class JTransientEngineSlowMoverTest {
         );
 
         assertEquals(1, filtered.size());
-        assertSame(noCoreSupportKeep, filtered.get(0));
+        assertSame(noCoreSupportKeep, filtered.get(0).object);
         assertEquals(0, telemetry.rejectedLowResidualCoreSupport);
         assertEquals(0.0, telemetry.residualCoreMinPositiveFractionThreshold, 0.0001);
         assertEquals(0.0, telemetry.avgResidualCorePositiveFraction, 0.0001);
+    }
+
+    /**
+     * Verifies accepted slow movers export their overlap and residual-core diagnostics together.
+     */
+    @Test
+    public void filterSlowMoverCandidatesExportsAcceptedCandidateDiagnostics() throws Exception {
+        DetectionConfig config = new DetectionConfig();
+        config.slowMoverMedianSupportOverlapFraction = 0.0;
+        config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
+        config.slowMoverResidualCoreRadiusPixels = 2.0;
+        config.slowMoverResidualCoreMinPositiveFraction = 0.5;
+        PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
+        short[][] slowMoverImage = new short[80][80];
+        short[][] medianImage = new short[80][80];
+
+        List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
+        addBaselineSlowMoverCandidates(rawSlowMovers, slowMoverImage);
+
+        SourceExtractor.DetectedObject accepted = createLinearCandidate(10, 48, 8, 4.9, (short) 120, slowMoverImage);
+        rawSlowMovers.add(accepted);
+
+        boolean[][] medianMask = new boolean[80][80];
+        markFirstPixels(medianMask, accepted, 4);
+        copyPixelValues(medianImage, accepted, 2, 4);
+
+        List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
+                rawSlowMovers,
+                slowMoverImage,
+                medianImage,
+                medianMask,
+                config,
+                telemetry
+        );
+
+        assertEquals(1, filtered.size());
+        SlowMoverCandidateResult result = filtered.get(0);
+        assertSame(accepted, result.object);
+        assertEquals(0.5, result.diagnostics.medianSupportOverlap, 0.0001);
+        assertEquals(0.5, result.diagnostics.residualCorePositiveFraction, 0.0001);
+        assertEquals(2, result.diagnostics.residualCorePositivePixels);
+        assertEquals(4, result.diagnostics.residualCorePixels);
+        assertEquals(2.0, result.diagnostics.residualCoreRadiusPixelsUsed, 0.0001);
+        assertTrue(result.diagnostics.residualCoreFilteringEnabled);
+    }
+
+    /**
+     * Verifies the exported residual-core radius reflects the effective internal clamp, not only the raw config value.
+     */
+    @Test
+    public void filterSlowMoverCandidatesExportsClampedResidualCoreRadius() throws Exception {
+        DetectionConfig config = new DetectionConfig();
+        config.slowMoverMedianSupportOverlapFraction = 0.0;
+        config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
+        config.slowMoverResidualCoreRadiusPixels = 0.1;
+        config.slowMoverResidualCoreMinPositiveFraction = 0.0;
+        PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
+        short[][] slowMoverImage = new short[80][80];
+        short[][] medianImage = new short[80][80];
+
+        List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
+        addBaselineSlowMoverCandidates(rawSlowMovers, slowMoverImage);
+
+        SourceExtractor.DetectedObject accepted = createLinearCandidate(10, 48, 8, 4.9, (short) 120, slowMoverImage);
+        rawSlowMovers.add(accepted);
+        copyPixelValues(medianImage, accepted, 3, 4);
+
+        List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
+                rawSlowMovers,
+                slowMoverImage,
+                medianImage,
+                new boolean[80][80],
+                config,
+                telemetry
+        );
+
+        assertEquals(1, filtered.size());
+        SlowMoverCandidateResult result = filtered.get(0);
+        assertEquals(0.5, result.diagnostics.residualCoreRadiusPixelsUsed, 0.0001);
+        assertEquals(1, result.diagnostics.residualCorePositivePixels);
+        assertEquals(2, result.diagnostics.residualCorePixels);
+        assertEquals(0.5, result.diagnostics.residualCorePositiveFraction, 0.0001);
+    }
+
+    /**
+     * Verifies residual-core diagnostics are still exported even when the veto is disabled.
+     */
+    @Test
+    public void filterSlowMoverCandidatesExportsResidualDiagnosticsWhenFilterDisabled() throws Exception {
+        DetectionConfig config = new DetectionConfig();
+        config.enableSlowMoverResidualCoreFiltering = false;
+        config.slowMoverMedianSupportOverlapFraction = 0.0;
+        config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
+        config.slowMoverResidualCoreRadiusPixels = 2.0;
+        PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
+        short[][] slowMoverImage = new short[80][80];
+        short[][] medianImage = new short[80][80];
+
+        List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
+        addBaselineSlowMoverCandidates(rawSlowMovers, slowMoverImage);
+
+        SourceExtractor.DetectedObject accepted = createLinearCandidate(10, 48, 8, 4.9, (short) 120, slowMoverImage);
+        rawSlowMovers.add(accepted);
+        copyPixelValues(medianImage, accepted, 2, 6);
+
+        List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
+                rawSlowMovers,
+                slowMoverImage,
+                medianImage,
+                new boolean[80][80],
+                config,
+                telemetry
+        );
+
+        assertEquals(1, filtered.size());
+        SlowMoverCandidateResult result = filtered.get(0);
+        assertSame(accepted, result.object);
+        assertEquals(0.0, result.diagnostics.residualCorePositiveFraction, 0.0001);
+        assertEquals(0, result.diagnostics.residualCorePositivePixels);
+        assertEquals(4, result.diagnostics.residualCorePixels);
+        assertEquals(2.0, result.diagnostics.residualCoreRadiusPixelsUsed, 0.0001);
+        assertFalse(result.diagnostics.residualCoreFilteringEnabled);
+    }
+
+    /**
+     * Verifies the exported residual-core fraction matches the exported positive and total core pixel counts.
+     */
+    @Test
+    public void filterSlowMoverCandidatesExportsResidualCoreCountsConsistentWithFraction() throws Exception {
+        DetectionConfig config = new DetectionConfig();
+        config.slowMoverMedianSupportOverlapFraction = 0.0;
+        config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
+        config.slowMoverResidualCoreRadiusPixels = 2.0;
+        config.slowMoverResidualCoreMinPositiveFraction = 0.0;
+        PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
+        short[][] slowMoverImage = new short[80][80];
+        short[][] medianImage = new short[80][80];
+
+        List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
+        addBaselineSlowMoverCandidates(rawSlowMovers, slowMoverImage);
+
+        SourceExtractor.DetectedObject accepted = createLinearCandidate(10, 48, 8, 4.9, (short) 120, slowMoverImage);
+        rawSlowMovers.add(accepted);
+        copyPixelValues(medianImage, accepted, 2, 3);
+
+        List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
+                rawSlowMovers,
+                slowMoverImage,
+                medianImage,
+                new boolean[80][80],
+                config,
+                telemetry
+        );
+
+        assertEquals(1, filtered.size());
+        SlowMoverCandidateResult result = filtered.get(0);
+        assertEquals(3, result.diagnostics.residualCorePositivePixels);
+        assertEquals(4, result.diagnostics.residualCorePixels);
+        assertEquals(0.75, result.diagnostics.residualCorePositiveFraction, 0.0001);
+    }
+
+    /**
+     * Verifies accepted candidates keep the correct diagnostics instead of drifting into a parallel-ordering bug.
+     */
+    @Test
+    public void filterSlowMoverCandidatesKeepsDiagnosticsAttachedToCorrectAcceptedCandidate() throws Exception {
+        DetectionConfig config = new DetectionConfig();
+        config.slowMoverMedianSupportOverlapFraction = 0.0;
+        config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
+        config.slowMoverResidualCoreRadiusPixels = 2.0;
+        config.slowMoverResidualCoreMinPositiveFraction = 0.0;
+        PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
+        short[][] slowMoverImage = new short[80][80];
+        short[][] medianImage = new short[80][80];
+
+        List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
+        addBaselineSlowMoverCandidates(rawSlowMovers, slowMoverImage);
+
+        SourceExtractor.DetectedObject firstAccepted = createLinearCandidate(10, 48, 8, 4.9, (short) 120, slowMoverImage);
+        SourceExtractor.DetectedObject secondAccepted = createLinearCandidate(10, 56, 8, 5.0, (short) 120, slowMoverImage);
+        rawSlowMovers.add(firstAccepted);
+        rawSlowMovers.add(secondAccepted);
+
+        boolean[][] medianMask = new boolean[80][80];
+        markFirstPixels(medianMask, firstAccepted, 2);
+        markFirstPixels(medianMask, secondAccepted, 6);
+        copyPixelValues(medianImage, firstAccepted, 2, 4);
+
+        List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
+                rawSlowMovers,
+                slowMoverImage,
+                medianImage,
+                medianMask,
+                config,
+                telemetry
+        );
+
+        assertEquals(2, filtered.size());
+        assertSame(firstAccepted, filtered.get(0).object);
+        assertEquals(0.25, filtered.get(0).diagnostics.medianSupportOverlap, 0.0001);
+        assertEquals(0.5, filtered.get(0).diagnostics.residualCorePositiveFraction, 0.0001);
+        assertSame(secondAccepted, filtered.get(1).object);
+        assertEquals(0.75, filtered.get(1).diagnostics.medianSupportOverlap, 0.0001);
+        assertEquals(1.0, filtered.get(1).diagnostics.residualCorePositiveFraction, 0.0001);
+    }
+
+    /**
+     * Verifies the slow-mover analysis uses a stage-local config when applying extraction overrides.
+     */
+    @Test
+    public void analyzeDoesNotMutateCallerConfigDuringSlowMoverExtraction() {
+        DetectionConfig config = new DetectionConfig();
+        config.growSigmaMultiplier = 6.5;
+        config.masterSlowMoverGrowSigmaMultiplier = 2.5;
+        config.masterSlowMoverSigmaMultiplier = 2.0;
+        config.masterSlowMoverMinPixels = 3;
+
+        List<ImageFrame> frames = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            short[][] image = new short[16][16];
+            image[8][8] = 1000;
+            image[8][9] = 900;
+            image[9][8] = 900;
+            frames.add(new ImageFrame(i, "frame_" + i + ".fit", image, -1L, -1L));
+        }
+
+        short[][] masterStack = new short[16][16];
+        masterStack[8][8] = 1000;
+        masterStack[8][9] = 900;
+        masterStack[9][8] = 900;
+
+        SlowMoverAnalysis analysis = SlowMoverAnalyzer.analyze(frames, masterStack, config);
+
+        assertEquals(6.5, config.growSigmaMultiplier, 0.0);
+        assertNotNull(analysis.telemetry);
     }
 
     /**
@@ -480,7 +721,7 @@ public class JTransientEngineSlowMoverTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static List<SourceExtractor.DetectedObject> filterSlowMoverCandidates(
+    private static List<SlowMoverCandidateResult> filterSlowMoverCandidates(
             List<SourceExtractor.DetectedObject> rawSlowMovers,
             short[][] slowMoverImage,
             boolean[][] medianMask,
@@ -498,7 +739,7 @@ public class JTransientEngineSlowMoverTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static List<SourceExtractor.DetectedObject> filterSlowMoverCandidates(
+    private static List<SlowMoverCandidateResult> filterSlowMoverCandidates(
             List<SourceExtractor.DetectedObject> rawSlowMovers,
             short[][] slowMoverImage,
             short[][] medianImage,
@@ -506,7 +747,7 @@ public class JTransientEngineSlowMoverTest {
             DetectionConfig config,
             PipelineTelemetry.SlowMoverTelemetry telemetry
     ) throws Exception {
-        Method method = JTransientEngine.class.getDeclaredMethod(
+        Method method = SlowMoverAnalyzer.class.getDeclaredMethod(
                 "filterSlowMoverCandidates",
                 List.class,
                 short[][].class,
@@ -516,7 +757,7 @@ public class JTransientEngineSlowMoverTest {
                 PipelineTelemetry.SlowMoverTelemetry.class
         );
         method.setAccessible(true);
-        return (List<SourceExtractor.DetectedObject>) method.invoke(
+        return (List<SlowMoverCandidateResult>) method.invoke(
                 null,
                 rawSlowMovers,
                 slowMoverImage,
@@ -537,7 +778,7 @@ public class JTransientEngineSlowMoverTest {
     }
 
     private static Method slowMoverSpecificShapeFilterMethod() throws Exception {
-        Method method = JTransientEngine.class.getDeclaredMethod(
+        Method method = SlowMoverAnalyzer.class.getDeclaredMethod(
                 "evaluateSlowMoverSpecificShapeFilter",
                 SourceExtractor.DetectedObject.class
         );
@@ -619,6 +860,14 @@ public class JTransientEngineSlowMoverTest {
         scaled.elongation = source.elongation;
         scaled.angle = source.angle;
         return scaled;
+    }
+
+    private static void addBaselineSlowMoverCandidates(List<SourceExtractor.DetectedObject> rawSlowMovers,
+                                                       short[][] slowMoverImage) {
+        double[] baselineElongations = {1.0, 1.4, 1.6, 1.8, 2.0, 2.0, 2.2, 2.4};
+        for (int i = 0; i < baselineElongations.length; i++) {
+            rawSlowMovers.add(createLinearCandidate(10, 8 + (i * 4), 10, baselineElongations[i], (short) 100, slowMoverImage));
+        }
     }
 
     private static SourceExtractor.DetectedObject createLinearCandidate(
