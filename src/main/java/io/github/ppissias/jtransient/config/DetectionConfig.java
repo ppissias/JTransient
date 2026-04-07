@@ -161,20 +161,17 @@ public class DetectionConfig implements Cloneable {
      */
     public double slowMoverMedianSupportMaxOverlapFraction = 0.65;
 
-    /** * Enables the centered residual-support veto in the slow-mover branch.
-     * When enabled, candidates must retain positive signal near their centroid in slowMoverStack - medianStack.
+    /** * Enables the candidate-footprint residual-support veto in the slow-mover branch.
+     * When enabled, candidates must retain enough positive residual flux on their own detected footprint
+     * in slowMoverStack - medianStack.
      */
-    public boolean enableSlowMoverResidualCoreFiltering = true;
+    public boolean enableSlowMoverResidualFootprintFiltering = true;
 
-    /** * Radius, in pixels, of the centroid-centered footprint core evaluated against slowMoverStack - medianStack.
-     * Larger values make the residual-support check more tolerant of broader compact slow movers.
+    /** * Minimum fraction of the candidate's slow-mover footprint flux that must remain as positive residual
+     * after subtracting the ordinary median stack.
+     * Lower values relax the residual-footprint veto; higher values demand a more genuinely new slow-mover signal.
      */
-    public double slowMoverResidualCoreRadiusPixels = 2.0;
-
-    /** * Minimum fraction of core footprint pixels that must remain positive in slowMoverStack - medianStack.
-     * Lower values relax the residual-core veto; higher values demand stronger centered excess.
-     */
-    public double slowMoverResidualCoreMinPositiveFraction = 0.50;
+    public double slowMoverResidualFootprintMinFluxFraction = 0.10;
 
     // =================================================================
     // 3. FRAME QUALITY ANALYSIS PARAMETERS

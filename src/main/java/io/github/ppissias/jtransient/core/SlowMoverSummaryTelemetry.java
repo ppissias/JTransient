@@ -31,7 +31,7 @@ public final class SlowMoverSummaryTelemetry {
     public final int rejectedSlowMoverShapeBulgedWidth;
     public final int rejectedLowMedianSupport;
     public final int rejectedHighMedianSupport;
-    public final int rejectedLowResidualCoreSupport;
+    public final int rejectedLowResidualFootprintSupport;
     public final int candidatesDetected;
     public final double medianElongation;
     public final double madElongation;
@@ -39,8 +39,8 @@ public final class SlowMoverSummaryTelemetry {
     public final double medianSupportOverlapThreshold;
     public final double medianSupportMaxOverlapThreshold;
     public final double avgMedianSupportOverlap;
-    public final double residualCoreMinPositiveFractionThreshold;
-    public final double avgResidualCorePositiveFraction;
+    public final double residualFootprintMinFluxFractionThreshold;
+    public final double avgResidualFootprintFluxFraction;
 
     public SlowMoverSummaryTelemetry(PipelineTelemetry.SlowMoverTelemetry telemetry) {
         this.rawCandidatesExtracted = telemetry.rawCandidatesExtracted;
@@ -57,7 +57,7 @@ public final class SlowMoverSummaryTelemetry {
         this.rejectedSlowMoverShapeBulgedWidth = telemetry.rejectedSlowMoverShapeBulgedWidth;
         this.rejectedLowMedianSupport = telemetry.rejectedLowMedianSupport;
         this.rejectedHighMedianSupport = telemetry.rejectedHighMedianSupport;
-        this.rejectedLowResidualCoreSupport = telemetry.rejectedLowResidualCoreSupport;
+        this.rejectedLowResidualFootprintSupport = telemetry.rejectedLowResidualFootprintSupport;
         this.candidatesDetected = telemetry.candidatesDetected;
         this.medianElongation = telemetry.medianElongation;
         this.madElongation = telemetry.madElongation;
@@ -65,8 +65,8 @@ public final class SlowMoverSummaryTelemetry {
         this.medianSupportOverlapThreshold = telemetry.medianSupportOverlapThreshold;
         this.medianSupportMaxOverlapThreshold = telemetry.medianSupportMaxOverlapThreshold;
         this.avgMedianSupportOverlap = telemetry.avgMedianSupportOverlap;
-        this.residualCoreMinPositiveFractionThreshold = telemetry.residualCoreMinPositiveFractionThreshold;
-        this.avgResidualCorePositiveFraction = telemetry.avgResidualCorePositiveFraction;
+        this.residualFootprintMinFluxFractionThreshold = telemetry.residualFootprintMinFluxFractionThreshold;
+        this.avgResidualFootprintFluxFraction = telemetry.avgResidualFootprintFluxFraction;
     }
 
     public static SlowMoverSummaryTelemetry empty() {
@@ -89,7 +89,7 @@ public final class SlowMoverSummaryTelemetry {
         telemetry.rejectedSlowMoverShapeBulgedWidth = rejectedSlowMoverShapeBulgedWidth;
         telemetry.rejectedLowMedianSupport = rejectedLowMedianSupport;
         telemetry.rejectedHighMedianSupport = rejectedHighMedianSupport;
-        telemetry.rejectedLowResidualCoreSupport = rejectedLowResidualCoreSupport;
+        telemetry.rejectedLowResidualFootprintSupport = rejectedLowResidualFootprintSupport;
         telemetry.candidatesDetected = candidatesDetected;
         telemetry.medianElongation = medianElongation;
         telemetry.madElongation = madElongation;
@@ -97,8 +97,8 @@ public final class SlowMoverSummaryTelemetry {
         telemetry.medianSupportOverlapThreshold = medianSupportOverlapThreshold;
         telemetry.medianSupportMaxOverlapThreshold = medianSupportMaxOverlapThreshold;
         telemetry.avgMedianSupportOverlap = avgMedianSupportOverlap;
-        telemetry.residualCoreMinPositiveFractionThreshold = residualCoreMinPositiveFractionThreshold;
-        telemetry.avgResidualCorePositiveFraction = avgResidualCorePositiveFraction;
+        telemetry.residualFootprintMinFluxFractionThreshold = residualFootprintMinFluxFractionThreshold;
+        telemetry.avgResidualFootprintFluxFraction = avgResidualFootprintFluxFraction;
         for (SlowMoverCandidateResult candidate : candidates) {
             telemetry.candidateMedianSupportOverlaps.add(candidate.diagnostics.medianSupportOverlap);
         }

@@ -97,8 +97,8 @@ public class PipelineTelemetry {
         public int rejectedLowMedianSupport;
         /** Candidates rejected because their median-stack overlap exceeded the configured support ceiling. */
         public int rejectedHighMedianSupport;
-        /** Candidates rejected because their centered slowMover-minus-median residual was too weak. */
-        public int rejectedLowResidualCoreSupport;
+        /** Candidates rejected because their slow-mover footprint retained too little positive residual flux. */
+        public int rejectedLowResidualFootprintSupport;
         /** Number of slow-mover candidates retained after all filters. */
         public int candidatesDetected;
         /** Median elongation measured from the raw slow-mover extraction pass. */
@@ -113,10 +113,10 @@ public class PipelineTelemetry {
         public double medianSupportMaxOverlapThreshold;
         /** Mean overlap with the median-stack veto mask across candidates that reached the mask stage. */
         public double avgMedianSupportOverlap;
-        /** Minimum centered residual-core fraction required by the slowMover-minus-median veto. */
-        public double residualCoreMinPositiveFractionThreshold;
-        /** Mean centered residual-core positive fraction across candidates that reached the mask stage. */
-        public double avgResidualCorePositiveFraction;
+        /** Minimum residual-footprint flux fraction required by the slowMover-minus-median veto. */
+        public double residualFootprintMinFluxFractionThreshold;
+        /** Mean residual-footprint flux fraction across candidates retained by the slow-mover stage. */
+        public double avgResidualFootprintFluxFraction;
         /** Per-candidate overlap fractions for accepted slow movers, in the same order as the exported detections. */
         public final List<Double> candidateMedianSupportOverlaps = new ArrayList<>();
     }

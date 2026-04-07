@@ -1,6 +1,7 @@
 package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.core.PixelEncoding;
 import io.github.ppissias.jtransient.core.SlowMoverAnalysis;
 import io.github.ppissias.jtransient.core.SlowMoverAnalyzer;
 import io.github.ppissias.jtransient.core.SlowMoverCandidateResult;
@@ -23,7 +24,7 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * Regression tests for slow-mover filtering.
- * Candidates are filtered by shape, median-stack overlap, and optional centered residual support.
+ * Candidates are filtered by shape, median-stack overlap, and optional footprint residual support.
  */
 public class JTransientEngineSlowMoverTest {
     private static final List<String> REAL_SLOW_MOVER_MASKS = List.of(
@@ -49,7 +50,7 @@ public class JTransientEngineSlowMoverTest {
         config.slowMoverMedianSupportOverlapFraction = 0.10;
         config.slowMoverMedianSupportMaxOverlapFraction = 0.65;
         PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
-        short[][] slowMoverImage = new short[80][80];
+        short[][] slowMoverImage = createBlankEncodedImage(80, 80);
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
         double[] baselineElongations = {1.0, 1.4, 1.6, 1.8, 2.0, 2.0, 2.2, 2.4};
@@ -106,7 +107,7 @@ public class JTransientEngineSlowMoverTest {
         config.slowMoverMedianSupportOverlapFraction = 0.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
         PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
-        short[][] slowMoverImage = new short[80][80];
+        short[][] slowMoverImage = createBlankEncodedImage(80, 80);
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
         double[] baselineElongations = {1.0, 1.4, 1.6, 1.8, 2.0, 2.0, 2.2, 2.4};
@@ -152,7 +153,7 @@ public class JTransientEngineSlowMoverTest {
         config.slowMoverMedianSupportOverlapFraction = 0.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
         PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
-        short[][] slowMoverImage = new short[80][80];
+        short[][] slowMoverImage = createBlankEncodedImage(80, 80);
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
         double[] baselineElongations = {1.0, 1.4, 1.6, 1.8, 2.0, 2.0, 2.2, 2.4};
@@ -198,7 +199,7 @@ public class JTransientEngineSlowMoverTest {
         config.slowMoverMedianSupportOverlapFraction = 0.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
         PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
-        short[][] slowMoverImage = new short[80][80];
+        short[][] slowMoverImage = createBlankEncodedImage(80, 80);
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
         double[] baselineElongations = {1.0, 1.4, 1.6, 1.8, 2.0, 2.0, 2.2, 2.4};
@@ -247,7 +248,7 @@ public class JTransientEngineSlowMoverTest {
         config.slowMoverMedianSupportOverlapFraction = 0.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
         PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
-        short[][] slowMoverImage = new short[80][80];
+        short[][] slowMoverImage = createBlankEncodedImage(80, 80);
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
         double[] baselineElongations = {1.0, 1.4, 1.6, 1.8, 2.0, 2.0, 2.2, 2.4};
@@ -293,7 +294,7 @@ public class JTransientEngineSlowMoverTest {
         config.slowMoverMedianSupportOverlapFraction = 0.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
         PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
-        short[][] slowMoverImage = new short[80][80];
+        short[][] slowMoverImage = createBlankEncodedImage(80, 80);
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
         double[] baselineElongations = {1.0, 1.4, 1.6, 1.8, 2.0, 2.0, 2.2, 2.4};
@@ -334,7 +335,7 @@ public class JTransientEngineSlowMoverTest {
         config.slowMoverMedianSupportOverlapFraction = 0.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
         PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
-        short[][] slowMoverImage = new short[80][80];
+        short[][] slowMoverImage = createBlankEncodedImage(80, 80);
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
         double[] baselineElongations = {1.0, 1.4, 1.6, 1.8, 2.0, 2.0, 2.2, 2.4};
@@ -365,35 +366,30 @@ public class JTransientEngineSlowMoverTest {
     }
 
     /**
-     * Verifies the slow-mover branch rejects candidates whose slowMover-minus-median residual vanishes
-     * in the centroid-centered core even when the outer footprint still shows excess signal.
+     * Verifies the slow-mover branch rejects candidates whose own detected footprint is already almost entirely
+     * explained by the ordinary median stack.
      */
     @Test
-    public void filterSlowMoverCandidatesRejectsCandidatesWithoutCenteredResidualSupport() throws Exception {
+    public void filterSlowMoverCandidatesRejectsCandidatesWithLowResidualFootprintFlux() throws Exception {
         DetectionConfig config = new DetectionConfig();
         config.slowMoverMedianSupportOverlapFraction = 0.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
-        config.slowMoverResidualCoreRadiusPixels = 2.0;
-        config.slowMoverResidualCoreMinPositiveFraction = 0.5;
+        config.slowMoverResidualFootprintMinFluxFraction = 0.5;
         PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
-        short[][] slowMoverImage = new short[80][80];
-        short[][] medianImage = new short[80][80];
+        short[][] slowMoverImage = createBlankEncodedImage(80, 80);
+        short[][] medianImage = createBlankEncodedImage(80, 80);
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
-        double[] baselineElongations = {1.0, 1.4, 1.6, 1.8, 2.0, 2.0, 2.2, 2.4};
-        for (int i = 0; i < baselineElongations.length; i++) {
-            rawSlowMovers.add(createLinearCandidate(10, 8 + (i * 4), 10, baselineElongations[i], (short) 100, slowMoverImage));
-        }
+        addBaselineSlowMoverCandidates(rawSlowMovers, slowMoverImage);
 
-        SourceExtractor.DetectedObject noCoreSupportReject = createLinearCandidate(10, 48, 8, 4.8, (short) 120, slowMoverImage);
-        SourceExtractor.DetectedObject centeredSupportKeep = createLinearCandidate(10, 56, 8, 4.9, (short) 120, slowMoverImage);
-        rawSlowMovers.add(noCoreSupportReject);
-        rawSlowMovers.add(centeredSupportKeep);
+        SourceExtractor.DetectedObject mostlyExplainedReject = createLinearCandidate(10, 48, 8, 4.8, (short) 120, slowMoverImage);
+        SourceExtractor.DetectedObject genuinelyResidualKeep = createLinearCandidate(10, 56, 8, 4.9, (short) 120, slowMoverImage);
+        rawSlowMovers.add(mostlyExplainedReject);
+        rawSlowMovers.add(genuinelyResidualKeep);
 
         boolean[][] medianMask = new boolean[80][80];
-        copyPixelValues(medianImage, noCoreSupportReject, 2, 6);
-        copyPixelValues(medianImage, centeredSupportKeep, 0, 2);
-        copyPixelValues(medianImage, centeredSupportKeep, 6, 8);
+        copyPixelValues(medianImage, mostlyExplainedReject, 0, 7);
+        copyPixelValues(medianImage, genuinelyResidualKeep, 0, 4);
 
         List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
                 rawSlowMovers,
@@ -405,39 +401,36 @@ public class JTransientEngineSlowMoverTest {
         );
 
         assertEquals(1, filtered.size());
-        assertSame(centeredSupportKeep, filtered.get(0).object);
+        assertSame(genuinelyResidualKeep, filtered.get(0).object);
         assertEquals(2, telemetry.candidatesAboveElongationThreshold);
         assertEquals(2, telemetry.candidatesEvaluatedAgainstMasks);
-        assertEquals(1, telemetry.rejectedLowResidualCoreSupport);
+        assertEquals(1, telemetry.rejectedLowResidualFootprintSupport);
         assertEquals(0, telemetry.rejectedLowMedianSupport);
         assertEquals(0, telemetry.rejectedHighMedianSupport);
         assertEquals(1, telemetry.candidatesDetected);
-        assertEquals(0.5, telemetry.residualCoreMinPositiveFractionThreshold, 0.0001);
-        assertEquals(1.0, telemetry.avgResidualCorePositiveFraction, 0.0001);
+        assertEquals(0.5, telemetry.residualFootprintMinFluxFractionThreshold, 0.0001);
+        assertEquals(0.5, telemetry.avgResidualFootprintFluxFraction, 0.0001);
     }
 
     /**
-     * Verifies the residual-core veto can be disabled independently when diagnosing edge cases.
+     * Verifies the residual-footprint veto can be disabled independently when diagnosing edge cases.
      */
     @Test
-    public void filterSlowMoverCandidatesCanDisableResidualCoreFilter() throws Exception {
+    public void filterSlowMoverCandidatesCanDisableResidualFootprintFilter() throws Exception {
         DetectionConfig config = new DetectionConfig();
-        config.enableSlowMoverResidualCoreFiltering = false;
+        config.enableSlowMoverResidualFootprintFiltering = false;
         config.slowMoverMedianSupportOverlapFraction = 0.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
         PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
-        short[][] slowMoverImage = new short[80][80];
-        short[][] medianImage = new short[80][80];
+        short[][] slowMoverImage = createBlankEncodedImage(80, 80);
+        short[][] medianImage = createBlankEncodedImage(80, 80);
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
-        double[] baselineElongations = {1.0, 1.4, 1.6, 1.8, 2.0, 2.0, 2.2, 2.4};
-        for (int i = 0; i < baselineElongations.length; i++) {
-            rawSlowMovers.add(createLinearCandidate(10, 8 + (i * 4), 10, baselineElongations[i], (short) 100, slowMoverImage));
-        }
+        addBaselineSlowMoverCandidates(rawSlowMovers, slowMoverImage);
 
-        SourceExtractor.DetectedObject noCoreSupportKeep = createLinearCandidate(10, 48, 8, 4.8, (short) 120, slowMoverImage);
-        rawSlowMovers.add(noCoreSupportKeep);
-        copyPixelValues(medianImage, noCoreSupportKeep, 2, 6);
+        SourceExtractor.DetectedObject fullyExplainedKeep = createLinearCandidate(10, 48, 8, 4.8, (short) 120, slowMoverImage);
+        rawSlowMovers.add(fullyExplainedKeep);
+        copyPixelValues(medianImage, fullyExplainedKeep, 0, 8);
 
         List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
                 rawSlowMovers,
@@ -449,25 +442,24 @@ public class JTransientEngineSlowMoverTest {
         );
 
         assertEquals(1, filtered.size());
-        assertSame(noCoreSupportKeep, filtered.get(0).object);
-        assertEquals(0, telemetry.rejectedLowResidualCoreSupport);
-        assertEquals(0.0, telemetry.residualCoreMinPositiveFractionThreshold, 0.0001);
-        assertEquals(0.0, telemetry.avgResidualCorePositiveFraction, 0.0001);
+        assertSame(fullyExplainedKeep, filtered.get(0).object);
+        assertEquals(0, telemetry.rejectedLowResidualFootprintSupport);
+        assertEquals(0.0, telemetry.residualFootprintMinFluxFractionThreshold, 0.0001);
+        assertEquals(0.0, telemetry.avgResidualFootprintFluxFraction, 0.0001);
     }
 
     /**
-     * Verifies accepted slow movers export their overlap and residual-core diagnostics together.
+     * Verifies accepted slow movers export their overlap and residual-footprint diagnostics together.
      */
     @Test
     public void filterSlowMoverCandidatesExportsAcceptedCandidateDiagnostics() throws Exception {
         DetectionConfig config = new DetectionConfig();
         config.slowMoverMedianSupportOverlapFraction = 0.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
-        config.slowMoverResidualCoreRadiusPixels = 2.0;
-        config.slowMoverResidualCoreMinPositiveFraction = 0.5;
+        config.slowMoverResidualFootprintMinFluxFraction = 0.5;
         PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
-        short[][] slowMoverImage = new short[80][80];
-        short[][] medianImage = new short[80][80];
+        short[][] slowMoverImage = createBlankEncodedImage(80, 80);
+        short[][] medianImage = createBlankEncodedImage(80, 80);
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
         addBaselineSlowMoverCandidates(rawSlowMovers, slowMoverImage);
@@ -477,7 +469,7 @@ public class JTransientEngineSlowMoverTest {
 
         boolean[][] medianMask = new boolean[80][80];
         markFirstPixels(medianMask, accepted, 4);
-        copyPixelValues(medianImage, accepted, 2, 4);
+        copyPixelValues(medianImage, accepted, 0, 4);
 
         List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
                 rawSlowMovers,
@@ -492,71 +484,33 @@ public class JTransientEngineSlowMoverTest {
         SlowMoverCandidateResult result = filtered.get(0);
         assertSame(accepted, result.object);
         assertEquals(0.5, result.diagnostics.medianSupportOverlap, 0.0001);
-        assertEquals(0.5, result.diagnostics.residualCorePositiveFraction, 0.0001);
-        assertEquals(2, result.diagnostics.residualCorePositivePixels);
-        assertEquals(4, result.diagnostics.residualCorePixels);
-        assertEquals(2.0, result.diagnostics.residualCoreRadiusPixelsUsed, 0.0001);
-        assertTrue(result.diagnostics.residualCoreFilteringEnabled);
+        assertEquals(0.5, result.diagnostics.residualFootprintFluxFraction, 0.0001);
+        assertEquals(480.0, result.diagnostics.residualFootprintFlux, 0.0001);
+        assertEquals(960.0, result.diagnostics.slowMoverFootprintFlux, 0.0001);
+        assertEquals(480.0, result.diagnostics.medianFootprintFlux, 0.0001);
+        assertEquals(8, result.diagnostics.footprintPixelCount);
+        assertTrue(result.diagnostics.residualFootprintFilteringEnabled);
     }
 
     /**
-     * Verifies the exported residual-core radius reflects the effective internal clamp, not only the raw config value.
+     * Verifies residual-footprint diagnostics are still exported even when the veto is disabled.
      */
     @Test
-    public void filterSlowMoverCandidatesExportsClampedResidualCoreRadius() throws Exception {
+    public void filterSlowMoverCandidatesExportsResidualFootprintDiagnosticsWhenFilterDisabled() throws Exception {
         DetectionConfig config = new DetectionConfig();
+        config.enableSlowMoverResidualFootprintFiltering = false;
         config.slowMoverMedianSupportOverlapFraction = 0.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
-        config.slowMoverResidualCoreRadiusPixels = 0.1;
-        config.slowMoverResidualCoreMinPositiveFraction = 0.0;
         PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
-        short[][] slowMoverImage = new short[80][80];
-        short[][] medianImage = new short[80][80];
+        short[][] slowMoverImage = createBlankEncodedImage(80, 80);
+        short[][] medianImage = createBlankEncodedImage(80, 80);
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
         addBaselineSlowMoverCandidates(rawSlowMovers, slowMoverImage);
 
         SourceExtractor.DetectedObject accepted = createLinearCandidate(10, 48, 8, 4.9, (short) 120, slowMoverImage);
         rawSlowMovers.add(accepted);
-        copyPixelValues(medianImage, accepted, 3, 4);
-
-        List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
-                rawSlowMovers,
-                slowMoverImage,
-                medianImage,
-                new boolean[80][80],
-                config,
-                telemetry
-        );
-
-        assertEquals(1, filtered.size());
-        SlowMoverCandidateResult result = filtered.get(0);
-        assertEquals(0.5, result.diagnostics.residualCoreRadiusPixelsUsed, 0.0001);
-        assertEquals(1, result.diagnostics.residualCorePositivePixels);
-        assertEquals(2, result.diagnostics.residualCorePixels);
-        assertEquals(0.5, result.diagnostics.residualCorePositiveFraction, 0.0001);
-    }
-
-    /**
-     * Verifies residual-core diagnostics are still exported even when the veto is disabled.
-     */
-    @Test
-    public void filterSlowMoverCandidatesExportsResidualDiagnosticsWhenFilterDisabled() throws Exception {
-        DetectionConfig config = new DetectionConfig();
-        config.enableSlowMoverResidualCoreFiltering = false;
-        config.slowMoverMedianSupportOverlapFraction = 0.0;
-        config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
-        config.slowMoverResidualCoreRadiusPixels = 2.0;
-        PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
-        short[][] slowMoverImage = new short[80][80];
-        short[][] medianImage = new short[80][80];
-
-        List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
-        addBaselineSlowMoverCandidates(rawSlowMovers, slowMoverImage);
-
-        SourceExtractor.DetectedObject accepted = createLinearCandidate(10, 48, 8, 4.9, (short) 120, slowMoverImage);
-        rawSlowMovers.add(accepted);
-        copyPixelValues(medianImage, accepted, 2, 6);
+        copyPixelValues(medianImage, accepted, 0, 8);
 
         List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
                 rawSlowMovers,
@@ -570,33 +524,33 @@ public class JTransientEngineSlowMoverTest {
         assertEquals(1, filtered.size());
         SlowMoverCandidateResult result = filtered.get(0);
         assertSame(accepted, result.object);
-        assertEquals(0.0, result.diagnostics.residualCorePositiveFraction, 0.0001);
-        assertEquals(0, result.diagnostics.residualCorePositivePixels);
-        assertEquals(4, result.diagnostics.residualCorePixels);
-        assertEquals(2.0, result.diagnostics.residualCoreRadiusPixelsUsed, 0.0001);
-        assertFalse(result.diagnostics.residualCoreFilteringEnabled);
+        assertEquals(0.0, result.diagnostics.residualFootprintFluxFraction, 0.0001);
+        assertEquals(0.0, result.diagnostics.residualFootprintFlux, 0.0001);
+        assertEquals(960.0, result.diagnostics.slowMoverFootprintFlux, 0.0001);
+        assertEquals(960.0, result.diagnostics.medianFootprintFlux, 0.0001);
+        assertEquals(8, result.diagnostics.footprintPixelCount);
+        assertFalse(result.diagnostics.residualFootprintFilteringEnabled);
     }
 
     /**
-     * Verifies the exported residual-core fraction matches the exported positive and total core pixel counts.
+     * Verifies the exported residual-footprint fraction matches the exported flux totals.
      */
     @Test
-    public void filterSlowMoverCandidatesExportsResidualCoreCountsConsistentWithFraction() throws Exception {
+    public void filterSlowMoverCandidatesExportsResidualFootprintFluxConsistentWithFraction() throws Exception {
         DetectionConfig config = new DetectionConfig();
         config.slowMoverMedianSupportOverlapFraction = 0.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
-        config.slowMoverResidualCoreRadiusPixels = 2.0;
-        config.slowMoverResidualCoreMinPositiveFraction = 0.0;
+        config.slowMoverResidualFootprintMinFluxFraction = 0.0;
         PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
-        short[][] slowMoverImage = new short[80][80];
-        short[][] medianImage = new short[80][80];
+        short[][] slowMoverImage = createBlankEncodedImage(80, 80);
+        short[][] medianImage = createBlankEncodedImage(80, 80);
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
         addBaselineSlowMoverCandidates(rawSlowMovers, slowMoverImage);
 
         SourceExtractor.DetectedObject accepted = createLinearCandidate(10, 48, 8, 4.9, (short) 120, slowMoverImage);
         rawSlowMovers.add(accepted);
-        copyPixelValues(medianImage, accepted, 2, 3);
+        copyPixelValues(medianImage, accepted, 0, 2);
 
         List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
                 rawSlowMovers,
@@ -609,9 +563,9 @@ public class JTransientEngineSlowMoverTest {
 
         assertEquals(1, filtered.size());
         SlowMoverCandidateResult result = filtered.get(0);
-        assertEquals(3, result.diagnostics.residualCorePositivePixels);
-        assertEquals(4, result.diagnostics.residualCorePixels);
-        assertEquals(0.75, result.diagnostics.residualCorePositiveFraction, 0.0001);
+        assertEquals(720.0, result.diagnostics.residualFootprintFlux, 0.0001);
+        assertEquals(960.0, result.diagnostics.slowMoverFootprintFlux, 0.0001);
+        assertEquals(0.75, result.diagnostics.residualFootprintFluxFraction, 0.0001);
     }
 
     /**
@@ -622,11 +576,10 @@ public class JTransientEngineSlowMoverTest {
         DetectionConfig config = new DetectionConfig();
         config.slowMoverMedianSupportOverlapFraction = 0.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
-        config.slowMoverResidualCoreRadiusPixels = 2.0;
-        config.slowMoverResidualCoreMinPositiveFraction = 0.0;
+        config.slowMoverResidualFootprintMinFluxFraction = 0.0;
         PipelineTelemetry.SlowMoverTelemetry telemetry = new PipelineTelemetry.SlowMoverTelemetry();
-        short[][] slowMoverImage = new short[80][80];
-        short[][] medianImage = new short[80][80];
+        short[][] slowMoverImage = createBlankEncodedImage(80, 80);
+        short[][] medianImage = createBlankEncodedImage(80, 80);
 
         List<SourceExtractor.DetectedObject> rawSlowMovers = new ArrayList<>();
         addBaselineSlowMoverCandidates(rawSlowMovers, slowMoverImage);
@@ -639,7 +592,7 @@ public class JTransientEngineSlowMoverTest {
         boolean[][] medianMask = new boolean[80][80];
         markFirstPixels(medianMask, firstAccepted, 2);
         markFirstPixels(medianMask, secondAccepted, 6);
-        copyPixelValues(medianImage, firstAccepted, 2, 4);
+        copyPixelValues(medianImage, firstAccepted, 0, 2);
 
         List<SlowMoverCandidateResult> filtered = filterSlowMoverCandidates(
                 rawSlowMovers,
@@ -653,10 +606,10 @@ public class JTransientEngineSlowMoverTest {
         assertEquals(2, filtered.size());
         assertSame(firstAccepted, filtered.get(0).object);
         assertEquals(0.25, filtered.get(0).diagnostics.medianSupportOverlap, 0.0001);
-        assertEquals(0.5, filtered.get(0).diagnostics.residualCorePositiveFraction, 0.0001);
+        assertEquals(0.75, filtered.get(0).diagnostics.residualFootprintFluxFraction, 0.0001);
         assertSame(secondAccepted, filtered.get(1).object);
         assertEquals(0.75, filtered.get(1).diagnostics.medianSupportOverlap, 0.0001);
-        assertEquals(1.0, filtered.get(1).diagnostics.residualCorePositiveFraction, 0.0001);
+        assertEquals(1.0, filtered.get(1).diagnostics.residualFootprintFluxFraction, 0.0001);
     }
 
     /**
@@ -672,14 +625,14 @@ public class JTransientEngineSlowMoverTest {
 
         List<ImageFrame> frames = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
-            short[][] image = new short[16][16];
+            short[][] image = createBlankEncodedImage(16, 16);
             image[8][8] = 1000;
             image[8][9] = 900;
             image[9][8] = 900;
             frames.add(new ImageFrame(i, "frame_" + i + ".fit", image, -1L, -1L));
         }
 
-        short[][] masterStack = new short[16][16];
+        short[][] masterStack = createBlankEncodedImage(16, 16);
         masterStack[8][8] = 1000;
         masterStack[8][9] = 900;
         masterStack[9][8] = 900;
@@ -731,7 +684,7 @@ public class JTransientEngineSlowMoverTest {
         return filterSlowMoverCandidates(
                 rawSlowMovers,
                 slowMoverImage,
-                new short[slowMoverImage.length][slowMoverImage[0].length],
+                createBlankEncodedImage(slowMoverImage[0].length, slowMoverImage.length),
                 medianMask,
                 config,
                 telemetry
@@ -892,7 +845,7 @@ public class JTransientEngineSlowMoverTest {
         for (int dx = 0; dx < length; dx++) {
             int x = xStart + dx;
             obj.rawPixels.add(new SourceExtractor.Pixel(x, y, signal));
-            image[y][x] = signal;
+            image[y][x] = PixelEncoding.fromShiftedPositiveInt(signal);
         }
         return obj;
     }
@@ -928,7 +881,7 @@ public class JTransientEngineSlowMoverTest {
 
         for (int[] point : points) {
             obj.rawPixels.add(new SourceExtractor.Pixel(point[0], point[1], signal));
-            image[point[1]][point[0]] = signal;
+            image[point[1]][point[0]] = PixelEncoding.fromShiftedPositiveInt(signal);
         }
         return obj;
     }
@@ -966,7 +919,7 @@ public class JTransientEngineSlowMoverTest {
 
         for (int[] point : points) {
             obj.rawPixels.add(new SourceExtractor.Pixel(point[0], point[1], signal));
-            image[point[1]][point[0]] = signal;
+            image[point[1]][point[0]] = PixelEncoding.fromShiftedPositiveInt(signal);
         }
         return obj;
     }
@@ -981,7 +934,19 @@ public class JTransientEngineSlowMoverTest {
     private static void copyPixelValues(short[][] image, SourceExtractor.DetectedObject obj, int startInclusive, int endExclusive) {
         for (int i = startInclusive; i < endExclusive; i++) {
             SourceExtractor.Pixel p = obj.rawPixels.get(i);
-            image[p.y][p.x] = (short) p.value;
+            image[p.y][p.x] = PixelEncoding.fromShiftedPositiveInt(p.value);
         }
     }
+
+    private static short[][] createBlankEncodedImage(int width, int height) {
+        short[][] image = new short[height][width];
+        short encodedZero = PixelEncoding.fromShiftedPositiveInt(0);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                image[y][x] = encodedZero;
+            }
+        }
+        return image;
+    }
 }
+

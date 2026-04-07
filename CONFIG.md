@@ -183,7 +183,7 @@ Slow-mover candidates now pass through a simpler artifact filter after this base
 
 - irregular or binary-like shapes are still rejected first
 - any surviving candidate must overlap the median-stack artifact mask within the configured support band
-- the branch can also require centered positive support in `slowMoverStack - medianStack`
+- the branch can also require enough positive residual flux on the candidate's own detected footprint in `slowMoverStack - medianStack`
 - the stage-by-stage outcome is reported through `PipelineResult.telemetry.slowMoverTelemetry`
 - accepted candidates and their per-candidate diagnostics are exported through `PipelineResult.slowMoverAnalysis`
 
@@ -203,27 +203,20 @@ Maximum fraction of a slow-mover footprint that may overlap the median-stack art
 - should usually stay above `slowMoverMedianSupportOverlapFraction`
 - useful when deep-stack static artifacts still survive with very high median-stack overlap
 
-### `enableSlowMoverResidualCoreFiltering` (default `true`)
+### `enableSlowMoverResidualFootprintFiltering` (default `true`)
 
-Enables the centered residual-support veto in the slow-mover branch.
+Enables the candidate-footprint residual-support veto in the slow-mover branch.
 
-- when enabled, the engine evaluates `slowMoverStack - medianStack` near the candidate centroid
-- useful for rejecting candidates whose deep-stack excess disappears in the center and survives only in the wings
+- when enabled, the engine compares the candidate's own slow-mover footprint pixels against the ordinary median stack
+- useful for rejecting candidates that are already mostly explained by the ordinary median stack and only survive because the slow-mover stack sits slightly above threshold
 - disable only for diagnostics or compatibility testing
 
-### `slowMoverResidualCoreRadiusPixels` (default `2.0`)
+### `slowMoverResidualFootprintMinFluxFraction` (default `0.10`)
 
-Radius of the centroid-centered candidate core evaluated in `slowMoverStack - medianStack`.
+Minimum fraction of a candidate's slow-mover footprint flux that must remain as positive residual after subtracting the ordinary median stack.
 
-- smaller values focus the check tightly on the center
-- larger values make the filter more tolerant of broader compact slow movers
-
-### `slowMoverResidualCoreMinPositiveFraction` (default `0.50`)
-
-Minimum fraction of core footprint pixels that must stay positive in `slowMoverStack - medianStack`.
-
-- lower values relax the centered-residual veto
-- higher values demand a stronger positive core before the candidate is kept
+- lower values relax the residual-footprint veto
+- higher values demand a more genuinely new slow-mover signal
 
 ## 3. Frame Quality Analysis
 

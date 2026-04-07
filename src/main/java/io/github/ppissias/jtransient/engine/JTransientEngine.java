@@ -485,7 +485,7 @@ public class JTransientEngine {
                         smTelemetry.dynamicElongationThreshold
                 );
                 System.out.printf(
-                        "DEBUG: Slow Mover Filters -> Raw: %d | AboveElong: %d | MaskStage: %d | Irregular: %d | Binary: %d | SlowMoverShape: %d | LowMedianSupport: %d | HighMedianSupport: %d | LowResidualCore: %d | Final: %d%n",
+                        "DEBUG: Slow Mover Filters -> Raw: %d | AboveElong: %d | MaskStage: %d | Irregular: %d | Binary: %d | SlowMoverShape: %d | LowMedianSupport: %d | HighMedianSupport: %d | LowResidualFootprint: %d | Final: %d%n",
                         smTelemetry.rawCandidatesExtracted,
                         smTelemetry.candidatesAboveElongationThreshold,
                         smTelemetry.candidatesEvaluatedAgainstMasks,
@@ -494,7 +494,7 @@ public class JTransientEngine {
                         smTelemetry.rejectedSlowMoverShape,
                         smTelemetry.rejectedLowMedianSupport,
                         smTelemetry.rejectedHighMedianSupport,
-                        smTelemetry.rejectedLowResidualCoreSupport,
+                        smTelemetry.rejectedLowResidualFootprintSupport,
                         smTelemetry.candidatesDetected
                 );
                 if (smTelemetry.rejectedSlowMoverShape > 0) {
@@ -509,12 +509,12 @@ public class JTransientEngine {
                     );
                 }
                 System.out.printf(
-                        "DEBUG: Slow Mover Signals -> MinSupport: %.3f | MaxSupport: %.3f | AvgMedianSupportOverlap: %.3f | MinResidualCore: %.3f | AvgResidualCore: %.3f%n",
+                        "DEBUG: Slow Mover Signals -> MinSupport: %.3f | MaxSupport: %.3f | AvgMedianSupportOverlap: %.3f | MinResidualFootprint: %.3f | AvgResidualFootprint: %.3f%n",
                         smTelemetry.medianSupportOverlapThreshold,
                         smTelemetry.medianSupportMaxOverlapThreshold,
                         smTelemetry.avgMedianSupportOverlap,
-                        smTelemetry.residualCoreMinPositiveFractionThreshold,
-                        smTelemetry.avgResidualCorePositiveFraction
+                        smTelemetry.residualFootprintMinFluxFractionThreshold,
+                        smTelemetry.avgResidualFootprintFluxFraction
                 );
                 if (!smTelemetry.candidateMedianSupportOverlaps.isEmpty()) {
                     System.out.printf(

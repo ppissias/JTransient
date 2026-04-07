@@ -181,7 +181,7 @@ public class SourceExtractor {
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
 
-                int pixelValue = image[y][x] + 32768;
+                int pixelValue = PixelEncoding.toShiftedPositiveInt(image[y][x]);
 
                 if (pixelValue > seedThreshold && !visited[y][x]) {
                     statBfsTriggers++;
@@ -204,7 +204,7 @@ public class SourceExtractor {
 
                             if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
                                 if (!visited[ny][nx]) {
-                                    int nValue = image[ny][nx] + 32768;
+                                    int nValue = PixelEncoding.toShiftedPositiveInt(image[ny][nx]);
                                     if (nValue > growThreshold) {
                                         visited[ny][nx] = true;
                                         queue.add(new Pixel(nx, ny, nValue));
@@ -259,7 +259,7 @@ public class SourceExtractor {
                                 break;
                             }
 
-                            int vValue = image[testY][testX] + 32768;
+                            int vValue = PixelEncoding.toShiftedPositiveInt(image[testY][testX]);
                             if (vValue <= voidValueThreshold) {
                                 nearVirtualEdge = true;
                                 break;
@@ -305,7 +305,7 @@ public class SourceExtractor {
 
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
-                int val = image[y][x] + 32768;
+                int val = PixelEncoding.toShiftedPositiveInt(image[y][x]);
                 histogram[val]++;
             }
         }

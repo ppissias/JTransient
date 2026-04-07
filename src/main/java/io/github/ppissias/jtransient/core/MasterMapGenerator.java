@@ -46,7 +46,7 @@ public class MasterMapGenerator {
                 for (int i = 0; i < numFrames; i++) {
                     // Shift to a positive 32-bit int domain (matching SourceExtractor logic)
                     // This makes the sort immune to Java signed-short wrap-around bugs from custom FITS files.
-                    pixelValues[i] = frames.get(i).pixelData[y][x] + 32768;
+                    pixelValues[i] = PixelEncoding.toShiftedPositiveInt(frames.get(i).pixelData[y][x]);
                 }
 
                 // Sort the perfectly continuous positive integers
@@ -54,7 +54,7 @@ public class MasterMapGenerator {
                 
                 // Use safe lower-median bias and shift back to the original signed short domain
                 int safeMedianIndex = (numFrames - 1) / 2;
-                masterMap[y][x] = (short) (pixelValues[safeMedianIndex] - 32768);
+                masterMap[y][x] = PixelEncoding.fromShiftedPositiveInt(pixelValues[safeMedianIndex]);
             }
         });
 
@@ -93,13 +93,13 @@ public class MasterMapGenerator {
             int[] pixelValues = new int[numFrames];
             for (int x = 0; x < width; x++) {
                 for (int i = 0; i < numFrames; i++) {
-                    pixelValues[i] = frames.get(i).pixelData[y][x] + 32768;
+                    pixelValues[i] = PixelEncoding.toShiftedPositiveInt(frames.get(i).pixelData[y][x]);
                 }
 
                 Arrays.sort(pixelValues);
                 
                 // Extract the pre-calculated target index
-                masterMap[y][x] = (short) (pixelValues[targetIndex] - 32768);
+                masterMap[y][x] = PixelEncoding.fromShiftedPositiveInt(pixelValues[targetIndex]);
             }
         });
 
@@ -129,13 +129,14 @@ public class MasterMapGenerator {
 
         IntStream.range(0, height).parallel().forEach(y -> {
             for (int x = 0; x < width; x++) {
-                int maxPixelValue = -32768;
+                int maxPixelValue = 0;
                 for (int i = 0; i < numFrames; i++) {
-                    if (frames.get(i).pixelData[y][x] > maxPixelValue) {
-                        maxPixelValue = frames.get(i).pixelData[y][x];
+                    int shiftedPixelValue = PixelEncoding.toShiftedPositiveInt(frames.get(i).pixelData[y][x]);
+                    if (shiftedPixelValue > maxPixelValue) {
+                        maxPixelValue = shiftedPixelValue;
                     }
                 }
-                masterMap[y][x] = (short) maxPixelValue;
+                masterMap[y][x] = PixelEncoding.fromShiftedPositiveInt(maxPixelValue);
             }
         });
 

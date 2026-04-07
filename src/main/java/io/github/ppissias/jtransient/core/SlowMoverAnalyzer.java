@@ -11,6 +11,7 @@ package io.github.ppissias.jtransient.core;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.engine.ImageFrame;
+import io.github.ppissias.jtransient.engine.JTransientEngine;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 
 import java.util.ArrayList;
@@ -80,7 +81,7 @@ public final class SlowMoverAnalyzer {
     }
 
     /**
-     * Applies the slow-mover morphology, median-support, and residual-core filters while recording telemetry.
+     * Applies the slow-mover morphology, median-support, and residual-footprint filters while recording telemetry.
      */
     private static List<SlowMoverCandidateResult> filterSlowMoverCandidates(
             List<SourceExtractor.DetectedObject> rawSlowMovers,
@@ -92,6 +93,7 @@ public final class SlowMoverAnalyzer {
     ) {
         List<SlowMoverCandidateResult> filteredCandidates = new ArrayList<>();
         telemetry.rawCandidatesExtracted = rawSlowMovers.size();
+        int evaluatedCandidateIndex = 0;
 
         List<Double> elongations = new ArrayList<>(rawSlowMovers.size());
         for (SourceExtractor.DetectedObject obj : rawSlowMovers) {
@@ -116,15 +118,15 @@ public final class SlowMoverAnalyzer {
         if (elongations.size() >= 10) {
             dynamicElongationThreshold = medianElong + (madElong * config.slowMoverBaselineMadMultiplier);
         }
-        boolean residualCoreFilteringEnabled = config.enableSlowMoverResidualCoreFiltering
+        boolean residualFootprintFilteringEnabled = config.enableSlowMoverResidualFootprintFiltering
                 && slowMoverStackData != null
                 && medianStackData != null;
         double minMedianSupportOverlap = Math.max(0.0, Math.min(1.0, config.slowMoverMedianSupportOverlapFraction));
         double maxMedianSupportOverlap = Math.max(minMedianSupportOverlap, Math.min(1.0, config.slowMoverMedianSupportMaxOverlapFraction));
-        double minResidualCorePositiveFraction = Math.max(0.0, Math.min(1.0, config.slowMoverResidualCoreMinPositiveFraction));
+        double minResidualFootprintFluxFraction = Math.max(0.0, Math.min(1.0, config.slowMoverResidualFootprintMinFluxFraction));
 
         double medianSupportOverlapSum = 0.0;
-        double residualCorePositiveFractionSum = 0.0;
+        double residualFootprintFluxFractionSum = 0.0;
 
         for (SourceExtractor.DetectedObject obj : rawSlowMovers) {
             if (obj.elongation < dynamicElongationThreshold) {
@@ -154,6 +156,7 @@ public final class SlowMoverAnalyzer {
             }
 
             double medianSupportOverlap = computeMaskOverlapFraction(obj, medianMask);
+            int candidateIndex = evaluatedCandidateIndex++;
 
             telemetry.candidatesEvaluatedAgainstMasks++;
             medianSupportOverlapSum += medianSupportOverlap;
@@ -167,29 +170,41 @@ public final class SlowMoverAnalyzer {
                 continue;
             }
 
-            ResidualCoreMeasurement residualCoreMeasurement = computeResidualCoreMeasurement(
+            ResidualFootprintMeasurement residualFootprintMeasurement = computeResidualFootprintMeasurement(
                     obj,
                     slowMoverStackData,
-                    medianStackData,
-                    config.slowMoverResidualCoreRadiusPixels
+                    medianStackData
             );
-            if (residualCoreFilteringEnabled) {
-                if (residualCoreMeasurement.positiveFraction < minResidualCorePositiveFraction) {
-                    telemetry.rejectedLowResidualCoreSupport++;
+            debugResidualFootprintMeasurement(
+                    obj,
+                    candidateIndex,
+                    medianSupportOverlap,
+                    minMedianSupportOverlap,
+                    maxMedianSupportOverlap,
+                    residualFootprintMeasurement,
+                    residualFootprintFilteringEnabled,
+                    minResidualFootprintFluxFraction,
+                    slowMoverStackData,
+                    medianStackData
+            );
+            if (residualFootprintFilteringEnabled) {
+                if (residualFootprintMeasurement.fluxFraction < minResidualFootprintFluxFraction) {
+                    telemetry.rejectedLowResidualFootprintSupport++;
                     continue;
                 }
-                residualCorePositiveFractionSum += residualCoreMeasurement.positiveFraction;
+                residualFootprintFluxFractionSum += residualFootprintMeasurement.fluxFraction;
             }
 
             filteredCandidates.add(new SlowMoverCandidateResult(
                     obj,
                     new SlowMoverCandidateDiagnostics(
                             medianSupportOverlap,
-                            residualCoreMeasurement.positiveFraction,
-                            residualCoreMeasurement.positivePixels,
-                            residualCoreMeasurement.corePixels,
-                            residualCoreMeasurement.effectiveRadiusPixels,
-                            residualCoreFilteringEnabled
+                            residualFootprintMeasurement.fluxFraction,
+                            residualFootprintMeasurement.residualFlux,
+                            residualFootprintMeasurement.slowMoverFlux,
+                            residualFootprintMeasurement.medianFlux,
+                            residualFootprintMeasurement.footprintPixels,
+                            residualFootprintFilteringEnabled
                     )
             ));
             telemetry.candidateMedianSupportOverlaps.add(medianSupportOverlap);
@@ -202,57 +217,104 @@ public final class SlowMoverAnalyzer {
         telemetry.medianSupportOverlapThreshold = minMedianSupportOverlap;
         telemetry.medianSupportMaxOverlapThreshold = maxMedianSupportOverlap;
         telemetry.avgMedianSupportOverlap = computeAverage(medianSupportOverlapSum, telemetry.candidatesEvaluatedAgainstMasks);
-        telemetry.residualCoreMinPositiveFractionThreshold = residualCoreFilteringEnabled
-                ? minResidualCorePositiveFraction
+        telemetry.residualFootprintMinFluxFractionThreshold = residualFootprintFilteringEnabled
+                ? minResidualFootprintFluxFraction
                 : 0.0;
-        telemetry.avgResidualCorePositiveFraction = residualCoreFilteringEnabled
-                ? computeAverage(residualCorePositiveFractionSum, filteredCandidates.size())
+        telemetry.avgResidualFootprintFluxFraction = residualFootprintFilteringEnabled
+                ? computeAverage(residualFootprintFluxFractionSum, filteredCandidates.size())
                 : 0.0;
 
         return filteredCandidates;
     }
 
-    /**
-     * Measures how much of the centroid-centered candidate core remains positive after subtracting the median stack.
-     * This rejects candidates whose excess signal lives only in the wings or disappears entirely at the center.
-     */
-    private static double computeResidualCorePositiveFraction(
+    private static void debugResidualFootprintMeasurement(
             SourceExtractor.DetectedObject obj,
+            int candidateIndex,
+            double medianSupportOverlap,
+            double minMedianSupportOverlap,
+            double maxMedianSupportOverlap,
+            ResidualFootprintMeasurement measurement,
+            boolean residualFootprintFilteringEnabled,
+            double minResidualFootprintFluxFraction,
             short[][] slowMoverStackData,
-            short[][] medianStackData,
-            double radiusPixels
+            short[][] medianStackData
     ) {
-        return computeResidualCoreMeasurement(
+        if (!JTransientEngine.DEBUG) {
+            return;
+        }
+
+        if (measurement.footprintPixels <= 0 || measurement.slowMoverFlux > 0.0) {
+            return;
+        }
+
+        ResidualFootprintDebugStats debugStats = collectResidualFootprintDebugStats(
                 obj,
                 slowMoverStackData,
-                medianStackData,
-                radiusPixels
-        ).positiveFraction;
+                medianStackData
+        );
+        System.out.printf(
+                "DEBUG: Slow Mover Candidate #%d suspicious zero-flux footprint -> x=%.1f y=%.1f elong=%.2f pixels=%d maskOverlap=%.3f [min=%.3f max=%.3f] residualFootprintFraction=%.3f [min=%.3f enabled=%s] slowSigned[min=%d max=%d posPixels=%d posFlux=%.1f] medianSigned[min=%d max=%d posPixels=%d posFlux=%.1f] shiftedSlow[min=%d max=%d flux=%.1f] shiftedMedian[min=%d max=%d flux=%.1f] positiveResidualPixels=%d residualFluxSigned=%.1f residualFluxShifted=%.1f%n",
+                candidateIndex,
+                obj.x,
+                obj.y,
+                obj.elongation,
+                obj.rawPixels != null ? obj.rawPixels.size() : 0,
+                medianSupportOverlap,
+                minMedianSupportOverlap,
+                maxMedianSupportOverlap,
+                measurement.fluxFraction,
+                minResidualFootprintFluxFraction,
+                residualFootprintFilteringEnabled,
+                debugStats.minSignedSlowMoverValue,
+                debugStats.maxSignedSlowMoverValue,
+                debugStats.signedSlowMoverPositivePixels,
+                debugStats.signedSlowMoverPositiveFlux,
+                debugStats.minSignedMedianValue,
+                debugStats.maxSignedMedianValue,
+                debugStats.signedMedianPositivePixels,
+                debugStats.signedMedianPositiveFlux,
+                debugStats.minShiftedSlowMoverValue,
+                debugStats.maxShiftedSlowMoverValue,
+                debugStats.shiftedSlowMoverFlux,
+                debugStats.minShiftedMedianValue,
+                debugStats.maxShiftedMedianValue,
+                debugStats.shiftedMedianFlux,
+                debugStats.positiveResidualPixels,
+                debugStats.signedResidualFlux,
+                debugStats.shiftedResidualFlux
+        );
+        if (!debugStats.pixelSamples.isEmpty()) {
+            System.out.printf(
+                    "DEBUG: Slow Mover Candidate #%d suspicious pixel samples -> %s%n",
+                    candidateIndex,
+                    String.join(" | ", debugStats.pixelSamples)
+            );
+        }
     }
 
-    private static ResidualCoreMeasurement computeResidualCoreMeasurement(
+    /**
+     * Measures how much of the candidate's own detected slow-mover footprint remains as positive residual flux
+     * after subtracting the ordinary median stack.
+     * This rejects candidates that are almost entirely explained by the ordinary median stack and only survive
+     * because the slow-mover extraction happened to sit slightly above threshold.
+     */
+    private static ResidualFootprintMeasurement computeResidualFootprintMeasurement(
             SourceExtractor.DetectedObject obj,
             short[][] slowMoverStackData,
-            short[][] medianStackData,
-            double radiusPixels
+            short[][] medianStackData
     ) {
         if (obj.rawPixels == null || obj.rawPixels.isEmpty()
                 || slowMoverStackData == null || medianStackData == null
                 || slowMoverStackData.length == 0 || medianStackData.length == 0) {
-            return new ResidualCoreMeasurement(0.0, 0, 0, Math.max(0.5, radiusPixels));
+            return new ResidualFootprintMeasurement(0.0, 0.0, 0.0, 0.0, 0);
         }
 
-        double effectiveRadius = Math.max(0.5, radiusPixels);
-        double radiusSquared = effectiveRadius * effectiveRadius;
-        int positiveCorePixels = 0;
-        int corePixels = 0;
+        double residualFlux = 0.0;
+        double slowMoverFlux = 0.0;
+        double medianFlux = 0.0;
+        int footprintPixels = 0;
 
         for (SourceExtractor.Pixel p : obj.rawPixels) {
-            double dx = p.x - obj.x;
-            double dy = p.y - obj.y;
-            if ((dx * dx) + (dy * dy) > radiusSquared) {
-                continue;
-            }
             if (p.y < 0 || p.y >= slowMoverStackData.length || p.y >= medianStackData.length) {
                 continue;
             }
@@ -260,21 +322,110 @@ public final class SlowMoverAnalyzer {
                 continue;
             }
 
-            corePixels++;
-            if (((int) slowMoverStackData[p.y][p.x]) - ((int) medianStackData[p.y][p.x]) > 0) {
-                positiveCorePixels++;
+            int slowMoverValue = PixelEncoding.toShiftedPositiveInt(slowMoverStackData[p.y][p.x]);
+            int medianValue = PixelEncoding.toShiftedPositiveInt(medianStackData[p.y][p.x]);
+            int residualValue = slowMoverValue - medianValue;
+
+            footprintPixels++;
+            slowMoverFlux += slowMoverValue;
+            medianFlux += medianValue;
+            if (residualValue > 0) {
+                residualFlux += residualValue;
             }
         }
 
-        if (corePixels == 0) {
-            return new ResidualCoreMeasurement(0.0, 0, 0, effectiveRadius);
+        if (footprintPixels == 0 || slowMoverFlux <= 0.0) {
+            return new ResidualFootprintMeasurement(0.0, 0.0, slowMoverFlux, medianFlux, footprintPixels);
         }
-        return new ResidualCoreMeasurement(
-                (double) positiveCorePixels / corePixels,
-                positiveCorePixels,
-                corePixels,
-                effectiveRadius
+        return new ResidualFootprintMeasurement(
+                residualFlux / slowMoverFlux,
+                residualFlux,
+                slowMoverFlux,
+                medianFlux,
+                footprintPixels
         );
+    }
+
+    private static ResidualFootprintDebugStats collectResidualFootprintDebugStats(
+            SourceExtractor.DetectedObject obj,
+            short[][] slowMoverStackData,
+            short[][] medianStackData
+    ) {
+        ResidualFootprintDebugStats stats = new ResidualFootprintDebugStats();
+        if (obj.rawPixels == null) {
+            return stats;
+        }
+
+        for (SourceExtractor.Pixel p : obj.rawPixels) {
+            if (p.y < 0 || p.y >= slowMoverStackData.length || p.y >= medianStackData.length) {
+                continue;
+            }
+            if (p.x < 0 || p.x >= slowMoverStackData[p.y].length || p.x >= medianStackData[p.y].length) {
+                continue;
+            }
+
+            int slowMoverSigned = slowMoverStackData[p.y][p.x];
+            int medianSigned = medianStackData[p.y][p.x];
+            int residualSigned = slowMoverSigned - medianSigned;
+
+            int slowMoverShifted = PixelEncoding.toShiftedPositiveInt((short) slowMoverSigned);
+            int medianShifted = PixelEncoding.toShiftedPositiveInt((short) medianSigned);
+            int residualShifted = slowMoverShifted - medianShifted;
+
+            stats.minSignedSlowMoverValue = Math.min(stats.minSignedSlowMoverValue, slowMoverSigned);
+            stats.maxSignedSlowMoverValue = Math.max(stats.maxSignedSlowMoverValue, slowMoverSigned);
+            stats.minSignedMedianValue = Math.min(stats.minSignedMedianValue, medianSigned);
+            stats.maxSignedMedianValue = Math.max(stats.maxSignedMedianValue, medianSigned);
+            stats.minShiftedSlowMoverValue = Math.min(stats.minShiftedSlowMoverValue, slowMoverShifted);
+            stats.maxShiftedSlowMoverValue = Math.max(stats.maxShiftedSlowMoverValue, slowMoverShifted);
+            stats.minShiftedMedianValue = Math.min(stats.minShiftedMedianValue, medianShifted);
+            stats.maxShiftedMedianValue = Math.max(stats.maxShiftedMedianValue, medianShifted);
+
+            if (slowMoverSigned > 0) {
+                stats.signedSlowMoverPositivePixels++;
+                stats.signedSlowMoverPositiveFlux += slowMoverSigned;
+            }
+            if (medianSigned > 0) {
+                stats.signedMedianPositivePixels++;
+                stats.signedMedianPositiveFlux += medianSigned;
+            }
+            if (residualSigned > 0) {
+                stats.positiveResidualPixels++;
+                stats.signedResidualFlux += residualSigned;
+            }
+
+            stats.shiftedSlowMoverFlux += slowMoverShifted;
+            stats.shiftedMedianFlux += medianShifted;
+            if (residualShifted > 0) {
+                stats.shiftedResidualFlux += residualShifted;
+            }
+
+            if (stats.pixelSamples.size() < 8) {
+                stats.pixelSamples.add(String.format(
+                        "(%d,%d) slow=%d/%d median=%d/%d residual=%d",
+                        p.x,
+                        p.y,
+                        slowMoverSigned,
+                        slowMoverShifted,
+                        medianSigned,
+                        medianShifted,
+                        residualSigned
+                ));
+            }
+        }
+
+        if (stats.minSignedSlowMoverValue == Integer.MAX_VALUE) {
+            stats.minSignedSlowMoverValue = 0;
+            stats.maxSignedSlowMoverValue = 0;
+            stats.minSignedMedianValue = 0;
+            stats.maxSignedMedianValue = 0;
+            stats.minShiftedSlowMoverValue = 0;
+            stats.maxShiftedSlowMoverValue = 0;
+            stats.minShiftedMedianValue = 0;
+            stats.maxShiftedMedianValue = 0;
+        }
+
+        return stats;
     }
 
     /**
@@ -345,21 +496,45 @@ public final class SlowMoverAnalyzer {
         return count > 0 ? sum / count : 0.0;
     }
 
-    private static final class ResidualCoreMeasurement {
-        private final double positiveFraction;
-        private final int positivePixels;
-        private final int corePixels;
-        private final double effectiveRadiusPixels;
+    private static final class ResidualFootprintMeasurement {
+        private final double fluxFraction;
+        private final double residualFlux;
+        private final double slowMoverFlux;
+        private final double medianFlux;
+        private final int footprintPixels;
 
-        private ResidualCoreMeasurement(double positiveFraction,
-                                        int positivePixels,
-                                        int corePixels,
-                                        double effectiveRadiusPixels) {
-            this.positiveFraction = positiveFraction;
-            this.positivePixels = positivePixels;
-            this.corePixels = corePixels;
-            this.effectiveRadiusPixels = effectiveRadiusPixels;
+        private ResidualFootprintMeasurement(double fluxFraction,
+                                             double residualFlux,
+                                             double slowMoverFlux,
+                                             double medianFlux,
+                                             int footprintPixels) {
+            this.fluxFraction = fluxFraction;
+            this.residualFlux = residualFlux;
+            this.slowMoverFlux = slowMoverFlux;
+            this.medianFlux = medianFlux;
+            this.footprintPixels = footprintPixels;
         }
+    }
+
+    private static final class ResidualFootprintDebugStats {
+        private int minSignedSlowMoverValue = Integer.MAX_VALUE;
+        private int maxSignedSlowMoverValue = Integer.MIN_VALUE;
+        private int minSignedMedianValue = Integer.MAX_VALUE;
+        private int maxSignedMedianValue = Integer.MIN_VALUE;
+        private int minShiftedSlowMoverValue = Integer.MAX_VALUE;
+        private int maxShiftedSlowMoverValue = Integer.MIN_VALUE;
+        private int minShiftedMedianValue = Integer.MAX_VALUE;
+        private int maxShiftedMedianValue = Integer.MIN_VALUE;
+        private int signedSlowMoverPositivePixels = 0;
+        private int signedMedianPositivePixels = 0;
+        private int positiveResidualPixels = 0;
+        private double signedSlowMoverPositiveFlux = 0.0;
+        private double signedMedianPositiveFlux = 0.0;
+        private double shiftedSlowMoverFlux = 0.0;
+        private double shiftedMedianFlux = 0.0;
+        private double signedResidualFlux = 0.0;
+        private double shiftedResidualFlux = 0.0;
+        private final List<String> pixelSamples = new ArrayList<>();
     }
 
     /**

@@ -10,6 +10,7 @@
 package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.core.PixelEncoding;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
 
@@ -1017,17 +1018,17 @@ public class JTransientAutoTuner {
         int depth = frames.size();
 
         short[][] out = new short[height][width];
-        short[] buffer = new short[depth];
+        int[] buffer = new int[depth];
         int medianIndex = depth / 2;
 
         for (int y = 0; y < height; y++) {
             for (int x = 0; x < width; x++) {
                 for (int i = 0; i < depth; i++) {
-                    buffer[i] = frames.get(i).pixelData[y][x];
+                    buffer[i] = PixelEncoding.toShiftedPositiveInt(frames.get(i).pixelData[y][x]);
                 }
                 // sample size is tiny (5), so Collections/streams are unnecessary here
                 insertionSort(buffer);
-                out[y][x] = buffer[medianIndex];
+                out[y][x] = PixelEncoding.fromShiftedPositiveInt(buffer[medianIndex]);
             }
         }
 
@@ -1037,9 +1038,9 @@ public class JTransientAutoTuner {
     /**
      * Sorts a tiny short array in place using insertion sort.
      */
-    private static void insertionSort(short[] arr) {
+    private static void insertionSort(int[] arr) {
         for (int i = 1; i < arr.length; i++) {
-            short key = arr[i];
+            int key = arr[i];
             int j = i - 1;
             while (j >= 0 && arr[j] > key) {
                 arr[j + 1] = arr[j];
