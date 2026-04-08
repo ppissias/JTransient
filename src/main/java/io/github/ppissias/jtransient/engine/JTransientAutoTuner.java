@@ -1135,14 +1135,24 @@ public class JTransientAutoTuner {
         selected.add(rec.frame);
 
         report.append(String.format(
-                " -> Frame %d: Noise=%.2f, FWHM=%.2f, Stars=%d, ShapeStars=%d, FwhmStars=%d (Score: %.2f)%n",
+                " -> Frame %d: Noise=%.2f, FWHM=%s, Stars=%d, ShapeStars=%d, BrightShapeStars=%d, FwhmStars=%d, Ecc=%s, BrightEcc=%s (Score: %.2f)%n",
                 rec.frame.sequenceIndex,
                 rec.metrics.backgroundNoise,
-                rec.metrics.medianFWHM,
+                formatMetric(rec.metrics.medianFWHM),
                 rec.metrics.starCount,
                 rec.metrics.usableShapeStarCount,
+                rec.metrics.brightStarShapeStarCount,
                 rec.metrics.fwhmStarCount,
+                formatMetric(rec.metrics.medianEccentricity),
+                formatMetric(rec.metrics.brightStarMedianEccentricity),
                 rec.qualityScore));
+    }
+
+    /**
+     * Formats optional quality metrics for the tuning report.
+     */
+    private static String formatMetric(double value) {
+        return Double.isFinite(value) ? String.format("%.2f", value) : "n/a";
     }
 
     /**

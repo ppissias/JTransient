@@ -171,12 +171,15 @@ It computes:
 - `backgroundNoise`
 - `starCount`
 - `medianEccentricity`
+- `brightStarMedianEccentricity`
 - `medianFWHM`
 
 Important detail:
 
 - eccentricity uses all non-streak detections
+- bright-star eccentricity uses only non-streak detections whose `peakSigma` clears the configured bright-star cutoff
 - FWHM uses only non-streak detections whose elongation is below `qualityMaxElongationForFwhm`
+- the bright-star metric is reported as unavailable if too few bright stars qualify
 
 These are frame-quality filters, not object-track filters. Shape is used here only to decide whether an entire frame is trustworthy enough to keep.
 
@@ -191,6 +194,7 @@ It computes a median and a MAD-derived sigma for:
 - star count
 - median FWHM
 - median eccentricity
+- bright-star median eccentricity, when enough frames provide a valid value
 - background median
 
 Frames are rejected when:
@@ -198,12 +202,14 @@ Frames are rejected when:
 - star count falls too far below the session median
 - FWHM rises too far above the median
 - eccentricity rises too far above the median
+- bright-star eccentricity rises too far above the median
 - background median deviates too much from the median
 
-Three absolute floors keep the rejection envelopes from becoming too tight:
+Four absolute floors keep the rejection envelopes from becoming too tight:
 
 - `minBackgroundDeviationADU`
 - `minEccentricityEnvelope`
+- `minBrightStarEccentricityEnvelope`
 - `minFwhmEnvelope`
 
 Rejected frames are recorded in `PipelineTelemetry.rejectedFrames`. Only the retained frames participate in stacking and tracking.

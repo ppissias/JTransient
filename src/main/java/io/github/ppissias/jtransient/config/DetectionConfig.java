@@ -184,6 +184,19 @@ public class DetectionConfig implements Cloneable {
      */
     public int qualityMinDetectionPixels = 5;
 
+    /** * Additional peak-sigma required above the quality seed threshold before a measured quality star
+     * contributes to the bright-star eccentricity metric.
+     * This keeps the secondary shape check focused on stars bright enough to reveal tracking slips clearly.
+     */
+    public double qualityBrightStarPeakSigmaOffset = 8.0;
+
+    /** * Minimum number of bright quality stars required before the bright-star eccentricity metric
+     * is considered valid for a frame.
+     * Frames with fewer qualifying stars still keep the ordinary eccentricity metric, but the bright-star
+     * metric is reported as unavailable and skipped by the dedicated rejection gate.
+     */
+    public int qualityBrightStarMinStars = 8;
+
     // --- Quality measurements and fallback ---
 
     /** * Trailed stars (due to wind or mount errors) artificially inflate FWHM (focus) measurements.
@@ -208,6 +221,11 @@ public class DetectionConfig implements Cloneable {
      * ensuring minor, sub-pixel tracking shifts are ignored.
      */
     public double minEccentricityEnvelope = 0.10;
+
+    /** * Absolute bounds for the bright-star shape quality envelope.
+     * Prevents the dedicated bright-star eccentricity gate from becoming too tight on exceptionally stable runs.
+     */
+    public double minBrightStarEccentricityEnvelope = 0.10;
 
     /** * Absolute bounds for focus quality. Prevents MAD statistics from becoming hyper-sensitive,
      * ensuring minor, sub-pixel focus fluctuations are ignored.
@@ -327,6 +345,17 @@ public class DetectionConfig implements Cloneable {
      */
     public double eccentricitySigmaDeviation = 3.0;
 
+    /** * Enables the dedicated frame-quality rejection gate based only on brighter stars.
+     * The metric is still measured for telemetry even when this gate is disabled.
+     */
+    public boolean enableBrightStarEccentricityFilter = true;
+
+    /** * Rejects frames where the brighter reference stars become highly elliptical compared to the session median.
+     * This specifically targets tracking slips that affect only the brightest stars strongly enough to leak past
+     * the master veto mask.
+     */
+    public double brightStarEccentricitySigmaDeviation = 3.0;
+
     /** * Rejects frames where the sky background fluctuates wildly
      * (indicates a car driving by, moonlight entering the tube, or incoming clouds reflecting light pollution).
      */
@@ -390,7 +419,7 @@ public class DetectionConfig implements Cloneable {
     public boolean enableLocalRescueCandidates = true;
 
     /** * Enables the broader spatial activity-cluster pass after local rescue candidates are removed. */
-    public boolean enableLocalActivityClusters = true;
+    public boolean enableLocalActivityClusters = false;
 
     /** * Linkage radius for the broad local activity cluster review pass. */
     public double localActivityClusterRadiusPixels = 10.0;

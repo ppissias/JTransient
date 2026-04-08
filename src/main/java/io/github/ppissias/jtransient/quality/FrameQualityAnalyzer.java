@@ -37,10 +37,14 @@ public class FrameQualityAnalyzer {
         public double medianFWHM;
         /** Median elongation of usable stars. */
         public double medianEccentricity;
+        /** Median elongation of brighter usable stars, or NaN when too few are present. */
+        public double brightStarMedianEccentricity = Double.NaN;
         /** Number of extracted quality-reference stars. */
         public int starCount;
         /** Number of non-noise, non-streak stars used for shape statistics. */
         public int usableShapeStarCount;
+        /** Number of bright non-noise, non-streak stars used for the bright-star eccentricity metric. */
+        public int brightStarShapeStarCount;
         /** Number of stars that survived the FWHM elongation gate. */
         public int fwhmStarCount;
         /** Whether the frame was later rejected by the session evaluator. */
@@ -87,14 +91,24 @@ public class FrameQualityAnalyzer {
         // 3. One-pass extraction for both FWHM and Eccentricity
         List<Double> fwhmValues = new ArrayList<>(objects.size());
         List<Double> eccValues = new ArrayList<>(objects.size());
+        List<Double> brightStarEccValues = new ArrayList<>(objects.size());
         int usableShapeStarCount = 0;
+        int brightStarShapeStarCount = 0;
         int fwhmStarCount = 0;
+        double brightStarPeakSigmaThreshold = Math.max(
+                config.qualitySigmaMultiplier,
+                config.qualitySigmaMultiplier + config.qualityBrightStarPeakSigmaOffset
+        );
 
         for (SourceExtractor.DetectedObject obj : objects) {
             // Only measure true point sources (ignore obvious noise and massive satellite streaks)
             if (!obj.isStreak && !obj.isNoise) {
                 usableShapeStarCount++;
                 eccValues.add(obj.elongation);
+                if (obj.peakSigma >= brightStarPeakSigmaThreshold) {
+                    brightStarShapeStarCount++;
+                    brightStarEccValues.add(obj.elongation);
+                }
 
                 // Parameterized check: Ignore heavily distorted/trailed stars when judging pure optical focus
                 if (obj.elongation < config.qualityMaxElongationForFwhm) {
@@ -105,11 +119,15 @@ public class FrameQualityAnalyzer {
         }
 
         metrics.usableShapeStarCount = usableShapeStarCount;
+        metrics.brightStarShapeStarCount = brightStarShapeStarCount;
         metrics.fwhmStarCount = fwhmStarCount;
 
         // 4. Calculate Medians (THE BUG FIX: Eccentricity is now populated!)
         metrics.medianFWHM = calculateMedian(fwhmValues, config.errorFallbackValue);
         metrics.medianEccentricity = calculateMedian(eccValues, config.errorFallbackValue);
+        if (brightStarShapeStarCount >= config.qualityBrightStarMinStars) {
+            metrics.brightStarMedianEccentricity = calculateMedian(brightStarEccValues, config.errorFallbackValue);
+        }
 
         return metrics;
     }

@@ -40,12 +40,35 @@ public class PipelineTelemetry {
     public int totalFramesKept = 0;
 
     /**
+     * Per-frame quality summary captured after frame-quality analysis and session rejection.
+     */
+    public static class FrameQualityStat {
+        public int frameIndex;
+        public String filename;
+        public double backgroundMedian;
+        public double backgroundNoise;
+        public double medianFWHM;
+        public double medianEccentricity;
+        public double brightStarMedianEccentricity = Double.NaN;
+        public int starCount;
+        public int usableShapeStarCount;
+        public int brightStarShapeStarCount;
+        public int fwhmStarCount;
+        public boolean rejected;
+        public String rejectionReason;
+    }
+    public List<FrameQualityStat> frameQualityStats = new ArrayList<>();
+
+    /**
      * Per-frame rejection record emitted by the quality-control stage.
      */
     public static class FrameRejectionStat {
         public int frameIndex;
         public String filename;
         public String reason;
+        public double medianEccentricity;
+        public double brightStarMedianEccentricity = Double.NaN;
+        public int brightStarShapeStarCount;
     }
     public List<FrameRejectionStat> rejectedFrames = new ArrayList<>();
 
@@ -130,8 +153,37 @@ public class PipelineTelemetry {
         if (!rejectedFrames.isEmpty()) {
             sb.append("--- QUALITY CONTROL: REJECTED FRAMES ---\n");
             for (FrameRejectionStat rej : rejectedFrames) {
-                sb.append(String.format("  Frame %03d (%s) -> %s\n",
-                        rej.frameIndex + 1, rej.filename, rej.reason));
+                sb.append(String.format(
+                        "  Frame %03d (%s) -> %s | Ecc: %s | BrightEcc: %s | BrightStars: %d\n",
+                        rej.frameIndex + 1,
+                        rej.filename,
+                        rej.reason,
+                        formatMetric(rej.medianEccentricity),
+                        formatMetric(rej.brightStarMedianEccentricity),
+                        rej.brightStarShapeStarCount
+                ));
+            }
+            sb.append("\n");
+        }
+
+        if (!frameQualityStats.isEmpty()) {
+            sb.append("--- FRAME QUALITY STATISTICS ---\n");
+            for (FrameQualityStat stat : frameQualityStats) {
+                sb.append(String.format(
+                        "  Frame %03d (%s) -> Noise: %.2f, Bg: %.2f, Stars: %d, ShapeStars: %d, BrightShapeStars: %d, FwhmStars: %d, FWHM: %s, Ecc: %s, BrightEcc: %s%s\n",
+                        stat.frameIndex + 1,
+                        stat.filename,
+                        stat.backgroundNoise,
+                        stat.backgroundMedian,
+                        stat.starCount,
+                        stat.usableShapeStarCount,
+                        stat.brightStarShapeStarCount,
+                        stat.fwhmStarCount,
+                        formatMetric(stat.medianFWHM),
+                        formatMetric(stat.medianEccentricity),
+                        formatMetric(stat.brightStarMedianEccentricity),
+                        stat.rejected ? " [REJECTED: " + stat.rejectionReason + "]" : ""
+                ));
             }
             sb.append("\n");
         }
@@ -146,5 +198,12 @@ public class PipelineTelemetry {
         sb.append("==================================================\n");
 
         return sb.toString();
+    }
+
+    /**
+     * Formats optional floating-point metrics for reports.
+     */
+    private static String formatMetric(double value) {
+        return Double.isFinite(value) ? String.format("%.2f", value) : "n/a";
     }
 }

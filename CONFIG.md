@@ -225,6 +225,21 @@ Minimum blob size for the quality-analysis extraction pass.
 
 - used together with `qualitySigmaMultiplier`
 
+### `qualityBrightStarPeakSigmaOffset` (default `8.0`)
+
+Additional peak sigma required above `qualitySigmaMultiplier` before a measured quality star
+contributes to the bright-star eccentricity metric.
+
+- keeps the secondary shape gate focused on genuinely bright stars
+- uses the same extracted quality stars; it does not trigger a second extraction pass
+
+### `qualityBrightStarMinStars` (default `8`)
+
+Minimum number of bright stars required before the bright-star eccentricity metric is considered valid.
+
+- if fewer stars qualify, the bright-star metric is reported as unavailable
+- the ordinary median eccentricity metric still remains valid
+
 ### `qualityMaxElongationForFwhm` (default `1.5`)
 
 Upper elongation limit for stars that contribute to the frame's FWHM measurement.
@@ -250,6 +265,12 @@ Absolute floor on the allowed background-median deviation.
 Absolute floor on the eccentricity rejection envelope.
 
 - stops the MAD threshold from collapsing too tightly
+
+### `minBrightStarEccentricityEnvelope` (default `0.10`)
+
+Absolute floor on the bright-star eccentricity rejection envelope.
+
+- prevents the bright-star gate from becoming over-sensitive on extremely stable sessions
 
 ### `minFwhmEnvelope` (default `0.5`)
 
@@ -373,6 +394,16 @@ Controls how far median FWHM may rise above the session median before rejection.
 ### `eccentricitySigmaDeviation` (default `3.0`)
 
 Controls how far median eccentricity may rise above the session median before rejection.
+
+### `enableBrightStarEccentricityFilter` (default `true`)
+
+Enables the dedicated session-level rejection gate based on bright-star eccentricity.
+
+- the bright-star metric is still measured for telemetry even when this gate is disabled
+
+### `brightStarEccentricitySigmaDeviation` (default `3.0`)
+
+Controls how far bright-star median eccentricity may rise above the session median before rejection.
 
 ### `backgroundSigmaDeviation` (default `3.0`)
 

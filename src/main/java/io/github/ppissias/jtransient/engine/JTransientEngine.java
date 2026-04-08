@@ -331,12 +331,31 @@ public class JTransientEngine {
 
         for (int i = 0; i < rawExtractedFrames.size(); i++) {
             FrameQualityAnalyzer.FrameMetrics metrics = sessionMetrics.get(i);
+            PipelineTelemetry.FrameQualityStat qualityStat = new PipelineTelemetry.FrameQualityStat();
+            qualityStat.frameIndex = inputFrames.get(i).sequenceIndex;
+            qualityStat.filename = metrics.filename;
+            qualityStat.backgroundMedian = metrics.backgroundMedian;
+            qualityStat.backgroundNoise = metrics.backgroundNoise;
+            qualityStat.medianFWHM = metrics.medianFWHM;
+            qualityStat.medianEccentricity = metrics.medianEccentricity;
+            qualityStat.brightStarMedianEccentricity = metrics.brightStarMedianEccentricity;
+            qualityStat.starCount = metrics.starCount;
+            qualityStat.usableShapeStarCount = metrics.usableShapeStarCount;
+            qualityStat.brightStarShapeStarCount = metrics.brightStarShapeStarCount;
+            qualityStat.fwhmStarCount = metrics.fwhmStarCount;
+            qualityStat.rejected = metrics.isRejected;
+            qualityStat.rejectionReason = metrics.rejectionReason;
+            telemetry.frameQualityStats.add(qualityStat);
+
             if (metrics.isRejected) {
                 telemetry.totalFramesRejected++;
                 PipelineTelemetry.FrameRejectionStat rejStat = new PipelineTelemetry.FrameRejectionStat();
-                rejStat.frameIndex = i;
+                rejStat.frameIndex = inputFrames.get(i).sequenceIndex;
                 rejStat.filename = metrics.filename;
                 rejStat.reason = metrics.rejectionReason;
+                rejStat.medianEccentricity = metrics.medianEccentricity;
+                rejStat.brightStarMedianEccentricity = metrics.brightStarMedianEccentricity;
+                rejStat.brightStarShapeStarCount = metrics.brightStarShapeStarCount;
                 telemetry.rejectedFrames.add(rejStat);
             } else {
                 telemetry.totalFramesKept++;

@@ -41,12 +41,16 @@ public class SessionEvaluator {
         List<Double> bgValues = new ArrayList<>(count);
         List<Double> starCounts = new ArrayList<>(count);
         List<Double> eccValues = new ArrayList<>(count);
+        List<Double> brightEccValues = new ArrayList<>(count);
 
         for (FrameQualityAnalyzer.FrameMetrics m : sessionMetrics) {
             fwhmValues.add(m.medianFWHM);
             bgValues.add(m.backgroundMedian);
             starCounts.add((double) m.starCount);
             eccValues.add(m.medianEccentricity);
+            if (Double.isFinite(m.brightStarMedianEccentricity)) {
+                brightEccValues.add(m.brightStarMedianEccentricity);
+            }
         }
 
         // 2. Calculate the Session Medians and Sigma (MAD)
@@ -55,11 +59,18 @@ public class SessionEvaluator {
         double[] bgStats = calculateMedianAndSigma(bgValues, config);
         double[] starStats = calculateMedianAndSigma(starCounts, config);
         double[] eccStats = calculateMedianAndSigma(eccValues, config);
+        double[] brightEccStats = brightEccValues.size() >= config.minFramesForAnalysis
+                ? calculateMedianAndSigma(brightEccValues, config)
+                : null;
 
         if (JTransientEngine.DEBUG) {
             System.out.println(String.format(
-                    "Session Baseline - FWHM: %.2f, Background: %.2f, Stars: %.0f, Eccentricity: %.2f",
-                    fwhmStats[0], bgStats[0], starStats[0], eccStats[0]
+                    "Session Baseline - FWHM: %.2f, Background: %.2f, Stars: %.0f, Eccentricity: %.2f, Bright-Star Eccentricity: %s",
+                    fwhmStats[0],
+                    bgStats[0],
+                    starStats[0],
+                    eccStats[0],
+                    formatMetric(brightEccStats != null ? brightEccStats[0] : Double.NaN)
             ));
         }
 
@@ -72,6 +83,9 @@ public class SessionEvaluator {
             double maxFwhm = fwhmStats[0] + (config.fwhmSigmaDeviation * fwhmStats[1]);
             double maxEcc = eccStats[0] + (config.eccentricitySigmaDeviation * eccStats[1]);
             double maxBgDev = config.backgroundSigmaDeviation * bgStats[1];
+            double maxBrightEcc = brightEccStats != null
+                    ? brightEccStats[0] + (config.brightStarEccentricitySigmaDeviation * brightEccStats[1])
+                    : Double.POSITIVE_INFINITY;
 
             // --- THE FIX: ENFORCE ABSOLUTE MINIMUM DEVIATIONS ---
             // Don't let the background threshold drop below the configured minimum ADU
@@ -82,6 +96,10 @@ public class SessionEvaluator {
             // Don't let the eccentricity envelope shrink tighter than the configured minimum
             if (maxEcc - eccStats[0] < config.minEccentricityEnvelope) {
                 maxEcc = eccStats[0] + config.minEccentricityEnvelope;
+            }
+
+            if (brightEccStats != null && maxBrightEcc - brightEccStats[0] < config.minBrightStarEccentricityEnvelope) {
+                maxBrightEcc = brightEccStats[0] + config.minBrightStarEccentricityEnvelope;
             }
 
             // Don't let FWHM envelope shrink tighter than the configured minimum
@@ -120,6 +138,24 @@ public class SessionEvaluator {
                 continue;
             }
 
+            if (config.enableBrightStarEccentricityFilter
+                    && brightEccStats != null
+                    && Double.isFinite(m.brightStarMedianEccentricity)
+                    && m.brightStarMedianEccentricity > maxBrightEcc) {
+                if (JTransientEngine.DEBUG) {
+                    System.out.printf(
+                            "DEBUG REJECT [Frame %d]: Bright-Star Eccentricity %.3f > Max Threshold %.3f (Median: %.3f, Sigma: %.4f)%n",
+                            i,
+                            m.brightStarMedianEccentricity,
+                            maxBrightEcc,
+                            brightEccStats[0],
+                            brightEccStats[1]
+                    );
+                }
+                reject(m, "Bright-star eccentricity spiked (Tracking error/Wind)");
+                continue;
+            }
+
             // Background: We care if it spikes (car headlights) or drops completely.
             double currentBgDev = Math.abs(m.backgroundMedian - bgStats[0]);
             if (currentBgDev > maxBgDev) {
@@ -138,6 +174,13 @@ public class SessionEvaluator {
     private static void reject(FrameQualityAnalyzer.FrameMetrics m, String reason) {
         m.isRejected = true;
         m.rejectionReason = reason;
+    }
+
+    /**
+     * Formats optional metrics for debug output.
+     */
+    private static String formatMetric(double value) {
+        return Double.isFinite(value) ? String.format("%.2f", value) : "n/a";
     }
 
     /**
