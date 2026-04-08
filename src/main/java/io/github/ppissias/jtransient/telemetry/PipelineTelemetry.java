@@ -40,6 +40,22 @@ public class PipelineTelemetry {
     public int totalFramesKept = 0;
 
     /**
+     * Session-wide quality thresholds derived from the robust frame baseline.
+     */
+    public static class FrameQualityThresholds {
+        public boolean available;
+        public double minAllowedStarCount = Double.NaN;
+        public double maxAllowedFwhm = Double.NaN;
+        public double maxAllowedEccentricity = Double.NaN;
+        public double maxAllowedBrightStarEccentricity = Double.NaN;
+        public double backgroundMedianBaseline = Double.NaN;
+        public double maxAllowedBackgroundDeviation = Double.NaN;
+        public double minAllowedBackgroundMedian = Double.NaN;
+        public double maxAllowedBackgroundMedian = Double.NaN;
+    }
+    public FrameQualityThresholds qualityThresholds = new FrameQualityThresholds();
+
+    /**
      * Per-frame quality summary captured after frame-quality analysis and session rejection.
      */
     public static class FrameQualityStat {
@@ -164,6 +180,21 @@ public class PipelineTelemetry {
                 ));
             }
             sb.append("\n");
+        }
+
+        if (qualityThresholds.available) {
+            sb.append("--- QUALITY CONTROL: SESSION THRESHOLDS ---\n");
+            sb.append(String.format(
+                    "  Stars >= %.2f | FWHM <= %s | Ecc <= %s | BrightEcc <= %s | Bg Median in [%s, %s] (center %s, dev %s)\n\n",
+                    qualityThresholds.minAllowedStarCount,
+                    formatMetric(qualityThresholds.maxAllowedFwhm),
+                    formatMetric(qualityThresholds.maxAllowedEccentricity),
+                    formatMetric(qualityThresholds.maxAllowedBrightStarEccentricity),
+                    formatMetric(qualityThresholds.minAllowedBackgroundMedian),
+                    formatMetric(qualityThresholds.maxAllowedBackgroundMedian),
+                    formatMetric(qualityThresholds.backgroundMedianBaseline),
+                    formatMetric(qualityThresholds.maxAllowedBackgroundDeviation)
+            ));
         }
 
         if (!frameQualityStats.isEmpty()) {

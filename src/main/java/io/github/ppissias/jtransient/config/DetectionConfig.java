@@ -188,7 +188,7 @@ public class DetectionConfig implements Cloneable {
      * contributes to the bright-star eccentricity metric.
      * This keeps the secondary shape check focused on stars bright enough to reveal tracking slips clearly.
      */
-    public double qualityBrightStarPeakSigmaOffset = 8.0;
+    public double qualityBrightStarPeakSigmaOffset = 30.0;
 
     /** * Minimum number of bright quality stars required before the bright-star eccentricity metric
      * is considered valid for a frame.

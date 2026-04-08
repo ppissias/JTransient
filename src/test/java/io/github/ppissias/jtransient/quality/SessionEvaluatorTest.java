@@ -36,7 +36,7 @@ public class SessionEvaluatorTest {
         sessionMetrics.add(createMetrics("frame-3", 3.0, 1.12, 2.10));
         sessionMetrics.add(createMetrics("frame-4", 3.0, 1.10, 1.17));
 
-        SessionEvaluator.rejectOutlierFrames(sessionMetrics, config);
+        SessionEvaluator.SessionThresholds thresholds = SessionEvaluator.rejectOutlierFrames(sessionMetrics, config);
 
         assertFalse(sessionMetrics.get(0).isRejected);
         assertFalse(sessionMetrics.get(1).isRejected);
@@ -44,6 +44,16 @@ public class SessionEvaluatorTest {
         assertTrue(sessionMetrics.get(3).isRejected);
         assertEquals("Bright-star eccentricity spiked (Tracking error/Wind)", sessionMetrics.get(3).rejectionReason);
         assertFalse(sessionMetrics.get(4).isRejected);
+
+        assertTrue(thresholds.available);
+        assertEquals(99.998, thresholds.minAllowedStarCount, 1.0e-6);
+        assertEquals(3.5, thresholds.maxAllowedFwhm, 1.0e-6);
+        assertEquals(1.22, thresholds.maxAllowedEccentricity, 1.0e-6);
+        assertEquals(1.29, thresholds.maxAllowedBrightStarEccentricity, 1.0e-6);
+        assertEquals(1000.0, thresholds.backgroundMedianBaseline, 1.0e-6);
+        assertEquals(10.0, thresholds.maxAllowedBackgroundDeviation, 1.0e-6);
+        assertEquals(990.0, thresholds.minAllowedBackgroundMedian, 1.0e-6);
+        assertEquals(1010.0, thresholds.maxAllowedBackgroundMedian, 1.0e-6);
     }
 
     private static FrameQualityAnalyzer.FrameMetrics createMetrics(String filename,

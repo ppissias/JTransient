@@ -324,7 +324,16 @@ public class JTransientEngine {
         }
 
         // Pass the config down to the evaluator
-        SessionEvaluator.rejectOutlierFrames(sessionMetrics, config);
+        SessionEvaluator.SessionThresholds sessionThresholds = SessionEvaluator.rejectOutlierFrames(sessionMetrics, config);
+        telemetry.qualityThresholds.available = sessionThresholds.available;
+        telemetry.qualityThresholds.minAllowedStarCount = sessionThresholds.minAllowedStarCount;
+        telemetry.qualityThresholds.maxAllowedFwhm = sessionThresholds.maxAllowedFwhm;
+        telemetry.qualityThresholds.maxAllowedEccentricity = sessionThresholds.maxAllowedEccentricity;
+        telemetry.qualityThresholds.maxAllowedBrightStarEccentricity = sessionThresholds.maxAllowedBrightStarEccentricity;
+        telemetry.qualityThresholds.backgroundMedianBaseline = sessionThresholds.backgroundMedianBaseline;
+        telemetry.qualityThresholds.maxAllowedBackgroundDeviation = sessionThresholds.maxAllowedBackgroundDeviation;
+        telemetry.qualityThresholds.minAllowedBackgroundMedian = sessionThresholds.minAllowedBackgroundMedian;
+        telemetry.qualityThresholds.maxAllowedBackgroundMedian = sessionThresholds.maxAllowedBackgroundMedian;
 
         List<SourceExtractor.ExtractionResult> cleanFramesData = new ArrayList<>();
         List<ImageFrame> cleanFrames = new ArrayList<>(); // Track the raw images that passed the quality check
