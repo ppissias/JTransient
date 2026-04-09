@@ -93,6 +93,14 @@ public class JTransientAutoTuner {
     // =========================================================================
 
     /**
+     * Creates an auto-tuner facade.
+     *
+     * <p>The class is typically used through its static {@code tune(...)} methods.</p>
+     */
+    public JTransientAutoTuner() {
+    }
+
+    /**
      * Result of one auto-tuning run.
      */
     public static class AutoTunerResult {
@@ -155,8 +163,11 @@ public class JTransientAutoTuner {
      * High-level tuning policy presets.
      */
     public enum AutoTuneProfile {
+        /** Prefer cleaner runs with stricter leakage rejection. */
         CONSERVATIVE,
+        /** Balanced default between cleanliness and sensitivity. */
         BALANCED,
+        /** Allow noisier candidates to preserve sensitivity. */
         AGGRESSIVE
     }
 

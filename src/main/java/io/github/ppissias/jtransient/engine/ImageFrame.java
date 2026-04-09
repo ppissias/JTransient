@@ -11,6 +11,9 @@ package io.github.ppissias.jtransient.engine;
 
 /**
  * Immutable image payload consumed by the pipeline.
+ *
+ * <p>{@link JTransientEngine} orders frames by {@link #sequenceIndex}. Timestamps and exposure
+ * durations are optional, but when present they enable the time-aware tracking logic.</p>
  */
 public class ImageFrame {
     /** Monotonic frame order used to restore chronological processing. */

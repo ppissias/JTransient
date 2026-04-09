@@ -18,6 +18,12 @@ import java.util.List;
 
 /**
  * Aggregates all exported data products produced by a full pipeline run.
+ *
+ * <p>This is the primary return type of {@link JTransientEngine#runPipeline(List,
+ * io.github.ppissias.jtransient.config.DetectionConfig, TransientEngineProgressListener)}.
+ * Confirmed tracks, suspected same-frame streak groupings, rescued anomalies, leftover
+ * transients, and diagnostic products all live here so callers can decide how much of the
+ * pipeline output they want to keep.</p>
  */
 public class PipelineResult {
     /** Returned track-like detections, including confirmed tracks and suspected same-frame streak groupings. */
@@ -59,7 +65,22 @@ public class PipelineResult {
     public final short[][] maximumStackData;
 
     /**
-     * Creates the unified pipeline result payload.
+     * Creates the unified pipeline result payload using the legacy slow-mover export fields.
+     *
+     * @param tracks returned tracks and suspected streak groupings
+     * @param telemetry pipeline counters and diagnostics
+     * @param masterStackData median master stack used for vetoing
+     * @param masterStars stationary objects extracted from the master stack
+     * @param slowMoverStackData compatibility export of the slow-mover stack
+     * @param slowMoverMedianVetoMask compatibility export of the slow-mover median veto mask
+     * @param slowMoverCandidates compatibility export of accepted slow-mover detections
+     * @param anomalies rescued single-frame anomalies that did not become tracks
+     * @param allTransients full post-veto transient population grouped by frame
+     * @param unclassifiedTransients leftover detections still unclassified after tracking and anomaly rescue
+     * @param residualTransientAnalysis post-processing of the leftover detections
+     * @param masterVetoMask veto mask generated from the master star map
+     * @param driftPoints per-frame drift diagnostics
+     * @param maximumStackData maximum-value stack built from the retained frames
      */
     public PipelineResult(List<TrackLinker.Track> tracks,
                           PipelineTelemetry telemetry,
@@ -81,6 +102,25 @@ public class PipelineResult {
                 masterVetoMask, driftPoints, maximumStackData);
     }
 
+    /**
+     * Creates the unified pipeline result payload.
+     *
+     * @param tracks returned tracks and suspected streak groupings
+     * @param telemetry pipeline counters and diagnostics
+     * @param masterStackData median master stack used for vetoing
+     * @param masterStars stationary objects extracted from the master stack
+     * @param slowMoverAnalysis grouped slow-mover diagnostics and candidates
+     * @param slowMoverStackData compatibility export of the slow-mover stack
+     * @param slowMoverMedianVetoMask compatibility export of the slow-mover median veto mask
+     * @param slowMoverCandidates compatibility export of accepted slow-mover detections
+     * @param anomalies rescued single-frame anomalies that did not become tracks
+     * @param allTransients full post-veto transient population grouped by frame
+     * @param unclassifiedTransients leftover detections still unclassified after tracking and anomaly rescue
+     * @param residualTransientAnalysis post-processing of the leftover detections
+     * @param masterVetoMask veto mask generated from the master star map
+     * @param driftPoints per-frame drift diagnostics
+     * @param maximumStackData maximum-value stack built from the retained frames
+     */
     public PipelineResult(List<TrackLinker.Track> tracks,
                           PipelineTelemetry telemetry,
                           short[][] masterStackData,

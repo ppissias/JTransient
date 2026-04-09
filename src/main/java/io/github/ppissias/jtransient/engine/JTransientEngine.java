@@ -35,6 +35,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Orchestrates the full JTransient processing pipeline from extraction through track linking.
+ *
+ * <p>The engine owns an internal executor for concurrent frame processing. Reuse the same
+ * instance across runs when practical, and call {@link #shutdown()} when the application no
+ * longer needs it.</p>
  */
 public class JTransientEngine {
 
@@ -43,6 +47,12 @@ public class JTransientEngine {
 
     // Internal thread pool for the library
     private final ExecutorService executor = Executors.newCachedThreadPool();
+
+    /**
+     * Creates a new engine instance backed by its own worker pool.
+     */
+    public JTransientEngine() {
+    }
 
     /**
      * Internal concurrent work product for one frame.
@@ -65,10 +75,14 @@ public class JTransientEngine {
      * Generates the Master Stack independently so it can be reused across iterative pipeline runs.
      * Highly optimized: Skips transient extraction and only runs quality analysis to drop outliers.
      *
+     * <p>The supplied {@code inputFrames} list is sorted in place by {@link ImageFrame#sequenceIndex}
+     * before processing.</p>
+     *
      * @param inputFrames frames to evaluate and stack
      * @param config pipeline configuration
      * @param listener optional progress listener
      * @return median master stack built from the retained frames
+     * @throws Exception if frame evaluation or stack generation fails
      */
     public short[][] generateMasterStack(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
         if (listener != null) {
@@ -137,10 +151,14 @@ public class JTransientEngine {
      * Entry point for the JTransient library.
      * Convenience wrapper that calculates the master stack automatically.
      *
+     * <p>The supplied {@code inputFrames} list is sorted in place by {@link ImageFrame#sequenceIndex}
+     * before processing.</p>
+     *
      * @param inputFrames frames to process
      * @param config pipeline configuration
      * @param listener optional progress listener
      * @return full pipeline output bundle
+     * @throws Exception if extraction, stacking, tracking, or residual analysis fails
      */
     public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
         return runPipeline(inputFrames, config, listener, null);
@@ -150,10 +168,14 @@ public class JTransientEngine {
      * Runs the pipeline up to detecting the transients (extracted objects) for all frames and does no further processing.
      * Generates a median master stack automatically to apply the Veto Mask.
      *
+     * <p>The supplied {@code inputFrames} list is sorted in place by {@link ImageFrame#sequenceIndex}
+     * before processing.</p>
+     *
      * @param inputFrames frames to process
      * @param config pipeline configuration
      * @param listener optional progress listener
-     * @return A list of objects containing the filename and its actual transients that survived the Master Veto Mask.
+     * @return per-frame transient exports after the stationary-star veto
+     * @throws Exception if extraction, master-stack generation, or vetoing fails
      */
     public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
         return detectTransients(inputFrames, config, listener, null);
@@ -163,11 +185,15 @@ public class JTransientEngine {
      * Runs the pipeline up to detecting the transients for all frames and does no further processing.
      * Uses the provided master stack to successfully apply the Veto Mask.
      *
+     * <p>The supplied {@code inputFrames} list is sorted in place by {@link ImageFrame#sequenceIndex}
+     * before processing.</p>
+     *
      * @param inputFrames frames to process
      * @param config pipeline configuration
      * @param listener optional progress listener
      * @param providedMasterStack optional precomputed median master stack
-     * @return A list of objects containing the filename and its actual transients that survived the Master Veto Mask.
+     * @return per-frame transient exports after the stationary-star veto
+     * @throws Exception if extraction or vetoing fails
      */
     public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
         ExtractedFramesContext context = extractSourcesFromFrames(inputFrames, config, listener);
@@ -419,11 +445,15 @@ public class JTransientEngine {
      * Entry point for the JTransient library.
      * Allows passing a pre-computed master stack to bypass the heavy stacking phase during iterative runs.
      *
+     * <p>The supplied {@code inputFrames} list is sorted in place by {@link ImageFrame#sequenceIndex}
+     * before processing.</p>
+     *
      * @param inputFrames frames to process
      * @param config pipeline configuration
      * @param listener optional progress listener
      * @param providedMasterStack optional precomputed median master stack
      * @return full pipeline output bundle
+     * @throws Exception if extraction, tracking, or residual analysis fails
      */
     public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
         ExtractedFramesContext context = extractSourcesFromFrames(inputFrames, config, listener);

@@ -51,11 +51,23 @@ public final class ResidualTransientAnalysis {
      * A weak object-like rescue candidate discovered among leftover transients.
      */
     public static final class LocalRescueCandidate {
+        /** Category assigned to the weak rescue candidate. */
         public final LocalRescueKind kind;
+        /** Ordered detections that make up the weak local candidate. */
         public final List<SourceExtractor.DetectedObject> points;
+        /** Shared summary metrics for this candidate. */
         public final LocalTransientMetrics metrics;
+        /** Ranking score used by the residual-analysis stage. */
         public final double score;
 
+        /**
+         * Creates one local rescue candidate.
+         *
+         * @param kind candidate category
+         * @param points detections assigned to the candidate
+         * @param metrics summary measurements for the candidate
+         * @param score ranking score assigned by the analyzer
+         */
         public LocalRescueCandidate(LocalRescueKind kind,
                                     List<SourceExtractor.DetectedObject> points,
                                     LocalTransientMetrics metrics,
@@ -71,10 +83,20 @@ public final class ResidualTransientAnalysis {
      * A broad same-area review cluster built from points left after local rescue candidate extraction.
      */
     public static final class LocalActivityCluster {
+        /** Detections grouped into the broad review cluster. */
         public final List<SourceExtractor.DetectedObject> points;
+        /** Shared summary metrics for the cluster. */
         public final LocalTransientMetrics metrics;
+        /** Radius used to link detections into this cluster. */
         public final double linkageRadiusPixels;
 
+        /**
+         * Creates one broad local activity cluster.
+         *
+         * @param points detections grouped into the cluster
+         * @param metrics summary measurements for the cluster
+         * @param linkageRadiusPixels clustering radius used to build the cluster
+         */
         public LocalActivityCluster(List<SourceExtractor.DetectedObject> points,
                                     LocalTransientMetrics metrics,
                                     double linkageRadiusPixels) {
@@ -88,20 +110,50 @@ public final class ResidualTransientAnalysis {
      * Summary measurements shared by both rescue candidates and broad local activity clusters.
      */
     public static final class LocalTransientMetrics {
+        /** Number of detections represented by the metric bundle. */
         public final int pointCount;
+        /** Number of unique frames represented by the detections. */
         public final int uniqueFrameCount;
+        /** Inclusive frame span from earliest to latest detection. */
         public final int frameSpan;
+        /** Number of skipped frames inside the observed span. */
         public final int totalGapFrames;
+        /** Straight-line displacement between the earliest and latest detections. */
         public final double totalDisplacementPixels;
+        /** Mean step size between consecutive detections. */
         public final double averageStepPixels;
+        /** Largest step size between consecutive detections. */
         public final double maxStepPixels;
+        /** Root-mean-square line-fit error for the grouped detections. */
         public final double linearityRmsePixels;
+        /** Spatial radius of the grouped detections around their centroid. */
         public final double clusterRadiusPixels;
+        /** Mean peak signal proxy across the grouped detections. */
         public final double averageSignal;
+        /** Fraction of the frame span that actually contains detections. */
         public final double frameCoverage;
+        /** Centroid X position of the grouped detections. */
         public final double centroidX;
+        /** Centroid Y position of the grouped detections. */
         public final double centroidY;
 
+        /**
+         * Creates the shared metric bundle for a local rescue candidate or activity cluster.
+         *
+         * @param pointCount number of detections represented
+         * @param uniqueFrameCount number of unique frames represented
+         * @param frameSpan inclusive frame span
+         * @param totalGapFrames skipped frames inside the span
+         * @param totalDisplacementPixels end-to-end displacement
+         * @param averageStepPixels average step size between detections
+         * @param maxStepPixels maximum step size between detections
+         * @param linearityRmsePixels line-fit root-mean-square error
+         * @param clusterRadiusPixels spatial cluster radius
+         * @param averageSignal average signal proxy
+         * @param frameCoverage fraction of the span containing detections
+         * @param centroidX centroid X coordinate
+         * @param centroidY centroid Y coordinate
+         */
         public LocalTransientMetrics(int pointCount,
                                      int uniqueFrameCount,
                                      int frameSpan,

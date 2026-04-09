@@ -33,7 +33,11 @@ public class TrackLinker {
     // =================================================================
 
     /**
-     * One confirmed moving-object track.
+     * One returned track-like detection.
+     *
+     * <p>A track can represent a confirmed point track, a confirmed streak track, or a
+     * suspected same-frame streak grouping. Standalone anomalies are not represented here;
+     * they are exported separately as {@link AnomalyDetection}.</p>
      */
     public static class Track {
         /** Chronological points that make up the track. */
@@ -47,6 +51,8 @@ public class TrackLinker {
 
         /**
          * Appends one detection to the track.
+         *
+         * @param obj detection to append
          */
         public void addPoint(SourceExtractor.DetectedObject obj) {
             points.add(obj);

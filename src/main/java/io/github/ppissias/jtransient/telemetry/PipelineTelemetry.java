@@ -18,7 +18,9 @@ import java.util.List;
 public class PipelineTelemetry {
 
     // --- PHASE 1: Extraction ---
+    /** Number of frames submitted to the pipeline before quality rejection. */
     public int totalFramesLoaded = 0;
+    /** Number of raw extracted objects measured before frame rejection and stationary-star vetoing. */
     public int totalRawObjectsExtracted = 0;
 
     /**
@@ -33,10 +35,13 @@ public class PipelineTelemetry {
         public double seedThreshold;
         public double growThreshold;
     }
+    /** Per-frame extraction statistics in chronological order. */
     public List<FrameExtractionStat> frameExtractionStats = new ArrayList<>();
 
     // --- PHASE 2 & 3: Quality & Filtering ---
+    /** Number of frames rejected by the frame-quality stage. */
     public int totalFramesRejected = 0;
+    /** Number of frames retained after quality filtering. */
     public int totalFramesKept = 0;
 
     /**
@@ -53,6 +58,7 @@ public class PipelineTelemetry {
         public double minAllowedBackgroundMedian = Double.NaN;
         public double maxAllowedBackgroundMedian = Double.NaN;
     }
+    /** Session-level thresholds derived from the quality-control baseline. */
     public FrameQualityThresholds qualityThresholds = new FrameQualityThresholds();
 
     /**
@@ -73,6 +79,7 @@ public class PipelineTelemetry {
         public boolean rejected;
         public String rejectionReason;
     }
+    /** Per-frame quality statistics in chronological order. */
     public List<FrameQualityStat> frameQualityStats = new ArrayList<>();
 
     /**
@@ -86,12 +93,17 @@ public class PipelineTelemetry {
         public double brightStarMedianEccentricity = Double.NaN;
         public int brightStarShapeStarCount;
     }
+    /** Rejection records for frames removed by the quality-control stage. */
     public List<FrameRejectionStat> rejectedFrames = new ArrayList<>();
 
     // --- PHASE 4: Tracking ---
+    /** Number of stationary master-stack stars extracted for the veto mask. */
     public int totalMasterStarsIdentified = 0;
+    /** Number of returned track-like detections, including suspected streak groupings. */
     public int totalTracksFound = 0;
+    /** Number of rescued standalone anomalies returned outside the track list. */
     public int totalAnomaliesFound = 0;
+    /** Number of returned tracks flagged as suspected same-frame streak groupings. */
     public int totalSuspectedStreakTracksFound = 0;
 
     /**
@@ -143,10 +155,13 @@ public class PipelineTelemetry {
     }
 
     // --- Processing ---
+    /** End-to-end pipeline wall-clock runtime in milliseconds. */
     public long processingTimeMs = 0;
 
     /**
      * Generates a human-readable text summary of the recorded telemetry.
+     *
+     * @return multiline report suitable for logs, diagnostics, or HTML embedding
      */
     public String generateReport() {
         StringBuilder sb = new StringBuilder();

@@ -26,6 +26,10 @@ public final class FrameTransients {
 
     /**
      * Creates a transient-export payload for one frame.
+     *
+     * @param filename source frame label
+     * @param transients post-veto transient detections for the frame
+     * @param extractionResult full extraction result collected before the stationary-star veto
      */
     public FrameTransients(String filename,
                            List<SourceExtractor.DetectedObject> transients,

@@ -13,8 +13,10 @@ import com.google.gson.annotations.SerializedName;
 
 /**
  * Master configuration object for the JTransient detection pipeline.
- * This class holds all tuning parameters for extraction, quality control, and track linking.
- * It is designed to be easily serialized to/from JSON.
+ *
+ * <p>The fields are intentionally public so applications can tune the detector directly,
+ * persist settings to JSON, and clone a baseline config before running auto-tuning or
+ * dataset-specific overrides.</p>
  */
 public class DetectionConfig implements Cloneable {
 
@@ -434,9 +436,16 @@ public class DetectionConfig implements Cloneable {
     /** * Minimum number of unique frames required before a broad local activity cluster is exported. */
     public int localActivityClusterMinFrames = 3;
 
+    /**
+     * Creates a configuration initialized with the library defaults.
+     */
+    public DetectionConfig() {
+    }
 
     /**
      * Returns a copy of this configuration.
+     *
+     * @return cloned configuration carrying the same primitive field values
      */
     @Override
     public DetectionConfig clone() {

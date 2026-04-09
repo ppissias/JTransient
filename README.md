@@ -22,6 +22,7 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 - [ALGORITHM.md](ALGORITHM.md): internal phases of `JTransientEngine.runPipeline(...)`
 - [CONFIG.md](CONFIG.md): `DetectionConfig` field-by-field reference
 - [AUTOTUNER.md](AUTOTUNER.md): detailed walkthrough of `JTransientAutoTuner.tune(...)`
+- [PUBLISHING.md](PUBLISHING.md): Maven Central staging and release bundle workflow
 
 ## Build
 
@@ -32,6 +33,14 @@ This repository is a Gradle Java library project:
 ```
 
 The project name is `JTransient` and the current library version in `build.gradle` is `1.0.0`.
+
+To prepare a Maven Central release bundle locally:
+
+```powershell
+.\gradlew.bat mavenCentralBundle
+```
+
+See [PUBLISHING.md](PUBLISHING.md) for the required signing and Portal setup.
 
 ## Data Model
 
@@ -51,7 +60,7 @@ Notes:
 
 - frames must all have the same dimensions
 - the data should already be aligned/registered to the same pixel grid
-- the engine restores chronological order from `sequenceIndex`
+- the engine sorts the supplied `List<ImageFrame>` in place by `sequenceIndex` before processing
 - time-based linking only activates when timestamps are present
 
 ## Basic Usage
@@ -104,6 +113,7 @@ try {
     );
 
     System.out.println("Tracks found: " + result.tracks.size());
+    System.out.println("Anomalies rescued: " + result.anomalies.size());
     System.out.println("Slow mover candidates: " + result.slowMoverAnalysis.candidates.size());
     System.out.println(result.telemetry.generateReport());
 
@@ -111,8 +121,8 @@ try {
         System.out.println(
                 "Track points=" + track.points.size()
                         + " streak=" + track.isStreakTrack
+                        + " suspectedStreak=" + track.isSuspectedStreakTrack
                         + " timeBased=" + track.isTimeBasedTrack
-                        + " anomaly=" + track.isAnomaly
         );
     });
 } finally {

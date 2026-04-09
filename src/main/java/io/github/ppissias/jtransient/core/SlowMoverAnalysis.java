@@ -26,6 +26,14 @@ public final class SlowMoverAnalysis {
     /** Aggregate counters and thresholds describing the slow-mover stage. */
     public final SlowMoverSummaryTelemetry telemetry;
 
+    /**
+     * Creates an immutable slow-mover analysis payload.
+     *
+     * @param slowMoverStackData deep stack built for the slow-mover branch
+     * @param medianVetoMask veto mask used during slow-mover support filtering
+     * @param candidates accepted slow-mover detections with diagnostics
+     * @param telemetry aggregate slow-mover counters and thresholds
+     */
     public SlowMoverAnalysis(short[][] slowMoverStackData,
                              boolean[][] medianVetoMask,
                              List<SlowMoverCandidateResult> candidates,
@@ -36,6 +44,11 @@ public final class SlowMoverAnalysis {
         this.telemetry = telemetry;
     }
 
+    /**
+     * Returns an empty slow-mover result for runs where the branch is disabled or finds nothing.
+     *
+     * @return empty slow-mover analysis
+     */
     public static SlowMoverAnalysis empty() {
         return new SlowMoverAnalysis(null, null, Collections.emptyList(), SlowMoverSummaryTelemetry.empty());
     }
