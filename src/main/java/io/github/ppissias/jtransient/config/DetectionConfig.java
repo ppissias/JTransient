@@ -271,6 +271,13 @@ public class DetectionConfig implements Cloneable {
      */
     public double timeBasedVelocityTolerance = 0.10;
 
+    /** * Relative speed tolerance used when validating multi-frame streak tracks with timestamps.
+     * This is intentionally much looser than point-track velocity matching because one frame can
+     * contain several fragmented streak parts and faint frames may miss parts of the true trail.
+     * A value of 0.50 accepts about 50% projected-speed variation between sampled frames.
+     */
+    public double streakTimeConsistencyTolerance = 0.50;
+
     /** * Strict Exposure Kinematics: If an object appears as a round point source in a long exposure,
      * it physically cannot be moving fast. This bounds the time-based linker using the source footprint
      * and the exposure time when valid timestamps are available.

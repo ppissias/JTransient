@@ -158,6 +158,40 @@ public class TrackLinker {
         }
     }
 
+    /**
+     * One frame-level centroid sample used to validate streak motion after same-frame fragments are merged.
+     */
+    private static class StreakFrameSample {
+        private final int frameIndex;
+        private final long timestamp;
+        private final double x;
+        private final double y;
+
+        private StreakFrameSample(int frameIndex, long timestamp, double x, double y) {
+            this.frameIndex = frameIndex;
+            this.timestamp = timestamp;
+            this.x = x;
+            this.y = y;
+        }
+    }
+
+    /**
+     * One candidate merge between two streak-like tracks.
+     */
+    private static class StreakMergeCandidate {
+        private final Track mergedTrack;
+        private final int frameGap;
+        private final double maxLineError;
+
+        private StreakMergeCandidate(Track mergedTrack,
+                                     int frameGap,
+                                     double maxLineError) {
+            this.mergedTrack = mergedTrack;
+            this.frameGap = frameGap;
+            this.maxLineError = maxLineError;
+        }
+    }
+
     // =================================================================
     // CORE TRACKING ENGINE
     // =================================================================
@@ -310,10 +344,11 @@ public class TrackLinker {
             while (true) {
                 SourceExtractor.DetectedObject bestMatch = null;
                 int bestMatchIndex = -1;
+                int bestFrameGap = Integer.MAX_VALUE;
                 double shortestDistance = Double.MAX_VALUE;
                 double bestTrajectoryAngle = 0;
 
-                // Scan all available streaks to find the absolute closest valid link
+                // Scan all available streaks and prefer nearby frames before larger chronological jumps.
                 for (int j = 0; j < validMovingStreaks.size(); j++) {
                     if (streakMatched[j]) continue;
 
@@ -341,8 +376,16 @@ public class TrackLinker {
                         }
 
                         if (isDirectionValid) {
+                            List<SourceExtractor.DetectedObject> previewPoints = new ArrayList<>(continuousStreakTrack.points);
+                            previewPoints.add(candidateStreak);
+                            if (!passesStreakTimeConsistency(previewPoints, config)) {
+                                continue;
+                            }
+
+                            int frameGap = Math.max(0, candidateStreak.sourceFrameIndex - currentAnchor.sourceFrameIndex);
                             double dist = distance(currentAnchor.x, currentAnchor.y, candidateStreak.x, candidateStreak.y);
-                            if (dist < shortestDistance) {
+                            if (frameGap < bestFrameGap || (frameGap == bestFrameGap && dist < shortestDistance)) {
+                                bestFrameGap = frameGap;
                                 shortestDistance = dist;
                                 bestMatch = candidateStreak;
                                 bestMatchIndex = j;
@@ -367,7 +410,7 @@ public class TrackLinker {
                 }
             }
 
-            if (continuousStreakTrack.points.size() > 1) {
+            if (continuousStreakTrack.points.size() > 1 && passesStreakTimeConsistency(continuousStreakTrack.points, config)) {
                 confirmedStreakTracks.add(continuousStreakTrack);
                 streakTracksFound++;
             } else {
@@ -451,11 +494,9 @@ public class TrackLinker {
 
         TransientsFilterResult filterResult = filterTransients(allFrames, masterStars, config, listener, sensorWidth, sensorHeight);
 
-        List<Track> confirmedTracks = filterResult.streakTracks;
+        List<Track> confirmedTracks = new ArrayList<>(filterResult.streakTracks);
         TrackerTelemetry telemetry = filterResult.telemetry;
         List<List<SourceExtractor.DetectedObject>> transients = filterResult.pointTransients;
-        int streakTracksFound = filterResult.streakTracksFound;
-
         double angleToleranceRad = Math.toRadians(config.angleToleranceDegrees);
 
         // =================================================================
@@ -947,6 +988,8 @@ public class TrackLinker {
             }
         }
 
+        confirmedTracks = consolidateStreakTracks(confirmedTracks, suspectedStreakTracks, config);
+
         int integratedSigmaAnomaliesRescued = 0;
         for (AnomalyDetection anomaly : anomalies) {
             if (anomaly.type == AnomalyType.INTEGRATED_SIGMA) {
@@ -954,11 +997,21 @@ public class TrackLinker {
             }
         }
 
-        telemetry.streakTracksFound = streakTracksFound;
+        int consolidatedStreakTracksFound = 0;
+        int consolidatedSuspectedTracksFound = 0;
+        for (Track track : confirmedTracks) {
+            if (track.isSuspectedStreakTrack) {
+                consolidatedSuspectedTracksFound++;
+            } else if (track.isStreakTrack) {
+                consolidatedStreakTracksFound++;
+            }
+        }
+
+        telemetry.streakTracksFound = consolidatedStreakTracksFound;
         telemetry.pointTracksFound = pointTracks.size();
         telemetry.anomaliesFound = anomalies.size();
         telemetry.integratedSigmaAnomaliesFound = integratedSigmaAnomaliesRescued;
-        telemetry.suspectedStreakTracksFound = suspectedStreakTracks.size();
+        telemetry.suspectedStreakTracksFound = consolidatedSuspectedTracksFound;
 
         if (JTransientEngine.DEBUG) {
             System.out.println("\n--------------------------------------------------");
@@ -985,7 +1038,7 @@ public class TrackLinker {
             System.out.println("--------------------------------------------------\n");
 
             System.out.println("\n4. Valid Tracks Confirmed:");
-            System.out.println("   - Fast Streak Tracks (Phase 2)  : " + telemetry.streakTracksFound);
+            System.out.println("   - Returned Confirmed Streaks    : " + telemetry.streakTracksFound);
             System.out.println("   - Binary-Star Streak Rejects    : " + telemetry.rejectedBinaryStarStreakShape);
             System.out.println("   - Slow Point Tracks (Phase 4)   : " + telemetry.pointTracksFound);
             System.out.println("   - Suspected Streak Tracks       : " + telemetry.suspectedStreakTracksFound);
@@ -1001,7 +1054,6 @@ public class TrackLinker {
         }
 
         confirmedTracks.addAll(pointTracks);
-        confirmedTracks.addAll(suspectedStreakTracks);
         if (JTransientEngine.DEBUG) {
             int finalStreakTracks = 0;
             int finalSuspectedTracks = 0;
@@ -1223,6 +1275,615 @@ public class TrackLinker {
                 projectionAlongLine(left, start.x, start.y, dx, dy),
                 projectionAlongLine(right, start.x, start.y, dx, dy)
         ));
+    }
+
+    /**
+     * Runs one final reconciliation pass over confirmed streaks, promoted single streaks, and
+     * suspected same-frame groupings so nearby fragments collapse into one streak history.
+     */
+    private static List<Track> consolidateStreakTracks(List<Track> confirmedStreakTracks,
+                                                       List<Track> suspectedStreakTracks,
+                                                       DetectionConfig config) {
+        List<Track> orderedTracks = new ArrayList<>();
+
+        if (confirmedStreakTracks != null) {
+            List<Track> orderedConfirmedTracks = new ArrayList<>();
+            for (Track track : confirmedStreakTracks) {
+                if (isStreakLike(track)) {
+                    orderedConfirmedTracks.add(copyTrack(track));
+                }
+            }
+            orderedConfirmedTracks.sort(TrackLinker::compareStreakConsolidationPriority);
+            orderedTracks.addAll(orderedConfirmedTracks);
+        }
+
+        if (suspectedStreakTracks != null) {
+            List<Track> orderedSuspectedTracks = new ArrayList<>();
+            for (Track track : suspectedStreakTracks) {
+                if (isStreakLike(track)) {
+                    orderedSuspectedTracks.add(copyTrack(track));
+                }
+            }
+            orderedSuspectedTracks.sort(TrackLinker::compareStreakConsolidationPriority);
+            orderedTracks.addAll(orderedSuspectedTracks);
+        }
+
+        if (orderedTracks.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        List<Track> consolidatedTracks = new ArrayList<>();
+        for (Track track : orderedTracks) {
+            normalizeStreakTrackOrder(track);
+
+            int bestIndex = -1;
+            StreakMergeCandidate bestCandidate = null;
+            for (int i = 0; i < consolidatedTracks.size(); i++) {
+                StreakMergeCandidate currentCandidate = evaluateStreakMerge(consolidatedTracks.get(i), track, config);
+                if (isBetterStreakMergeCandidate(currentCandidate, bestCandidate)) {
+                    bestCandidate = currentCandidate;
+                    bestIndex = i;
+                }
+            }
+
+            if (bestIndex >= 0) {
+                consolidatedTracks.set(bestIndex, bestCandidate.mergedTrack);
+            } else {
+                consolidatedTracks.add(track);
+            }
+        }
+
+        consolidatedTracks.sort(TrackLinker::compareStreakConsolidationPriority);
+        return consolidatedTracks;
+    }
+
+    /**
+     * Returns whether a track participates in the streak-only consolidation pass.
+     */
+    private static boolean isStreakLike(Track track) {
+        return track != null
+                && track.points != null
+                && !track.points.isEmpty()
+                && (track.isStreakTrack || track.isSuspectedStreakTrack);
+    }
+
+    /**
+     * Creates a shallow copy of a track while preserving the original detection references.
+     */
+    private static Track copyTrack(Track source) {
+        Track copy = new Track();
+        copy.isStreakTrack = source.isStreakTrack;
+        copy.isSuspectedStreakTrack = source.isSuspectedStreakTrack;
+        copy.isTimeBasedTrack = source.isTimeBasedTrack;
+        copy.points.addAll(source.points);
+        return copy;
+    }
+
+    /**
+     * Orders streak points chronologically and, within each frame, along the best-fit streak axis.
+     */
+    private static void normalizeStreakTrackOrder(Track track) {
+        if (track == null || track.points == null || track.points.size() < 2) {
+            return;
+        }
+
+        SourceExtractor.DetectedObject[] endpoints = determineStreakLineEndpoints(track.points);
+        if (endpoints == null) {
+            return;
+        }
+
+        double dx = endpoints[1].x - endpoints[0].x;
+        double dy = endpoints[1].y - endpoints[0].y;
+        track.points.sort((left, right) -> {
+            int byFrame = Integer.compare(left.sourceFrameIndex, right.sourceFrameIndex);
+            if (byFrame != 0) {
+                return byFrame;
+            }
+            return Double.compare(
+                    projectionAlongLine(left, endpoints[0].x, endpoints[0].y, dx, dy),
+                    projectionAlongLine(right, endpoints[0].x, endpoints[0].y, dx, dy)
+            );
+        });
+    }
+
+    /**
+     * Ranks sturdier confirmed streaks ahead of weaker suspected fragments so they absorb later inputs.
+     */
+    private static int compareStreakConsolidationPriority(Track left, Track right) {
+        int byConfirmed = Boolean.compare(right.isStreakTrack, left.isStreakTrack);
+        if (byConfirmed != 0) {
+            return byConfirmed;
+        }
+
+        int byFrames = Integer.compare(countUniqueFrames(right), countUniqueFrames(left));
+        if (byFrames != 0) {
+            return byFrames;
+        }
+
+        int byPoints = Integer.compare(right.points.size(), left.points.size());
+        if (byPoints != 0) {
+            return byPoints;
+        }
+
+        return Double.compare(maxTrackPeakSigma(right), maxTrackPeakSigma(left));
+    }
+
+    /**
+     * Evaluates whether two streak-like tracks can be merged into one physically plausible streak history.
+     */
+    private static StreakMergeCandidate evaluateStreakMerge(Track existingTrack,
+                                                            Track candidateTrack,
+                                                            DetectionConfig config) {
+        if (!isStreakLike(existingTrack) || !isStreakLike(candidateTrack)) {
+            return null;
+        }
+
+        int frameGap = computeStreakFrameGap(existingTrack, candidateTrack);
+        if (!passesStreakFrameGapGate(existingTrack, candidateTrack, frameGap)) {
+            return null;
+        }
+
+        List<SourceExtractor.DetectedObject> combinedPoints = combineTrackPoints(existingTrack, candidateTrack);
+        SourceExtractor.DetectedObject[] endpoints = determineStreakLineEndpoints(combinedPoints);
+        if (endpoints == null) {
+            return null;
+        }
+
+        double baselineDistance = distance(endpoints[0].x, endpoints[0].y, endpoints[1].x, endpoints[1].y);
+        if (baselineDistance < 1.0) {
+            return null;
+        }
+
+        double mergedAngle = Math.atan2(endpoints[1].y - endpoints[0].y, endpoints[1].x - endpoints[0].x);
+        double angleTolerance = getStreakConsolidationAngleTolerance(existingTrack, candidateTrack, config);
+
+        double existingAngle = estimateTrackOrientation(existingTrack);
+        if (!Double.isNaN(existingAngle) && !anglesMatch(existingAngle, mergedAngle, angleTolerance)) {
+            return null;
+        }
+
+        double candidateAngle = estimateTrackOrientation(candidateTrack);
+        if (!Double.isNaN(candidateAngle) && !anglesMatch(candidateAngle, mergedAngle, angleTolerance)) {
+            return null;
+        }
+
+        double maxLineError = 0.0;
+        double maxAllowedLineError = getStreakConsolidationLineTolerance(config);
+        for (SourceExtractor.DetectedObject point : combinedPoints) {
+            double lineError = distanceToLineOptimized(endpoints[0], endpoints[1], point, baselineDistance);
+            maxLineError = Math.max(maxLineError, lineError);
+            if (lineError > maxAllowedLineError) {
+                return null;
+            }
+        }
+
+        if (!hasConsistentStreakMotion(combinedPoints, endpoints[0], endpoints[1], config)) {
+            return null;
+        }
+
+        Track mergedTrack = buildMergedStreakTrack(existingTrack, candidateTrack, combinedPoints);
+        return new StreakMergeCandidate(mergedTrack, frameGap, maxLineError);
+    }
+
+    /**
+     * Prefers same-frame or adjacent-frame reconciliations, then the tighter common line fit.
+     */
+    private static boolean isBetterStreakMergeCandidate(StreakMergeCandidate currentCandidate,
+                                                        StreakMergeCandidate bestCandidate) {
+        if (currentCandidate == null) {
+            return false;
+        }
+        if (bestCandidate == null) {
+            return true;
+        }
+        if (currentCandidate.frameGap != bestCandidate.frameGap) {
+            return currentCandidate.frameGap < bestCandidate.frameGap;
+        }
+        if (Math.abs(currentCandidate.maxLineError - bestCandidate.maxLineError) > 1e-6) {
+            return currentCandidate.maxLineError < bestCandidate.maxLineError;
+        }
+        return currentCandidate.mergedTrack.points.size() > bestCandidate.mergedTrack.points.size();
+    }
+
+    /**
+     * Builds the merged track and promotes it to a confirmed streak once a real streak or cross-frame motion exists.
+     */
+    private static Track buildMergedStreakTrack(Track left,
+                                                Track right,
+                                                List<SourceExtractor.DetectedObject> combinedPoints) {
+        Track mergedTrack = new Track();
+        boolean spansMultipleFrames = countUniqueFrames(combinedPoints) > 1;
+        mergedTrack.isStreakTrack = left.isStreakTrack || right.isStreakTrack || spansMultipleFrames;
+        mergedTrack.isSuspectedStreakTrack = !mergedTrack.isStreakTrack
+                && (left.isSuspectedStreakTrack || right.isSuspectedStreakTrack);
+        mergedTrack.points.addAll(combinedPoints);
+        normalizeStreakTrackOrder(mergedTrack);
+        return mergedTrack;
+    }
+
+    /**
+     * Collects one centroid sample per frame so streak motion can be checked without treating same-frame fragments
+     * as separate time steps.
+     */
+    private static List<StreakFrameSample> buildStreakFrameSamples(List<SourceExtractor.DetectedObject> points) {
+        List<SourceExtractor.DetectedObject> orderedPoints = new ArrayList<>(points);
+        orderedPoints.sort((left, right) -> {
+            int byFrame = Integer.compare(left.sourceFrameIndex, right.sourceFrameIndex);
+            if (byFrame != 0) {
+                return byFrame;
+            }
+            return Long.compare(left.timestamp, right.timestamp);
+        });
+
+        List<StreakFrameSample> frameSamples = new ArrayList<>();
+        int currentFrame = Integer.MIN_VALUE;
+        double sumX = 0.0;
+        double sumY = 0.0;
+        int count = 0;
+        long timestamp = -1L;
+
+        for (SourceExtractor.DetectedObject point : orderedPoints) {
+            if (count > 0 && point.sourceFrameIndex != currentFrame) {
+                frameSamples.add(new StreakFrameSample(currentFrame, timestamp, sumX / count, sumY / count));
+                sumX = 0.0;
+                sumY = 0.0;
+                count = 0;
+                timestamp = -1L;
+            }
+
+            currentFrame = point.sourceFrameIndex;
+            sumX += point.x;
+            sumY += point.y;
+            count++;
+            if (point.timestamp != -1L && point.exposureDuration > 0L) {
+                timestamp = timestamp == -1L ? point.timestamp : Math.min(timestamp, point.timestamp);
+            }
+        }
+
+        if (count > 0) {
+            frameSamples.add(new StreakFrameSample(currentFrame, timestamp, sumX / count, sumY / count));
+        }
+
+        return frameSamples;
+    }
+
+    /**
+     * Enforces monotonic forward motion and a loose timestamp-aware speed check before two streak fragments merge.
+     */
+    private static boolean hasConsistentStreakMotion(List<SourceExtractor.DetectedObject> points,
+                                                     SourceExtractor.DetectedObject lineStart,
+                                                     SourceExtractor.DetectedObject lineEnd,
+                                                     DetectionConfig config) {
+        List<StreakFrameSample> frameSamples = buildStreakFrameSamples(points);
+        if (frameSamples.size() <= 1) {
+            return true;
+        }
+
+        double dx = lineEnd.x - lineStart.x;
+        double dy = lineEnd.y - lineStart.y;
+        double minimumProjectedStep = Math.max(0.5, config.maxStarJitter * 0.5);
+        double directionSign = 0.0;
+        List<Double> projectedSpeeds = new ArrayList<>();
+        boolean hasTimestamps = false;
+
+        double previousProjection = projectionAlongLine(
+                frameSamples.get(0).x,
+                frameSamples.get(0).y,
+                lineStart.x,
+                lineStart.y,
+                dx,
+                dy
+        );
+
+        for (int i = 1; i < frameSamples.size(); i++) {
+            StreakFrameSample previous = frameSamples.get(i - 1);
+            StreakFrameSample current = frameSamples.get(i);
+
+            double currentProjection = projectionAlongLine(current.x, current.y, lineStart.x, lineStart.y, dx, dy);
+            double projectedStep = currentProjection - previousProjection;
+
+            if (Math.abs(projectedStep) < minimumProjectedStep) {
+                return false;
+            }
+
+            double currentDirection = Math.signum(projectedStep);
+            if (directionSign == 0.0) {
+                directionSign = currentDirection;
+            } else if (currentDirection != directionSign) {
+                return false;
+            }
+
+            if (previous.timestamp != -1L && current.timestamp != -1L) {
+                long dt = current.timestamp - previous.timestamp;
+                if (dt <= 0L) {
+                    return false;
+                }
+                projectedSpeeds.add(Math.abs(projectedStep) / dt);
+                hasTimestamps = true;
+            }
+
+            previousProjection = currentProjection;
+        }
+
+        if (hasTimestamps && projectedSpeeds.size() >= 2) {
+            List<Double> sortedSpeeds = new ArrayList<>(projectedSpeeds);
+            sortedSpeeds.sort(Double::compareTo);
+            double medianSpeed = sortedSpeeds.get(sortedSpeeds.size() / 2);
+            if (medianSpeed <= 0.0) {
+                return false;
+            }
+
+            int consistentSegments = 0;
+            for (double speed : projectedSpeeds) {
+                if (Math.abs(speed - medianSpeed) <= (medianSpeed * getStreakTimeConsistencyTolerance(config))) {
+                    consistentSegments++;
+                }
+            }
+            double consistencyRatio = (double) consistentSegments / projectedSpeeds.size();
+            return consistencyRatio >= config.rhythmMinConsistencyRatio;
+        }
+
+        if (!hasTimestamps && frameSamples.size() >= 3) {
+            Track representativeTrack = new Track();
+            for (StreakFrameSample sample : frameSamples) {
+                SourceExtractor.DetectedObject point = createSyntheticPoint(sample.x, sample.y);
+                point.sourceFrameIndex = sample.frameIndex;
+                representativeTrack.addPoint(point);
+            }
+            return hasSteadyRhythm(
+                    representativeTrack,
+                    config.rhythmAllowedVariance,
+                    config.rhythmStationaryThreshold,
+                    config.rhythmMinConsistencyRatio
+            );
+        }
+
+        return true;
+    }
+
+    /**
+     * Validates timestamp consistency for a streak candidate using one aggregated sample per frame.
+     */
+    private static boolean passesStreakTimeConsistency(List<SourceExtractor.DetectedObject> points,
+                                                       DetectionConfig config) {
+        if (points == null || points.size() < 2) {
+            return true;
+        }
+
+        SourceExtractor.DetectedObject[] endpoints = determineStreakLineEndpoints(points);
+        if (endpoints == null) {
+            return true;
+        }
+
+        return hasConsistentStreakMotion(points, endpoints[0], endpoints[1], config);
+    }
+
+    /**
+     * Uses a slightly looser angular tolerance than the initial linker so near-identical same-frame fragments can merge.
+     */
+    private static double getStreakConsolidationAngleTolerance(Track left,
+                                                               Track right,
+                                                               DetectionConfig config) {
+        double baseTolerance = Math.toRadians(config.angleToleranceDegrees);
+        double minimumDegrees = tracksShareFrame(left, right) ? 5.0 : 4.0;
+        return Math.max(baseTolerance, Math.toRadians(minimumDegrees));
+    }
+
+    /**
+     * Keeps final streak consolidation aligned with the more permissive same-frame suspected-streak geometry.
+     */
+    private static double getStreakConsolidationLineTolerance(DetectionConfig config) {
+        return Math.max(getSuspectedStreakLineTolerance(config), config.predictionTolerance * 2.0);
+    }
+
+    /**
+     * Returns the generous relative speed tolerance used for timestamp-aware streak validation.
+     */
+    private static double getStreakTimeConsistencyTolerance(DetectionConfig config) {
+        return Math.max(0.0, config.streakTimeConsistencyTolerance);
+    }
+
+    /**
+     * Returns the minimum frame separation between two tracks, or zero if they overlap in time.
+     */
+    private static int computeStreakFrameGap(Track left, Track right) {
+        int leftStart = getMinFrameIndex(left.points);
+        int leftEnd = getMaxFrameIndex(left.points);
+        int rightStart = getMinFrameIndex(right.points);
+        int rightEnd = getMaxFrameIndex(right.points);
+
+        if (leftEnd < rightStart) {
+            return rightStart - leftEnd;
+        }
+        if (rightEnd < leftStart) {
+            return leftStart - rightEnd;
+        }
+        return 0;
+    }
+
+    /**
+     * Prevents the consolidation pass from bridging large unsupported gaps with too little evidence.
+     */
+    private static boolean passesStreakFrameGapGate(Track left,
+                                                    Track right,
+                                                    int frameGap) {
+        if (frameGap == 0) {
+            return true;
+        }
+
+        if (countUniqueFrames(left) == 1 && countUniqueFrames(right) == 1) {
+            return frameGap <= 1;
+        }
+
+        return frameGap <= 2;
+    }
+
+    /**
+     * Returns the dominant orientation of a track using its frame endpoints when available.
+     */
+    private static double estimateTrackOrientation(Track track) {
+        if (track == null || track.points == null || track.points.isEmpty()) {
+            return Double.NaN;
+        }
+        if (track.points.size() == 1) {
+            return track.points.get(0).angle;
+        }
+
+        SourceExtractor.DetectedObject[] endpoints = determineStreakLineEndpoints(track.points);
+        if (endpoints == null) {
+            return track.points.get(0).angle;
+        }
+        return Math.atan2(endpoints[1].y - endpoints[0].y, endpoints[1].x - endpoints[0].x);
+    }
+
+    /**
+     * Chooses a stable line definition for ordering and consolidation from either frame endpoints or the longest span.
+     */
+    private static SourceExtractor.DetectedObject[] determineStreakLineEndpoints(List<SourceExtractor.DetectedObject> points) {
+        List<StreakFrameSample> frameSamples = buildStreakFrameSamples(points);
+        if (frameSamples.size() >= 2) {
+            StreakFrameSample startSample = frameSamples.get(0);
+            StreakFrameSample endSample = frameSamples.get(frameSamples.size() - 1);
+            if (distance(startSample.x, startSample.y, endSample.x, endSample.y) >= 1.0) {
+                return new SourceExtractor.DetectedObject[]{
+                        createSyntheticPoint(startSample.x, startSample.y),
+                        createSyntheticPoint(endSample.x, endSample.y)
+                };
+            }
+        }
+
+        SourceExtractor.DetectedObject[] farthestPair = findFarthestPair(points);
+        if (farthestPair == null) {
+            return null;
+        }
+
+        if (distance(farthestPair[0].x, farthestPair[0].y, farthestPair[1].x, farthestPair[1].y) < 1.0) {
+            return null;
+        }
+        return farthestPair;
+    }
+
+    /**
+     * Finds the two detections with the largest separation inside one track.
+     */
+    private static SourceExtractor.DetectedObject[] findFarthestPair(List<SourceExtractor.DetectedObject> points) {
+        if (points == null || points.size() < 2) {
+            return null;
+        }
+
+        SourceExtractor.DetectedObject bestStart = null;
+        SourceExtractor.DetectedObject bestEnd = null;
+        double maxDistance = -1.0;
+        for (int i = 0; i < points.size() - 1; i++) {
+            for (int j = i + 1; j < points.size(); j++) {
+                SourceExtractor.DetectedObject left = points.get(i);
+                SourceExtractor.DetectedObject right = points.get(j);
+                double span = distance(left.x, left.y, right.x, right.y);
+                if (span > maxDistance) {
+                    maxDistance = span;
+                    bestStart = left;
+                    bestEnd = right;
+                }
+            }
+        }
+
+        if (bestStart == null || bestEnd == null) {
+            return null;
+        }
+        return new SourceExtractor.DetectedObject[]{bestStart, bestEnd};
+    }
+
+    /**
+     * Merges the unique detections from two tracks while preserving the original detection identities.
+     */
+    private static List<SourceExtractor.DetectedObject> combineTrackPoints(Track left, Track right) {
+        List<SourceExtractor.DetectedObject> combinedPoints = new ArrayList<>();
+        Set<SourceExtractor.DetectedObject> seenPoints = new HashSet<>();
+        for (SourceExtractor.DetectedObject point : left.points) {
+            if (seenPoints.add(point)) {
+                combinedPoints.add(point);
+            }
+        }
+        for (SourceExtractor.DetectedObject point : right.points) {
+            if (seenPoints.add(point)) {
+                combinedPoints.add(point);
+            }
+        }
+        return combinedPoints;
+    }
+
+    /**
+     * Returns whether two tracks share at least one frame.
+     */
+    private static boolean tracksShareFrame(Track left, Track right) {
+        Set<Integer> frames = new HashSet<>();
+        for (SourceExtractor.DetectedObject point : left.points) {
+            frames.add(point.sourceFrameIndex);
+        }
+        for (SourceExtractor.DetectedObject point : right.points) {
+            if (frames.contains(point.sourceFrameIndex)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Counts the unique frames represented by a track.
+     */
+    private static int countUniqueFrames(Track track) {
+        return countUniqueFrames(track.points);
+    }
+
+    /**
+     * Counts the unique frames represented by a list of detections.
+     */
+    private static int countUniqueFrames(List<SourceExtractor.DetectedObject> points) {
+        Set<Integer> frames = new HashSet<>();
+        for (SourceExtractor.DetectedObject point : points) {
+            frames.add(point.sourceFrameIndex);
+        }
+        return frames.size();
+    }
+
+    /**
+     * Returns the strongest peak sigma inside a track so stable tracks sort ahead of weak fragments.
+     */
+    private static double maxTrackPeakSigma(Track track) {
+        double maxPeakSigma = Double.NEGATIVE_INFINITY;
+        for (SourceExtractor.DetectedObject point : track.points) {
+            maxPeakSigma = Math.max(maxPeakSigma, point.peakSigma);
+        }
+        return maxPeakSigma;
+    }
+
+    /**
+     * Returns the earliest frame index represented by the supplied detections.
+     */
+    private static int getMinFrameIndex(List<SourceExtractor.DetectedObject> points) {
+        int minFrameIndex = Integer.MAX_VALUE;
+        for (SourceExtractor.DetectedObject point : points) {
+            minFrameIndex = Math.min(minFrameIndex, point.sourceFrameIndex);
+        }
+        return minFrameIndex == Integer.MAX_VALUE ? -1 : minFrameIndex;
+    }
+
+    /**
+     * Returns the latest frame index represented by the supplied detections.
+     */
+    private static int getMaxFrameIndex(List<SourceExtractor.DetectedObject> points) {
+        int maxFrameIndex = Integer.MIN_VALUE;
+        for (SourceExtractor.DetectedObject point : points) {
+            maxFrameIndex = Math.max(maxFrameIndex, point.sourceFrameIndex);
+        }
+        return maxFrameIndex == Integer.MIN_VALUE ? -1 : maxFrameIndex;
+    }
+
+    /**
+     * Creates a lightweight synthetic point for frame-level motion checks and ordering.
+     */
+    private static SourceExtractor.DetectedObject createSyntheticPoint(double x, double y) {
+        return new SourceExtractor.DetectedObject(x, y, 0.0, 1);
     }
 
     /**
@@ -1515,7 +2176,19 @@ public class TrackLinker {
                                               double originY,
                                               double dx,
                                               double dy) {
-        return ((object.x - originX) * dx) + ((object.y - originY) * dy);
+        return projectionAlongLine(object.x, object.y, originX, originY, dx, dy);
+    }
+
+    /**
+     * Projects one coordinate pair onto a candidate line for frame-level streak motion checks.
+     */
+    private static double projectionAlongLine(double x,
+                                              double y,
+                                              double originX,
+                                              double originY,
+                                              double dx,
+                                              double dy) {
+        return ((x - originX) * dx) + ((y - originY) * dy);
     }
 
     /**

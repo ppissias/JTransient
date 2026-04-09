@@ -330,6 +330,14 @@ Relative speed tolerance for time-based linking.
 - used when timestamps exist
 - allowed speed error also includes a jitter term based on `maxStarJitter`
 
+### `streakTimeConsistencyTolerance` (default `0.50`)
+
+Relative projected-speed tolerance for multi-frame streak tracks.
+
+- used when timestamps exist on streak detections
+- evaluated on one aggregated centroid sample per frame, so same-frame streak fragments do not count as separate time steps
+- intentionally looser than `timeBasedVelocityTolerance` because faint streak parts can be missed or broken up
+
 ### `absoluteMaxPointsRequired` (default `5`)
 
 Upper cap for `minPointsRequired`.
