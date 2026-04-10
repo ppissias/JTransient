@@ -114,6 +114,7 @@ public class ResidualTransientAnalyzerTest {
     @Test
     public void buildsLocalActivityClusterFromLeftoverPointsWithinConfiguredRadius() {
         DetectionConfig config = new DetectionConfig();
+        config.enableLocalActivityClusters = true;
         List<List<SourceExtractor.DetectedObject>> remaining = emptyFrameList(6);
         addPoint(remaining, 1, 300.0, 300.0, 2.0, 2.5);
         addPoint(remaining, 3, 306.0, 306.0, 2.1, 2.4);
