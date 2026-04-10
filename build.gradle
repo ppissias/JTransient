@@ -45,6 +45,8 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 tasks.withType(Javadoc).configureEach {
+    // Keep generating javadocs for publication, but suppress boilerplate warning noise.
+    options.addStringOption('Xdoclint:none', '-quiet')
     if (JavaVersion.current().isJava9Compatible()) {
         options.addBooleanOption('html5', true)
     }
