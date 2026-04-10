@@ -65,6 +65,9 @@ Notes:
 
 ## Basic Usage
 
+The following examples are written as standalone skeletons. Any `load...()` helper
+shown in an example is an application-specific placeholder that you should replace.
+
 ### 1. Auto-tune a configuration
 
 `JTransientAutoTuner` clones the base config, evaluates a representative frame sample, and returns an `AutoTunerResult`.
@@ -73,23 +76,31 @@ Notes:
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.engine.ImageFrame;
 import io.github.ppissias.jtransient.engine.JTransientAutoTuner;
+import java.util.List;
 
-List<ImageFrame> frames = loadFrames();
+public final class AutoTuneExample {
+    public static void main(String[] args) {
+        List<ImageFrame> frames = loadFrames();
+        DetectionConfig baseConfig = new DetectionConfig();
 
-DetectionConfig baseConfig = new DetectionConfig();
+        JTransientAutoTuner.AutoTunerResult tuning = JTransientAutoTuner.tune(
+                frames,
+                baseConfig,
+                JTransientAutoTuner.AutoTuneProfile.BALANCED,
+                (percent, message) -> System.out.printf("%3d%% %s%n", percent, message)
+        );
 
-JTransientAutoTuner.AutoTunerResult tuning = JTransientAutoTuner.tune(
-        frames,
-        baseConfig,
-        JTransientAutoTuner.AutoTuneProfile.BALANCED,
-        (percent, message) -> System.out.printf("%3d%% %s%n", percent, message)
-);
+        DetectionConfig config = tuning.optimizedConfig;
+        System.out.println("Auto-tune success: " + tuning.success);
+        System.out.println(tuning.telemetryReport);
+        if (tuning.finalValidationTelemetry != null) {
+            System.out.println(tuning.finalValidationTelemetry.statusMessage);
+        }
+    }
 
-DetectionConfig config = tuning.optimizedConfig;
-System.out.println("Auto-tune success: " + tuning.success);
-System.out.println(tuning.telemetryReport);
-if (tuning.finalValidationTelemetry != null) {
-    System.out.println(tuning.finalValidationTelemetry.statusMessage);
+    private static List<ImageFrame> loadFrames() {
+        throw new UnsupportedOperationException("Replace with your frame-loading code.");
+    }
 }
 ```
 
@@ -100,33 +111,46 @@ If you do not need to pick a profile explicitly, use the three-argument overload
 This is the main entrypoint. It performs extraction, frame rejection, master-stack generation, optional slow-mover detection, streak linking, time-based linking when timestamps exist, geometric fallback linking, and anomaly rescue.
 
 ```java
+import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.engine.ImageFrame;
 import io.github.ppissias.jtransient.engine.JTransientEngine;
 import io.github.ppissias.jtransient.engine.PipelineResult;
+import java.util.List;
 
-JTransientEngine engine = new JTransientEngine();
+public final class RunPipelineExample {
+    public static void main(String[] args) throws Exception {
+        List<ImageFrame> frames = loadFrames();
+        DetectionConfig config = new DetectionConfig();
+        JTransientEngine engine = new JTransientEngine();
 
-try {
-    PipelineResult result = engine.runPipeline(
-            frames,
-            config,
-            (percent, message) -> System.out.printf("%3d%% %s%n", percent, message)
-    );
+        try {
+            PipelineResult result = engine.runPipeline(
+                    frames,
+                    config,
+                    (percent, message) -> System.out.printf("%3d%% %s%n", percent, message)
+            );
 
-    System.out.println("Tracks found: " + result.tracks.size());
-    System.out.println("Anomalies rescued: " + result.anomalies.size());
-    System.out.println("Slow mover candidates: " + result.slowMoverAnalysis.candidates.size());
-    System.out.println(result.telemetry.generateReport());
+            System.out.println("Tracks found: " + result.tracks.size());
+            System.out.println("Anomalies rescued: " + result.anomalies.size());
+            System.out.println("Slow mover candidates: " + result.slowMoverAnalysis.candidates.size());
+            System.out.println(result.telemetry.generateReport());
 
-    result.tracks.forEach(track -> {
-        System.out.println(
-                "Track points=" + track.points.size()
-                        + " streak=" + track.isStreakTrack
-                        + " suspectedStreak=" + track.isSuspectedStreakTrack
-                        + " timeBased=" + track.isTimeBasedTrack
-        );
-    });
-} finally {
-    engine.shutdown();
+            result.tracks.forEach(track -> {
+                System.out.println(
+                        "Track points=" + track.points.size()
+                                + " streak=" + track.isStreakTrack
+                                + " suspectedStreak=" + track.isSuspectedStreakTrack
+                                + " timeBased=" + track.isTimeBasedTrack
+                );
+            });
+        } finally {
+            engine.shutdown();
+        }
+    }
+
+    private static List<ImageFrame> loadFrames() {
+        throw new UnsupportedOperationException("Replace with your frame-loading code.");
+    }
 }
 ```
 
@@ -151,21 +175,36 @@ Key `PipelineResult` fields:
 If you are iterating on parameters or running UI workflows, you can precompute the median master stack once and pass it into the overloads that accept `providedMasterStack`.
 
 ```java
+import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.engine.FrameTransients;
+import io.github.ppissias.jtransient.engine.ImageFrame;
 import io.github.ppissias.jtransient.engine.JTransientEngine;
 import io.github.ppissias.jtransient.engine.PipelineResult;
+import java.util.List;
 
-JTransientEngine engine = new JTransientEngine();
+public final class ReuseMasterStackExample {
+    public static void main(String[] args) throws Exception {
+        List<ImageFrame> frames = loadFrames();
+        DetectionConfig config = new DetectionConfig();
+        JTransientEngine engine = new JTransientEngine();
 
-try {
-    short[][] masterStack = engine.generateMasterStack(frames, config, null);
+        try {
+            short[][] masterStack = engine.generateMasterStack(frames, config, null);
 
-    PipelineResult pipeline = engine.runPipeline(frames, config, null, masterStack);
+            PipelineResult pipeline = engine.runPipeline(frames, config, null, masterStack);
+            System.out.println("Tracks found: " + pipeline.tracks.size());
 
-    List<FrameTransients> transients =
-            engine.detectTransients(frames, config, null, masterStack);
-} finally {
-    engine.shutdown();
+            List<FrameTransients> transients =
+                    engine.detectTransients(frames, config, null, masterStack);
+            System.out.println("Frames with exported transients: " + transients.size());
+        } finally {
+            engine.shutdown();
+        }
+    }
+
+    private static List<ImageFrame> loadFrames() {
+        throw new UnsupportedOperationException("Replace with your frame-loading code.");
+    }
 }
 ```
 
@@ -177,21 +216,34 @@ try {
 
 ```java
 import io.github.ppissias.jtransient.engine.FrameTransients;
+import io.github.ppissias.jtransient.engine.ImageFrame;
 import io.github.ppissias.jtransient.engine.JTransientEngine;
+import io.github.ppissias.jtransient.config.DetectionConfig;
+import java.util.List;
 
-JTransientEngine engine = new JTransientEngine();
+public final class DetectTransientsExample {
+    public static void main(String[] args) throws Exception {
+        List<ImageFrame> frames = loadFrames();
+        DetectionConfig config = new DetectionConfig();
+        JTransientEngine engine = new JTransientEngine();
 
-try {
-    List<FrameTransients> frameTransients =
-            engine.detectTransients(frames, config, null);
+        try {
+            List<FrameTransients> frameTransients =
+                    engine.detectTransients(frames, config, null);
 
-    for (FrameTransients frame : frameTransients) {
-        System.out.println(frame.filename + " -> " + frame.transients.size() + " transients");
-        System.out.println("Seed threshold: " + frame.extractionResult.seedThreshold);
-        System.out.println("Grow threshold: " + frame.extractionResult.growThreshold);
+            for (FrameTransients frame : frameTransients) {
+                System.out.println(frame.filename + " -> " + frame.transients.size() + " transients");
+                System.out.println("Seed threshold: " + frame.extractionResult.seedThreshold);
+                System.out.println("Grow threshold: " + frame.extractionResult.growThreshold);
+            }
+        } finally {
+            engine.shutdown();
+        }
     }
-} finally {
-    engine.shutdown();
+
+    private static List<ImageFrame> loadFrames() {
+        throw new UnsupportedOperationException("Replace with your frame-loading code.");
+    }
 }
 ```
 
@@ -202,30 +254,40 @@ This entrypoint is useful when you want JTransient's extraction and stationary-s
 If you only want object detection on one image, call `SourceExtractor.extractSources(...)` directly.
 
 ```java
+import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 
-DetectionConfig config = new DetectionConfig();
+public final class ExtractSingleFrameExample {
+    public static void main(String[] args) {
+        short[][] image = loadImage();
+        DetectionConfig config = new DetectionConfig();
 
-SourceExtractor.ExtractionResult extraction = SourceExtractor.extractSources(
-        image,
-        config.detectionSigmaMultiplier,
-        config.minDetectionPixels,
-        config
-);
+        SourceExtractor.ExtractionResult extraction = SourceExtractor.extractSources(
+                image,
+                config.detectionSigmaMultiplier,
+                config.minDetectionPixels,
+                config
+        );
 
-System.out.println("Objects: " + extraction.objects.size());
-System.out.println("Background median: " + extraction.backgroundMetrics.median);
-System.out.println("Background sigma: " + extraction.backgroundMetrics.sigma);
+        System.out.println("Objects: " + extraction.objects.size());
+        System.out.println("Background median: " + extraction.backgroundMetrics.median);
+        System.out.println("Background sigma: " + extraction.backgroundMetrics.sigma);
 
-for (SourceExtractor.DetectedObject object : extraction.objects) {
-    System.out.printf(
-            "x=%.2f y=%.2f area=%.0f elongation=%.2f streak=%s%n",
-            object.x,
-            object.y,
-            object.pixelArea,
-            object.elongation,
-            object.isStreak
-    );
+        for (SourceExtractor.DetectedObject object : extraction.objects) {
+            System.out.printf(
+                    "x=%.2f y=%.2f area=%.0f elongation=%.2f streak=%s%n",
+                    object.x,
+                    object.y,
+                    object.pixelArea,
+                    object.elongation,
+                    object.isStreak
+            );
+        }
+    }
+
+    private static short[][] loadImage() {
+        throw new UnsupportedOperationException("Replace with your single-frame loading code.");
+    }
 }
 ```
 
