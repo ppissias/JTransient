@@ -12,12 +12,14 @@ def githubRepoUrl = 'https://github.com/ppissias/JTransient'
 def githubRepoScmUrl = 'https://github.com/ppissias/JTransient.git'
 def centralArtifactId = 'jtransient'
 def centralStagingRepository = layout.buildDirectory.dir('repos/central-staging')
-def pomDeveloperId = providers.gradleProperty('pomDeveloperId').orElse('ppissias')
-def pomDeveloperName = providers.gradleProperty('pomDeveloperName').orElse('Petros Pissias')
-def pomDeveloperEmail = providers.gradleProperty('pomDeveloperEmail').orElse('petrospis@gmail.com')
-def pomDeveloperOrganization = providers.gradleProperty('pomDeveloperOrganization').orElse('GitHub')
-def pomDeveloperOrganizationUrl = providers.gradleProperty('pomDeveloperOrganizationUrl').orElse('https://github.com/ppissias')
-def inMemorySigningKey = providers.gradleProperty('signingKey').orNull
+def pomDeveloperId = providers.gradleProperty('pomDeveloperId')
+def pomDeveloperName = providers.gradleProperty('pomDeveloperName')
+def pomDeveloperEmail = providers.gradleProperty('pomDeveloperEmail')
+def pomDeveloperOrganization = providers.gradleProperty('pomDeveloperOrganization')
+def pomDeveloperOrganizationUrl = providers.gradleProperty('pomDeveloperOrganizationUrl')
+def inMemorySigningKey = providers.gradleProperty('signingKey')
+        .map { it.replace("\\n", "\n") }
+        .orNull
 def inMemorySigningPassword = providers.gradleProperty('signingPassword').orNull
 def hasInMemorySigning = inMemorySigningKey != null && inMemorySigningPassword != null
 def hasLegacySigning = findProperty('signing.keyId') != null &&
@@ -124,6 +126,32 @@ tasks.register('validateCentralReleaseConfiguration') {
     }
 }
 
+tasks.register('validateRequiredProjectProperties') {
+    description = 'Checks that required Gradle properties are configured for project metadata.'
+    group = 'verification'
+
+    doLast {
+        def requiredProperties = [
+                pomDeveloperId             : pomDeveloperId.orNull,
+                pomDeveloperName           : pomDeveloperName.orNull,
+                pomDeveloperEmail          : pomDeveloperEmail.orNull,
+                pomDeveloperOrganization   : pomDeveloperOrganization.orNull,
+                pomDeveloperOrganizationUrl: pomDeveloperOrganizationUrl.orNull
+        ]
+
+        def missingProperties = requiredProperties.findResults { propertyName, propertyValue ->
+            propertyValue != null && !propertyValue.trim().isEmpty() ? null : propertyName
+        }
+
+        if (!missingProperties.isEmpty()) {
+            throw new GradleException(
+                    'Missing required Gradle properties: ' + missingProperties.join(', ') + '. ' +
+                            'Configure them in gradle.properties or via ORG_GRADLE_PROJECT_* environment variables.'
+            )
+        }
+    }
+}
+
 tasks.withType(Sign).configureEach {
     onlyIf('Central staging publication requested') {
         gradle.taskGraph.allTasks.any { task ->
@@ -135,7 +163,20 @@ tasks.withType(Sign).configureEach {
 }
 
 tasks.named('publishMavenJavaPublicationToCentralStagingRepository') {
+    dependsOn tasks.named('validateRequiredProjectProperties')
     dependsOn tasks.named('validateCentralReleaseConfiguration')
+}
+
+tasks.named('generatePomFileForMavenJavaPublication') {
+    dependsOn tasks.named('validateRequiredProjectProperties')
+}
+
+tasks.named('publishMavenJavaPublicationToMavenLocal') {
+    dependsOn tasks.named('validateRequiredProjectProperties')
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('validateRequiredProjectProperties')
 }
 
 tasks.register('bundleCentralPortal', Zip) {
