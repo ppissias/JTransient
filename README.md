@@ -26,7 +26,7 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 
 ## Build
 
-This repository is a Gradle Java library project:
+This repository is a Gradle Java library project. Install a local JDK first and make sure `java` is available on `PATH`, or that `JAVA_HOME` points to the JDK installation.
 
 ```powershell
 .\gradlew.bat build
@@ -60,8 +60,8 @@ Notes:
 
 - frames must all have the same dimensions
 - the data should already be aligned/registered to the same pixel grid
-- the engine sorts the supplied `List<ImageFrame>` in place by `sequenceIndex` before processing
-- time-based linking only activates when timestamps are present
+- `sequenceIndex` should be zero-based, contiguous, and chronological (`0..frames.size()-1`); the engine sorts the supplied `List<ImageFrame>` in place by this value, and some per-frame exports use it as a frame-list index
+- time-based linking activates when timestamps are present; for reliable time-based tracking, populate timestamps consistently and in increasing capture order, or leave them as `-1` and rely on geometric linking
 
 ## Basic Usage
 
@@ -108,7 +108,7 @@ If you do not need to pick a profile explicitly, use the three-argument overload
 
 ### 2. Run the full pipeline
 
-This is the main entrypoint. It performs extraction, frame rejection, master-stack generation, optional slow-mover detection, streak linking, time-based linking when timestamps exist, geometric fallback linking, and anomaly rescue.
+This is the main entrypoint. It performs extraction, frame rejection, master-stack generation, optional slow-mover detection, streak linking, time-based linking when timestamps exist, geometric linking when timestamps are unavailable or `config.enableGeometricTrackLinking` is enabled, and anomaly rescue.
 
 ```java
 import io.github.ppissias.jtransient.config.DetectionConfig;

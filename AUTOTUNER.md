@@ -43,7 +43,7 @@ The result object contains:
 - `telemetryReport`: the full human-readable report
 - `bestStarCount`: stable-star count for the winning sweep entry
 - `bestTransientRatio`: transient ratio for the winning sweep entry
-- `finalValidationTelemetry`: replay of the final config on the same frozen tuning crops
+- `finalValidationTelemetry`: replay of the final config on the same frozen tuning crops, or `null` when tuning falls back before a winner exists
 
 `finalValidationTelemetry` itself includes:
 
@@ -62,9 +62,9 @@ The tuner assumes:
 - frames are already aligned or registered well enough for master-stack comparisons
 - frame pixels are monochrome `short[][]`
 - `sequenceIndex` reflects capture order
-- there are at least `5` frames available
+- there are at least `AUTO_TUNE_SAMPLE_SIZE` frames available, which defaults to `5`
 
-If fewer than `5` frames are available, tuning does not proceed and the tuner falls back to the incoming base config.
+If fewer than `AUTO_TUNE_SAMPLE_SIZE` frames are available, tuning does not proceed and the tuner falls back to the incoming base config.
 
 ## What It Tunes, Measures, Preserves, And Ignores
 
@@ -97,13 +97,14 @@ The rest of this document walks through each stage in detail.
 
 ## 1. Input Snapshot And Frame Sampling
 
-The report starts with an `--- INPUT CONFIG SNAPSHOT ---` section. This exists for two reasons:
+The report starts with a header, profile line, and input-frame order trace. It then writes an `--- INPUT CONFIG SNAPSHOT ---` section. The snapshot exists for two reasons:
 
 - to show what config the run started from
 - to reveal whether a second tuning pass is inheriting fields from a previous tuned output
 
 The report lists:
 
+- the number of incoming frames, whether they arrived sorted by `sequenceIndex`, and a compact sequence-order summary
 - the incoming base config
 - which fields can affect frame sampling
 - which carried-over fields are ignored during frame sampling
@@ -140,7 +141,7 @@ The quality pass now has its own dedicated thresholds:
 
 That separation keeps frame sampling stable even when the tuner later proposes a different detection-side `growSigmaMultiplier`.
 
-### How the 5 tuning frames are selected
+### How the tuning frames are selected
 
 The tuner evaluates all frames, sorts them by `qualityScore`, then selects:
 
@@ -159,14 +160,20 @@ The selected frames are reported with:
 - `FWHM`
 - `Stars`
 - `ShapeStars`
+- `BrightShapeStars`
 - `FwhmStars`
+- `Ecc`
+- `BrightEcc`
 - the final `Score`
 
 Definitions:
 
 - `Stars`: total stars used by the quality analyzer
 - `ShapeStars`: stars usable for shape metrics
+- `BrightShapeStars`: bright stars usable for the dedicated bright-star eccentricity metric
 - `FwhmStars`: stars that survived the FWHM-specific filters
+- `Ecc`: median elongation/eccentricity for usable shape stars
+- `BrightEcc`: median elongation/eccentricity for bright usable shape stars, or `n/a`
 
 The final selected list is sorted by `sequenceIndex` before tuning continues.
 
@@ -536,9 +543,11 @@ This section tells you:
 - which carried-over fields are intentionally ignored during frame sampling
 - the exact quality-side thresholds used for frame sampling
 
+The line immediately before it, `Input Frames -> ...`, reports the incoming frame count, whether the caller supplied frames already sorted by `sequenceIndex`, and a compact order summary.
+
 If repeated runs differ, start here.
 
-### `Selected 5 tuning frames`
+### `Selected N tuning frames`
 
 This tells you whether the sample changed before the sweep.
 

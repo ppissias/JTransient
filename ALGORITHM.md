@@ -26,11 +26,12 @@ The full run is organized into these major phases:
 4. median master-stack generation
 5. master-star extraction
 6. optional slow-mover analysis
-7. streak linking and stationary-star veto filtering
+7. stationary-star veto filtering and streak linking
 8. time-based point linking
 9. optional geometric point linking
-10. anomaly rescue and suspected streak grouping
-11. output assembly and maximum-stack export
+10. anomaly rescue, suspected streak grouping, and streak consolidation
+11. residual-transient analysis
+12. output assembly and maximum-stack export
 
 ## Filtering Overview
 
@@ -40,14 +41,16 @@ Filtering happens at several different levels of the pipeline, and not all of it
   - blobs below `minPixels` never reach shape analysis
   - surviving blobs get per-object measurements such as `peakSigma`, `integratedSigma`, elongation, angle, and `fwhm`
   - shape is first used here to classify an object as streak-like or point-like
-  - non-streaks are then filtered against physical edges and registration voids
+  - non-streaks are filtered against physical sensor edges
+  - all surviving objects are filtered against registration voids
 - frame-level filtering:
   - `FrameQualityAnalyzer` computes shape-derived frame statistics such as median eccentricity and median `fwhm`
   - `SessionEvaluator` uses those statistics to reject bad frames from the run
 - slow-mover candidate filtering:
-  - slow-mover candidates are filtered by elongation, multiple shape-veto functions, median-stack overlap, and optional centered residual support in `slowMoverStack - medianStack`
+  - slow-mover candidates are filtered by elongation, configured median-stack support bounds, and optional candidate-footprint residual support in `slowMoverStack - medianStack`
 - streak filtering:
-  - fast streak discovery filters by angle consistency, directional consistency, `singleStreakMinPeakSigma`, and the binary-star-like streak-shape veto
+  - streak detections are first filtered by the stationary-star veto mask
+  - fast streak discovery then filters by angle consistency, directional consistency, streak time consistency, `singleStreakMinPeakSigma`, and the binary-star-like streak-shape veto for one-point track promotion
 - point-track filtering:
   - point detections are first filtered by the stationary-star veto mask
   - both time-based and geometric point linking require morphology consistency
@@ -55,6 +58,8 @@ Filtering happens at several different levels of the pipeline, and not all of it
 - anomaly filtering:
   - peak-sigma and integrated-sigma rescue filter by object area and significance
 - suspected streak grouping is the anomaly-stage same-frame line pass, using rescued anomaly collinearity within one frame
+- residual-transient analysis:
+  - leftover unclassified non-streak point detections can be mined for weak local rescue candidates and optional broader local activity clusters
 
 ## 1. Border Drift Diagnostics
 
@@ -68,7 +73,7 @@ For each frame, `FrameDriftAnalyzer` determines the valid image footprint by fin
 4. It calculates the padding on each side from this bounding box (e.g., `leftPadding = minX`).
 5. It derives a translation vector:
    - `dx = leftPadding - rightPadding`
-   - `dy = topPadding - bottomPad`
+   - `dy = topPadding - bottomPadding`
 
 The vectors are exported as `PipelineResult.driftPoints`.
 
@@ -241,9 +246,9 @@ Then it runs:
 ```java
 SourceExtractor.extractSources(
         masterStackData,
-        config.masterSigmaMultiplier,
-        config.masterMinDetectionPixels,
-        config
+        extractionConfig.masterSigmaMultiplier,
+        extractionConfig.masterMinDetectionPixels,
+        extractionConfig
 )
 ```
 
@@ -274,12 +279,13 @@ The engine then:
    - fallback `3.0` if too few objects are available
 5. rejects candidates that:
    - fail the elongation threshold
+   - overlap the median-stack mask below the configured `slowMoverMedianSupportOverlapFraction`
+   - overlap the median-stack mask above the configured `slowMoverMedianSupportMaxOverlapFraction`
    - optionally fail the candidate-footprint residual-flux check in `slowMoverStack - medianStack` when `enableSlowMoverResidualFootprintFiltering` is enabled
-   - overlap the median-stack mask by more than the configured `slowMoverMedianSupportMaxOverlapFraction`
 
 The survivors are exported as `PipelineResult.slowMoverAnalysis.candidates`, with per-candidate diagnostics and aggregate slow-mover telemetry. The legacy `PipelineResult.slowMoverCandidates` export is still populated temporarily for compatibility.
 
-## 9. Streak Linking And Stationary-Star Veto Filtering
+## 9. Stationary-Star Veto Filtering And Streak Linking
 
 `TrackLinker.findMovingObjects(...)` starts by delegating to `TrackLinker.filterTransients(...)`.
 
@@ -294,9 +300,25 @@ All detections are split into:
 
 This split uses the streak classification assigned earlier during extraction from elongation and blob size. No new shape measurement is performed here.
 
-### 9.2 Fast streak linking
+### 9.2 Stationary-star veto mask
 
-Streaks bypass the stationary-star veto and are linked first.
+Point detections and streak detections are both filtered against a boolean mask built from `masterStars`.
+
+For every master-star footprint pixel, the tracker paints a disk with radius:
+
+`round(maxStarJitter / 2.0)`, minimum `1`
+
+Then each point-like or streak-like object is checked:
+
+1. count how many footprint pixels touch the mask
+2. compute `overlapFraction = overlapCount / rawPixels.size()`
+3. purge the object if `overlapFraction > maxMaskOverlapFraction`
+
+The surviving point detections are the inputs to point-track linking. The surviving streak detections are the inputs to fast streak linking and are also preserved in the merged transient export. The exported `allTransients` list contains the full post-veto transient population carried through tracking, while `unclassifiedTransients` contains only the detections that remain after tracks and anomalies are assigned.
+
+### 9.3 Fast streak linking
+
+Only post-veto streak detections are linked.
 
 For each unmatched streak:
 
@@ -305,6 +327,7 @@ For each unmatched streak:
 3. require the streak angles to agree
 4. establish a forward direction from the first valid jump
 5. require later jumps to stay directionally consistent
+6. require the candidate streak history to pass streak time/motion consistency
 
 Single-frame streaks are only kept if:
 
@@ -314,25 +337,11 @@ Single-frame streaks are only kept if:
 After multi-point streak linking finishes, the unmatched single streaks are evaluated separately:
 
 - streaks that pass both checks above become one-point `streakTracks`
-- all other unmatched streaks remain preserved standalone streak detections and are merged into the exported transient list
+- all other unmatched post-veto streaks remain preserved standalone streak detections and are merged into the exported transient list
 
 Rejected binary-star-like streaks still increment `TrackerTelemetry.rejectedBinaryStarStreakShape`, but they are rejected only from single-streak track promotion, not from standalone export.
 
-### 9.3 Stationary-star veto mask
-
-Point detections are filtered against a boolean mask built from `masterStars`.
-
-For every master-star footprint pixel, the tracker paints a disk with radius:
-
-`round(maxStarJitter / 2.0)`, minimum `1`
-
-Then each point-like object is checked:
-
-1. count how many footprint pixels touch the mask
-2. compute `overlapFraction = overlapCount / rawPixels.size()`
-3. purge the object if `overlapFraction > maxMaskOverlapFraction`
-
-The surviving point detections are the inputs to point-track linking. The exported `allTransients` list contains the full post-veto transient population carried through tracking, while `unclassifiedTransients` contains only the detections that remain after tracks and anomalies are assigned.
+Streak time/motion consistency is evaluated using one centroid sample per frame. When timestamps are available, projected speeds must stay within `streakTimeConsistencyTolerance`. Without timestamps, multi-frame streak candidates use the same steady-rhythm logic as geometric point tracks.
 
 ## 10. Time-Based Point Linking
 
@@ -475,25 +484,64 @@ Elongation and measured blob angle are not required to seed the line. Once a sam
 
 The pass can return multiple disjoint suspected streak tracks from one frame. It repeatedly removes the accepted line and searches the remaining rescued anomalies from that frame again.
 
-If an integrated anomaly is absorbed into a suspected streak track, it is removed from the standalone anomaly list. The final returned categories are therefore mutually exclusive:
+If a rescued anomaly is absorbed into a suspected streak track, it is removed from the standalone anomaly list. The final returned categories are therefore mutually exclusive:
 
 - tracks in `TrackingResult.tracks` and `PipelineResult.tracks`
-- suspected same-frame streak groupings are still returned through those same `tracks` lists, flagged by `Track.isSuspectedStreakTrack`
+- standalone suspected same-frame streak groupings are still returned through those same `tracks` lists, flagged by `Track.isSuspectedStreakTrack`
 - standalone anomalies (`PEAK_SIGMA` or `INTEGRATED_SIGMA`) in `TrackingResult.anomalies` and `PipelineResult.anomalies`
 
-## 14. Output Assembly
+### 13.4 Final streak consolidation
+
+After suspected streak grouping, the tracker runs `consolidateStreakTracks(...)` over confirmed streak tracks and suspected streak tracks.
+
+This pass:
+
+1. orders stronger confirmed streaks ahead of weaker suspected fragments
+2. normalizes same-frame streak-fragment ordering along the best-fit streak axis
+3. merges streak-like tracks when they pass frame-gap, angle, line-error, and motion-consistency checks
+4. promotes a merged track to `isStreakTrack` if it contains a confirmed streak or spans multiple frames
+
+This means a suspected same-frame grouping can remain as a standalone suspected track, or it can be absorbed into a confirmed streak track when the geometry and motion checks support that merge.
+
+## 14. Residual Transient Analysis
+
+After tracking and anomaly export, `JTransientEngine.runPipeline(...)` runs:
+
+```java
+ResidualTransientAnalyzer.analyze(trackResult.unclassifiedTransients, config)
+```
+
+This stage only operates when `enableResidualTransientAnalysis` is true. It looks at leftover unclassified non-streak point detections after normal tracks and standalone anomalies have already been removed.
+
+The residual analyzer can export:
+
+- `localRescueCandidates`, when `enableLocalRescueCandidates` is true
+- `localActivityClusters`, when `enableLocalActivityClusters` is true
+
+Local rescue candidates are ranked weak local patterns classified as:
+
+- `MICRO_DRIFT`
+- `SPARSE_LOCAL_DRIFT`
+- `LOCAL_REPEAT`
+
+Accepted local rescue candidates consume their detections before optional local activity clustering runs. Local activity clusters then group remaining nearby detections by `localActivityClusterRadiusPixels` and require at least `localActivityClusterMinFrames` unique frames.
+
+The result is exported as `PipelineResult.residualTransientAnalysis`; it does not add entries to `PipelineResult.tracks` or `PipelineResult.anomalies`.
+
+## 15. Output Assembly
 
 At the end of the run, the engine assembles:
 
 - confirmed tracks
 - standalone anomalies
-- suspected streak tracks folded into the returned track list
+- standalone or consolidated suspected streak tracks folded into the returned track list
 - pipeline telemetry
 - tracker telemetry
 - median master stack
 - master-star detections
 - slow-mover stack and candidates
 - merged per-frame transients
+- residual-transient analysis
 - master veto mask
 - drift vectors
 
@@ -501,6 +549,7 @@ The main UI-facing tracking outputs are therefore:
 
 - `PipelineResult.tracks`
 - `PipelineResult.anomalies`
+- `PipelineResult.residualTransientAnalysis`
 - `Track.isSuspectedStreakTrack` on entries inside `PipelineResult.tracks`
 
 It also generates `maximumStackData` with `MasterMapGenerator.createMaximumMasterStack(...)`. This maximum stack is exported for visualization or downstream analysis.
@@ -516,6 +565,7 @@ The full algorithm is intentionally layered:
 5. try the strictest track linker first
 6. optionally fall back to looser geometry when timestamps are available, and require it when timestamps are missing
 7. rescue strong one-frame events at the end as either peak-sigma or integrated-sigma anomalies
-8. regroup some faint integrated anomalies into same-frame suspected streak tracks
+8. regroup collinear rescued anomalies into same-frame suspected streak tracks
+9. mine leftover unclassified point detections for weaker local residual patterns
 
 That layering is what lets `runPipeline(...)` handle slow point-like movers, fast streaks, faint same-frame streak fragments, and one-frame flashes within the same overall engine.

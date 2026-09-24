@@ -18,13 +18,14 @@ The full engine is assembled from these stages:
 4. session-level frame rejection
 5. median master-stack generation or reuse
 6. master-star extraction
-7. stationary-star veto masking
-8. optional slow-mover stack analysis
-9. streak linking
+7. optional slow-mover stack analysis
+8. stationary-star veto masking
+9. fast streak linking
 10. time-based point linking when timestamps exist
-11. geometric fallback linking
-12. anomaly rescue
-13. maximum-stack export
+11. geometric point linking when timestamps are missing or explicitly enabled
+12. anomaly rescue, suspected same-frame streak grouping, and streak consolidation
+13. residual transient analysis
+14. maximum-stack export
 
 Different entrypoints execute different subsets of that sequence.
 
@@ -101,11 +102,11 @@ What it does:
 1. evaluates frame quality across the sequence
 2. selects a representative sample of frames
 3. builds several interior crops from those frames
-4. estimates a rough initial jitter baseline
+4. calibrates `maxStarJitter` from sampled crop stars
 5. sweeps detection sigma, grow sigma, minimum pixels, and mask overlap
 6. scores each combination against cropped master-stack behavior
-7. measures stable-star jitter and elongation from the winning combination
-8. returns an optimized config clone
+7. validates the winning combination against the frozen tuning crops
+8. returns an optimized config on success, or falls back to the base config
 
 What it returns:
 
@@ -149,7 +150,7 @@ What it returns:
 
 What it does not do:
 
-- no per-frame `SourceExtractor` pass
+- no main transient `SourceExtractor` pass; the quality analyzer still extracts quality-reference stars
 - no drift diagnostics
 - no master-star extraction
 - no transients export
@@ -188,9 +189,9 @@ What it does:
 6. extracts `masterStars` from that stack
 7. calls `TrackLinker.filterTransients(...)`
    - separates streaks from point detections
-   - links fast streaks
    - builds the stationary-star veto mask
-   - removes masked point sources
+   - removes masked point sources and masked streaks
+   - links surviving fast streaks
    - merges surviving point transients and preserved streak detections
 
 What it returns:
@@ -240,14 +241,15 @@ What it does:
 3. extracts the master-star map
 4. optionally builds and filters the slow-mover stack
 5. calls `TrackLinker.findMovingObjects(...)`
-   - fast streak linking
    - stationary-star veto masking
+   - fast streak linking
    - time-based point linking when timestamps are available
-   - geometric fallback point linking
+   - geometric point linking when timestamps are missing or `enableGeometricTrackLinking` is enabled
    - anomaly rescue
-   - residual transient analysis on leftover non-streak point detections
+   - suspected same-frame streak grouping and streak consolidation
 6. records pipeline and tracker telemetry
-7. builds the maximum stack for export
+7. runs residual transient analysis on leftover non-streak point detections
+8. builds the maximum stack for export
 
 What it returns:
 
@@ -282,6 +284,9 @@ They still do the following:
 - master-star extraction from the provided stack
 - stationary-star filtering
 - track linking, if you called `runPipeline(...)`
+- slow-mover analysis, if you called `runPipeline(...)` and it is enabled
+- anomaly rescue and residual transient analysis, if you called `runPipeline(...)`
+- maximum-stack export, if you called `runPipeline(...)`
 
 So `providedMasterStack` is a performance shortcut, not a full cached pipeline state.
 

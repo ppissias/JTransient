@@ -6,7 +6,7 @@ All fields are public and mutable. A few implementation details matter when you 
 
 - `JTransientEngine` may raise `voidProximityRadius` during drift diagnostics if the data demands it
 - the engine uses stage-local config overrides for master-star and slow-mover extraction so the caller's config object is not left mutated afterward
-- `JTransientAutoTuner.tune(...)` clones the supplied config and returns an optimized clone; it does not mutate the original reference unless you reuse the returned object
+- `JTransientAutoTuner.tune(...)` clones configs while searching and returns an optimized clone on success; fallback paths may return the original base config reference
 
 This document tracks the fields that actually exist in `src/main/java/io/github/ppissias/jtransient/config/DetectionConfig.java`.
 
@@ -53,7 +53,7 @@ Dead zone around the physical image border.
 Threshold fraction used to define black registration voids.
 
 - extraction computes `voidValueThreshold = backgroundMedian * voidThresholdFraction`
-- border drift diagnostics also use it when scanning inward from the image edges
+- border drift diagnostics use a separate signed-short padding threshold when scanning inward from the image edges
 
 ### `voidProximityRadius` (default `20`)
 
@@ -85,6 +85,14 @@ Minimum `peakSigma` required for a one-point streak track.
 - used after streak linking
 - unmatched single-frame streaks below this significance stay as preserved standalone streak detections instead of becoming one-point streak tracks
 
+### `enableBinaryStarLikeStreakShapeVeto` (default `true`)
+
+Enables the binary-star-like shape veto for unmatched single-frame streaks.
+
+- when enabled, short wide single-frame streaks that look like merged double stars can be rejected before promotion to one-point streak tracks
+- only applies to unmatched single-frame streak candidates
+- disabling it preserves compatibility with cases where such shapes are expected real streaks
+
 ### `bgClippingIterations` (default `3`)
 
 Number of sigma-clipping passes for the histogram-based background estimate.
@@ -99,11 +107,12 @@ Sigma width used to clamp the histogram bounds during background estimation.
 - lower values clip bright structure more aggressively
 - higher values preserve more of the original histogram
 
-### `strictExposureKinematics` (default `false`)
+### `strictExposureKinematics` (default `true`)
 
 Optional physical speed limit for point-like detections.
 
-- used in both time-based and geometric linking
+- used in time-based point linking when timestamps and exposure durations exist
+- not used by the geometric fallback linker
 - if enabled, a point source is not allowed to jump farther than its footprint and exposure time imply
 - useful when long exposures should physically blur fast movers into streaks
 - not ideal for short glints or intermittent flashes
@@ -166,7 +175,7 @@ Controls the dynamic elongation threshold for slow-mover candidates.
 
 Slow-mover candidates now pass through a simpler artifact filter after this baseline check.
 
-- any surviving candidate must overlap the median-stack artifact mask within the configured support band
+- any surviving candidate must have median-stack artifact-mask overlap within the configured support band
 - the branch can also require enough positive residual flux on the candidate's own detected footprint in `slowMoverStack - medianStack`
 - the stage-by-stage outcome is reported through `PipelineResult.telemetry.slowMoverTelemetry`
 - accepted candidates and their per-candidate diagnostics are exported through `PipelineResult.slowMoverAnalysis`
@@ -225,7 +234,7 @@ Minimum blob size for the quality-analysis extraction pass.
 
 - used together with `qualitySigmaMultiplier`
 
-### `qualityBrightStarPeakSigmaOffset` (default `8.0`)
+### `qualityBrightStarPeakSigmaOffset` (default `30.0`)
 
 Additional peak sigma required above `qualitySigmaMultiplier` before a measured quality star
 contributes to the bright-star eccentricity metric.
@@ -337,6 +346,14 @@ Relative projected-speed tolerance for multi-frame streak tracks.
 - used when timestamps exist on streak detections
 - evaluated on one aggregated centroid sample per frame, so same-frame streak fragments do not count as separate time steps
 - intentionally looser than `timeBasedVelocityTolerance` because faint streak parts can be missed or broken up
+
+### `enableGeometricTrackLinking` (default `false`)
+
+Controls whether the frame-agnostic geometric point-track linker runs when timestamps are available.
+
+- when timestamps are available, `false` uses the time-based linker without the geometric point-linking fallback
+- when timestamps are missing, geometric linking still runs because it is the only point-track linker available
+- only affects point-track linking; streak linking still runs separately
 
 ### `absoluteMaxPointsRequired` (default `5`)
 
@@ -500,7 +517,7 @@ Enables the object-like local rescue candidate pass.
 - returns weak heuristic candidates as `MICRO_DRIFT`, `SPARSE_LOCAL_DRIFT`, or `LOCAL_REPEAT`
 - these are kept separate from ordinary confirmed tracks
 
-### `enableLocalActivityClusters` (default `true`)
+### `enableLocalActivityClusters` (default `false`)
 
 Enables the broader leftover-point activity clustering pass after accepted local rescue candidates are removed.
 
