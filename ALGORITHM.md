@@ -6,6 +6,8 @@ It does not document the public API surface in general. For that, see `PIPELINE.
 
 ## Input Assumptions
 
+The pipeline expects an ordered set of aligned images, and it uses timestamps when available to link motion more accurately.
+
 The implementation expects:
 
 - all frames to share the same dimensions
@@ -17,6 +19,8 @@ The implementation expects:
 `runPipeline(...)` sorts frames by `sequenceIndex` before the main extraction work. If timestamps are missing, the engine still runs, but point-like mover discovery must rely on geometric linking. When timestamps are available, the time-based linker runs first and the geometric linker becomes an optional secondary pass controlled by `enableGeometricTrackLinking`.
 
 ## High-Level Flow
+
+The pipeline measures image health, builds reference stacks, removes stationary structure, links moving detections, rescues strong leftovers, and packages the results.
 
 The full run is organized into these major phases:
 
@@ -34,6 +38,8 @@ The full run is organized into these major phases:
 12. output assembly and maximum-stack export
 
 ## Filtering Overview
+
+The pipeline applies different filters at different stages so bad pixels, bad frames, stationary stars, weak tracks, and leftover anomalies are handled by the stage best suited to them.
 
 Filtering happens at several different levels of the pipeline, and not all of it is shape-based.
 
@@ -63,6 +69,8 @@ Filtering happens at several different levels of the pipeline, and not all of it
 
 ## 1. Border Drift Diagnostics
 
+This stage measures where registration created empty borders so later detection can avoid treating edge artifacts as real objects.
+
 Before extracting sources, `JTransientEngine` delegates border-padding measurement to `FrameDriftAnalyzer.analyze(...)`.
 
 For each frame, `FrameDriftAnalyzer` determines the valid image footprint by finding the bounding box of real image data:
@@ -80,6 +88,8 @@ The vectors are exported as `PipelineResult.driftPoints`.
 Across the whole sequence, the analyzer also returns the maximum inward padding depth and a recommended safe `voidProximityRadius`. `JTransientEngine` applies that recommendation only if it is larger than the current config value. That keeps the measurement logic pure while preserving the existing conservative extraction behavior.
 
 ## 2. Parallel Extraction And Quality Measurement
+
+Each retained input frame is scanned for objects and scored for quality at the same time.
 
 The engine then processes frames in parallel. Each frame goes through two independent calculations:
 
@@ -102,6 +112,8 @@ At the same time, `PipelineTelemetry.frameExtractionStats` records:
 - grow threshold
 
 ## 3. Single-Frame Extraction Internals
+
+This stage turns bright connected pixels in one image into measured objects with positions, brightness, size, and shape.
 
 `SourceExtractor` is the detector at the heart of the pipeline.
 
@@ -164,6 +176,8 @@ If any virtual-edge test point is out of bounds or falls below the void threshol
 
 ## 4. Frame Quality Analysis
 
+This stage asks whether each frame looks sharp, stable, and well exposed enough to trust.
+
 `FrameQualityAnalyzer.evaluateFrame(...)` runs a stricter extraction pass using:
 
 - `qualitySigmaMultiplier`
@@ -191,6 +205,8 @@ These are frame-quality filters, not object-track filters. Shape is used here on
 If the analyzer cannot compute a meaningful median, it falls back to `errorFallbackValue`.
 
 ## 5. Session-Level Frame Rejection
+
+This stage compares frames against the rest of the session and removes frames that look like outliers.
 
 Once all frames have been measured, `SessionEvaluator.rejectOutlierFrames(...)` decides which frames remain in the run.
 
@@ -221,6 +237,8 @@ Rejected frames are recorded in `PipelineTelemetry.rejectedFrames`. Only the ret
 
 ## 6. Median Master Stack
 
+This stage builds a stable sky reference by taking the median value at every pixel across the good frames.
+
 If the caller did not pass a `providedMasterStack`, the engine builds one from the retained frames with `MasterMapGenerator.createMedianMasterStack(...)`.
 
 For each pixel coordinate:
@@ -234,6 +252,8 @@ For each pixel coordinate:
 This erases many transient or moving features while preserving the stationary sky.
 
 ## 7. Master-Star Extraction
+
+In plain English, this stage finds the stationary objects in the median stack so they can be masked out later.
 
 The engine next extracts stationary objects from the median master stack using a stage-local extraction config:
 
@@ -257,6 +277,8 @@ The resulting `masterStars` are the stationary reference objects used for veto m
 ## 8. Optional Slow-Mover Analysis
 
 If `enableSlowMoverDetection` is true, the engine generates a second reference stack with `MasterMapGenerator.createSlowMoverMasterStack(...)`.
+
+In plain English, the engine builds a normal median stack and a mask of the objects visible there, then builds a special slow-mover stack that favors the brighter middle frame values, detects objects in that stack, and rejects detections whose elongation, median-mask overlap, or remaining flux after subtracting the median stack do not look like genuine slow movers.
 
 This stack is built by:
 
@@ -286,6 +308,8 @@ The engine then:
 The survivors are exported as `PipelineResult.slowMoverAnalysis.candidates`, with per-candidate diagnostics and aggregate slow-mover telemetry. The legacy `PipelineResult.slowMoverCandidates` export is still populated temporarily for compatibility.
 
 ## 9. Stationary-Star Veto Filtering And Streak Linking
+
+This stage removes detections that overlap known stationary stars, separates streak-like objects from point-like objects, and links compatible streak detections.
 
 `TrackLinker.findMovingObjects(...)` starts by delegating to `TrackLinker.filterTransients(...)`.
 
@@ -345,6 +369,8 @@ Streak time/motion consistency is evaluated using one centroid sample per frame.
 
 ## 10. Time-Based Point Linking
 
+This stage uses timestamps to connect point detections that move with consistent speed, direction, and shape.
+
 If timestamps are available, the tracker attempts time-aware linking before any optional geometric linking.
 
 For each proposed baseline pair `p1 -> p2`:
@@ -387,6 +413,8 @@ The tracker then accepts the highest-ranked non-conflicting candidates first.
 
 ## 11. Geometric Point Linking
 
+This fallback links point detections by straight-line geometry when timestamps are missing or when geometric linking is explicitly enabled.
+
 Unused point detections can go through a time-agnostic geometric linker.
 
 This stage runs when either:
@@ -424,6 +452,8 @@ The tracker keeps the best line-consistent continuation in each later frame.
 
 ## 12. Anti-Hijack Pruning And Rhythm Validation
 
+This stage trims suspicious nearly stationary points from geometric tracks and keeps only tracks whose step pattern looks like real motion.
+
 Before a geometric track is accepted, the tracker runs two cleanup checks.
 
 ### 12.1 Anti-hijack pruning
@@ -448,6 +478,8 @@ It:
 This allows skipped frames while still rejecting erratic or mostly stationary tracks.
 
 ## 13. Anomaly Rescue
+
+This stage gives strong untracked detections one more chance as standalone flashes or same-frame suspected streaks.
 
 If `enableAnomalyRescue` is enabled, the tracker scans merged transient detections that were not consumed by any accepted track.
 
@@ -505,6 +537,8 @@ This means a suspected same-frame grouping can remain as a standalone suspected 
 
 ## 14. Residual Transient Analysis
 
+This final mining stage looks through leftover point detections for weak local patterns that were not strong enough to become normal tracks or anomalies.
+
 After tracking and anomaly export, `JTransientEngine.runPipeline(...)` runs:
 
 ```java
@@ -529,6 +563,8 @@ Accepted local rescue candidates consume their detections before optional local 
 The result is exported as `PipelineResult.residualTransientAnalysis`; it does not add entries to `PipelineResult.tracks` or `PipelineResult.anomalies`.
 
 ## 15. Output Assembly
+
+This stage gathers every accepted product of the run into `PipelineResult` for callers and UIs.
 
 At the end of the run, the engine assembles:
 
@@ -555,6 +591,8 @@ The main UI-facing tracking outputs are therefore:
 It also generates `maximumStackData` with `MasterMapGenerator.createMaximumMasterStack(...)`. This maximum stack is exported for visualization or downstream analysis.
 
 ## Resulting Behavior
+
+In plain English, the algorithm starts with stricter evidence, then progressively rescues weaker but still explainable moving signals.
 
 The full algorithm is intentionally layered:
 
