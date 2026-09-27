@@ -12,11 +12,6 @@ def githubRepoUrl = 'https://github.com/ppissias/JTransient'
 def githubRepoScmUrl = 'https://github.com/ppissias/JTransient.git'
 def centralArtifactId = 'jtransient'
 def centralStagingRepository = layout.buildDirectory.dir('repos/central-staging')
-def pomDeveloperId = providers.gradleProperty('pomDeveloperId')
-def pomDeveloperName = providers.gradleProperty('pomDeveloperName')
-def pomDeveloperEmail = providers.gradleProperty('pomDeveloperEmail')
-def pomDeveloperOrganization = providers.gradleProperty('pomDeveloperOrganization')
-def pomDeveloperOrganizationUrl = providers.gradleProperty('pomDeveloperOrganizationUrl')
 def inMemorySigningKey = providers.gradleProperty('signingKey')
         .map { it.replace("\\n", "\n") }
         .orNull
@@ -28,7 +23,8 @@ def hasLegacySigning = findProperty('signing.keyId') != null &&
 def signingConfigured = hasInMemorySigning || hasLegacySigning
 
 group = 'io.github.ppissias.jtransient'
-version = '1.0.0'
+version = '1.0.1' +
+        ''
 description = 'Java library for transient extraction and moving-object track linking on aligned monochrome astronomical image sequences.'
 
 base {
@@ -79,11 +75,11 @@ publishing {
 
                 developers {
                     developer {
-                        id = pomDeveloperId.get()
-                        name = pomDeveloperName.get()
-                        email = pomDeveloperEmail.get()
-                        organization = pomDeveloperOrganization.get()
-                        organizationUrl = pomDeveloperOrganizationUrl.get()
+                        id = providers.gradleProperty('pomDeveloperId')
+                        name = providers.gradleProperty('pomDeveloperName')
+                        email = providers.gradleProperty('pomDeveloperEmail')
+                        organization = providers.gradleProperty('pomDeveloperOrganization')
+                        organizationUrl = providers.gradleProperty('pomDeveloperOrganizationUrl')
                     }
                 }
 
@@ -125,32 +121,18 @@ tasks.register('validateCentralReleaseConfiguration') {
                             'Set ORG_GRADLE_PROJECT_signingKey and ORG_GRADLE_PROJECT_signingPassword, ' +
                             'or configure signing.keyId/signing.password/signing.secretKeyRingFile.')
         }
-    }
-}
 
-tasks.register('validateRequiredProjectProperties') {
-    description = 'Checks that required Gradle properties are configured for project metadata.'
-    group = 'verification'
-
-    doLast {
-        def requiredProperties = [
-                pomDeveloperId             : pomDeveloperId.orNull,
-                pomDeveloperName           : pomDeveloperName.orNull,
-                pomDeveloperEmail          : pomDeveloperEmail.orNull,
-                pomDeveloperOrganization   : pomDeveloperOrganization.orNull,
-                pomDeveloperOrganizationUrl: pomDeveloperOrganizationUrl.orNull
-        ]
-
-        def missingProperties = requiredProperties.findResults { propertyName, propertyValue ->
-            propertyValue != null && !propertyValue.trim().isEmpty() ? null : propertyName
+        def checkNotBlank = { String propName ->
+            def prop = providers.gradleProperty(propName).orNull
+            if (prop == null || prop.trim().isEmpty()) {
+                throw new GradleException("Missing required Gradle property for publication: '${propName}'.")
+            }
         }
-
-        if (!missingProperties.isEmpty()) {
-            throw new GradleException(
-                    'Missing required Gradle properties: ' + missingProperties.join(', ') + '. ' +
-                            'Configure them in gradle.properties or via ORG_GRADLE_PROJECT_* environment variables.'
-            )
-        }
+        checkNotBlank('pomDeveloperId')
+        checkNotBlank('pomDeveloperName')
+        checkNotBlank('pomDeveloperEmail')
+        checkNotBlank('pomDeveloperOrganization')
+        checkNotBlank('pomDeveloperOrganizationUrl')
     }
 }
 
@@ -165,20 +147,7 @@ tasks.withType(Sign).configureEach {
 }
 
 tasks.named('publishMavenJavaPublicationToCentralStagingRepository') {
-    dependsOn tasks.named('validateRequiredProjectProperties')
     dependsOn tasks.named('validateCentralReleaseConfiguration')
-}
-
-tasks.named('generatePomFileForMavenJavaPublication') {
-    dependsOn tasks.named('validateRequiredProjectProperties')
-}
-
-tasks.named('publishMavenJavaPublicationToMavenLocal') {
-    dependsOn tasks.named('validateRequiredProjectProperties')
-}
-
-tasks.named('check') {
-    dependsOn tasks.named('validateRequiredProjectProperties')
 }
 
 tasks.register('bundleCentralPortal', Zip) {
