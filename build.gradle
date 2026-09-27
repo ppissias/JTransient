@@ -23,8 +23,7 @@ def hasLegacySigning = findProperty('signing.keyId') != null &&
 def signingConfigured = hasInMemorySigning || hasLegacySigning
 
 group = 'io.github.ppissias.jtransient'
-version = '1.0.1' +
-        ''
+version = '1.0.1'
 description = 'Java library for transient extraction and moving-object track linking on aligned monochrome astronomical image sequences.'
 
 base {
