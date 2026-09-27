@@ -68,45 +68,7 @@ Notes:
 The following examples are written as standalone skeletons. Any `load...()` helper
 shown in an example is an application-specific placeholder that you should replace.
 
-### 1. Auto-tune a configuration
-
-`JTransientAutoTuner` clones the base config, evaluates a representative frame sample, and returns an `AutoTunerResult`.
-
-```java
-import io.github.ppissias.jtransient.config.DetectionConfig;
-import io.github.ppissias.jtransient.engine.ImageFrame;
-import io.github.ppissias.jtransient.engine.JTransientAutoTuner;
-import java.util.List;
-
-public final class AutoTuneExample {
-    public static void main(String[] args) {
-        List<ImageFrame> frames = loadFrames();
-        DetectionConfig baseConfig = new DetectionConfig();
-
-        JTransientAutoTuner.AutoTunerResult tuning = JTransientAutoTuner.tune(
-                frames,
-                baseConfig,
-                JTransientAutoTuner.AutoTuneProfile.BALANCED,
-                (percent, message) -> System.out.printf("%3d%% %s%n", percent, message)
-        );
-
-        DetectionConfig config = tuning.optimizedConfig;
-        System.out.println("Auto-tune success: " + tuning.success);
-        System.out.println(tuning.telemetryReport);
-        if (tuning.finalValidationTelemetry != null) {
-            System.out.println(tuning.finalValidationTelemetry.statusMessage);
-        }
-    }
-
-    private static List<ImageFrame> loadFrames() {
-        throw new UnsupportedOperationException("Replace with your frame-loading code.");
-    }
-}
-```
-
-If you do not need to pick a profile explicitly, use the three-argument overload. It defaults to `BALANCED`.
-
-### 2. Run the full pipeline
+### 1. Run the full pipeline
 
 This is the main entrypoint. It performs extraction, frame rejection, master-stack generation, optional slow-mover detection, streak linking, time-based linking when timestamps exist, geometric linking when timestamps are unavailable or `config.enableGeometricTrackLinking` is enabled, and anomaly rescue.
 
@@ -169,6 +131,44 @@ Key `PipelineResult` fields:
 - `slowMoverStackData`, `slowMoverMedianVetoMask`, and `slowMoverCandidates`: legacy slow-mover exports kept temporarily for compatibility
 - `driftPoints`: per-frame border-drift diagnostics
 - `telemetry`: pipeline and tracker counters, including nested `slowMoverTelemetry`
+
+### 2. Auto-tune a configuration
+
+`JTransientAutoTuner` clones the base config, evaluates a representative frame sample, and returns an `AutoTunerResult`.
+
+```java
+import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.engine.ImageFrame;
+import io.github.ppissias.jtransient.engine.JTransientAutoTuner;
+import java.util.List;
+
+public final class AutoTuneExample {
+    public static void main(String[] args) {
+        List<ImageFrame> frames = loadFrames();
+        DetectionConfig baseConfig = new DetectionConfig();
+
+        JTransientAutoTuner.AutoTunerResult tuning = JTransientAutoTuner.tune(
+                frames,
+                baseConfig,
+                JTransientAutoTuner.AutoTuneProfile.BALANCED,
+                (percent, message) -> System.out.printf("%3d%% %s%n", percent, message)
+        );
+
+        DetectionConfig config = tuning.optimizedConfig;
+        System.out.println("Auto-tune success: " + tuning.success);
+        System.out.println(tuning.telemetryReport);
+        if (tuning.finalValidationTelemetry != null) {
+            System.out.println(tuning.finalValidationTelemetry.statusMessage);
+        }
+    }
+
+    private static List<ImageFrame> loadFrames() {
+        throw new UnsupportedOperationException("Replace with your frame-loading code.");
+    }
+}
+```
+
+If you do not need to pick a profile explicitly, use the three-argument overload. It defaults to `BALANCED`.
 
 ### 3. Reuse a precomputed master stack
 
