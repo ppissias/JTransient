@@ -80,13 +80,16 @@ public class MasterMapGenerator {
 
         short[][] masterMap = new short[height][width];
 
-        // Calculate the exact target index once!
-        // Because the array is perfectly sorted, the "maximum of the middle fraction" is simply the upper bound index of that fraction.
+        // Calculate the target index for the slow mover stack
         int bandSize = (int) Math.round(numFrames * middleFraction);
         int targetIndex = Math.min(numFrames - 1, ((numFrames - 1) / 2) + (bandSize / 2));
 
+        //fix issue where with few frames we hit the maximum
+        int maxAllowedSlowMoverIndex = numFrames > 1 ? numFrames - 2 : 0;
+        final int finalTargetIndex = Math.min(targetIndex, maxAllowedSlowMoverIndex);
+
         if (JTransientEngine.DEBUG) {
-            System.out.printf("\n[PHASE 0.5] Generating Slow-Mover Master Stack... (Extracting index %d of %d)%n", targetIndex, numFrames - 1);
+            System.out.printf("\n[PHASE 0.5] Generating Slow-Mover Master Stack... (Extracting index %d of %d)%n", finalTargetIndex, numFrames - 1);
         }
 
         IntStream.range(0, height).parallel().forEach(y -> {
@@ -99,7 +102,7 @@ public class MasterMapGenerator {
                 Arrays.sort(pixelValues);
                 
                 // Extract the pre-calculated target index
-                masterMap[y][x] = PixelEncoding.fromShiftedPositiveInt(pixelValues[targetIndex]);
+                masterMap[y][x] = PixelEncoding.fromShiftedPositiveInt(pixelValues[finalTargetIndex]);
             }
         });
 
