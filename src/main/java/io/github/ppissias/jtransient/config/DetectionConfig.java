@@ -120,10 +120,6 @@ public class DetectionConfig implements Cloneable {
      */
     public boolean enableSlowMoverDetection = true;
 
-    /** Legacy percentile-stack setting; ignored by the maximum-stack detector. */
-    @Deprecated
-    public double slowMoverStackMiddleFraction = 0.75;
-
     // --- Slow-mover extraction thresholds ---
 
     /**
@@ -143,10 +139,6 @@ public class DetectionConfig implements Cloneable {
      * Used on both stacks; lower values enlarge footprints and may merge nearby sources.
      */
     public double masterSlowMoverGrowSigmaMultiplier = 3.5;
-
-    /** Legacy elongation-baseline setting; ignored by the geometric detector. */
-    @Deprecated
-    public double slowMoverBaselineMadMultiplier = 4.5;
 
     /**
      * Minimum length-to-width ratio of a maximum-stack footprint's oriented raw-pixel extents.
@@ -190,14 +182,6 @@ public class DetectionConfig implements Cloneable {
      * it is a heuristic rather than a calibrated probability. Range 0-100; 100 disables the gate.
      */
     public double slowMoverMaxStationaryLikelihood = 100.0;
-
-    /** Legacy residual-footprint setting; ignored by the maximum-stack detector. */
-    @Deprecated
-    public boolean enableSlowMoverResidualFootprintFiltering = true;
-
-    /** Legacy residual-footprint setting; ignored by the maximum-stack detector. */
-    @Deprecated
-    public double slowMoverResidualFootprintMinFluxFraction = 0.10;
 
     // =================================================================
     // 3. FRAME QUALITY ANALYSIS PARAMETERS

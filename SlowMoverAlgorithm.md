@@ -987,16 +987,7 @@ Zero disables the veto while retaining fill-factor diagnostics. A value such as 
 
 # 25. Legacy Parameters From the Previous Algorithm
 
-The following belong to the previous percentile-stack / elongation-baseline approach and do not drive the current detector:
-
-```text
-slowMoverStackMiddleFraction
-slowMoverBaselineMadMultiplier
-enableSlowMoverResidualFootprintFiltering
-slowMoverResidualFootprintMinFluxFraction
-```
-
-These fields remain in `DetectionConfig` for configuration compatibility and are ignored by the maximum-stack detector.
+The previous percentile-stack, elongation-baseline, and residual-footprint settings have been removed from `DetectionConfig`.
 
 The new primary shape window is:
 
@@ -1352,13 +1343,7 @@ createMaximumMasterStack(...)
 
 as the source image for slow-mover candidates.
 
-The old:
-
-```text
-createSlowMoverMasterStack(...)
-```
-
-percentile-stack method is no longer used by the slow-mover detector.
+The former percentile-stack method has been removed.
 
 ---
 

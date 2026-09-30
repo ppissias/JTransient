@@ -66,58 +66,6 @@ public class MasterMapGenerator {
     }
 
     /**
-     * Generates a special Master Stack specifically designed to capture ultra-slow moving objects (like asteroids).
-     * Instead of a pure median (which erases movers), this takes the maximum value of the middle X% of the sorted pixels.
-     * This perfectly captures objects that persist in a small area for a few frames, while still rejecting fast
-     * single-frame anomalies (which are pushed to the extreme high end of the sort).
-     * This legacy stack is not used by the maximum-stack slow-mover detector.
-     *
-     * @deprecated use {@link #createMaximumMasterStack(List)} for slow-mover candidate extraction
-     */
-    @Deprecated
-    public static short[][] createSlowMoverMasterStack(List<ImageFrame> frames, double middleFraction) {
-        if (frames == null || frames.isEmpty()) return null;
-
-        int height = frames.get(0).pixelData.length;
-        int width = frames.get(0).pixelData[0].length;
-        int numFrames = frames.size();
-
-        short[][] masterMap = new short[height][width];
-
-        // Calculate the target index for the slow mover stack
-        int bandSize = (int) Math.round(numFrames * middleFraction);
-        int targetIndex = Math.min(numFrames - 1, ((numFrames - 1) / 2) + (bandSize / 2));
-
-        //fix issue where with few frames we hit the maximum
-        int maxAllowedSlowMoverIndex = numFrames > 1 ? numFrames - 2 : 0;
-        final int finalTargetIndex = Math.min(targetIndex, maxAllowedSlowMoverIndex);
-
-        if (JTransientEngine.DEBUG) {
-            System.out.printf("\n[PHASE 0.5] Generating Slow-Mover Master Stack... (Extracting index %d of %d)%n", finalTargetIndex, numFrames - 1);
-        }
-
-        IntStream.range(0, height).parallel().forEach(y -> {
-            int[] pixelValues = new int[numFrames];
-            for (int x = 0; x < width; x++) {
-                for (int i = 0; i < numFrames; i++) {
-                    pixelValues[i] = PixelEncoding.toShiftedPositiveInt(frames.get(i).pixelData[y][x]);
-                }
-
-                Arrays.sort(pixelValues);
-                
-                // Extract the pre-calculated target index
-                masterMap[y][x] = PixelEncoding.fromShiftedPositiveInt(pixelValues[finalTargetIndex]);
-            }
-        });
-
-        if (JTransientEngine.DEBUG) {
-            System.out.println("  -> Slow-Mover Stack generation complete.");
-        }
-
-        return masterMap;
-    }
-
-    /**
      * Generates a Maximum Value Master Stack from the sequence.
      * This preserves swept source footprints for slow-mover morphology and is also exported for visualization.
      */

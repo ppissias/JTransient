@@ -197,7 +197,7 @@ Maximum allowed stationary-likelihood percentage (0–100). This heuristic is th
 
 The frame measurements use local background subtraction independently of per-frame `SourceExtractor` detections. Frame support is unavailable with fewer than two usable frames; stationarity is unavailable unless at least three supported frames span half the retained sequence. Unavailable measurements cannot veto a candidate. No three-stage stack is built.
 
-`slowMoverStackMiddleFraction`, `slowMoverBaselineMadMultiplier`, `enableSlowMoverResidualFootprintFiltering`, and `slowMoverResidualFootprintMinFluxFraction` remain as legacy configuration fields but are ignored by this detector. No maximum-minus-median subtraction is used.
+The former percentile-stack, elongation-baseline, and residual-footprint settings have been removed. No maximum-minus-median subtraction is used.
 
 Accepted candidates, geometric motion estimates, overlap fractions, frame-support and stationary-likelihood percentages, and stage counters are exported through `PipelineResult.slowMoverAnalysis` and `PipelineResult.telemetry.slowMoverTelemetry`. Each candidate's diagnostics include both percentages, availability flags, and supported/usable frame counts. The aggregate telemetry also exposes aligned percentage and availability lists for accepted candidates.
 

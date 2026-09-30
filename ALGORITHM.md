@@ -291,7 +291,7 @@ The engine then:
 
 The geometric axis ratio uses oriented raw-pixel extents; it is distinct from intensity-weighted moment elongation. The default minimum fill factor is `0.0`, which disables that veto. The default lower mask-overlap bound is also `0.0`, so a single-frame artifact can pass it. The upper bound defaults to `0.80` and rejects footprints mostly explained by persistent sources. The stacks are not subtracted.
 
-The survivors are exported as `PipelineResult.slowMoverAnalysis.candidates`, with footprint-based motion estimates, per-candidate diagnostics, and aggregate telemetry. Frame support and stationary likelihood are heuristics, not temporal confirmation or calibrated probabilities; unavailable measurements do not veto candidates. The stack-only analyzer overload does not have frame evidence. `slowMoverStackData`, `slowMoverMedianVetoMask`, and `slowMoverCandidates` remain compatibility exports. `slowMoverStackMiddleFraction`, `slowMoverBaselineMadMultiplier`, `enableSlowMoverResidualFootprintFiltering`, and `slowMoverResidualFootprintMinFluxFraction` are ignored by this detector.
+The survivors are exported as `PipelineResult.slowMoverAnalysis.candidates`, with footprint-based motion estimates, per-candidate diagnostics, and aggregate telemetry. Frame support and stationary likelihood are heuristics, not temporal confirmation or calibrated probabilities; unavailable measurements do not veto candidates. The stack-only analyzer overload does not have frame evidence. `slowMoverStackData`, `slowMoverMedianVetoMask`, and `slowMoverCandidates` remain compatibility exports. The former percentile-stack and residual-footprint settings have been removed.
 
 ## 9. Stationary-Star Veto Filtering And Streak Linking
 
