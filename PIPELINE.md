@@ -18,14 +18,14 @@ The full engine is assembled from these stages:
 4. session-level frame rejection
 5. median master-stack generation or reuse
 6. master-star extraction
-7. optional slow-mover stack analysis
+7. maximum-stack generation and optional slow-mover candidate analysis
 8. stationary-star veto masking
 9. fast streak linking
 10. time-based point linking when timestamps exist
 11. geometric point linking when timestamps are missing or explicitly enabled
 12. anomaly rescue, suspected same-frame streak grouping, and streak consolidation
 13. residual transient analysis
-14. maximum-stack export
+14. maximum-stack result export
 
 Different entrypoints execute different subsets of that sequence.
 
@@ -204,7 +204,7 @@ What it returns:
 
 What it does not do:
 
-- no slow-mover stack generation
+- no maximum-stack slow-mover analysis
 - no time-based point tracking
 - no geometric point tracking
 - no anomaly rescue
@@ -239,7 +239,7 @@ What it does:
 1. runs the same shared setup as `detectTransients(...)`
 2. generates or reuses the median master stack
 3. extracts the master-star map
-4. optionally builds and filters the slow-mover stack
+4. builds the maximum stack once and, when enabled, finds slow-mover candidates from its geometric footprints, an exact median-stack object mask, and original-frame support measurements
 5. calls `TrackLinker.findMovingObjects(...)`
    - stationary-star veto masking
    - fast streak linking
@@ -249,7 +249,9 @@ What it does:
    - suspected same-frame streak grouping and streak consolidation
 6. records pipeline and tracker telemetry
 7. runs residual transient analysis on leftover non-streak point detections
-8. builds the maximum stack for export
+8. exports the maximum stack, reusing the same array for slow-mover analysis when enabled
+
+The slow-mover branch keeps maximum-stack `DetectedObject` instances whose geometric axis ratio lies within the configured window and whose fill factor passes the optional minimum. It measures each candidate's raw-pixel overlap with an undilated mask of median-stack objects. The optional lower overlap bound and the upper stationary-source veto use that fraction; the two stacks are never subtracted. It also measures frame-support and stationary-likelihood percentages from the original retained frames. Their default thresholds (`0` and `100`) record diagnostics without rejecting candidates. Its output remains a candidate, not a temporally confirmed mover.
 
 What it returns:
 
@@ -269,6 +271,8 @@ What it returns:
 - `PipelineResult.driftPoints`
 - `PipelineResult.telemetry.slowMoverTelemetry`
 - `PipelineResult.maximumStackData`
+
+When slow-mover detection is enabled, `slowMoverStackData` is the same array as `maximumStackData`, and `slowMoverMedianVetoMask` is the same array as `slowMoverAnalysis.medianMask`.
 
 Use this when you want the library to go end-to-end and return all track-like detections.
 

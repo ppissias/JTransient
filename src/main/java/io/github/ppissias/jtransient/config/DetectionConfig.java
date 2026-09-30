@@ -112,57 +112,91 @@ public class DetectionConfig implements Cloneable {
      */
     public int masterMinDetectionPixels = 3;
 
-    // --- Slow-mover stack generation ---
+    // --- Slow-mover candidate detection ---
 
-    /** * Master switch to enable the generation and analysis of the specialized Slow Mover stack.
-     * Set to true to actively hunt for ultra-slow moving objects like distant asteroids.
+    /**
+     * Searches the maximum stack of quality-filtered frames for elongated shape candidates.
+     * These footprints do not confirm motion or form measured tracks.
      */
     public boolean enableSlowMoverDetection = true;
 
-    /** * The fraction of the sorted pixel values around the median to use when generating a Slow Mover Master Stack.
-     * By taking the maximum of this middle band, the stack captures ultra-slow moving objects without including
-     * high-energy single-frame flashes (like fast streaks or cosmic rays).
-     */
+    /** Legacy percentile-stack setting; ignored by the maximum-stack detector. */
+    @Deprecated
     public double slowMoverStackMiddleFraction = 0.75;
 
     // --- Slow-mover extraction thresholds ---
 
-    /** * Minimum pixel area required to flag an elongated object in the master stack as a slow mover candidate. */
+    /**
+     * Minimum connected raw pixels needed to keep a source in either the maximum or median stack.
+     * Higher values reject small noise spots but can miss small sources.
+     */
     public int masterSlowMoverMinPixels = 15;
 
-    /** * The strict detection threshold multiplier used exclusively when scanning the master stack for ultra-slow movers. */
+    /**
+     * Background-sigma multiplier a pixel must exceed to start a source in either stack.
+     * Lower values find fainter sources but may also admit more noise.
+     */
     public double masterSlowMoverSigmaMultiplier = 4;
 
-    /** * The grow sigma multiplier (hysteresis) used exclusively when scanning the master stack for ultra-slow movers. */
+    /**
+     * Background-sigma multiplier neighboring pixels must exceed to join a seeded source.
+     * Used on both stacks; lower values enlarge footprints and may merge nearby sources.
+     */
     public double masterSlowMoverGrowSigmaMultiplier = 3.5;
 
-    /** * Multiplier applied to the MAD to calculate the dynamic elongation threshold for slow movers.
-     * A value of 5.0 means an object must be 5 deviations more elongated than the median to be flagged.
-     */
+    /** Legacy elongation-baseline setting; ignored by the geometric detector. */
+    @Deprecated
     public double slowMoverBaselineMadMultiplier = 4.5;
+
+    /**
+     * Minimum length-to-width ratio of a maximum-stack footprint's oriented raw-pixel extents.
+     * A ratio near one means similar length and width; raising this rejects less elongated sources.
+     */
+    public double slowMoverMinAxisRatio = 1.35;
+    /**
+     * Maximum length-to-width ratio of a maximum-stack footprint's oriented raw-pixel extents.
+     * Lower values reject longer, thinner shapes from this candidate filter.
+     */
+    public double slowMoverMaxAxisRatio = 3.20;
+    /**
+     * Minimum raw-pixel count divided by the area of the oriented bounding rectangle.
+     * Higher values reject sparse or bent shapes; zero disables this filter.
+     */
+    public double slowMoverMinFillFactor = 0.0;
 
     // --- Slow-mover support filtering ---
 
-    /** * Minimum fraction of a slow-mover footprint that must overlap the median-stack artifact mask.
-     * Higher values demand stronger support from the median stack before a candidate is kept.
+    /**
+     * Minimum fraction of a maximum-stack candidate's raw pixels inside the exact median-source mask.
+     * Zero does not require median overlap, so even a single-frame artifact may pass this gate.
      */
     public double slowMoverMedianSupportOverlapFraction = 0.00;
 
-    /** * Maximum fraction of a slow-mover footprint that may overlap the median-stack artifact mask.
-     * Lower values reject candidates that look too similar to stationary median-stack artifacts.
+    /**
+     * Maximum fraction of a maximum-stack candidate's raw pixels inside the exact median-source mask.
+     * Candidates above this limit are rejected as likely stationary; one disables the limit.
      */
-    public double slowMoverMedianSupportMaxOverlapFraction = 0.65;
+    public double slowMoverMedianSupportMaxOverlapFraction = 0.80;
 
-    /** * Enables the candidate-footprint residual-support veto in the slow-mover branch.
-     * When enabled, candidates must retain enough positive residual flux on their own detected footprint
-     * in slowMoverStack - medianStack.
+    /**
+     * Minimum percentage of usable quality-filtered frames with significant localized signal
+     * in a compact aperture inside the candidate footprint. Range 0-100; zero disables the gate.
      */
+    public double slowMoverMinFrameSupport = 0.0;
+
+    /**
+     * Maximum stationary-likelihood percentage allowed for a slow-mover candidate.
+     * The score measures how often supported frame positions cluster in one location;
+     * it is a heuristic rather than a calibrated probability. Range 0-100; 100 disables the gate.
+     */
+    public double slowMoverMaxStationaryLikelihood = 100.0;
+
+    /** Legacy residual-footprint setting; ignored by the maximum-stack detector. */
+    @Deprecated
     public boolean enableSlowMoverResidualFootprintFiltering = true;
 
-    /** * Minimum fraction of the candidate's slow-mover footprint flux that must remain as positive residual
-     * after subtracting the ordinary median stack.
-     * Lower values relax the residual-footprint veto; higher values demand a more genuinely new slow-mover signal.
-     */
+    /** Legacy residual-footprint setting; ignored by the maximum-stack detector. */
+    @Deprecated
     public double slowMoverResidualFootprintMinFluxFraction = 0.10;
 
     // =================================================================

@@ -47,16 +47,24 @@ public class SourceExtractor {
         /** Exact blob footprint used for mask building and diagnostics. */
         public List<Pixel> rawPixels = null;
 
-        /** Pixel footprint size used by the track-linking morphology filters. */
+        /** Number of connected raw pixels used by morphology filters. */
         public double pixelArea;
 
         /** Approximate full width at half maximum derived from image moments. */
         public double fwhm;
 
-        /** Ratio between the principal axes of the detected footprint. */
+        /** Intensity-weighted principal-axis RMS ratio from second moments. */
         public double elongation;
-        /** Dominant orientation of the footprint in radians. */
+        /** Intensity-weighted principal-axis orientation in radians. */
         public double angle;
+        /** Longer extent of the raw-pixel footprint in the orientation frame, including one pixel of width. */
+        public double majorExtent;
+        /** Shorter extent of the raw-pixel footprint in the orientation frame. */
+        public double minorExtent;
+        /** Geometric majorExtent / minorExtent; distinct from moment-based {@link #elongation}. */
+        public double axisRatio;
+        /** Connected pixel count divided by the area of its oriented bounding rectangle. */
+        public double fillFactor;
         /** Whether the footprint is classified as a streak-like object. */
         public boolean isStreak;
         /** Whether the footprint should be treated as noise. */
@@ -96,6 +104,38 @@ public class SourceExtractor {
             this.x = x;
             this.y = y;
             this.value = value;
+        }
+    }
+
+    /**
+     * Oriented geometric measurements of a connected pixel footprint.
+     * Parallel and perpendicular refer to the object's intensity-derived {@link DetectedObject#angle};
+     * major and minor are those two extents sorted by size.
+     */
+    public static final class BlobGeometry {
+        /** Full extent along the object's angle, including one pixel of width. */
+        public final double parallelExtent;
+        /** Full extent across the object's angle, including one pixel of width. */
+        public final double perpendicularExtent;
+        /** Larger of the parallel and perpendicular extents. */
+        public final double majorExtent;
+        /** Smaller of the parallel and perpendicular extents. */
+        public final double minorExtent;
+        /** Major extent divided by minor extent. */
+        public final double axisRatio;
+        /** Raw-pixel count divided by parallelExtent * perpendicularExtent. */
+        public final double fillFactor;
+        /** Minimum pixel projection along the object's angle, used for streak-profile bins. */
+        public final double minParallel;
+
+        private BlobGeometry(double parallelExtent, double perpendicularExtent, double fillFactor, double minParallel) {
+            this.parallelExtent = parallelExtent;
+            this.perpendicularExtent = perpendicularExtent;
+            this.majorExtent = Math.max(parallelExtent, perpendicularExtent);
+            this.minorExtent = Math.min(parallelExtent, perpendicularExtent);
+            this.axisRatio = majorExtent / Math.max(1.0, minorExtent);
+            this.fillFactor = fillFactor;
+            this.minParallel = minParallel;
         }
     }
 
@@ -354,7 +394,7 @@ public class SourceExtractor {
     }
 
     /**
-     * Calculates the centroid, elongation, and angle of a pixel blob using Image Moments.
+     * Calculates intensity moments and oriented raw-pixel geometry for a blob.
      *
      * @param blob extracted footprint pixels
      * @param bg background metrics used for intensity weighting
@@ -418,6 +458,13 @@ public class SourceExtractor {
 
         obj.elongation = Math.sqrt(lambda1 / lambda2);
         obj.angle = 0.5 * Math.atan2(2 * mu11, mu20 - mu02);
+        // The extractor attaches rawPixels after this method returns, so measure from blob here.
+        obj.pixelArea = blob.size();
+        BlobGeometry geometry = measureBlobGeometry(obj, blob);
+        obj.majorExtent = geometry.majorExtent;
+        obj.minorExtent = geometry.minorExtent;
+        obj.axisRatio = geometry.axisRatio;
+        obj.fillFactor = geometry.fillFactor;
 
         double sigmaSq = lambda1 + lambda2;
         obj.fwhm = 2.355 * Math.sqrt(sigmaSq);
@@ -435,6 +482,45 @@ public class SourceExtractor {
         }
 
         return obj;
+    }
+
+    /**
+     * Measures an object's raw-pixel footprint along and across its intensity-derived angle.
+     *
+     * @param obj object with an orientation and connected raw pixels
+     * @return oriented extents, ratio, and fill factor; zero values when no raw pixels exist
+     */
+    public static BlobGeometry measureBlobGeometry(DetectedObject obj) {
+        return measureBlobGeometry(obj, obj.rawPixels);
+    }
+
+    private static BlobGeometry measureBlobGeometry(DetectedObject obj, List<Pixel> pixels) {
+        if (pixels == null || pixels.isEmpty()) {
+            return new BlobGeometry(0.0, 0.0, 0.0, 0.0);
+        }
+
+        double directionX = Math.cos(obj.angle);
+        double directionY = Math.sin(obj.angle);
+        double minParallel = Double.POSITIVE_INFINITY;
+        double maxParallel = Double.NEGATIVE_INFINITY;
+        double minPerpendicular = Double.POSITIVE_INFINITY;
+        double maxPerpendicular = Double.NEGATIVE_INFINITY;
+        for (Pixel pixel : pixels) {
+            double offsetX = pixel.x - obj.x;
+            double offsetY = pixel.y - obj.y;
+            double parallel = offsetX * directionX + offsetY * directionY;
+            double perpendicular = -offsetX * directionY + offsetY * directionX;
+            minParallel = Math.min(minParallel, parallel);
+            maxParallel = Math.max(maxParallel, parallel);
+            minPerpendicular = Math.min(minPerpendicular, perpendicular);
+            maxPerpendicular = Math.max(maxPerpendicular, perpendicular);
+        }
+
+        // The added pixel accounts for the width of the two extreme pixel centers.
+        double parallelExtent = maxParallel - minParallel + 1.0;
+        double perpendicularExtent = maxPerpendicular - minPerpendicular + 1.0;
+        double fillFactor = pixels.size() / (parallelExtent * perpendicularExtent);
+        return new BlobGeometry(parallelExtent, perpendicularExtent, fillFactor, minParallel);
     }
 
     /**
@@ -524,28 +610,13 @@ public class SourceExtractor {
 
         double dx = Math.cos(obj.angle);
         double dy = Math.sin(obj.angle);
-
-        double minPar = Double.MAX_VALUE;
-        double maxPar = -Double.MAX_VALUE;
-        double minPerp = Double.MAX_VALUE;
-        double maxPerp = -Double.MAX_VALUE;
-        for (SourceExtractor.Pixel p : obj.rawPixels) {
-            double vx = p.x - obj.x;
-            double vy = p.y - obj.y;
-            double par = vx * dx + vy * dy;
-            double perp = -vx * dy + vy * dx;
-            if (par < minPar) minPar = par;
-            if (par > maxPar) maxPar = par;
-            if (perp < minPerp) minPerp = perp;
-            if (perp > maxPerp) maxPerp = perp;
-        }
-
-        double length = maxPar - minPar + 1.0;
-        double width = maxPerp - minPerp + 1.0;
+        BlobGeometry geometry = measureBlobGeometry(obj);
+        double minPar = geometry.minParallel;
+        double length = geometry.parallelExtent;
+        double width = geometry.perpendicularExtent;
         if (length < 6.0 || width < 2.0) return false;
 
-        double fillFactor = obj.pixelArea / Math.max(1.0, length * width);
-        if (fillFactor < 0.35) return false;
+        if (geometry.fillFactor < 0.35) return false;
 
         int bins = Math.max(6, Math.min(8, (int) Math.round(length)));
         double binSpan = Math.max(1.0, length / bins);
@@ -670,33 +741,14 @@ public class SourceExtractor {
 
         double dx = Math.cos(obj.angle);
         double dy = Math.sin(obj.angle);
-
-        double minPar = Double.MAX_VALUE;
-        double maxPar = -Double.MAX_VALUE;
-        double minPerp = Double.MAX_VALUE;
-        double maxPerp = -Double.MAX_VALUE;
-
-        // Project every pixel onto the primary and perpendicular axes
-        for (SourceExtractor.Pixel p : obj.rawPixels) {
-            double vx = p.x - obj.x;
-            double vy = p.y - obj.y;
-            double par = vx * dx + vy * dy;       // Distance along the streak
-            double perp = -vx * dy + vy * dx;     // Distance away from the center line (thickness)
-
-            if (par < minPar) minPar = par;
-            if (par > maxPar) maxPar = par;
-            if (perp < minPerp) minPerp = perp;
-            if (perp > maxPerp) maxPerp = perp;
-        }
-
-        double length = maxPar - minPar + 1;
-        double width = maxPerp - minPerp + 1;
+        BlobGeometry geometry = measureBlobGeometry(obj);
+        double minPar = geometry.minParallel;
+        double length = geometry.parallelExtent;
 
         // 1. Fill Factor Check (Catches L-shapes, V-shapes, and diagonal crosses)
         // A true streak (capsule) fills roughly 78% (PI/4) to 100% of its oriented bounding box.
         // Relaxed to 35% to account for ragged edges on faint targets.
-        double fillFactor = obj.pixelArea / (length * width);
-        if (fillFactor < 0.35) {
+        if (geometry.fillFactor < 0.35) {
             return true;
         }
 

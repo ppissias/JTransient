@@ -29,7 +29,7 @@ The full run is organized into these major phases:
 3. session-level frame rejection
 4. median master-stack generation
 5. master-star extraction
-6. optional slow-mover analysis
+6. maximum-stack generation and optional slow-mover candidate analysis
 7. stationary-star veto filtering and streak linking
 8. time-based point linking
 9. optional geometric point linking
@@ -53,7 +53,7 @@ Filtering happens at several different levels of the pipeline, and not all of it
   - `FrameQualityAnalyzer` computes shape-derived frame statistics such as median eccentricity and median `fwhm`
   - `SessionEvaluator` uses those statistics to reject bad frames from the run
 - slow-mover candidate filtering:
-  - slow-mover candidates are filtered by elongation, configured median-stack support bounds, and optional candidate-footprint residual support in `slowMoverStack - medianStack`
+  - maximum-stack footprints are filtered by geometric axis ratio, optional fill factor, exact median-stack mask overlap bounds, and optional frame-support/stationarity gates
 - streak filtering:
   - streak detections are first filtered by the stationary-star veto mask
   - fast streak discovery then filters by angle consistency, directional consistency, streak time consistency, `singleStreakMinPeakSigma`, and the binary-star-like streak-shape veto for one-point track promotion
@@ -276,36 +276,22 @@ The resulting `masterStars` are the stationary reference objects used for veto m
 
 ## 8. Optional Slow-Mover Analysis
 
-If `enableSlowMoverDetection` is true, the engine generates a second reference stack with `MasterMapGenerator.createSlowMoverMasterStack(...)`.
-
-In plain English, the engine builds a normal median stack and a mask of the objects visible there, then builds a special slow-mover stack that favors the brighter middle frame values, detects objects in that stack, and rejects detections whose elongation, median-mask overlap, or remaining flux after subtracting the median stack do not look like genuine slow movers.
-
-This stack is built by:
-
-1. sorting the per-pixel values across frames
-2. computing a band size from `slowMoverStackMiddleFraction`
-3. selecting the upper end of that middle band
-
-This favors objects that persist in roughly the same area across several frames while suppressing many one-frame flashes.
+The engine builds one per-pixel maximum stack from the quality-filtered, aligned frames with `MasterMapGenerator.createMaximumMasterStack(...)`. It uses that stack for candidate extraction and exports the same stack as `PipelineResult.maximumStackData`. The median master stack supplies a separate mask of persistent sources. A maximum-stack footprint is a shape candidate, not a measured track or confirmation of motion.
 
 The engine then:
 
-1. extracts raw candidates from the slow-mover stack using:
+1. extracts connected objects from the maximum stack using:
    - `masterSlowMoverSigmaMultiplier`
    - `masterSlowMoverMinPixels`
    - stage-local `growSigmaMultiplier = masterSlowMoverGrowSigmaMultiplier`
-2. extracts comparison objects from the median master stack with the same slow-mover thresholds
-3. builds a boolean mask from the median-stack comparison objects
-4. computes a dynamic elongation threshold:
-   - `medianElongation + MAD * slowMoverBaselineMadMultiplier`
-   - fallback `3.0` if too few objects are available
-5. rejects candidates that:
-   - fail the elongation threshold
-   - overlap the median-stack mask below the configured `slowMoverMedianSupportOverlapFraction`
-   - overlap the median-stack mask above the configured `slowMoverMedianSupportMaxOverlapFraction`
-   - optionally fail the candidate-footprint residual-flux check in `slowMoverStack - medianStack` when `enableSlowMoverResidualFootprintFiltering` is enabled
+2. extracts comparison objects from the median master stack with the same slow-mover thresholds and paints their raw pixels into an undilated boolean mask
+3. rejects maximum-stack objects below `masterSlowMoverMinPixels`, outside the `slowMoverMinAxisRatio` to `slowMoverMaxAxisRatio` geometric window, or below `slowMoverMinFillFactor` when that filter is enabled
+4. measures the fraction of each remaining object's raw pixels inside the median mask, rejecting values below `slowMoverMedianSupportOverlapFraction` or above `slowMoverMedianSupportMaxOverlapFraction`
+5. when the original quality-filtered frames are available, searches a compact aperture inside each surviving maximum-stack footprint in every usable frame. It records the percentage of frames with significant localized signal, then the percentage of supported frame positions clustered at one location. `slowMoverMinFrameSupport` can reject low frame support and `slowMoverMaxStationaryLikelihood` can reject stationary-looking sources; defaults `0` and `100` disable these vetoes while keeping their measurements.
 
-The survivors are exported as `PipelineResult.slowMoverAnalysis.candidates`, with per-candidate diagnostics and aggregate slow-mover telemetry. The legacy `PipelineResult.slowMoverCandidates` export is still populated temporarily for compatibility.
+The geometric axis ratio uses oriented raw-pixel extents; it is distinct from intensity-weighted moment elongation. The default minimum fill factor is `0.0`, which disables that veto. The default lower mask-overlap bound is also `0.0`, so a single-frame artifact can pass it. The upper bound defaults to `0.80` and rejects footprints mostly explained by persistent sources. The stacks are not subtracted.
+
+The survivors are exported as `PipelineResult.slowMoverAnalysis.candidates`, with footprint-based motion estimates, per-candidate diagnostics, and aggregate telemetry. Frame support and stationary likelihood are heuristics, not temporal confirmation or calibrated probabilities; unavailable measurements do not veto candidates. The stack-only analyzer overload does not have frame evidence. `slowMoverStackData`, `slowMoverMedianVetoMask`, and `slowMoverCandidates` remain compatibility exports. `slowMoverStackMiddleFraction`, `slowMoverBaselineMadMultiplier`, `enableSlowMoverResidualFootprintFiltering`, and `slowMoverResidualFootprintMinFluxFraction` are ignored by this detector.
 
 ## 9. Stationary-Star Veto Filtering And Streak Linking
 
@@ -575,7 +561,7 @@ At the end of the run, the engine assembles:
 - tracker telemetry
 - median master stack
 - master-star detections
-- slow-mover stack and candidates
+- maximum-stack slow-mover candidates and median-source mask
 - merged per-frame transients
 - residual-transient analysis
 - master veto mask
@@ -588,7 +574,7 @@ The main UI-facing tracking outputs are therefore:
 - `PipelineResult.residualTransientAnalysis`
 - `Track.isSuspectedStreakTrack` on entries inside `PipelineResult.tracks`
 
-It also generates `maximumStackData` with `MasterMapGenerator.createMaximumMasterStack(...)`. This maximum stack is exported for visualization or downstream analysis.
+The engine exports `maximumStackData` for visualization or downstream analysis. When slow-mover detection is enabled, the detector reuses this same array.
 
 ## Resulting Behavior
 

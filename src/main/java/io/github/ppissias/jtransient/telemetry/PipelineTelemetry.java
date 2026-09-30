@@ -112,46 +112,82 @@ public class PipelineTelemetry {
     public TrackerTelemetry trackerTelemetry;
 
     /**
-     * Diagnostic summary for the slow-mover detection branch.
+     * Diagnostic summary for morphology candidates from the slow-mover branch.
      */
     public SlowMoverTelemetry slowMoverTelemetry;
 
-    /**
-     * Diagnostic counters for the slow-mover detection branch.
-     */
+    /** Mutable pipeline-facing view of slow-mover morphology and median-mask filtering. */
     public static class SlowMoverTelemetry {
-        /** Raw candidate count extracted from the slow-mover stack before any filtering. */
+        /** Maximum-stack components extracted before candidate filtering. */
         public int rawCandidatesExtracted;
-        /** Candidates that cleared the elongation baseline before median-support and residual checks. */
-        public int candidatesAboveElongationThreshold;
-        /** Candidates that reached the median-support overlap stage after the elongation baseline. */
-        public int candidatesEvaluatedAgainstMasks;
-        /** Candidates rejected because their median-stack overlap stayed below the configured support floor. */
+        /** Components rejected for having too few connected raw pixels. */
+        public int rejectedBelowMinPixels;
+        /** Components below the geometric axis-ratio window. */
+        public int rejectedBelowMinAxisRatio;
+        /** Components above the geometric axis-ratio window. */
+        public int rejectedAboveMaxAxisRatio;
+        /** Components below the optional oriented-box fill-factor floor. */
+        public int rejectedLowFillFactor;
+        /** Shape-qualified components evaluated against the exact median mask. */
+        public int evaluatedAgainstMedianMask;
+        /** Components below the optional median-overlap floor. */
         public int rejectedLowMedianSupport;
-        /** Candidates rejected because their median-stack overlap exceeded the configured support ceiling. */
+        /** Components above the stationary-source median-overlap ceiling. */
         public int rejectedHighMedianSupport;
-        /** Candidates rejected because their slow-mover footprint retained too little positive residual flux. */
-        public int rejectedLowResidualFootprintSupport;
-        /** Number of slow-mover candidates retained after all filters. */
+        /** Components with measurable frame evidence. */
+        public int evaluatedAgainstFrames;
+        /** Components for which no usable frame evidence was available. */
+        public int frameEvidenceUnavailable;
+        /** Components below the optional frame-support percentage floor. */
+        public int rejectedLowFrameSupport;
+        /** Components above the optional stationary-likelihood percentage ceiling. */
+        public int rejectedHighStationaryLikelihood;
+        /** Components retained as morphological slow-mover candidates. */
         public int candidatesDetected;
-        /** Median elongation measured from the raw slow-mover extraction pass. */
-        public double medianElongation;
-        /** Median absolute deviation of the raw elongation distribution, after the safety floor. */
-        public double madElongation;
-        /** Dynamic elongation threshold derived from the baseline elongation distribution. */
-        public double dynamicElongationThreshold;
-        /** Minimum overlap fraction required for a slow mover to be considered supported by the median stack. */
+        /** Effective minimum major/minor footprint extent ratio. */
+        public double minAxisRatioThreshold;
+        /** Effective maximum major/minor footprint extent ratio. */
+        public double maxAxisRatioThreshold;
+        /** Effective minimum fill factor; zero disables the veto. */
+        public double minFillFactorThreshold;
+        /** Effective lower fraction of candidate raw pixels inside the median mask. */
         public double medianSupportOverlapThreshold;
-        /** Maximum overlap fraction allowed before a slow mover is treated as too similar to the median stack. */
+        /** Effective upper fraction of candidate raw pixels inside the median mask. */
         public double medianSupportMaxOverlapThreshold;
-        /** Mean overlap with the median-stack veto mask across candidates that reached the mask stage. */
-        public double avgMedianSupportOverlap;
-        /** Minimum residual-footprint flux fraction required by the slowMover-minus-median veto. */
-        public double residualFootprintMinFluxFractionThreshold;
-        /** Mean residual-footprint flux fraction across candidates retained by the slow-mover stage. */
-        public double avgResidualFootprintFluxFraction;
-        /** Per-candidate overlap fractions for accepted slow movers, in the same order as the exported detections. */
+        /** Effective minimum frame-support percentage. */
+        public double minFrameSupportThreshold;
+        /** Effective maximum stationary-likelihood percentage. */
+        public double maxStationaryLikelihoodThreshold;
+        /** Mean geometric axis ratio across accepted candidates. */
+        public double avgCandidateAxisRatio;
+        /** Minimum accepted geometric axis ratio, or zero for no candidates. */
+        public double minCandidateAxisRatio;
+        /** Maximum accepted geometric axis ratio, or zero for no candidates. */
+        public double maxCandidateAxisRatio;
+        /** Mean overlap across all mask-evaluated components, including vetoed ones. */
+        public double avgMedianMaskOverlap;
+        /** Mean footprint-derived displacement in pixels among accepted candidates. */
+        public double avgEstimatedMotionPixels;
+        /** Mean footprint-derived displacement in source diameters among accepted candidates. */
+        public double avgEstimatedMotionDiameters;
+        /** Axis ratios of size-qualified maximum-stack components. */
+        public final List<Double> candidateAxisRatios = new ArrayList<>();
+        /** Moment elongations of the same size-qualified components. */
+        public final List<Double> candidateMomentElongations = new ArrayList<>();
+        /** Fill factors of the same size-qualified components. */
+        public final List<Double> candidateFillFactors = new ArrayList<>();
+        /** Overlaps of components that reached median-mask evaluation. */
+        public final List<Double> candidateMedianMaskOverlaps = new ArrayList<>();
+        /** Overlaps of accepted candidates, ordered like the exported result list. */
         public final List<Double> candidateMedianSupportOverlaps = new ArrayList<>();
+        /** Frame-support percentages of accepted candidates, in result order. */
+        public final List<Double> candidateFrameSupportPercentages = new ArrayList<>();
+        /** Stationary-likelihood percentages of accepted candidates, in result order. */
+        public final List<Double> candidateStationaryLikelihoodPercentages = new ArrayList<>();
+        /** Whether each accepted candidate has a frame-support measurement. */
+        public final List<Boolean> candidateFrameSupportAvailable = new ArrayList<>();
+        /** Whether each accepted candidate has a stationary-likelihood measurement. */
+        public final List<Boolean> candidateStationaryLikelihoodAvailable = new ArrayList<>();
     }
 
     // --- Processing ---

@@ -138,25 +138,19 @@ Minimum size for master-stack objects.
 
 Master switch for the slow-mover branch.
 
-### `slowMoverStackMiddleFraction` (default `0.75`)
-
-Controls how the slow-mover stack is built.
-
-- the implementation takes the upper end of the middle band of sorted per-pixel values
-- it is not a plain percentile parameter, although it behaves similarly
-- larger values preserve more semi-persistent bright structure
+The slow-mover branch extracts candidate footprints from the maximum stack and builds an exact object-footprint mask from the median stack. It reports morphological candidates; motion is not temporally confirmed.
 
 ### `masterSlowMoverMinPixels` (default `15`)
 
 Minimum blob size for slow-mover extraction.
 
-- applied to both the slow-mover stack and the comparison extraction on the median master stack
+- applied to both the maximum-stack candidates and median-mask objects
 
 ### `masterSlowMoverSigmaMultiplier` (default `4.0`)
 
 Seed threshold for the slow-mover extraction pass.
 
-- applied to the slow-mover stack
+- applied to the maximum stack
 - also applied to the comparison extraction on the median master stack
 
 ### `masterSlowMoverGrowSigmaMultiplier` (default `3.5`)
@@ -165,51 +159,49 @@ Temporary grow threshold used only during the slow-mover extraction pass.
 
 - slow-mover extraction uses a stage-local `growSigmaMultiplier = masterSlowMoverGrowSigmaMultiplier`
 
-### `slowMoverBaselineMadMultiplier` (default `4.5`)
+### `slowMoverMinAxisRatio` (default `1.35`)
 
-Controls the dynamic elongation threshold for slow-mover candidates.
+Minimum geometric major/minor extent ratio of a maximum-stack connected footprint. The moment-based `elongation` remains available as a separate diagnostic.
 
-- threshold = `medianElongation + MAD * slowMoverBaselineMadMultiplier`
-- larger values are stricter
-- smaller values are more sensitive to elongated residuals
+The extents are measured by projecting raw pixels along and across the intensity-derived orientation, adding one pixel to each range. For a capsule-like source, `axisRatio - 1` is an approximate total displacement in source diameters.
 
-Slow-mover candidates now pass through a simpler artifact filter after this baseline check.
+### `slowMoverMaxAxisRatio` (default `3.20`)
 
-- any surviving candidate must have median-stack artifact-mask overlap within the configured support band
-- the branch can also require enough positive residual flux on the candidate's own detected footprint in `slowMoverStack - medianStack`
-- the stage-by-stage outcome is reported through `PipelineResult.telemetry.slowMoverTelemetry`
-- accepted candidates and their per-candidate diagnostics are exported through `PipelineResult.slowMoverAnalysis`
+Maximum geometric axis ratio, intended to exclude longer tracks handled by the normal mover pipeline.
+
+### `slowMoverMinFillFactor` (default `0.0`)
+
+Optional minimum raw-pixel count divided by the area of the oriented bounding rectangle. Zero disables this veto while preserving the measured fill factor in diagnostics.
 
 ### `slowMoverMedianSupportOverlapFraction` (default `0.00`)
 
-Minimum fraction of a slow-mover footprint that must overlap the median-stack artifact mask.
+Minimum fraction of a maximum-stack footprint that must overlap the exact median-stack object mask.
 
 - `0.0` allows a blank-sky candidate through the lower bound
-- larger values require stronger support from the median stack
-- useful when faint star wobble still leaks through with only a token overlap
+- larger values require median-mask support but may reject one-frame transients and real movers alike
 
-### `slowMoverMedianSupportMaxOverlapFraction` (default `0.65`)
+### `slowMoverMedianSupportMaxOverlapFraction` (default `0.80`)
 
-Maximum fraction of a slow-mover footprint that may overlap the median-stack artifact mask.
+Maximum fraction of a maximum-stack footprint that may overlap the exact median-stack mask.
 
-- lower values reject candidates that look too similar to stationary median-stack artifacts
-- should usually stay above `slowMoverMedianSupportOverlapFraction`
-- useful when deep-stack static artifacts still survive with very high median-stack overlap
+- lower values reject candidates that look too similar to stationary median-stack sources
+- `1.0` disables this upper veto; the effective upper bound is clamped to at least `slowMoverMedianSupportOverlapFraction`
 
-### `enableSlowMoverResidualFootprintFiltering` (default `true`)
+### `slowMoverMinFrameSupport` (default `0.0`)
 
-Enables the candidate-footprint residual-support veto in the slow-mover branch.
+Minimum percentage (0–100) of usable quality-filtered frames with significant localized signal inside a maximum-stack candidate's footprint. The measurement searches a small aperture within the footprint in each original frame, so the source can move between positions. It requires integrated signal-to-noise of at least `5.0`; this measurement floor is fixed. Zero disables the rejection gate but still records the measured percentage.
 
-- when enabled, the engine compares the candidate's own slow-mover footprint pixels against the ordinary median stack
-- useful for rejecting candidates that are already mostly explained by the ordinary median stack and only survive because the slow-mover stack sits slightly above threshold
-- disable only for diagnostics or compatibility testing
+### `slowMoverMaxStationaryLikelihood` (default `100.0`)
 
-### `slowMoverResidualFootprintMinFluxFraction` (default `0.10`)
+Maximum allowed stationary-likelihood percentage (0–100). This heuristic is the largest fraction of supported frame positions clustering within the configured star-jitter scale of one location. It is not a calibrated probability. A high value indicates a persistent source at nearly the same position, but genuinely slow motion below the positional resolution can also score high. `100.0` disables the rejection gate but still records the measured percentage.
 
-Minimum fraction of a candidate's slow-mover footprint flux that must remain as positive residual after subtracting the ordinary median stack.
+The frame measurements use local background subtraction independently of per-frame `SourceExtractor` detections. Frame support is unavailable with fewer than two usable frames; stationarity is unavailable unless at least three supported frames span half the retained sequence. Unavailable measurements cannot veto a candidate. No three-stage stack is built.
 
-- lower values relax the residual-footprint veto
-- higher values demand a more genuinely new slow-mover signal
+`slowMoverStackMiddleFraction`, `slowMoverBaselineMadMultiplier`, `enableSlowMoverResidualFootprintFiltering`, and `slowMoverResidualFootprintMinFluxFraction` remain as legacy configuration fields but are ignored by this detector. No maximum-minus-median subtraction is used.
+
+Accepted candidates, geometric motion estimates, overlap fractions, frame-support and stationary-likelihood percentages, and stage counters are exported through `PipelineResult.slowMoverAnalysis` and `PipelineResult.telemetry.slowMoverTelemetry`. Each candidate's diagnostics include both percentages, availability flags, and supported/usable frame counts. The aggregate telemetry also exposes aligned percentage and availability lists for accepted candidates.
+
+`estimatedMotionPixels = majorExtent - minorExtent` is a footprint-based estimate, not a measured astrometric displacement. The telemetry shape distributions include size-qualified maximum-stack objects, while overlap distributions include objects that reach median-mask evaluation.
 
 ## 3. Frame Quality Analysis
 

@@ -35,14 +35,14 @@ public class PipelineResult {
     /** Stationary objects extracted from the median master stack. */
     public final List<SourceExtractor.DetectedObject> masterStars;
 
-    /** Grouped slow-mover stage output with per-candidate diagnostics. */
+    /** Grouped maximum-stack morphology candidates, exact median mask, and diagnostics. */
     public final SlowMoverAnalysis slowMoverAnalysis;
 
-    /** Legacy slow-mover stack export kept temporarily for compatibility. */
+    /** Compatibility alias of {@link #maximumStackData} when slow-mover detection is enabled; otherwise null. */
     public final short[][] slowMoverStackData;
-    /** Legacy slow-mover median veto mask export kept temporarily for compatibility. */
+    /** Compatibility alias of {@link SlowMoverAnalysis#medianMask} when enabled; otherwise null. */
     public final boolean[][] slowMoverMedianVetoMask;
-    /** Legacy accepted slow-mover object export kept temporarily for compatibility. */
+    /** Compatibility list of the same candidate objects held by {@link SlowMoverAnalysis#candidates}. */
     public final List<SourceExtractor.DetectedObject> slowMoverCandidates;
     /** Single-frame anomalies rescued after tracking without being treated as tracks. */
     public final List<TrackLinker.AnomalyDetection> anomalies;
@@ -71,7 +71,7 @@ public class PipelineResult {
      * @param telemetry pipeline counters and diagnostics
      * @param masterStackData median master stack used for vetoing
      * @param masterStars stationary objects extracted from the master stack
-     * @param slowMoverStackData compatibility export of the slow-mover stack
+     * @param slowMoverStackData compatibility export of the maximum stack when slow-mover detection is enabled
      * @param slowMoverMedianVetoMask compatibility export of the slow-mover median veto mask
      * @param slowMoverCandidates compatibility export of accepted slow-mover detections
      * @param anomalies rescued single-frame anomalies that did not become tracks
@@ -110,7 +110,7 @@ public class PipelineResult {
      * @param masterStackData median master stack used for vetoing
      * @param masterStars stationary objects extracted from the master stack
      * @param slowMoverAnalysis grouped slow-mover diagnostics and candidates
-     * @param slowMoverStackData compatibility export of the slow-mover stack
+     * @param slowMoverStackData compatibility export of the maximum stack when slow-mover detection is enabled
      * @param slowMoverMedianVetoMask compatibility export of the slow-mover median veto mask
      * @param slowMoverCandidates compatibility export of accepted slow-mover detections
      * @param anomalies rescued single-frame anomalies that did not become tracks

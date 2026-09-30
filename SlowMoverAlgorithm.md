@@ -1,5 +1,7 @@
 # Slow Mover Detection Algorithm
 
+This document records the maximum-stack detector design and possible future enhancements. The current implementation and defaults are described in `CONFIG.md` and `ALGORITHM.md`; proposal values and future-tense steps below are not active settings.
+
 ## 1. Purpose
 
 The slow-mover detection branch is intended to detect astronomical sources whose total displacement across an aligned image sequence is too small for normal frame-to-frame track linking, but large enough to measurably alter the source footprint.
@@ -799,6 +801,8 @@ median stack  -> contextual veto
 
 # 20. Optional Temporal Confirmation
 
+The current implementation measures candidate frame-support and stationary-likelihood percentages directly in the retained original frames. Their configurable vetoes default to disabled. The three-bin stacking and measured-motion validation proposed below remain future work.
+
 Maximum-stack morphology identifies objects that **look like** a slow-moving swept source.
 
 It does not by itself prove motion.
@@ -898,7 +902,7 @@ Maximum stacking, temporal binning, PSF variation and extraction thresholds meas
 
 # 23. Configuration Plan
 
-## Keep Existing Parameters
+## Active Extraction And Mask Parameters
 
 ```text
 enableSlowMoverDetection
@@ -915,21 +919,21 @@ Meanings:
 
 ### `masterSlowMoverMinPixels`
 
-Minimum connected-component size in the maximum-stack extraction.
+Minimum connected-component size in both maximum-stack and median-stack extraction.
 
 ### `masterSlowMoverSigmaMultiplier`
 
-Seed threshold for maximum-stack candidate extraction.
+Seed threshold for both stack extractions.
 
 ### `masterSlowMoverGrowSigmaMultiplier`
 
-Grow threshold for maximum-stack candidate extraction.
+Grow threshold for both stack extractions.
 
 ### `slowMoverMedianSupportOverlapFraction`
 
 Optional minimum candidate-footprint overlap with the exact median mask.
 
-Recommended initial value:
+Current default:
 
 ```text
 0.0
@@ -941,7 +945,7 @@ Maximum permitted candidate-footprint overlap with the exact median mask.
 
 Used primarily as the stationary-source veto.
 
-Possible initial value:
+Current default:
 
 ```text
 0.80
@@ -949,16 +953,16 @@ Possible initial value:
 
 ---
 
-# 24. New Shape Parameters
+# 24. Shape Parameters
 
-Add:
+Active parameters:
 
 ```text
 slowMoverMinAxisRatio
 slowMoverMaxAxisRatio
 ```
 
-Possible initial values:
+Current defaults:
 
 ```text
 slowMoverMinAxisRatio = 1.35
@@ -971,31 +975,28 @@ Optional:
 slowMoverMinFillFactor
 ```
 
-Possible permissive initial value:
+Current default:
 
 ```text
-slowMoverMinFillFactor = 0.35
+slowMoverMinFillFactor = 0.0
 ```
 
-This can also remain disabled initially and be recorded only as telemetry.
+Zero disables the veto while retaining fill-factor diagnostics. A value such as `0.35` is a possible future tuning choice.
 
 ---
 
-# 25. Parameters To Retire From the Previous Algorithm
+# 25. Legacy Parameters From the Previous Algorithm
 
-The following belong to the previous percentile-stack / elongation-baseline approach and should no longer drive the new detector:
+The following belong to the previous percentile-stack / elongation-baseline approach and do not drive the current detector:
 
 ```text
 slowMoverStackMiddleFraction
 slowMoverBaselineMadMultiplier
-slowMoverMinElongationBaselineMadMultiplier
-slowMoverMaxElongation
-
 enableSlowMoverResidualFootprintFiltering
 slowMoverResidualFootprintMinFluxFraction
 ```
 
-They may temporarily remain for configuration compatibility if required.
+These fields remain in `DetectionConfig` for configuration compatibility and are ignored by the maximum-stack detector.
 
 The new primary shape window is:
 
@@ -1357,7 +1358,7 @@ The old:
 createSlowMoverMasterStack(...)
 ```
 
-percentile-stack method should become legacy if no other part of the application requires it.
+percentile-stack method is no longer used by the slow-mover detector.
 
 ---
 
@@ -1423,7 +1424,7 @@ slowMoverMedianSupportOverlapFraction = 0.0
 slowMoverMedianSupportMaxOverlapFraction = 0.80
 ```
 
-Optional:
+Optional experimental setting (current default `0.0`):
 
 ```text
 slowMoverMinFillFactor = 0.35

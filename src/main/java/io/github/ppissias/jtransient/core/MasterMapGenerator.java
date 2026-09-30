@@ -70,7 +70,11 @@ public class MasterMapGenerator {
      * Instead of a pure median (which erases movers), this takes the maximum value of the middle X% of the sorted pixels.
      * This perfectly captures objects that persist in a small area for a few frames, while still rejecting fast
      * single-frame anomalies (which are pushed to the extreme high end of the sort).
+     * This legacy stack is not used by the maximum-stack slow-mover detector.
+     *
+     * @deprecated use {@link #createMaximumMasterStack(List)} for slow-mover candidate extraction
      */
+    @Deprecated
     public static short[][] createSlowMoverMasterStack(List<ImageFrame> frames, double middleFraction) {
         if (frames == null || frames.isEmpty()) return null;
 
@@ -115,7 +119,7 @@ public class MasterMapGenerator {
 
     /**
      * Generates a Maximum Value Master Stack from the sequence.
-     * This is useful for creating star trails and visualizing the full path of all moving objects.
+     * This preserves swept source footprints for slow-mover morphology and is also exported for visualization.
      */
     public static short[][] createMaximumMasterStack(List<ImageFrame> frames) {
         if (frames == null || frames.isEmpty()) return null;

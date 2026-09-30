@@ -505,9 +505,11 @@ public class JTransientEngine {
         }
 
         // =================================================================
-        // PHASE 0.5 (Slow Mover Detection
+        // PHASE 0.5 (Maximum-Stack Slow-Mover Candidate Detection)
         // =================================================================
 
+        // Build once for both the detector and PipelineResult.maximumStackData.
+        short[][] maximumStackData = MasterMapGenerator.createMaximumMasterStack(cleanFrames);
         SlowMoverAnalysis slowMoverAnalysis = SlowMoverAnalysis.empty();
         short[][] slowMoverStackData = null;
         boolean[][] slowMoverMedianVetoMask = null;
@@ -519,12 +521,13 @@ public class JTransientEngine {
                 System.out.println("\n--- JTRANSIENT: PHASE 0.5 (Slow Mover Detection) ---");
             }
             if (listener != null) {
-                listener.onProgressUpdate(49, "Generating Slow Mover Master Stack...");
+                listener.onProgressUpdate(49, "Analyzing Maximum Stack for Slow Movers...");
             }
 
             slowMoverAnalysis = SlowMoverAnalyzer.analyze(
-                    cleanFrames,
+                    maximumStackData,
                     masterStackData,
+                    cleanFrames,
                     config
             );
             slowMoverStackData = slowMoverAnalysis.slowMoverStackData;
@@ -537,28 +540,30 @@ public class JTransientEngine {
 
             if (DEBUG) {
                 System.out.printf(
-                        "DEBUG: Slow Mover Stats -> Median Elong: %.2f | MAD: %.2f | Dynamic Threshold: %.2f%n",
-                        smTelemetry.medianElongation,
-                        smTelemetry.madElongation,
-                        smTelemetry.dynamicElongationThreshold
+                        "DEBUG: Slow Mover Shape -> Axis Ratio: %.2f-%.2f | Min Fill: %.2f | Avg Accepted Axis Ratio: %.2f%n",
+                        smTelemetry.minAxisRatioThreshold,
+                        smTelemetry.maxAxisRatioThreshold,
+                        smTelemetry.minFillFactorThreshold,
+                        smTelemetry.avgCandidateAxisRatio
                 );
                 System.out.printf(
-                        "DEBUG: Slow Mover Filters -> Raw: %d | AboveElong: %d | MaskStage: %d | LowMedianSupport: %d | HighMedianSupport: %d | LowResidualFootprint: %d | Final: %d%n",
+                        "DEBUG: Slow Mover Filters -> Raw: %d | LowPixels: %d | LowAxis: %d | HighAxis: %d | LowFill: %d | MaskStage: %d | LowMedianOverlap: %d | HighMedianOverlap: %d | Final: %d%n",
                         smTelemetry.rawCandidatesExtracted,
-                        smTelemetry.candidatesAboveElongationThreshold,
-                        smTelemetry.candidatesEvaluatedAgainstMasks,
+                        smTelemetry.rejectedBelowMinPixels,
+                        smTelemetry.rejectedBelowMinAxisRatio,
+                        smTelemetry.rejectedAboveMaxAxisRatio,
+                        smTelemetry.rejectedLowFillFactor,
+                        smTelemetry.evaluatedAgainstMedianMask,
                         smTelemetry.rejectedLowMedianSupport,
                         smTelemetry.rejectedHighMedianSupport,
-                        smTelemetry.rejectedLowResidualFootprintSupport,
                         smTelemetry.candidatesDetected
                 );
                 System.out.printf(
-                        "DEBUG: Slow Mover Signals -> MinSupport: %.3f | MaxSupport: %.3f | AvgMedianSupportOverlap: %.3f | MinResidualFootprint: %.3f | AvgResidualFootprint: %.3f%n",
+                        "DEBUG: Slow Mover Mask -> MinOverlap: %.3f | MaxOverlap: %.3f | AvgOverlap: %.3f | AvgEstimatedMotion: %.2f px%n",
                         smTelemetry.medianSupportOverlapThreshold,
                         smTelemetry.medianSupportMaxOverlapThreshold,
-                        smTelemetry.avgMedianSupportOverlap,
-                        smTelemetry.residualFootprintMinFluxFractionThreshold,
-                        smTelemetry.avgResidualFootprintFluxFraction
+                        smTelemetry.avgMedianMaskOverlap,
+                        smTelemetry.avgEstimatedMotionPixels
                 );
                 if (!smTelemetry.candidateMedianSupportOverlaps.isEmpty()) {
                     System.out.printf(
@@ -640,9 +645,6 @@ public class JTransientEngine {
         }
 
         // --- FINAL POST-PROCESSING ---
-        short[][] maximumStackData = MasterMapGenerator.createMaximumMasterStack(cleanFrames);
-
-        // --- MASTER MAXIMUM STACK EXPORT ONLY ---
         if (listener != null) {
             listener.onProgressUpdate(100, "Maximum Stack generation complete.");
         }

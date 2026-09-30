@@ -11,7 +11,7 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 ## What The Library Exposes
 
 - `JTransientAutoTuner.tune(...)`: derives a cleaner `DetectionConfig` from a representative subset of frames
-- `JTransientEngine.runPipeline(...)`: full extraction, quality filtering, master-stack masking, slow-mover detection, and track linking
+- `JTransientEngine.runPipeline(...)`: full extraction, quality filtering, master-stack masking, slow-mover candidate detection, and track linking
 - `JTransientEngine.detectTransients(...)`: same early pipeline, but stops after the stationary-star veto and returns per-frame transients
 - `JTransientEngine.generateMasterStack(...)`: precomputes a reusable median master stack
 - `SourceExtractor.extractSources(...)`: standalone single-frame object extraction
@@ -70,7 +70,7 @@ shown in an example is an application-specific placeholder that you should repla
 
 ### 1. Run the full pipeline
 
-This is the main entrypoint. It performs extraction, frame rejection, master-stack generation, optional slow-mover detection, streak linking, time-based linking when timestamps exist, geometric linking when timestamps are unavailable or `config.enableGeometricTrackLinking` is enabled, and anomaly rescue.
+This is the main entrypoint. It performs extraction, frame rejection, master-stack generation, optional slow-mover candidate detection, streak linking, time-based linking when timestamps exist, geometric linking when timestamps are unavailable or `config.enableGeometricTrackLinking` is enabled, and anomaly rescue.
 
 ```java
 import io.github.ppissias.jtransient.config.DetectionConfig;
@@ -127,10 +127,12 @@ Key `PipelineResult` fields:
 - `maximumStackData`: maximum stack exported for visualization/post-processing
 - `masterStars`: stationary objects extracted from the master stack
 - `masterVetoMask`: boolean veto mask used to purge stationary stars
-- `slowMoverAnalysis`: grouped slow-mover result with per-candidate diagnostics and aggregate stage telemetry
-- `slowMoverStackData`, `slowMoverMedianVetoMask`, and `slowMoverCandidates`: legacy slow-mover exports kept temporarily for compatibility
+- `slowMoverAnalysis`: maximum-stack morphological candidates, exact median mask, geometric diagnostics, and aggregate telemetry; motion is not temporally confirmed
+- `slowMoverStackData`, `slowMoverMedianVetoMask`, and `slowMoverCandidates`: compatibility exports; the stack now aliases `maximumStackData`
 - `driftPoints`: per-frame border-drift diagnostics
 - `telemetry`: pipeline and tracker counters, including nested `slowMoverTelemetry`
+
+Slow-mover diagnostics report `axisRatio = majorExtent / minorExtent`, an optional fill factor, exact median-mask overlap, and two 0–100 frame-based heuristics: `frameSupportPercentage` and `stationaryLikelihoodPercentage`. Their config thresholds default to `0` and `100`, so they are measured without vetoing candidates. `estimatedMotionPixels = majorExtent - minorExtent` is a shape-based estimate; motion is not temporally confirmed.
 
 ### 2. Auto-tune a configuration
 
