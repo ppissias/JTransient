@@ -402,7 +402,7 @@ public class SourceExtractor {
      * @return analyzed object populated with morphology metrics
      */
     public static DetectedObject analyzeShape(List<Pixel> blob, BackgroundMetrics bg, DetectionConfig config) {
-        DetectedObject obj = new DetectedObject(0,0,0,0);
+        DetectedObject obj = new DetectedObject(0, 0, 0, blob.size());
 
         // Calculate Peak Sigma for Anomaly Rescue
         double maxPixelValue = 0;

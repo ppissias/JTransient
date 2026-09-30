@@ -144,17 +144,17 @@ public class DetectionConfig implements Cloneable {
      * Minimum length-to-width ratio of a maximum-stack footprint's oriented raw-pixel extents.
      * A ratio near one means similar length and width; raising this rejects less elongated sources.
      */
-    public double slowMoverMinAxisRatio = 1.35;
+    public double slowMoverMinAxisRatio = 1.2;
     /**
      * Maximum length-to-width ratio of a maximum-stack footprint's oriented raw-pixel extents.
      * Lower values reject longer, thinner shapes from this candidate filter.
      */
-    public double slowMoverMaxAxisRatio = 3.20;
+    public double slowMoverMaxAxisRatio = 2.8;
     /**
      * Minimum raw-pixel count divided by the area of the oriented bounding rectangle.
      * Higher values reject sparse or bent shapes; zero disables this filter.
      */
-    public double slowMoverMinFillFactor = 0.0;
+    public double slowMoverMinFillFactor = 0.5;
 
     // --- Slow-mover support filtering ---
 
@@ -174,14 +174,14 @@ public class DetectionConfig implements Cloneable {
      * Minimum percentage of usable quality-filtered frames with significant localized signal
      * in a compact aperture inside the candidate footprint. Range 0-100; zero disables the gate.
      */
-    public double slowMoverMinFrameSupport = 0.0;
+    public double slowMoverMinFrameSupport = 40.0;
 
     /**
      * Maximum stationary-likelihood percentage allowed for a slow-mover candidate.
      * The score measures how often supported frame positions cluster in one location;
      * it is a heuristic rather than a calibrated probability. Range 0-100; 100 disables the gate.
      */
-    public double slowMoverMaxStationaryLikelihood = 100.0;
+    public double slowMoverMaxStationaryLikelihood = 60.0;
 
     // =================================================================
     // 3. FRAME QUALITY ANALYSIS PARAMETERS

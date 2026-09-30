@@ -56,6 +56,19 @@ public class SourceExtractorBlobGeometryTest {
         assertEquals(irregular.axisRatio, SourceExtractor.measureBlobGeometry(irregular).axisRatio, 1.0e-9);
     }
 
+    @Test
+    public void analyzedFootprintReportsPixelCount() {
+        List<SourceExtractor.Pixel> pixels = new ArrayList<>();
+        pixels.add(new SourceExtractor.Pixel(1, 2, 100));
+        pixels.add(new SourceExtractor.Pixel(2, 2, 100));
+        pixels.add(new SourceExtractor.Pixel(2, 3, 100));
+
+        SourceExtractor.DetectedObject object = analyze(pixels);
+
+        assertEquals(pixels.size(), object.pixelCount);
+        assertEquals((double) pixels.size(), object.pixelArea, 0.0);
+    }
+
     /** Rasterizes a capsule as all pixel centers within a radius of a line segment. */
     private static SourceExtractor.DetectedObject analyzeCapsule(double halfLength,
                                                                  double radius,
