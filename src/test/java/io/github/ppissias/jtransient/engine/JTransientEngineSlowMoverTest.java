@@ -106,6 +106,7 @@ public class JTransientEngineSlowMoverTest {
     @Test
     public void frameSupportMeasuresOneFrameArtifactAndOptionalFloorRejectsIt() {
         DetectionConfig config = testConfig();
+        disableFrameEvidenceGates(config);
         List<ImageFrame> frames = createFrames(0.0, 3.0, 1.3, true, false);
         short[][] maximumStack = MasterMapGenerator.createMaximumMasterStack(frames);
         short[][] medianStack = MasterMapGenerator.createMedianMasterStack(frames);
@@ -118,8 +119,8 @@ public class JTransientEngineSlowMoverTest {
         assertEquals(9, diagnostics.usableFrameCount);
         assertEquals(1, diagnostics.supportedFrameCount);
         assertEquals(100.0 / 9.0, diagnostics.frameSupportPercentage, 1.0e-9);
-        assertEquals(0.0, diagnostics.minFrameSupportThreshold, 0.0);
-        assertEquals(100.0, diagnostics.maxStationaryLikelihoodThreshold, 0.0);
+        assertEquals(config.slowMoverMinFrameSupport, diagnostics.minFrameSupportThreshold, 0.0);
+        assertEquals(config.slowMoverMaxStationaryLikelihood, diagnostics.maxStationaryLikelihoodThreshold, 0.0);
         assertEquals(diagnostics.frameSupportPercentage,
                 measured.telemetry.candidateFrameSupportPercentages.get(0), 0.0);
         assertEquals(1, measured.telemetry.evaluatedAgainstFrames);
@@ -133,6 +134,7 @@ public class JTransientEngineSlowMoverTest {
     @Test
     public void stationaryLikelihoodMeasuresFixedSourceAndOptionalCeilingRejectsIt() {
         DetectionConfig config = testConfig();
+        disableFrameEvidenceGates(config);
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
         List<ImageFrame> frames = createFrames(0.0, 3.0, 1.3, false, false);
         short[][] maximumStack = MasterMapGenerator.createMaximumMasterStack(frames);
@@ -157,6 +159,7 @@ public class JTransientEngineSlowMoverTest {
     @Test
     public void stationarySourceRemainsRecognizableWithOneFrameExtension() {
         DetectionConfig config = testConfig();
+        disableFrameEvidenceGates(config);
         config.slowMoverMinAxisRatio = 1.0;
         config.slowMoverMedianSupportMaxOverlapFraction = 1.0;
         List<ImageFrame> frames = new ArrayList<>();
@@ -279,6 +282,12 @@ public class JTransientEngineSlowMoverTest {
         } finally {
             engine.shutdown();
         }
+    }
+
+    /** Disables the frame-support floor and stationary-likelihood ceiling so raw diagnostics can be measured. */
+    private static void disableFrameEvidenceGates(DetectionConfig config) {
+        config.slowMoverMinFrameSupport = 0.0;
+        config.slowMoverMaxStationaryLikelihood = 100.0;
     }
 
     /** Relaxes edge checks for a small synthetic field without changing morphology defaults. */
