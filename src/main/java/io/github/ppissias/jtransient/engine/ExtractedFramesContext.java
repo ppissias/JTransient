@@ -10,6 +10,7 @@
 package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.core.SourceExtractor;
+import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 
 import java.util.List;
@@ -22,6 +23,8 @@ final class ExtractedFramesContext {
     final List<SourceExtractor.ExtractionResult> cleanFramesData;
     /** Raw image frames that survived session-level rejection. */
     final List<ImageFrame> cleanFrames;
+    /** Quality metrics of the clean frames, same order as {@link #cleanFrames}. */
+    final List<FrameQualityAnalyzer.FrameMetrics> cleanFrameMetrics;
     /** Telemetry accumulated during the early pipeline phases. */
     final PipelineTelemetry telemetry;
     /** Pipeline start timestamp used to calculate total runtime. */
@@ -31,11 +34,13 @@ final class ExtractedFramesContext {
 
     ExtractedFramesContext(List<SourceExtractor.ExtractionResult> cleanFramesData,
                            List<ImageFrame> cleanFrames,
+                           List<FrameQualityAnalyzer.FrameMetrics> cleanFrameMetrics,
                            PipelineTelemetry telemetry,
                            long startTime,
                            List<SourceExtractor.Pixel> driftPoints) {
         this.cleanFramesData = cleanFramesData;
         this.cleanFrames = cleanFrames;
+        this.cleanFrameMetrics = cleanFrameMetrics;
         this.telemetry = telemetry;
         this.startTime = startTime;
         this.driftPoints = driftPoints;

@@ -454,6 +454,151 @@ public class DetectionConfig implements Cloneable {
     /** * Minimum number of unique frames required before a broad local activity cluster is exported. */
     public int localActivityClusterMinFrames = 3;
 
+    // =================================================================
+    // 8. VARIABLE-STAR PHOTOMETRY PARAMETERS
+    // =================================================================
+
+    // --- Master switch and star selection ---
+
+    /** * Master switch for stationary-star photometry and variable-star detection.
+     * Runs after track linking on the frames that passed the session quality filter.
+     */
+    public boolean enableVariableStarDetection = false;
+
+    /** * Maximum number of master stars measured; 0 measures every usable star. When capped, stars are
+     * picked evenly across the field and across the brightness range.
+     */
+    public int photometryMaxStars = 0;
+
+    /** * Stars whose median per-frame signal-to-noise ratio is below this are still measured and listed,
+     * but kept out of the ensemble and the variability scoring.
+     */
+    public double photometryMinSnr = 10.0;
+
+    /** * Master stars more elongated than this are not measured (blends, galaxies, trailed sources). */
+    public double photometryMaxElongation = 1.5;
+
+    // --- Apertures ---
+
+    /** * Photometry aperture radius in units of each frame's median FWHM. */
+    public double photometryApertureFwhmFactor = 1.5;
+
+    /** * Inner radius of the sky annulus in units of the frame FWHM.
+     * Stars with another master star closer than this radius are not measured.
+     */
+    public double photometryAnnulusInnerFwhmFactor = 3.0;
+
+    /** * Outer radius of the sky annulus in units of the frame FWHM. */
+    public double photometryAnnulusOuterFwhmFactor = 5.0;
+
+    /** * Fraction of the session saturation level above which a star's peak pixel marks the
+     * measurement as saturated.
+     */
+    public double photometrySaturationFraction = 0.85;
+
+    /** * Fits a per-frame linear spatial term (a*x + b*y) in the ensemble, absorbing gradients
+     * and differential extinction across the field.
+     */
+    public boolean photometryFitPlane = true;
+
+    /** * Frames whose star positions scatter by more than this (robust sigma, pixels) around the
+     * median registration offset are excluded from photometry (rotation or poor alignment).
+     */
+    public double photometryMaxRegistrationSpreadPixels = 0.5;
+
+    // --- Photometric readiness (linearity) checks ---
+
+    /** * Check A: minimum number of distinct pixel levels in a frame. Fewer levels suggest 8-bit
+     * origin or heavy quantisation, and the session is refused.
+     */
+    public int linearityMinDistinctLevels = 1024;
+
+    /** * Check A: maximum fraction of sky-annulus pixels sitting at the zero floor. More than this
+     * means negative sky noise was clipped (e.g. calibrated float data), which biases faint stars;
+     * the session is then limited.
+     */
+    public double linearityMaxFloorClippedFraction = 0.01;
+
+    /** * Check B: largest allowed change of the concentration index (flux in 1 x FWHM divided by
+     * flux in 2.5 x FWHM) from the faint-star reference inside the linear range.
+     */
+    public double linearityMaxConcentrationDrift = 0.03;
+
+    /** * Check B: smallest linear magnitude range a frame must have to be used. */
+    public double linearityMinRangeMag = 2.0;
+
+    /** * Check B: minimum number of measurable stars inside a frame's linear range. */
+    public int linearityMinStars = 50;
+
+    /** * Check D: largest per-frame slope of the ensemble residual against magnitude (mag per mag). */
+    public double linearityMaxFrameSlope = 0.01;
+
+    /** * Check D: minimum spread (5th to 95th percentile) of frame zero points, in mag, for the
+     * slope-tracking test to be conclusive.
+     */
+    public double linearityMinZeroPointRangeMag = 0.05;
+
+    /** * Check D: the session fails when the per-frame slopes correlate with the zero point or sky
+     * level at least this strongly (and the implied slope change is significant).
+     */
+    public double linearityMaxSlopeTrackingCorrelation = 0.7;
+
+    /** * Checks B and D: share of frames that may fail before the whole session is refused. */
+    public double linearityMaxFailingFrameFraction = 0.2;
+
+    // --- Variability scoring and gates ---
+
+    /** * Minimum number of usable measurements a star needs to be scored. */
+    public int variableMinFrames = 20;
+
+    /** * Minimum time span of the session, in minutes, for a high-confidence result.
+     * Ignored when frames have no timestamps.
+     */
+    public double variableMinSpanMinutes = 30.0;
+
+    /** * Number of stars of similar magnitude used to build each star's expected noise and robust z-scores. */
+    public int variableNoiseModelNeighbors = 50;
+
+    /** * Robust z-score that both the scatter score and the Stetson J score must reach for a star to become a candidate. */
+    public double variableScoreSigma = 5.0;
+
+    /** * Smallest robust amplitude (5th to 95th percentile), in mag, for a high-confidence result. */
+    public double variableMinAmplitudeMag = 0.05;
+
+    /** * Smallest robust amplitude, in mag, when the readiness verdict is Limited. */
+    public double variableLimitedMinAmplitudeMag = 0.1;
+
+    /** * The robust amplitude must also exceed this multiple of the expected noise at the star's magnitude. */
+    public double variableAmplitudeNoiseFactor = 4.0;
+
+    /** * Minimum run of consecutive measurements deviating on the same side by more than 1.5 x expected noise. */
+    public int variableMinPersistenceFrames = 5;
+
+    /** * Minimum correlation between consecutive measurement pairs (split-half test against white noise). */
+    public double variableMinSplitHalfCorrelation = 0.5;
+
+    /** * Largest allowed difference between the amplitudes measured with 1.0 x and 2.0 x FWHM apertures,
+     * as a fraction of the main-aperture amplitude.
+     */
+    public double variableMaxApertureAmplitudeDifference = 0.3;
+
+    /** * Largest allowed absolute correlation of a light curve with frame zero point, FWHM, local sky
+     * or registration offsets.
+     */
+    public double variableMaxSystematicsCorrelation = 0.6;
+
+    /** * A correlated systematic only explains a candidate when the candidate's amplitude is at most this
+     * multiple of the largest response (99th percentile) that constant stars of similar brightness show
+     * to the same systematic. Larger changes cannot come from that systematic, so the gate passes.
+     */
+    public double variableSystematicsResponseFactor = 2.0;
+
+    /** * Radius, in pixels, within which nearby constant stars are compared for a shared pattern. */
+    public double variableLocalRadiusPixels = 100.0;
+
+    /** * Largest allowed median absolute correlation with nearby constant stars. */
+    public double variableMaxLocalCorrelation = 0.3;
+
     /**
      * Creates a configuration initialized with the library defaults.
      */

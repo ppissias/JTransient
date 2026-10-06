@@ -20,6 +20,8 @@ import io.github.ppissias.jtransient.core.SlowMoverAnalyzer;
 import io.github.ppissias.jtransient.core.SlowMoverCandidateResult;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.core.TrackLinker;
+import io.github.ppissias.jtransient.photometry.VariableStarAnalysis;
+import io.github.ppissias.jtransient.photometry.VariableStarAnalyzer;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
 import io.github.ppissias.jtransient.quality.SessionEvaluator;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
@@ -363,6 +365,7 @@ public class JTransientEngine {
 
         List<SourceExtractor.ExtractionResult> cleanFramesData = new ArrayList<>();
         List<ImageFrame> cleanFrames = new ArrayList<>(); // Track the raw images that passed the quality check
+        List<FrameQualityAnalyzer.FrameMetrics> cleanFrameMetrics = new ArrayList<>();
 
         for (int i = 0; i < rawExtractedFrames.size(); i++) {
             FrameQualityAnalyzer.FrameMetrics metrics = sessionMetrics.get(i);
@@ -396,12 +399,14 @@ public class JTransientEngine {
                 telemetry.totalFramesKept++;
                 cleanFramesData.add(rawExtractedFrames.get(i));
                 cleanFrames.add(inputFrames.get(i)); // Keep the actual frame for the Master Stack
+                cleanFrameMetrics.add(metrics);
             }
         }
 
         return new ExtractedFramesContext(
                 cleanFramesData,
                 cleanFrames,
+                cleanFrameMetrics,
                 telemetry,
                 startTime,
                 driftPoints
@@ -640,6 +645,30 @@ public class JTransientEngine {
                 config
         );
 
+        // =================================================================
+        // PHASE 5 (Variable-Star Photometry)
+        // =================================================================
+        VariableStarAnalysis variableStarAnalysis = VariableStarAnalysis.empty();
+        if (config.enableVariableStarDetection) {
+            if (DEBUG) {
+                System.out.println("\n--- JTRANSIENT: PHASE 5 (Variable-Star Photometry) ---");
+            }
+            if (listener != null) {
+                listener.onProgressUpdate(97, "Measuring stationary-star photometry...");
+            }
+            VariableStarAnalyzer.Input photometryInput = new VariableStarAnalyzer.Input();
+            photometryInput.frames = cleanFrames;
+            photometryInput.frameMetrics = context.cleanFrameMetrics;
+            photometryInput.frameDetections = cleanFramesObjects;
+            photometryInput.masterStars = masterStars;
+            photometryInput.masterStack = masterStackData;
+            photometryInput.masterStarMask = trackResult.masterVetoMask;
+            photometryInput.tracks = trackResult.tracks;
+            photometryInput.slowMoverCandidates = slowMoverCandidates;
+            variableStarAnalysis = VariableStarAnalyzer.analyze(photometryInput, config, executor);
+            telemetry.photometryTelemetry = variableStarAnalysis.telemetry;
+        }
+
         if (listener != null) {
             listener.onProgressUpdate(100, "Processing Complete!");
         }
@@ -653,7 +682,7 @@ public class JTransientEngine {
                 slowMoverAnalysis, slowMoverStackData, slowMoverMedianVetoMask, slowMoverCandidates, trackResult.anomalies,
                 trackResult.allTransients, trackResult.unclassifiedTransients,
                 residualTransientAnalysis, trackResult.masterVetoMask, context.driftPoints,
-                maximumStackData);
+                maximumStackData, variableStarAnalysis);
     }
 
     /**

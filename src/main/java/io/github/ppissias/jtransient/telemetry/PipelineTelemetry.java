@@ -10,7 +10,9 @@
 package io.github.ppissias.jtransient.telemetry;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Top-level telemetry bundle describing what happened during one pipeline run.
@@ -190,6 +192,179 @@ public class PipelineTelemetry {
         public final List<Boolean> candidateStationaryLikelihoodAvailable = new ArrayList<>();
     }
 
+    // --- Variable-Star Photometry ---
+    /** Photometry diagnostics for the whole session and every frame; null when photometry is disabled. */
+    public PhotometryTelemetry photometryTelemetry;
+
+    /**
+     * Session-level photometry diagnostics: readiness checks, star selection, frame usage,
+     * measurement flags, the noise model and candidate counts. Per-frame records are in {@link #frames}.
+     */
+    public static class PhotometryTelemetry {
+        /** Readiness verdict name (READY, LIMITED, NOT_READY, NOT_RUN). */
+        public String verdict = "NOT_RUN";
+        /** Plain-language readiness findings. */
+        public final List<String> readinessMessages = new ArrayList<>();
+
+        /** Check A status and measurements. */
+        public String quantisationCheck = "NOT_RUN";
+        public int distinctPixelLevels;
+        public double medianFloorClippedFraction = Double.NaN;
+
+        /** Check B status and measurements. */
+        public String shapeLinearityCheck = "NOT_RUN";
+        public double medianLinearLimitMag = Double.NaN;
+        public double medianLinearRangeMag = Double.NaN;
+        public int framesFailingShapeLinearity;
+
+        /** Check D status and measurements. */
+        public String responseCheck = "NOT_RUN";
+        public double zeroPointRangeMag = Double.NaN;
+        public double slopeZeroPointCorrelation = Double.NaN;
+        public double slopeSkyCorrelation = Double.NaN;
+        public int framesFailingResponse;
+
+        /** Session median FWHM used for star selection, in pixels. */
+        public double sessionFwhm = Double.NaN;
+        /** Estimated saturation level in the shifted non-negative pixel domain (0..65535). */
+        public double saturationLevel = Double.NaN;
+
+        /** Star selection counters. */
+        public int masterStarsConsidered;
+        public int starsSelected;
+        public int starsRejectedStreak;
+        public int starsRejectedElongated;
+        public int starsRejectedEdgeOrVoid;
+        public int starsRejectedCrowded;
+        public int starsRejectedSaturated;
+        public int starsRejectedByCap;
+        public int starsExcludedMostlyNonlinear;
+        public int starsExcludedLowSnr;
+
+        /** Frame usage counters. */
+        public int framesAnalyzed;
+        public int framesUsed;
+        public int framesExcludedRegistration;
+        public int framesExcludedShapeLinearity;
+        public int framesExcludedResponse;
+        public int framesExcludedTooFewStars;
+
+        /** Measurement flag counters over all stars and frames (one measurement can carry several flags). */
+        public long measurementsTotal;
+        public long measurementsSaturated;
+        public long measurementsNonlinear;
+        public long measurementsEdgeOrVoid;
+        public long measurementsCrossing;
+        public long measurementsOutlier;
+        public long measurementsBadFlux;
+
+        /** Variability counters. */
+        public int starsScored;
+        public int starsNotScored;
+        public int candidates;
+        public int highConfidence;
+        public int possible;
+        public int rejectedCandidates;
+        /** Number of candidates that failed each gate, by gate name. */
+        public final Map<String, Integer> gateFailureCounts = new LinkedHashMap<>();
+
+        /** Expected scatter against magnitude (the session noise model), sorted by magnitude. */
+        public final List<PhotometryNoisePoint> noiseModel = new ArrayList<>();
+
+        /** Per-frame diagnostics in chronological order; light-curve arrays are aligned with this list. */
+        public final List<PhotometryFrameStat> frames = new ArrayList<>();
+
+        /** Wall-clock runtime of the photometry stage in milliseconds. */
+        public long processingTimeMs;
+    }
+
+    /**
+     * One point of the session noise model.
+     */
+    public static class PhotometryNoisePoint {
+        /** Mean instrumental magnitude of the star. */
+        public double mag;
+        /** Measured scatter of the star (standard deviation of its usable residuals). */
+        public double scatter;
+        /** Expected scatter of a constant star at this magnitude. */
+        public double expectedScatter;
+        /** Tier name of the star, so candidates can be highlighted. */
+        public String tier;
+    }
+
+    /**
+     * One binned point of a frame's concentration-index profile (check B).
+     */
+    public static class PhotometryProfilePoint {
+        /** Median instrumental magnitude of the bin. */
+        public double mag;
+        /** Median concentration index of the bin. */
+        public double concentration;
+        /** Stars in the bin. */
+        public int count;
+    }
+
+    /**
+     * Photometry diagnostics of a single frame.
+     */
+    public static class PhotometryFrameStat {
+        public int frameIndex;
+        public String filename;
+        /** Capture timestamp in milliseconds, or -1. */
+        public long timestamp = -1;
+        /** Mid-exposure Julian date, or NaN without timestamps. */
+        public double julianDate = Double.NaN;
+
+        /** FWHM used for the apertures, in pixels. */
+        public double fwhm = Double.NaN;
+        /** Main photometry aperture radius, in pixels. */
+        public double apertureRadius = Double.NaN;
+        /** Median local sky level of the measured stars (shifted pixel domain). */
+        public double skyMedian = Double.NaN;
+
+        /** Median residual registration offset of bright stars, in pixels. */
+        public double registrationOffsetX = Double.NaN;
+        public double registrationOffsetY = Double.NaN;
+        /** Robust spread of the bright-star offsets around the median, in pixels. */
+        public double registrationSpread = Double.NaN;
+
+        /** Share of sky-annulus pixels at the zero floor (check A). */
+        public double floorClippedFraction = Double.NaN;
+
+        /** Check B: faint-star reference concentration index, linear limit and range. */
+        public double concentrationReference = Double.NaN;
+        public double linearLimitMag = Double.NaN;
+        public double linearRangeMag = Double.NaN;
+        public int linearStars;
+        public String shapeLinearityStatus = "NOT_RUN";
+        /** Binned concentration index against magnitude, bright to faint. */
+        public final List<PhotometryProfilePoint> concentrationProfile = new ArrayList<>();
+
+        /** Ensemble solution for the frame: zero point Z(j) and plane terms (mag per normalized unit). */
+        public double zeroPoint = Double.NaN;
+        public double planeX = Double.NaN;
+        public double planeY = Double.NaN;
+        /** Check D: residual slope against magnitude and its standard error. */
+        public double responseSlope = Double.NaN;
+        public double responseSlopeError = Double.NaN;
+        public String responseStatus = "NOT_RUN";
+
+        /** Measurement counters for this frame. */
+        public int starsMeasured;
+        public int starsInEnsemble;
+        public int saturated;
+        public int nonlinear;
+        public int edgeOrVoid;
+        public int crossing;
+        public int outliers;
+        public int badFlux;
+
+        /** Whether the frame was used for the ensemble and scoring. */
+        public boolean used = true;
+        /** Why the frame was excluded, or null. */
+        public String exclusionReason;
+    }
+
     // --- Processing ---
     /** End-to-end pipeline wall-clock runtime in milliseconds. */
     public long processingTimeMs = 0;
@@ -270,6 +445,10 @@ public class PipelineTelemetry {
             sb.append("\n");
         }
 
+        if (photometryTelemetry != null) {
+            appendPhotometryReport(sb, photometryTelemetry);
+        }
+
         sb.append("--- EXTRACTION STATISTICS ---\n");
         for (FrameExtractionStat stat : frameExtractionStats) {
             sb.append(String.format("  Frame %03d (%s) -> %d objects extracted | Median: %.2f, Sigma: %.2f, Seed: %.2f, Grow: %.2f\n",
@@ -280,6 +459,60 @@ public class PipelineTelemetry {
         sb.append("==================================================\n");
 
         return sb.toString();
+    }
+
+    /**
+     * Appends the variable-star photometry section of the text report.
+     */
+    private static void appendPhotometryReport(StringBuilder sb, PhotometryTelemetry p) {
+        sb.append("--- VARIABLE-STAR PHOTOMETRY ---\n");
+        sb.append(String.format("Readiness Verdict     : %s\n", p.verdict));
+        sb.append(String.format("  A Quantisation      : %s | Levels: %d | Floor-clipped sky: %s\n",
+                p.quantisationCheck, p.distinctPixelLevels, formatPercent(p.medianFloorClippedFraction)));
+        sb.append(String.format("  B Star Shape        : %s | Linear limit: %s mag | Linear range: %s mag | Failing frames: %d\n",
+                p.shapeLinearityCheck, formatMetric(p.medianLinearLimitMag), formatMetric(p.medianLinearRangeMag),
+                p.framesFailingShapeLinearity));
+        sb.append(String.format("  D Response          : %s | Zero-point range: %s mag | r(slope,Z): %s | r(slope,sky): %s | Failing frames: %d\n",
+                p.responseCheck, formatMetric(p.zeroPointRangeMag), formatMetric(p.slopeZeroPointCorrelation),
+                formatMetric(p.slopeSkyCorrelation), p.framesFailingResponse));
+        for (String message : p.readinessMessages) {
+            sb.append("  * ").append(message).append("\n");
+        }
+        sb.append(String.format("Session FWHM / Saturation: %s px / %s\n",
+                formatMetric(p.sessionFwhm), formatMetric(p.saturationLevel)));
+        sb.append(String.format("Stars: %d master, %d selected | Rejected: streak %d, elongated %d, edge/void %d, crowded %d, saturated %d, cap %d | Mostly non-linear: %d, low SNR: %d\n",
+                p.masterStarsConsidered, p.starsSelected, p.starsRejectedStreak, p.starsRejectedElongated,
+                p.starsRejectedEdgeOrVoid, p.starsRejectedCrowded, p.starsRejectedSaturated, p.starsRejectedByCap, p.starsExcludedMostlyNonlinear, p.starsExcludedLowSnr));
+        sb.append(String.format("Frames: %d analysed, %d used | Excluded: registration %d, star shape %d, response %d, too few stars %d\n",
+                p.framesAnalyzed, p.framesUsed, p.framesExcludedRegistration, p.framesExcludedShapeLinearity,
+                p.framesExcludedResponse, p.framesExcludedTooFewStars));
+        sb.append(String.format("Measurements: %d | Saturated %d, non-linear %d, edge/void %d, crossing %d, outlier %d, bad flux %d\n",
+                p.measurementsTotal, p.measurementsSaturated, p.measurementsNonlinear, p.measurementsEdgeOrVoid,
+                p.measurementsCrossing, p.measurementsOutlier, p.measurementsBadFlux));
+        sb.append(String.format("Variability: %d scored, %d not scored | Candidates: %d (high confidence %d, possible %d, rejected %d)\n",
+                p.starsScored, p.starsNotScored, p.candidates, p.highConfidence, p.possible, p.rejectedCandidates));
+        if (!p.gateFailureCounts.isEmpty()) {
+            sb.append("Gate failures: ").append(p.gateFailureCounts).append("\n");
+        }
+        for (PhotometryFrameStat f : p.frames) {
+            sb.append(String.format(
+                    "  Frame %03d (%s) -> FWHM %s, Ap %s, Sky %s, Offset (%s, %s) spread %s, Floor %s, B %s limit %s range %s, Z %s, D %s slope %s, Stars %d/%d, Sat %d, NonLin %d, Cross %d%s\n",
+                    f.frameIndex + 1, f.filename, formatMetric(f.fwhm), formatMetric(f.apertureRadius), formatMetric(f.skyMedian),
+                    formatMetric(f.registrationOffsetX), formatMetric(f.registrationOffsetY), formatMetric(f.registrationSpread),
+                    formatPercent(f.floorClippedFraction), f.shapeLinearityStatus, formatMetric(f.linearLimitMag),
+                    formatMetric(f.linearRangeMag), formatMag(f.zeroPoint), f.responseStatus, formatMag(f.responseSlope),
+                    f.starsInEnsemble, f.starsMeasured, f.saturated, f.nonlinear, f.crossing,
+                    f.used ? "" : " [EXCLUDED: " + f.exclusionReason + "]"));
+        }
+        sb.append(String.format("Photometry Time: %.2f seconds\n\n", p.processingTimeMs / 1000.0));
+    }
+
+    private static String formatMag(double value) {
+        return Double.isFinite(value) ? String.format("%.4f", value) : "n/a";
+    }
+
+    private static String formatPercent(double fraction) {
+        return Double.isFinite(fraction) ? String.format("%.2f%%", 100.0 * fraction) : "n/a";
     }
 
     /**

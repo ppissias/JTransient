@@ -1,6 +1,6 @@
 # JTransient DetectionConfig Guide
 
-`DetectionConfig` is the runtime configuration object for extraction, frame rejection, slow-mover analysis, and tracking.
+`DetectionConfig` is the runtime configuration object for extraction, frame rejection, slow-mover analysis, tracking, and variable-star photometry.
 
 All fields are public and mutable. A few implementation details matter when you use it:
 
@@ -535,7 +535,148 @@ The detailed local-rescue thresholds are now engine-internal rather than public 
 - the three rescue kinds still use the same underlying heuristics and metrics
 - if we need more control later, the better direction is a small profile-style knob rather than exposing 20+ raw thresholds again
 
-## 8. Interaction With The Auto-Tuner
+## 8. Variable-Star Photometry
+
+Optional stage that runs after track linking on the frames that passed session rejection. It measures forced aperture photometry of isolated master stars in every frame, checks whether the frames respond linearly to light, solves an ensemble model `m(i,j) = M(i) + Z(j) + a(j)x + b(j)y`, and scores each star against stars of similar brightness. Results are in `PipelineResult.variableStarAnalysis`; session and per-frame diagnostics are in `PipelineResult.telemetry.photometryTelemetry`.
+
+Readiness verdicts:
+
+- `READY`: checks A, B and D passed
+- `LIMITED`: no check failed, but sky pixels are clipped at zero, the linear range is under `linearityMinRangeMag + 1`, or check D was inconclusive; only amplitudes of at least `variableLimitedMinAmplitudeMag` reach high confidence
+- `NOT_READY`: a check failed or too few frames remain; light curves are still returned for diagnostics but nothing is scored
+
+A pure power-law stretch applied from zero passes all checks, so `READY` means no non-linearity was detected, not that linearity is proven.
+
+Apertures use a FWHM measured in this stage from second moments of bright stars. The extraction FWHM (`sqrt(lambda1 + lambda2)`) reads about 1.4 times larger for round stars and is only used to size the moment window and as a fallback.
+
+### `enableVariableStarDetection` (default `false`)
+
+Master switch for the whole stage.
+
+### `photometryMaxStars` (default `0`)
+
+Maximum number of stars measured; `0` measures every usable star. When a cap is set, each of an 8 x 8 grid of field regions contributes its share, taken at evenly spaced brightness ranks so the whole magnitude range is covered. Stars whose master-stack peak is already above `photometrySaturationFraction` of the saturation level are never measured.
+
+### `photometryMinSnr` (default `10.0`)
+
+Stars whose median per-frame signal-to-noise ratio (main aperture, sky noise only) is below this are still measured and exported, but kept out of the ensemble and the variability scoring. `0` disables the cut.
+
+### `photometryMaxElongation` (default `1.5`)
+
+Master stars more elongated than this are not measured.
+
+### `photometryApertureFwhmFactor` (default `1.5`)
+
+Main aperture radius in units of each frame's FWHM.
+
+### `photometryAnnulusInnerFwhmFactor` / `photometryAnnulusOuterFwhmFactor` (defaults `3.0` / `5.0`)
+
+Sky annulus radii in FWHM. Master-star pixels inside the annulus are masked. A star is not measured when another master star lies within (aperture factor + 1) x FWHM, or a neighbour with at least 10% of its flux lies within the inner radius.
+
+### `photometrySaturationFraction` (default `0.85`)
+
+A measurement is flagged saturated when its peak exceeds this fraction of the session saturation level. The level is the pile-up of clipped pixels at the top of the frame histograms, or 95% of 65535 when no frame shows one.
+
+### `photometryFitPlane` (default `true`)
+
+Fits the per-frame plane term `a(j)x + b(j)y`. Static spatial patterns (vignetting, missing flats) are absorbed by the star magnitudes `M(i)` either way.
+
+### `photometryMaxRegistrationSpreadPixels` (default `0.5`)
+
+Frames whose bright-star centroids scatter more than this (robust sigma, pixels) around the median offset are excluded.
+
+### `linearityMinDistinctLevels` (default `1024`)
+
+Check A. Fewer distinct pixel levels in the middle frame means 8-bit origin or heavy quantisation; the session is refused.
+
+### `linearityMaxFloorClippedFraction` (default `0.01`)
+
+Check A. When the median share of sky-annulus pixels at zero exceeds this, negative sky noise was clipped (for example calibrated float data converted to 16-bit) and the session is limited.
+
+### `linearityMaxConcentrationDrift` (default `0.03`)
+
+Check B. The concentration index is the flux within 0.7 x FWHM divided by the flux within 2.5 x FWHM, using stars with SNR of about 50 or more. The faint half of those stars sets the reference; walking towards brighter stars, the first magnitude bin that departs by more than this value (plus two standard errors of the bin median) marks the frame's linear limit. Brighter stars are flagged non-linear in that frame.
+
+### `linearityMinRangeMag` (default `2.0`)
+
+Check B. A frame whose linear range is narrower than this is excluded.
+
+### `linearityMinStars` (default `50`)
+
+Check B. Minimum number of high-SNR stars in a frame (and inside its linear range), and the minimum number of selected stars for the stage to run.
+
+### `linearityMaxFrameSlope` (default `0.01`)
+
+Check D. A frame fails when its ensemble residual slopes against magnitude by more than this (mag per mag) and by more than 3 standard errors. Failing frames are excluded and the ensemble is solved again.
+
+### `linearityMinZeroPointRangeMag` (default `0.05`)
+
+Check D. Below this zero-point spread (5th to 95th percentile) there is no lever arm and the slope-tracking test is inconclusive.
+
+### `linearityMaxSlopeTrackingCorrelation` (default `0.7`)
+
+Check D. The session fails when the per-frame slopes correlate with the zero point or the sky level at least this strongly and the implied slope change over that range exceeds `linearityMaxFrameSlope`.
+
+### `linearityMaxFailingFrameFraction` (default `0.2`)
+
+Checks B and D. Share of frames that may fail before the session is `NOT_READY`.
+
+### `variableMinFrames` (default `20`)
+
+Minimum usable measurements for a star to be scored, and minimum frames remaining for the session.
+
+### `variableMinSpanMinutes` (default `30.0`)
+
+DATA gate: minimum time span of a candidate's usable measurements. Ignored without timestamps.
+
+### `variableNoiseModelNeighbors` (default `50`)
+
+Stars nearest in magnitude used for the expected scatter and the robust z-scores.
+
+### `variableScoreSigma` (default `5.0`)
+
+Both the excess-scatter z-score and the Stetson J z-score must reach this for a star to become a candidate.
+
+### `variableMinAmplitudeMag` / `variableLimitedMinAmplitudeMag` (defaults `0.05` / `0.1`)
+
+AMPLITUDE gate: minimum robust amplitude (95th minus 5th percentile) for `READY` and `LIMITED` sessions.
+
+### `variableAmplitudeNoiseFactor` (default `4.0`)
+
+AMPLITUDE gate: the amplitude must also exceed this multiple of the expected scatter.
+
+### `variableMinPersistenceFrames` (default `5`)
+
+PERSISTENCE gate: longest run of consecutive measurements deviating on the same side by more than 1.5 x expected scatter.
+
+### `variableMinSplitHalfCorrelation` (default `0.5`)
+
+SPLIT_HALF gate: correlation between consecutive non-overlapping measurement pairs. This guards against noise, not against shared systematics.
+
+### `variableMaxApertureAmplitudeDifference` (default `0.3`)
+
+APERTURE gate: amplitudes from the 1.0 x and 2.0 x FWHM apertures may differ by at most this fraction of the main amplitude.
+
+### `variableMaxSystematicsCorrelation` (default `0.6`)
+
+SYSTEMATICS gate, applied to the frame zero point, FWHM, the star's local sky and the x/y registration offsets. The gate fails when either:
+
+- the light curve's changes from one frame to the next correlate with the systematic's changes more strongly than this (the star follows it frame by frame, as a blend leaking with seeing does; smooth real variability barely changes between frames), or
+- the raw correlation exceeds this and the candidate's amplitude is within `variableSystematicsResponseFactor` of what constant stars show for that systematic.
+
+Raw correlation alone does not fail the gate, because a real variable that brightens or fades steadily correlates with any steady drift in the session.
+
+### `variableSystematicsResponseFactor` (default `2.0`)
+
+SYSTEMATICS gate: for each correlated systematic, the response of every constant star is measured (slope of its light curve against the systematic times the systematic's 5th-95th percentile range). The gate fails only when the candidate's amplitude is at most this factor times the 99th percentile of those responses among the 200 constant stars nearest in magnitude, i.e. when the systematic could plausibly have produced the change. The limit for the most correlated systematic is exported as `StarLightCurve.systematicsLimitMag`.
+
+### `variableLocalRadiusPixels` / `variableMaxLocalCorrelation` (defaults `100.0` / `0.3`)
+
+LOCAL gate: median absolute correlation with up to 10 nearby constant stars must not exceed this; at least 3 are required.
+
+Candidates that pass every gate are `HIGH_CONFIDENCE`, one failure gives `POSSIBLE`, more give `REJECTED`. A LINEARITY gate also fails when the star was flagged saturated or non-linear in any frame.
+
+## 9. Interaction With The Auto-Tuner
 
 `JTransientAutoTuner` does not read extra scoring fields from `DetectionConfig`. The tuning sweep and scoring policy are implemented as static fields and `AutoTuneProfile` presets inside `JTransientAutoTuner`.
 
@@ -549,7 +690,7 @@ The tuner actively optimizes or measures these `DetectionConfig` fields:
 
 Everything else in the returned config comes from the base config you provided.
 
-## 9. Practical Starting Point
+## 10. Practical Starting Point
 
 If you do not have strong prior knowledge of the dataset:
 

@@ -13,6 +13,7 @@ import io.github.ppissias.jtransient.core.ResidualTransientAnalysis;
 import io.github.ppissias.jtransient.core.SlowMoverAnalysis;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.core.TrackLinker;
+import io.github.ppissias.jtransient.photometry.VariableStarAnalysis;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 import java.util.List;
 
@@ -63,6 +64,9 @@ public class PipelineResult {
 
     /** A stack containing the maximum pixel values across the sequence. */
     public final short[][] maximumStackData;
+
+    /** Stationary-star photometry, readiness verdict and variable-star candidates; empty when disabled. */
+    public final VariableStarAnalysis variableStarAnalysis;
 
     /**
      * Creates the unified pipeline result payload using the legacy slow-mover export fields.
@@ -136,6 +140,32 @@ public class PipelineResult {
                           boolean[][] masterVetoMask,
                           List<SourceExtractor.Pixel> driftPoints,
                           short[][] maximumStackData) {
+        this(tracks, telemetry, masterStackData, masterStars, slowMoverAnalysis, slowMoverStackData,
+                slowMoverMedianVetoMask, slowMoverCandidates, anomalies, allTransients, unclassifiedTransients,
+                residualTransientAnalysis, masterVetoMask, driftPoints, maximumStackData, VariableStarAnalysis.empty());
+    }
+
+    /**
+     * Creates the unified pipeline result payload including the variable-star analysis.
+     *
+     * @param variableStarAnalysis photometry result, or null for an empty one
+     */
+    public PipelineResult(List<TrackLinker.Track> tracks,
+                          PipelineTelemetry telemetry,
+                          short[][] masterStackData,
+                          List<SourceExtractor.DetectedObject> masterStars,
+                          SlowMoverAnalysis slowMoverAnalysis,
+                          short[][] slowMoverStackData,
+                          boolean[][] slowMoverMedianVetoMask,
+                          List<SourceExtractor.DetectedObject> slowMoverCandidates,
+                          List<TrackLinker.AnomalyDetection> anomalies,
+                          List<List<SourceExtractor.DetectedObject>> allTransients,
+                          List<List<SourceExtractor.DetectedObject>> unclassifiedTransients,
+                          ResidualTransientAnalysis residualTransientAnalysis,
+                          boolean[][] masterVetoMask,
+                          List<SourceExtractor.Pixel> driftPoints,
+                          short[][] maximumStackData,
+                          VariableStarAnalysis variableStarAnalysis) {
         this.tracks = tracks;
         this.telemetry = telemetry;
         this.masterStackData = masterStackData;
@@ -151,5 +181,6 @@ public class PipelineResult {
         this.masterVetoMask = masterVetoMask;
         this.driftPoints = driftPoints;
         this.maximumStackData = maximumStackData;
+        this.variableStarAnalysis = variableStarAnalysis != null ? variableStarAnalysis : VariableStarAnalysis.empty();
     }
 }
