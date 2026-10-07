@@ -97,6 +97,8 @@ public class PipelineTelemetry {
     }
     /** Rejection records for frames removed by the quality-control stage. */
     public List<FrameRejectionStat> rejectedFrames = new ArrayList<>();
+    /** Sequence indices of blank or failed-registration frames left out of the drift analysis. */
+    public List<Integer> driftExcludedFrames = new ArrayList<>();
 
     // --- PHASE 4: Tracking ---
     /** Number of stationary master-stack stars extracted for the veto mask. */
@@ -257,6 +259,8 @@ public class PipelineTelemetry {
         public long measurementsCrossing;
         public long measurementsOutlier;
         public long measurementsBadFlux;
+        /** Measurements whose star shape departed from the star's own typical shape (hot pixel, cosmic ray). */
+        public long measurementsContaminated;
 
         /** Variability counters. */
         public int starsScored;
@@ -358,6 +362,7 @@ public class PipelineTelemetry {
         public int crossing;
         public int outliers;
         public int badFlux;
+        public int contaminated;
 
         /** Whether the frame was used for the ensemble and scoring. */
         public boolean used = true;
@@ -384,6 +389,9 @@ public class PipelineTelemetry {
         sb.append(String.format("Total Processing Time : %.2f seconds\n", processingTimeMs / 1000.0));
         sb.append(String.format("Total Frames Processed: %d\n", totalFramesLoaded));
         sb.append(String.format("Frames Kept / Rejected: %d / %d\n", totalFramesKept, totalFramesRejected));
+        if (!driftExcludedFrames.isEmpty()) {
+            sb.append(String.format("Blank / Failed Registration (left out of drift analysis): %s\n", driftExcludedFrames));
+        }
         sb.append(String.format("Total Raw Objects     : %d\n", totalRawObjectsExtracted));
 
         sb.append(String.format("Master Stars          : %d\n", totalMasterStarsIdentified));
@@ -486,9 +494,9 @@ public class PipelineTelemetry {
         sb.append(String.format("Frames: %d analysed, %d used | Excluded: registration %d, star shape %d, response %d, too few stars %d\n",
                 p.framesAnalyzed, p.framesUsed, p.framesExcludedRegistration, p.framesExcludedShapeLinearity,
                 p.framesExcludedResponse, p.framesExcludedTooFewStars));
-        sb.append(String.format("Measurements: %d | Saturated %d, non-linear %d, edge/void %d, crossing %d, outlier %d, bad flux %d\n",
+        sb.append(String.format("Measurements: %d | Saturated %d, non-linear %d, edge/void %d, crossing %d, outlier %d, bad flux %d, contaminated shape %d\n",
                 p.measurementsTotal, p.measurementsSaturated, p.measurementsNonlinear, p.measurementsEdgeOrVoid,
-                p.measurementsCrossing, p.measurementsOutlier, p.measurementsBadFlux));
+                p.measurementsCrossing, p.measurementsOutlier, p.measurementsBadFlux, p.measurementsContaminated));
         sb.append(String.format("Variability: %d scored, %d not scored | Candidates: %d (high confidence %d, possible %d, rejected %d)\n",
                 p.starsScored, p.starsNotScored, p.candidates, p.highConfidence, p.possible, p.rejectedCandidates));
         if (!p.gateFailureCounts.isEmpty()) {

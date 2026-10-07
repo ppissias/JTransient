@@ -6,7 +6,7 @@ All fields are public and mutable. A few implementation details matter when you 
 
 - `JTransientEngine` may raise `voidProximityRadius` during drift diagnostics if the data demands it
 - the engine uses stage-local config overrides for master-star and slow-mover extraction so the caller's config object is not left mutated afterward
-- `JTransientAutoTuner.tune(...)` clones configs while searching and returns an optimized clone on success; fallback paths may return the original base config reference
+- the auto-tuners (`CalibratedAutoTuner.tune(...)`, and the legacy `JTransientAutoTuner.tune(...)`) clone configs while searching and return an optimized clone on success; fallback paths may return the base config
 
 This document tracks the fields that actually exist in `src/main/java/io/github/ppissias/jtransient/config/DetectionConfig.java`.
 
@@ -19,7 +19,7 @@ Primary seed threshold for `SourceExtractor.extractSources(...)`.
 - seed threshold = `backgroundMedian + backgroundSigma * detectionSigmaMultiplier`
 - higher values reduce sensitivity and false positives
 - lower values detect fainter structure but increase noise
-- the auto-tuner actively searches this field
+- both auto-tuners search this field
 
 ### `growSigmaMultiplier` (default `3.0`)
 
@@ -30,7 +30,7 @@ Secondary hysteresis threshold used while the BFS expands a blob.
 - too low can leak into noise
 - master-star extraction uses a stage-local `growSigmaMultiplier = masterSigmaMultiplier`
 - slow-mover extraction uses a stage-local `growSigmaMultiplier = masterSlowMoverGrowSigmaMultiplier`
-- the auto-tuner actively searches this field
+- both auto-tuners search this field
 
 ### `minDetectionPixels` (default `10`)
 
@@ -38,7 +38,7 @@ Minimum blob size required before shape analysis.
 
 - rejects hot pixels and tiny noise islands
 - applies to the main extraction pass
-- the auto-tuner actively searches this field
+- both auto-tuners search this field
 
 ### `edgeMarginPixels` (default `15`)
 
@@ -125,7 +125,8 @@ Seed threshold for extracting stationary objects from the median master stack.
 
 - usually lower than the main detection sigma
 - used with `masterMinDetectionPixels`
-- during master extraction the engine also sets `growSigmaMultiplier` to the same value
+- the calibrated auto-tuner searches this field; the legacy tuner preserves it
+- master stars are grown at `masterGrowSigmaMultiplier` (`0` = the master sigma itself)
 
 ### `masterMinDetectionPixels` (default `3`)
 
@@ -133,6 +134,16 @@ Minimum size for master-stack objects.
 
 - lower values produce a more complete stationary-star map
 - can also increase mask density if set too low
+- the calibrated auto-tuner searches this field; the legacy tuner preserves it
+
+### `masterGrowSigmaMultiplier` (default `0.0`)
+
+Hysteresis threshold used to grow master-map stars after they are seeded at `masterSigmaMultiplier`.
+
+- `0` uses the master sigma itself (the previous behaviour, no hysteresis)
+- a lower value extends star footprints into their faint wings without seeding new noise islands
+- values above `masterSigmaMultiplier` are capped to it
+- the calibrated auto-tuner searches this field; the legacy tuner preserves it
 
 ### `enableSlowMoverDetection` (default `true`)
 
@@ -291,7 +302,7 @@ It affects several places:
 - baseline pairs below this jump are treated as stationary
 - anti-hijack pruning removes track steps that stall within this scale
 - time-based velocity tolerance uses it as a physical slack term
-- the auto-tuner actively measures and updates this field
+- both auto-tuners measure and update this field
 
 ### `maxMaskOverlapFraction` (default `0.75`)
 
@@ -300,7 +311,7 @@ Fraction of an object's footprint that may overlap the veto mask before the obje
 - purge rule: `overlapFraction > maxMaskOverlapFraction`
 - larger values are more permissive near stars
 - smaller values are stricter
-- the auto-tuner actively searches this field
+- both auto-tuners search this field
 
 ### `predictionTolerance` (default `3.0`)
 
@@ -678,9 +689,26 @@ Candidates that pass every gate are `HIGH_CONFIDENCE`, one failure gives `POSSIB
 
 ## 9. Interaction With The Auto-Tuner
 
-`JTransientAutoTuner` does not read extra scoring fields from `DetectionConfig`. The tuning sweep and scoring policy are implemented as static fields and `AutoTuneProfile` presets inside `JTransientAutoTuner`.
+There are two auto-tuners. Both take an `AutoTuneProfile` (conservative = low sensitivity, balanced = medium, aggressive = high, maximum = as sensitive as possible; the legacy tuner treats maximum like aggressive) and return a `JTransientAutoTuner.AutoTunerResult`. Neither reads extra fields from `DetectionConfig`; their settings are static fields of the tuner classes.
 
-The tuner actively optimizes or measures these `DetectionConfig` fields:
+### `CalibratedAutoTuner` (measured)
+
+Blank or failed-registration frames are left out first. It then measures, on crops of the session frames (the centre and four corners; an even grid of up to 4 x 4 crops on large frames; the border kept clear is the measured drift padding plus 50 px, between 50 and 200 px; overlapping crops count each pixel once; small sensors use more frames, up to 40, to cover about 30 megapixel-frames), for every combination of per-frame settings, master-mask settings and veto overlap:
+
+- noise false positives, from a negative image `2 x master - frame` (the noise of a frame, no real objects)
+- star leakage: real-frame detections that survive the veto and touch the star mask, recur at the same place on the sky or on the sensor (hot pixels follow the drift across registered frames), or lie within one FWHM of a star and reappear beside it in another frame
+- other real-frame detections above the lowest rate any setting reaches (faint stars visible only in better frames, seeing residuals and similar artefacts that depend on the settings)
+- satellite and meteor trails, which are not charged: a more sensitive extraction of every frame (2.5 / 1.5 sigma) joins trail fragments into one object, and detections within one FWHM of a streak found that way (mostly outside the star mask) are left out
+- sensitivity: the fraction of synthetic point sources, shaped like the session's measured stars (FWHM from the area above half maximum) and injected over peak SNR 2 to 15, that are detected and survive the veto
+- mask coverage
+
+A profile is a budget of false positives per megapixel per frame (noise plus star leakage, or the real-frame excess if larger) (`FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME`, default 0.05 / 0.2 / 0.6 / 3.5; maximum is meant for small sensors or targeted searches, since a per-megapixel budget leaves many candidates on a large sensor). Within the budget it picks the settings that recover the most synthetic sources, so a more permissive profile is never less sensitive; near-ties go to the setting that keeps more bright sources. Budgets smaller than one event over the measured area cannot be confirmed and are relaxed to "no events". `CalibratedAutoTuner.calibrate(...)` returns every measurement and the choice for all three profiles.
+
+It sets `detectionSigmaMultiplier`, `growSigmaMultiplier`, `minDetectionPixels`, `masterSigmaMultiplier`, `masterGrowSigmaMultiplier`, `masterMinDetectionPixels`, `maxMaskOverlapFraction` and `maxStarJitter`. Minimum-pixel candidates for frames and master are derived from the measured star FWHM. Master settings are tried both deeper and shallower than the per-frame grow threshold: a shallower mask hides less sky but lets star wings leak, and the measured leakage counts against the budget.
+
+### `JTransientAutoTuner` (legacy, score-based)
+
+Kept for comparison. It optimizes or measures:
 
 - `detectionSigmaMultiplier`
 - `growSigmaMultiplier`
@@ -695,6 +723,6 @@ Everything else in the returned config comes from the base config you provided.
 If you do not have strong prior knowledge of the dataset:
 
 1. start from `new DetectionConfig()`
-2. run `JTransientAutoTuner.tune(...)`
+2. run `CalibratedAutoTuner.tune(...)` (or the legacy `JTransientAutoTuner.tune(...)`)
 3. use the returned `optimizedConfig` with `runPipeline(...)`
 4. only hand-tune fields like `enableSlowMoverDetection`, `strictExposureKinematics`, `maxJumpPixels`, or anomaly thresholds after reviewing telemetry

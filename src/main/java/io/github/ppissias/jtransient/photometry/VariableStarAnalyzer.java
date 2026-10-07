@@ -14,6 +14,7 @@ import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.core.TrackLinker;
 import io.github.ppissias.jtransient.engine.ImageFrame;
 import io.github.ppissias.jtransient.engine.JTransientEngine;
+import io.github.ppissias.jtransient.engine.TransientEngineProgressListener;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 
@@ -25,6 +26,7 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Runs stationary-star photometry and variable-star detection on the quality-filtered frames.
@@ -38,7 +40,21 @@ public final class VariableStarAnalyzer {
     /** Flags that keep a measurement out of the ensemble and scoring. */
     private static final int EXCLUDING_FLAGS = PhotometryFlags.SATURATED | PhotometryFlags.NONLINEAR
             | PhotometryFlags.EDGE_OR_VOID | PhotometryFlags.CROSSING | PhotometryFlags.BAD_FLUX
-            | PhotometryFlags.FRAME_EXCLUDED;
+            | PhotometryFlags.FRAME_EXCLUDED | PhotometryFlags.CONTAMINATED;
+    /** Flags that make a measurement unfit as a reference for the shape check. */
+    private static final int SHAPE_REFERENCE_EXCLUDING_FLAGS = PhotometryFlags.SATURATED | PhotometryFlags.NONLINEAR
+            | PhotometryFlags.EDGE_OR_VOID | PhotometryFlags.CROSSING | PhotometryFlags.BAD_FLUX;
+    /** A measurement whose relative concentration deviates by more than this many robust sigmas is contaminated. */
+    private static final double SHAPE_OUTLIER_SIGMA = 5.0;
+    /** Lower bound on the per-star relative-concentration spread (fractional), so very stable stars are not over-flagged. */
+    private static final double MIN_SHAPE_SPREAD = 0.02;
+    private static final int MIN_SHAPE_MEASUREMENTS = 5;
+    /** Share of the photometry progress spent measuring the frames. */
+    private static final int MEASURING_PROGRESS_SHARE = 80;
+    /** Stars are grouped by brightness into about this many groups for the shape tolerance... */
+    private static final int SHAPE_GROUPS = 10;
+    /** ...with at least this many stars per group. */
+    private static final int MIN_SHAPE_GROUP_STARS = 30;
     /** A star flagged saturated or non-linear in more than this share of its measurements is not used at all. */
     private static final double MAX_NONLINEAR_SHARE = 0.5;
     /** Limited verdict when the median linear range is below the minimum plus this margin, in mag. */
@@ -58,6 +74,8 @@ public final class VariableStarAnalyzer {
         public boolean[][] masterStarMask;
         public List<TrackLinker.Track> tracks = new ArrayList<>();
         public List<SourceExtractor.DetectedObject> slowMoverCandidates = new ArrayList<>();
+        /** Optional progress listener, 0 to 100 over the photometry stage. */
+        public TransientEngineProgressListener progress;
     }
 
     private VariableStarAnalyzer() {
@@ -139,8 +157,10 @@ public final class VariableStarAnalyzer {
         }
 
         // --- Forced aperture photometry on every frame ---
+        report(input, 0, "Photometry: measuring " + selected.size() + " stars in every frame...");
         ApertureMeasurer.FrameMeasurement[] measurements = measureFrames(
                 input, selected, frameFwhm, frameBackground, saturationThreshold, config, executor);
+        report(input, MEASURING_PROGRESS_SHARE, "Photometry: readiness checks and ensemble solution...");
         flagCrossings(input, selected, measurements, config);
 
         int nStars = selected.size();
@@ -235,6 +255,9 @@ public final class VariableStarAnalyzer {
         } else {
             readiness.shapeLinearityCheck = PhotometricReadiness.CheckStatus.PASS;
         }
+
+        // --- Per-measurement shape check (hot pixels, cosmic rays, faint passing objects) ---
+        flagContaminatedShapes(measurements, nStars, nFrames);
 
         // --- Ensemble inputs ---
         double[][] mag = new double[nStars][nFrames];
@@ -340,6 +363,7 @@ public final class VariableStarAnalyzer {
             curves.add(curve);
         }
 
+        report(input, 90, "Photometry: scoring variability...");
         // --- Variability scoring ---
         if (readiness.allowsScoring()) {
             EnsembleSolver.Solution small = solveForAperture(measurements, ApertureMeasurer.R_SMALL, flags, starExcluded,
@@ -386,6 +410,7 @@ public final class VariableStarAnalyzer {
                 if ((f & PhotometryFlags.CROSSING) != 0) { telemetry.measurementsCrossing++; stat.crossing++; }
                 if ((f & PhotometryFlags.OUTLIER) != 0) { telemetry.measurementsOutlier++; stat.outliers++; }
                 if ((f & PhotometryFlags.BAD_FLUX) != 0) { telemetry.measurementsBadFlux++; stat.badFlux++; }
+                if ((f & PhotometryFlags.CONTAMINATED) != 0) { telemetry.measurementsContaminated++; stat.contaminated++; }
             }
         }
         for (int j = 0; j < nFrames; j++) {
@@ -400,6 +425,103 @@ public final class VariableStarAnalyzer {
     // Stages
     // =================================================================
 
+    /**
+     * Flags measurements whose concentration index (inner over outer aperture flux) departs from the star's
+     * own typical value. Each concentration is first divided by the frame's median concentration so that
+     * seeing changes, which affect every star alike, are taken out. The allowed departure comes from stars of
+     * similar brightness, not from the star itself: a star contaminated in many frames would otherwise widen
+     * its own tolerance until nothing is flagged.
+     */
+    private static void report(Input input, int percent, String message) {
+        if (input.progress != null) {
+            input.progress.onProgressUpdate(percent, message);
+        }
+    }
+
+    private static void flagContaminatedShapes(ApertureMeasurer.FrameMeasurement[] measurements, int nStars, int nFrames) {
+        double[] frameConcentration = new double[nFrames];
+        double[] buffer = new double[Math.max(nStars, nFrames)];
+        for (int j = 0; j < nFrames; j++) {
+            ApertureMeasurer.FrameMeasurement m = measurements[j];
+            int n = 0;
+            for (int i = 0; i < nStars; i++) {
+                double ci = m.concentration(i);
+                if (Double.isFinite(ci) && (m.flags[i] & SHAPE_REFERENCE_EXCLUDING_FLAGS) == 0) {
+                    buffer[n++] = ci;
+                }
+            }
+            frameConcentration[j] = n > 0 ? PhotometryMath.median(buffer, n) : Double.NaN;
+        }
+        // Fractional departure of every measurement from the star's typical relative concentration.
+        double[][] departure = new double[nStars][nFrames];
+        double[] starMag = new double[nStars];
+        double[] relative = new double[nFrames];
+        double[] mags = new double[nFrames];
+        List<Integer> scored = new ArrayList<>();
+        for (int i = 0; i < nStars; i++) {
+            Arrays.fill(departure[i], Double.NaN);
+            int n = 0;
+            for (int j = 0; j < nFrames; j++) {
+                ApertureMeasurer.FrameMeasurement m = measurements[j];
+                double ci = m.concentration(i);
+                boolean ok = Double.isFinite(ci) && frameConcentration[j] > 0
+                        && (m.flags[i] & SHAPE_REFERENCE_EXCLUDING_FLAGS) == 0;
+                relative[j] = ok ? ci / frameConcentration[j] : Double.NaN;
+                mags[j] = ok ? m.mag(ApertureMeasurer.R_MAIN, i) : Double.NaN;
+                if (ok) {
+                    n++;
+                }
+            }
+            if (n < MIN_SHAPE_MEASUREMENTS) {
+                continue;
+            }
+            double typical = PhotometryMath.median(relative);
+            starMag[i] = PhotometryMath.median(mags);
+            if (!(typical > 0) || !Double.isFinite(starMag[i])) {
+                continue;
+            }
+            for (int j = 0; j < nFrames; j++) {
+                departure[i][j] = relative[j] / typical - 1.0;
+            }
+            scored.add(i);
+        }
+        if (scored.isEmpty()) {
+            return;
+        }
+        // Tolerance per brightness group, pooled over all measurements of the group's stars.
+        scored.sort((a, b) -> Double.compare(starMag[a], starMag[b]));
+        int groupSize = Math.max(MIN_SHAPE_GROUP_STARS, scored.size() / SHAPE_GROUPS);
+        double[] pooled = new double[groupSize * 2 * nFrames];
+        int start = 0;
+        while (start < scored.size()) {
+            int end = Math.min(scored.size(), start + groupSize);
+            if (scored.size() - end < groupSize / 2) {
+                end = scored.size(); // fold a small remainder into the last group
+            }
+            int n = 0;
+            for (int k = start; k < end; k++) {
+                for (double d : departure[scored.get(k)]) {
+                    if (Double.isFinite(d)) {
+                        if (n == pooled.length) {
+                            pooled = Arrays.copyOf(pooled, pooled.length * 2);
+                        }
+                        pooled[n++] = d;
+                    }
+                }
+            }
+            double spread = Math.max(PhotometryMath.robustSigma(pooled, n), MIN_SHAPE_SPREAD);
+            for (int k = start; k < end; k++) {
+                int i = scored.get(k);
+                for (int j = 0; j < nFrames; j++) {
+                    if (Math.abs(departure[i][j]) > SHAPE_OUTLIER_SIGMA * spread) {
+                        measurements[j].flags[i] |= PhotometryFlags.CONTAMINATED;
+                    }
+                }
+            }
+            start = end;
+        }
+    }
+
     private static ApertureMeasurer.FrameMeasurement[] measureFrames(Input input,
                                                                      List<PhotometryStarSelector.Star> stars,
                                                                      double[] frameFwhm,
@@ -410,16 +532,25 @@ public final class VariableStarAnalyzer {
         int nFrames = input.frames.size();
         ApertureMeasurer.FrameMeasurement[] out = new ApertureMeasurer.FrameMeasurement[nFrames];
         List<Callable<ApertureMeasurer.FrameMeasurement>> tasks = new ArrayList<>(nFrames);
+        AtomicInteger measured = new AtomicInteger();
         for (int j = 0; j < nFrames; j++) {
             final int frame = j;
-            tasks.add(() -> ApertureMeasurer.measure(
-                    input.frames.get(frame).pixelData,
-                    frameFwhm[frame],
-                    stars,
-                    input.masterStarMask,
-                    saturationThreshold,
-                    frameBackground[frame],
-                    config));
+            tasks.add(() -> {
+                ApertureMeasurer.FrameMeasurement m = ApertureMeasurer.measure(
+                        input.frames.get(frame).pixelData,
+                        frameFwhm[frame],
+                        stars,
+                        input.masterStarMask,
+                        saturationThreshold,
+                        frameBackground[frame],
+                        config);
+                synchronized (measured) { // keeps the reported progress in order across threads
+                    int done = measured.incrementAndGet();
+                    report(input, (int) (MEASURING_PROGRESS_SHARE * done / nFrames),
+                            "Photometry: measured frame " + done + " of " + nFrames);
+                }
+                return m;
+            });
         }
         if (executor == null) {
             for (int j = 0; j < nFrames; j++) {

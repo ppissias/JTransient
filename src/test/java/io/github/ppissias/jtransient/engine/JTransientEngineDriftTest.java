@@ -2,6 +2,7 @@ package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.SourceExtractor;
+import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 import org.junit.Test;
 
 import java.lang.reflect.Method;
@@ -104,10 +105,11 @@ public class JTransientEngineDriftTest {
                 "analyzeDitherAndDrift",
                 List.class,
                 DetectionConfig.class,
-                TransientEngineProgressListener.class
+                TransientEngineProgressListener.class,
+                PipelineTelemetry.class
         );
         method.setAccessible(true);
-        return (List<SourceExtractor.Pixel>) method.invoke(engine, frames, config, null);
+        return (List<SourceExtractor.Pixel>) method.invoke(engine, frames, config, null, new PipelineTelemetry());
     }
 
     private static short[][] createFrame(int width,

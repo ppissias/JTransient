@@ -107,10 +107,12 @@ public class JTransientEngine {
                 FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData, config);
                 metrics.filename = frame.filename;
 
-                int completed = framesCompleted.incrementAndGet();
-                if (listener != null) {
-                    int progress = (int) ((completed / (double) totalFrames) * 50.0);
-                    listener.onProgressUpdate(progress, "Evaluating frame " + completed + " of " + totalFrames);
+                synchronized (framesCompleted) { // keeps the reported progress in order across threads
+                    int completed = framesCompleted.incrementAndGet();
+                    if (listener != null) {
+                        int progress = (int) ((completed / (double) totalFrames) * 50.0);
+                        listener.onProgressUpdate(progress, "Evaluating frame " + completed + " of " + totalFrames);
+                    }
                 }
 
                 return new FrameExtractionResult(frame.sequenceIndex, null, metrics);
@@ -269,7 +271,7 @@ public class JTransientEngine {
         // =================================================================
         // --- NEW: DITHER & DRIFT DIAGNOSTICS ---
         // =================================================================
-        List<SourceExtractor.Pixel> driftPoints = analyzeDitherAndDrift(inputFrames, config, listener);
+        List<SourceExtractor.Pixel> driftPoints = analyzeDitherAndDrift(inputFrames, config, listener, telemetry);
 
         List<Callable<FrameExtractionResult>> tasks = new ArrayList<>();
 
@@ -303,10 +305,12 @@ public class JTransientEngine {
                 metrics.filename = frame.filename;
 
                 // Safely update progress from multiple threads (Mapping Phase 1 to 0-40% of the total bar)
-                int completed = framesCompleted.incrementAndGet();
-                if (listener != null) {
-                    int progress = (int) ((completed / (double) totalFrames) * 40.0);
-                    listener.onProgressUpdate(progress, "Extracting features from frame " + completed + " of " + totalFrames);
+                synchronized (framesCompleted) { // keeps the reported progress in order across threads
+                    int completed = framesCompleted.incrementAndGet();
+                    if (listener != null) {
+                        int progress = (int) ((completed / (double) totalFrames) * 40.0);
+                        listener.onProgressUpdate(progress, "Extracting features from frame " + completed + " of " + totalFrames);
+                    }
                 }
 
                 return new FrameExtractionResult(frame.sequenceIndex, extResult, metrics);
@@ -369,6 +373,12 @@ public class JTransientEngine {
 
         for (int i = 0; i < rawExtractedFrames.size(); i++) {
             FrameQualityAnalyzer.FrameMetrics metrics = sessionMetrics.get(i);
+            if (!metrics.isRejected && telemetry.driftExcludedFrames.contains(inputFrames.get(i).sequenceIndex)) {
+                // A partly blank frame can keep enough stars to pass the session statistics, but its sky does
+                // not match the other frames.
+                metrics.isRejected = true;
+                metrics.rejectionReason = "Blank or failed registration (less than half of the pixels hold image data)";
+            }
             PipelineTelemetry.FrameQualityStat qualityStat = new PipelineTelemetry.FrameQualityStat();
             qualityStat.frameIndex = inputFrames.get(i).sequenceIndex;
             qualityStat.filename = metrics.filename;
@@ -420,9 +430,12 @@ public class JTransientEngine {
      * @param inputFrames frames to inspect
      * @param config pipeline configuration that may be updated with a safer void radius
      * @param listener optional progress listener
+     * @param telemetry telemetry that records the frames left out of the drift analysis
      * @return A list of translation vectors (dx, dy) representing the relative movement per frame.
      */
-    private List<SourceExtractor.Pixel> analyzeDitherAndDrift(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) {
+    private List<SourceExtractor.Pixel> analyzeDitherAndDrift(List<ImageFrame> inputFrames, DetectionConfig config,
+                                                              TransientEngineProgressListener listener,
+                                                              PipelineTelemetry telemetry) {
         if (listener != null) {
             listener.onProgressUpdate(0, "Analyzing sequence dither and corner drift...");
         }
@@ -432,6 +445,11 @@ public class JTransientEngine {
                 config.voidProximityRadius
         );
 
+        telemetry.driftExcludedFrames.addAll(driftAnalysis.failedRegistrationFrames);
+        if (DEBUG && !driftAnalysis.failedRegistrationFrames.isEmpty()) {
+            System.out.println("DEBUG: Dither Diagnostics left out blank or failed-registration frames "
+                    + "(less than half the pixels valid): " + driftAnalysis.failedRegistrationFrames);
+        }
         if (driftAnalysis.recommendedVoidProximityRadius > config.voidProximityRadius) {
             if (DEBUG) {
                 System.out.println(
@@ -488,7 +506,7 @@ public class JTransientEngine {
 
         if (DEBUG) {
             System.out.printf("DEBUG: Master Map Config -> Master Sigma: %.2f | Master Grow: %.2f | Master MinPix: %d%n",
-                    config.masterSigmaMultiplier, config.masterSigmaMultiplier, config.masterMinDetectionPixels);
+                    config.masterSigmaMultiplier, MasterReferenceAnalyzer.effectiveMasterGrowSigma(config), config.masterMinDetectionPixels);
         }
 
         if (listener != null) {
@@ -587,11 +605,12 @@ public class JTransientEngine {
         }
 
         // --- THE PROXY LISTENER ---
-        // We pass a synthetic listener to the Linker. It maps the Linker's 0-100% to the Engine's 50-100% range!
+        // We pass a synthetic listener to the Linker. It maps the Linker's 0-100% to the Engine's 50-90% range;
+        // residual analysis and photometry follow, so the progress never goes back.
         TransientEngineProgressListener trackingProxyListener = null;
         if (listener != null) {
             trackingProxyListener = (percentage, message) -> {
-                int scaledProgress = 50 + (percentage / 2);
+                int scaledProgress = 50 + (int) (percentage * 0.4);
                 listener.onProgressUpdate(scaledProgress, message);
             };
         }
@@ -637,7 +656,7 @@ public class JTransientEngine {
         telemetry.processingTimeMs = System.currentTimeMillis() - startTime;
 
         if (listener != null) {
-            listener.onProgressUpdate(96, "Analyzing residual transients...");
+            listener.onProgressUpdate(92, "Analyzing residual transients...");
         }
 
         ResidualTransientAnalysis residualTransientAnalysis = ResidualTransientAnalyzer.analyze(
@@ -654,7 +673,7 @@ public class JTransientEngine {
                 System.out.println("\n--- JTRANSIENT: PHASE 5 (Variable-Star Photometry) ---");
             }
             if (listener != null) {
-                listener.onProgressUpdate(97, "Measuring stationary-star photometry...");
+                listener.onProgressUpdate(93, "Measuring stationary-star photometry...");
             }
             VariableStarAnalyzer.Input photometryInput = new VariableStarAnalyzer.Input();
             photometryInput.frames = cleanFrames;
@@ -665,6 +684,10 @@ public class JTransientEngine {
             photometryInput.masterStarMask = trackResult.masterVetoMask;
             photometryInput.tracks = trackResult.tracks;
             photometryInput.slowMoverCandidates = slowMoverCandidates;
+            if (listener != null) {
+                // Photometry 0-100% maps to 93-99%.
+                photometryInput.progress = (percentage, message) -> listener.onProgressUpdate(93 + (int) (percentage * 0.06), message);
+            }
             variableStarAnalysis = VariableStarAnalyzer.analyze(photometryInput, config, executor);
             telemetry.photometryTelemetry = variableStarAnalysis.telemetry;
         }

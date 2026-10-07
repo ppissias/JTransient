@@ -73,19 +73,19 @@ This stage measures where registration created empty borders so later detection 
 
 Before extracting sources, `JTransientEngine` delegates border-padding measurement to `FrameDriftAnalyzer.analyze(...)`.
 
-For each frame, `FrameDriftAnalyzer` determines the valid image footprint by finding the bounding box of real image data:
+For each frame, `FrameDriftAnalyzer` measures how deep the alignment padding reaches from each edge:
 
 1. It considers a pixel to be valid if its value is above a low threshold (`DRIFT_VALID_PIXEL_THRESHOLD`).
-2. It finds the first and last rows containing a significant number of valid pixels (at least 5% of the frame width). This determines the top (`minY`) and bottom (`maxY`) of the valid area.
-3. It finds the first and last columns containing a significant number of valid pixels (at least 5% of the frame height). This determines the left (`minX`) and right (`maxX`) of the valid area.
-4. It calculates the padding on each side from this bounding box (e.g., `leftPadding = minX`).
-5. It derives a translation vector:
-   - `dx = leftPadding - rightPadding`
-   - `dy = topPadding - bottomPadding`
+2. **Usability check.** A frame where less than half of the pixels are valid is blank or a failed registration. It is left out of the drift trajectory and of the void-radius recommendation, and its sequence index is reported in `failedRegistrationFrames` (telemetry: `driftExcludedFrames`). The engine later rejects such frames at the session quality stage, even if they keep enough stars to pass the session statistics.
+3. **Edge depths.** On every row of the central half of the frame height it counts the padded pixels from the left and from the right edge; on every column of the central half of the width, from the top and from the bottom. Fully padded rows and columns are skipped. Using only the central band keeps the padding of the neighbouring edges out of each measurement at the corners.
+4. **Translation.** The median depth of each edge is its depth at the middle of the edge, so frames that registration also rotated (wedge-shaped padding) still give the right shift, and a few stray valid pixels in the padding do not change it:
+   - `dx = median(left depth) - median(right depth)`
+   - `dy = median(top depth) - median(bottom depth)`
+5. **Padding extent.** The deepest padding within the central bands is the frame's padding extent.
 
-The vectors are exported as `PipelineResult.driftPoints`.
+The vectors of the usable frames are exported as `PipelineResult.driftPoints` (each point's `value` is the frame's sequence index).
 
-Across the whole sequence, the analyzer also returns the maximum inward padding depth and a recommended safe `voidProximityRadius`. `JTransientEngine` applies that recommendation only if it is larger than the current config value. That keeps the measurement logic pure while preserving the existing conservative extraction behavior.
+Across the usable frames, the analyzer also returns the maximum padding extent and a recommended safe `voidProximityRadius` (extent + 10 px). `JTransientEngine` applies that recommendation only if it is larger than the current config value. That keeps the measurement logic pure while preserving the existing conservative extraction behavior.
 
 ## 2. Parallel Extraction And Quality Measurement
 

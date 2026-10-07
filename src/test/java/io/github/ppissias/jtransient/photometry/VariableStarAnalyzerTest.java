@@ -165,6 +165,50 @@ public class VariableStarAnalyzerTest {
         assertFalse(crossed.tier == VariabilityTier.HIGH_CONFIDENCE);
     }
 
+    /**
+     * A hot pixel landing on a constant star's core in runs of consecutive frames brightens it by a large
+     * factor, too often to be an isolated outlier. The star's shape gives it away: the core becomes far more
+     * concentrated than the star's usual profile, while real variability leaves the shape unchanged.
+     */
+    @Test
+    public void hotPixelSpikesOnAStarAreFlaggedAsContaminated() throws Exception {
+        Session session = createSession(DoubleUnaryOperator.identity());
+        Star target = null;
+        for (Star star : session.stars) {
+            if (star.flux > 15_000 && star.flux < 100_000
+                    && Math.hypot(star.x - session.variable.x, star.y - session.variable.y) > 60
+                    && Math.hypot(star.x - session.crossed.x, star.y - session.crossed.y) > 60
+                    && star.x > 60 && star.y > 60 && star.x < SIZE - 60 && star.y < SIZE - 60) {
+                target = star;
+                break;
+            }
+        }
+        assertNotNull(target);
+        int[] spikeFrames = {8, 9, 10, 25, 26};
+        for (int j : spikeFrames) {
+            short[][] pixels = session.frames.get(j).pixelData;
+            int x = (int) Math.round(target.x) + 1;
+            int y = (int) Math.round(target.y);
+            int value = Math.min(65535, PixelEncoding.toShiftedPositiveInt(pixels[y][x]) + 25_000);
+            pixels[y][x] = PixelEncoding.fromShiftedPositiveInt(value);
+        }
+
+        PipelineResult result = engine.runPipeline(session.frames, testConfig(), null, null);
+        StarLightCurve curve = nearest(result.variableStarAnalysis, target);
+
+        int flagged = 0;
+        for (int j : spikeFrames) {
+            if ((curve.flags[j] & (PhotometryFlags.CONTAMINATED | PhotometryFlags.OUTLIER | PhotometryFlags.CROSSING)) != 0) {
+                flagged++;
+            }
+        }
+        assertEquals("every spike must be flagged", spikeFrames.length, flagged);
+        assertTrue("spikes in consecutive frames are caught by the shape check",
+                (curve.flags[9] & PhotometryFlags.CONTAMINATED) != 0);
+        assertEquals(curve.failedGates.toString(), VariabilityTier.CONSTANT, curve.tier);
+        assertTrue(result.variableStarAnalysis.telemetry.measurementsContaminated >= spikeFrames.length);
+    }
+
     @Test
     public void stretchedSessionIsRefusedByStarShapeCheck() throws Exception {
         double beta = 1000.0;

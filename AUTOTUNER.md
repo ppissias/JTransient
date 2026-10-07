@@ -1,8 +1,119 @@
 # JTransient Auto-Tuner Guide
 
-This document explains how `JTransientAutoTuner.tune(...)` works internally, what it optimizes, what it deliberately does not optimize, and how to read the telemetry report it produces.
+JTransient has two auto-tuners. Both derive a `DetectionConfig` for a session from a sample of its frames, take an `AutoTuneProfile` and return a `JTransientAutoTuner.AutoTunerResult`:
+
+| Tuner | Entry point | How it decides |
+| --- | --- | --- |
+| Calibrated (measured) | `CalibratedAutoTuner.tune(...)` | Measures false positives and sensitivity directly for every combination of settings, then picks the most sensitive combination within the profile's false-positive budget |
+| Legacy (score-based) | `JTransientAutoTuner.tune(...)` | Scores combinations by how well they separate stationary stars from possible transients; kept for comparison |
+
+SpacePixels uses the calibrated tuner by default and offers the legacy one as an option.
+
+The profiles are `CONSERVATIVE` (low sensitivity), `BALANCED` (medium), `AGGRESSIVE` (high) and `MAXIMUM` (as sensitive as possible, for small sensors or targeted searches for a faint object). The legacy tuner treats `MAXIMUM` like `AGGRESSIVE`.
 
 For the broader library surface, see [PIPELINE.md](PIPELINE.md). For individual `DetectionConfig` fields, see [CONFIG.md](CONFIG.md).
+
+# Calibrated Auto-Tuner (`CalibratedAutoTuner`)
+
+## Idea
+
+Instead of scoring proxies, the calibrated tuner tries a grid of settings on crops of the session's own frames and measures, for each combination:
+
+- **false positives**: detections that a setting would report although nothing is there
+- **sensitivity**: how many faint objects of known brightness it would find
+- **mask coverage**: how much sky the star mask hides
+
+Each profile is a false-positive budget per megapixel per frame. Among the combinations within budget, the tuner takes the one that recovers the most synthetic sources (near-ties go to the one that keeps more bright sources). A more permissive profile can therefore never be less sensitive.
+
+| Profile | Budget (false positives per MPix per frame) |
+| --- | --- |
+| `CONSERVATIVE` | 0.05 |
+| `BALANCED` | 0.2 |
+| `AGGRESSIVE` | 0.6 |
+| `MAXIMUM` | 3.5 |
+
+Because the budget is per megapixel per frame, the number of false detections a profile allows grows with the sensor size and the number of frames. On a 61-megapixel sensor with 33 frames, `MAXIMUM` allows several thousand; it is meant for small sensors and targeted searches.
+
+## Entry points
+
+```java
+JTransientAutoTuner.AutoTunerResult CalibratedAutoTuner.tune(
+        List<ImageFrame> frames,
+        DetectionConfig baseConfig,
+        JTransientAutoTuner.AutoTuneProfile profile,
+        TransientEngineProgressListener listener)
+
+CalibratedAutoTuner.Calibration CalibratedAutoTuner.calibrate(
+        List<ImageFrame> frames,
+        DetectionConfig baseConfig,
+        TransientEngineProgressListener listener)
+
+DetectionConfig CalibratedAutoTuner.configFor(
+        CalibratedAutoTuner.Calibration calibration,
+        DetectionConfig baseConfig,
+        JTransientAutoTuner.AutoTuneProfile profile)
+```
+
+`tune(...)` returns:
+
+- the chosen settings in `optimizedConfig`;
+- a short `summary`;
+- the full `telemetryReport`;
+- the whole measurement in `calibration`.
+
+`calibrate(...)` returns:
+
+- every measured combination;
+- the choice for every profile (`chosen`, `withinBudget`, `budgetVerifiable`);
+- the measured FWHM, jitter and measured area.
+
+Because one measurement covers all profiles, a caller can switch profiles without re-running: `configFor(...)` applies one profile's choice to a clone of a base config. SpacePixels uses this for the profile table on its Detection Settings Overview page.
+
+It sets `detectionSigmaMultiplier`, `growSigmaMultiplier`, `minDetectionPixels`, `masterSigmaMultiplier`, `masterGrowSigmaMultiplier`, `masterMinDetectionPixels`, `maxMaskOverlapFraction` and `maxStarJitter`. Everything else comes from the base config.
+
+## Preparation
+
+1. **Unusable frames are left out.** Frames where less than half of the pixels hold image data (blank frames, failed registrations) are dropped. At least 5 usable frames are needed.
+2. **Crops.** The frames are cut into square crops of up to 1024 px: the centre and four corners on ordinary frames, an even grid of up to 4 x 4 on large ones. The border kept clear of the frame edges is the measured drift padding plus 50 px (between 50 and 200 px). Where crops overlap, each pixel is counted in one crop only.
+3. **Measurement frames.** Ten frames, evenly spaced; small sensors use more (up to 40) so that about 30 megapixel-frames are measured.
+4. **Star size and jitter.** The star FWHM is measured from the area above half the peak of bright, isolated stars (the core width; second moments would include the wings). The residual registration jitter is measured from master-to-frame star distances.
+5. **Three images per crop-frame:** the real frame; a negative image `2 x master - frame`, which has the noise of a frame but no real objects; and a copy with synthetic stars injected (see below).
+6. **Streak pass.** A more sensitive extraction (2.5 / 1.5 sigma) of each real crop joins the fragments of faint satellite or meteor trails into elongated objects. Detections within one FWHM of such a streak (lying mostly outside the star mask) are treated as real objects, not false positives.
+
+## The settings grid
+
+- Detection sigma 2.5 to 6.0; grow sigma = detection sigma minus 0.75 or 1.25.
+- Minimum pixels: 0.3, 0.5, 0.75, 1, 1.5, 2 and 3 times the star core area (pi x (FWHM/2)^2).
+- Master sigma 1.5 to 5.0; master grow = master sigma minus 0, 0.5 or 1.0; master minimum pixels 3 or 0.25, 0.5 and 1 times the core area. The star mask is grown by max(1, round(jitter / 2)) px, as in the pipeline.
+- Veto overlap 0.5, 0.65, 0.75, 0.85 and 0.95.
+
+Settings that already drown in noise before any veto are skipped. Every combination is evaluated exactly as the pipeline would: extraction on the crops, then the star-mask veto.
+
+## What is measured
+
+**False positives**, per megapixel per frame:
+
+- **noise**: detections in the negative image that survive the veto
+- **star leakage**: real-frame survivors that touch the star mask; or reappear within the recurrence radius (max(1.5 px, jitter)) in another frame, on the sky or on the sensor (hot pixels move with the drift across registered frames; the sensor test only applies between frames whose drift differs); or lie within one FWHM of a star and reappear beside it in another frame
+- **real-frame excess**: real-frame survivors above the lowest rate any setting reaches (faint stars visible only in better frames, seeing residuals and similar artefacts)
+
+The false-positive figure is the larger of noise + leakage and the real-frame excess. A cautious estimate, (count + 1) / measured area, is compared with the budget. A budget smaller than one event over the measured area cannot be confirmed; it is relaxed to "no events".
+
+**Sensitivity (the artificial star test).** On in-memory copies of the crops, the tuner injects Gaussian stars shaped like the session's measured stars, 12 per brightness level per crop-frame, at known positions and peak SNR 2, 3, 4, 5, 6, 8, 10 and 15. For each combination it counts the injected stars that are detected near their position and survive the veto. This gives the completeness per level, the recovered fraction (mean over levels), the bright recovery (SNR 8 and above) and SNR50, the peak SNR at which half are found. The injected stars never reach the input files or the pipeline run.
+
+## Reading the report
+
+The telemetry report lists the measurement area, the star FWHM and jitter, skipped settings and crops, the choice for every profile with its measurements, the best setting per detection sigma, the completeness curve of the chosen setting, and the final configuration.
+
+## Known limitations
+
+- The injected stars are static point sources. A slow mover whose path crosses faint stars included only in a deep mask can be vetoed in many consecutive frames; the tuner cannot foresee that for a particular path. (Example: Apophis, which the deep 1.5-sigma mask removes while a 2.0-sigma mask keeps it; `MAXIMUM` finds it.)
+- Diffuse objects such as comets are not represented by the injected stars, so the cost of a deep mask for them is underestimated.
+- Calibration takes a few seconds on small sensors and about a minute on 61-megapixel frames.
+
+# Legacy Auto-Tuner (`JTransientAutoTuner`)
+
+The rest of this document describes the original, score-based tuner.
 
 ## What The Auto-Tuner Is For
 
@@ -464,6 +575,7 @@ The public profiles are:
 - `CONSERVATIVE`
 - `BALANCED`
 - `AGGRESSIVE`
+- `MAXIMUM`, which this tuner treats exactly like `AGGRESSIVE`
 
 They do not change the search grid. They change the hard limits and score weights.
 

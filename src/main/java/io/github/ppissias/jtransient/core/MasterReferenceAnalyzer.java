@@ -55,6 +55,15 @@ public final class MasterReferenceAnalyzer {
     }
 
     /**
+     * Grow threshold used for the Master Star Map: {@code masterGrowSigmaMultiplier} when set (and not above
+     * the master seed), otherwise the master seed itself.
+     */
+    public static double effectiveMasterGrowSigma(DetectionConfig config) {
+        double grow = config.masterGrowSigmaMultiplier;
+        return grow > 0 ? Math.min(grow, config.masterSigmaMultiplier) : config.masterSigmaMultiplier;
+    }
+
+    /**
      * Extracts stationary master-star reference objects from an existing median master stack.
      */
     public static MasterReferenceAnalysis analyzeFromMasterStack(short[][] masterStackData,
@@ -71,7 +80,7 @@ public final class MasterReferenceAnalyzer {
         DetectionConfig extractionConfig = config.clone();
 
         // Use a stage-local config so master-star extraction cannot leak temporary thresholds back to callers.
-        extractionConfig.growSigmaMultiplier = extractionConfig.masterSigmaMultiplier;
+        extractionConfig.growSigmaMultiplier = effectiveMasterGrowSigma(config);
         extractionConfig.edgeMarginPixels = 5;
         extractionConfig.voidProximityRadius = 5;
 

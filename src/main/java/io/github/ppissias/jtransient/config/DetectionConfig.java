@@ -112,6 +112,12 @@ public class DetectionConfig implements Cloneable {
      */
     public int masterMinDetectionPixels = 3;
 
+    /** * Hysteresis threshold used to grow Master Star Map sources after they are seeded at
+     * {@link #masterSigmaMultiplier}. A lower value extends star footprints into their faint wings
+     * without seeding new noise islands. 0 (default) uses the master sigma itself (no hysteresis).
+     */
+    public double masterGrowSigmaMultiplier = 0.0;
+
     // --- Slow-mover candidate detection ---
 
     /**

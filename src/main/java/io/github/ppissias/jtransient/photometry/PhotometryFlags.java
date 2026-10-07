@@ -31,6 +31,12 @@ public final class PhotometryFlags {
     public static final int FRAME_EXCLUDED = 1 << 5;
     /** Background-subtracted flux was not positive, so no magnitude exists. */
     public static final int BAD_FLUX = 1 << 6;
+    /**
+     * The star's concentration index on this frame differs strongly from its own typical value (after the
+     * frame's seeing is taken out): a hot pixel, cosmic ray or faint passing object in the aperture.
+     * Real variability changes the flux, not the shape.
+     */
+    public static final int CONTAMINATED = 1 << 7;
 
     private PhotometryFlags() {
     }
@@ -47,6 +53,7 @@ public final class PhotometryFlags {
         if ((flags & OUTLIER) != 0) names.add("OUTLIER");
         if ((flags & FRAME_EXCLUDED) != 0) names.add("FRAME_EXCLUDED");
         if ((flags & BAD_FLUX) != 0) names.add("BAD_FLUX");
+        if ((flags & CONTAMINATED) != 0) names.add("CONTAMINATED");
         return names;
     }
 }

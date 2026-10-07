@@ -157,6 +157,16 @@ public class JTransientAutoTuner {
         public double bestTransientRatio;
         /** Replay of the final tuned config on the frozen tuning crops. */
         public FinalValidationTelemetry finalValidationTelemetry;
+        /**
+         * Optional short plain-language summary of the chosen settings and their measured effect,
+         * set by tuners that measure noise and sensitivity directly; null for this legacy tuner.
+         */
+        public String summary;
+        /**
+         * Full measurement of the calibrated tuner, including the chosen settings of every profile, so a
+         * caller can switch profiles without re-running; null for this legacy tuner.
+         */
+        public CalibratedAutoTuner.Calibration calibration;
     }
 
     /**
@@ -168,7 +178,12 @@ public class JTransientAutoTuner {
         /** Balanced default between cleanliness and sensitivity. */
         BALANCED,
         /** Allow noisier candidates to preserve sensitivity. */
-        AGGRESSIVE
+        AGGRESSIVE,
+        /**
+         * As sensitive as possible: many more candidates to review, for small sensors or targeted searches for
+         * faint objects. The legacy tuner treats it like {@link #AGGRESSIVE}.
+         */
+        MAXIMUM
     }
 
     /**
@@ -1682,7 +1697,7 @@ public class JTransientAutoTuner {
             return true;
         }
 
-        if (profile != AutoTuneProfile.AGGRESSIVE) {
+        if (profile != AutoTuneProfile.AGGRESSIVE && profile != AutoTuneProfile.MAXIMUM) {
             return false;
         }
 
@@ -1765,6 +1780,7 @@ public class JTransientAutoTuner {
                 );
 
             case AGGRESSIVE:
+            case MAXIMUM:
                 return new AutoTunePolicy(
                         0.12,
                         1.00,
