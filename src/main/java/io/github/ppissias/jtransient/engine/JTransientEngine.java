@@ -27,6 +27,7 @@ import io.github.ppissias.jtransient.quality.SessionEvaluator;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -87,6 +88,32 @@ public class JTransientEngine {
      * @throws Exception if frame evaluation or stack generation fails
      */
     public short[][] generateMasterStack(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
+        return generateMasterStackWithDetails(inputFrames, config, listener).masterStack;
+    }
+
+    /** A master stack and the frames it was built from. */
+    public static final class MasterStackResult {
+        /** Median master stack of the kept frames. */
+        public final short[][] masterStack;
+        /** Sequence indices of the frames in the stack. */
+        public final List<Integer> keptFrames;
+        /** Frames left out, with the reason, as in the pipeline telemetry. */
+        public final List<PipelineTelemetry.FrameRejectionStat> rejectedFrames;
+
+        MasterStackResult(short[][] masterStack, List<Integer> keptFrames, List<PipelineTelemetry.FrameRejectionStat> rejectedFrames) {
+            this.masterStack = masterStack;
+            this.keptFrames = keptFrames;
+            this.rejectedFrames = rejectedFrames;
+        }
+    }
+
+    /**
+     * Builds the master stack exactly as the pipeline does: the same drift analysis, quality metrics and frame
+     * selection ({@link #rejectUnusableFrames}), then the median of the kept frames. The caller's configuration is
+     * not changed (the pipeline may raise the void radius for its own run).
+     */
+    public MasterStackResult generateMasterStackWithDetails(List<ImageFrame> inputFrames, DetectionConfig config,
+                                                            TransientEngineProgressListener listener) throws Exception {
         if (listener != null) {
             listener.onProgressUpdate(0, "Evaluating frames for Master Stack...");
         }
@@ -95,8 +122,13 @@ public class JTransientEngine {
             System.out.println("\n--- JTRANSIENT: PRE-COMPUTING MASTER STACK ---");
         }
 
-        List<Callable<FrameExtractionResult>> tasks = new ArrayList<>();
+        // The drift analysis may raise the void radius, which the quality metrics then use, as in the pipeline.
+        DetectionConfig stageConfig = config.clone();
+        PipelineTelemetry telemetry = new PipelineTelemetry();
         inputFrames.sort(Comparator.comparingInt(f -> f.sequenceIndex));
+        analyzeDitherAndDrift(inputFrames, stageConfig, null, telemetry);
+
+        List<Callable<FrameExtractionResult>> tasks = new ArrayList<>();
 
         int totalFrames = inputFrames.size();
         AtomicInteger framesCompleted = new AtomicInteger(0);
@@ -104,7 +136,7 @@ public class JTransientEngine {
         for (ImageFrame frame : inputFrames) {
             tasks.add(() -> {
                 // We only need quality metrics to drop outliers. We skip SourceExtractor to save massive CPU time!
-                FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData, config);
+                FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData, stageConfig);
                 metrics.filename = frame.filename;
 
                 synchronized (framesCompleted) { // keeps the reported progress in order across threads
@@ -135,12 +167,25 @@ public class JTransientEngine {
             listener.onProgressUpdate(55, "Filtering outlier frames...");
         }
 
-        SessionEvaluator.rejectOutlierFrames(sessionMetrics, config);
+        rejectUnusableFrames(sessionMetrics, inputFrames, telemetry.driftExcludedFrames, stageConfig);
 
         List<ImageFrame> cleanFrames = new ArrayList<>();
+        List<Integer> keptFrames = new ArrayList<>();
+        List<PipelineTelemetry.FrameRejectionStat> rejectedFrames = new ArrayList<>();
         for (int i = 0; i < completedResults.size(); i++) {
-            if (!sessionMetrics.get(i).isRejected) {
+            FrameQualityAnalyzer.FrameMetrics metrics = sessionMetrics.get(i);
+            if (!metrics.isRejected) {
                 cleanFrames.add(inputFrames.get(i));
+                keptFrames.add(inputFrames.get(i).sequenceIndex);
+            } else {
+                PipelineTelemetry.FrameRejectionStat rejected = new PipelineTelemetry.FrameRejectionStat();
+                rejected.frameIndex = inputFrames.get(i).sequenceIndex;
+                rejected.filename = metrics.filename;
+                rejected.reason = metrics.rejectionReason;
+                rejected.medianEccentricity = metrics.medianEccentricity;
+                rejected.brightStarMedianEccentricity = metrics.brightStarMedianEccentricity;
+                rejected.brightStarShapeStarCount = metrics.brightStarShapeStarCount;
+                rejectedFrames.add(rejected);
             }
         }
 
@@ -148,7 +193,7 @@ public class JTransientEngine {
             listener.onProgressUpdate(60, "Stacking " + cleanFrames.size() + " clean frames...");
         }
 
-        return MasterMapGenerator.createMedianMasterStack(cleanFrames);
+        return new MasterStackResult(MasterMapGenerator.createMedianMasterStack(cleanFrames), keptFrames, rejectedFrames);
     }
 
     /**
@@ -356,7 +401,8 @@ public class JTransientEngine {
         }
 
         // Pass the config down to the evaluator
-        SessionEvaluator.SessionThresholds sessionThresholds = SessionEvaluator.rejectOutlierFrames(sessionMetrics, config);
+        SessionEvaluator.SessionThresholds sessionThresholds =
+                rejectUnusableFrames(sessionMetrics, inputFrames, telemetry.driftExcludedFrames, config);
         telemetry.qualityThresholds.available = sessionThresholds.available;
         telemetry.qualityThresholds.minAllowedStarCount = sessionThresholds.minAllowedStarCount;
         telemetry.qualityThresholds.maxAllowedFwhm = sessionThresholds.maxAllowedFwhm;
@@ -373,12 +419,6 @@ public class JTransientEngine {
 
         for (int i = 0; i < rawExtractedFrames.size(); i++) {
             FrameQualityAnalyzer.FrameMetrics metrics = sessionMetrics.get(i);
-            if (!metrics.isRejected && telemetry.driftExcludedFrames.contains(inputFrames.get(i).sequenceIndex)) {
-                // A partly blank frame can keep enough stars to pass the session statistics, but its sky does
-                // not match the other frames.
-                metrics.isRejected = true;
-                metrics.rejectionReason = "Blank or failed registration (less than half of the pixels hold image data)";
-            }
             PipelineTelemetry.FrameQualityStat qualityStat = new PipelineTelemetry.FrameQualityStat();
             qualityStat.frameIndex = inputFrames.get(i).sequenceIndex;
             qualityStat.filename = metrics.filename;
@@ -421,6 +461,33 @@ public class JTransientEngine {
                 startTime,
                 driftPoints
         );
+    }
+
+    /**
+     * The frame selection of the quality stage, shared by the full pipeline and {@link #generateMasterStack}: marks
+     * the session outliers (quality settings) and the blank or failed-registration frames found by the drift
+     * analysis as rejected.
+     *
+     * @param sessionMetrics per-frame quality metrics, in the order of {@code inputFrames}; updated in place
+     * @param inputFrames the frames, sorted by sequence index
+     * @param driftExcludedFrames sequence indices of blank or failed-registration frames
+     * @return the session thresholds used for the outlier rejection
+     */
+    private static SessionEvaluator.SessionThresholds rejectUnusableFrames(List<FrameQualityAnalyzer.FrameMetrics> sessionMetrics,
+                                                                          List<ImageFrame> inputFrames,
+                                                                          Collection<Integer> driftExcludedFrames,
+                                                                          DetectionConfig config) {
+        SessionEvaluator.SessionThresholds thresholds = SessionEvaluator.rejectOutlierFrames(sessionMetrics, config);
+        for (int i = 0; i < sessionMetrics.size(); i++) {
+            FrameQualityAnalyzer.FrameMetrics metrics = sessionMetrics.get(i);
+            if (!metrics.isRejected && driftExcludedFrames.contains(inputFrames.get(i).sequenceIndex)) {
+                // A partly blank frame can keep enough stars to pass the session statistics, but its sky does
+                // not match the other frames.
+                metrics.isRejected = true;
+                metrics.rejectionReason = "Blank or failed registration (less than half of the pixels hold image data)";
+            }
+        }
+        return thresholds;
     }
 
     /**

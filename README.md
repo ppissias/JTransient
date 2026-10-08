@@ -273,7 +273,7 @@ public final class ReuseMasterStackExample {
 }
 ```
 
-`generateMasterStack(...)` is lighter than a full run: it performs quality evaluation and session rejection, then stacks the retained frames, but it does not extract frame objects or link tracks.
+`generateMasterStack(...)` is lighter than a full run: it performs the drift check, quality evaluation and session rejection exactly as the pipeline does, then stacks the retained frames, but it does not extract frame objects or link tracks. `generateMasterStackWithDetails(...)` also reports which frames were kept and rejected.
 
 ### 5. Export transients without linking tracks
 

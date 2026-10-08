@@ -174,24 +174,27 @@ short[][] generateMasterStack(
 )
 ```
 
-What it does:
+What it does (the same frame selection as `runPipeline(...)`, so the stack is identical to the pipeline's):
 
 1. sorts frames by `sequenceIndex`
-2. runs `FrameQualityAnalyzer.evaluateFrame(...)` on every frame
-3. rejects outlier frames with `SessionEvaluator`
-4. builds a median master stack from the retained frames
+2. runs the drift analysis, which finds blank or failed-registration frames (on a copy of the configuration, so the caller's void radius is not changed)
+3. runs `FrameQualityAnalyzer.evaluateFrame(...)` on every frame
+4. rejects outlier frames with `SessionEvaluator` and the blank or failed-registration frames, in the same shared step as the pipeline
+5. builds a median master stack from the retained frames
 
 What it returns:
 
 - the median `short[][]` master stack
+- `generateMasterStackWithDetails(...)` also returns the kept frames and the rejected frames with their reasons (`MasterStackResult`)
 
 What it does not do:
 
 - no main transient `SourceExtractor` pass; the quality analyzer still extracts quality-reference stars
-- no drift diagnostics
 - no master-star extraction
 - no transients export
 - no track linking
+
+The stationary-star veto mask is built by `MasterVetoMask.build(...)`: the master-star footprints, each widened by half the star jitter radius (at least one pixel). The pipeline uses it, and tools that preview the mask can use the same method with `MasterReferenceAnalyzer.analyzeFromMasterStack(...)`.
 
 Use this when you want to reuse the same master stack across repeated `detectTransients(...)` or `runPipeline(...)` calls.
 

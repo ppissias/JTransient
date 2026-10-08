@@ -250,24 +250,7 @@ public class TrackLinker {
         // =================================================================
         if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 2] Building Binary Footprint Mask from Master Map...");
 
-        boolean[][] masterVetoMask = new boolean[sensorHeight][sensorWidth];
-        int dilationRadius = (int) Math.max(1, Math.round(config.maxStarJitter / 2.0));
-
-        for (SourceExtractor.DetectedObject mStar : masterStars) {
-            for (SourceExtractor.Pixel p : mStar.rawPixels) {
-                for (int dx = -dilationRadius; dx <= dilationRadius; dx++) {
-                    for (int dy = -dilationRadius; dy <= dilationRadius; dy++) {
-                        if (dx * dx + dy * dy <= dilationRadius * dilationRadius) {
-                            int mx = p.x + dx;
-                            int my = p.y + dy;
-                            if (mx >= 0 && mx < sensorWidth && my >= 0 && my < sensorHeight) {
-                                masterVetoMask[my][mx] = true;
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        boolean[][] masterVetoMask = MasterVetoMask.build(masterStars, sensorWidth, sensorHeight, config.maxStarJitter);
 
         // --- PHASE 2A: Veto Point Sources ---
         List<List<SourceExtractor.DetectedObject>> transients = new ArrayList<>();
