@@ -83,7 +83,7 @@ It sets `detectionSigmaMultiplier`, `growSigmaMultiplier`, `minDetectionPixels`,
 ## The settings grid
 
 - Detection sigma 2.5 to 6.0; grow sigma = detection sigma minus 0.75 or 1.25.
-- Minimum pixels: 0.3, 0.5, 0.75, 1, 1.5, 2 and 3 times the star core area (pi x (FWHM/2)^2).
+- Minimum pixels: 0.3, 0.5, 0.75, 1, 1.5, 2 and 3 times the star core area (pi x (FWHM/2)^2), at least 3 and at most 15 pixels (`MAX_MIN_PIXELS`). Without the upper limit, wide stars would lead to sizes of 25 pixels and more, which reject small faint movers.
 - Master sigma 1.5 to 5.0; master grow = master sigma minus 0, 0.5 or 1.0; master minimum pixels 3 or 0.25, 0.5 and 1 times the core area. The star mask is grown by max(1, round(jitter / 2)) px, as in the pipeline.
 - Veto overlap 0.5, 0.65, 0.75, 0.85 and 0.95.
 

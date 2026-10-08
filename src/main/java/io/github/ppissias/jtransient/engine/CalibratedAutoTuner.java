@@ -67,6 +67,11 @@ public final class CalibratedAutoTuner {
     public static double[] GROW_DELTAS_TO_TEST = {0.75, 1.25};
     /** Minimum-pixel candidates as multiples of the PSF core area (pi x (FWHM/2)^2). */
     public static double[] MIN_PIXEL_AREA_FACTORS = {0.3, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0};
+    /**
+     * Upper limit of the minimum-pixel candidates. With wide stars the area factors would reach 25 pixels and more,
+     * which rejects small faint movers; larger sizes than this are not tried.
+     */
+    public static int MAX_MIN_PIXELS = 15;
     public static double[] MASTER_SIGMAS_TO_TEST = {1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0};
     public static double[] MASTER_GROW_OFFSETS_TO_TEST = {0.0, 0.5, 1.0};
     /** Master minimum-pixel candidates as multiples of the PSF core area, in addition to 3 pixels. */
@@ -191,7 +196,7 @@ public final class CalibratedAutoTuner {
         }
     }
 
-    private static final class FrameSetting {
+    static final class FrameSetting {
         final double sigma;
         final double grow;
         final int minPixels;
@@ -355,9 +360,9 @@ public final class CalibratedAutoTuner {
                         "Master sigma %.2f, master grow %.2f, master min pixels %d%n" +
                         "Mask overlap %.2f, star jitter %.2f px%n%n" +
                         "Measured on this session:%n" +
-                        "- false positives from these settings: %.3f per megapixel per frame (noise %.3f + star leakage %.3f, or the real-frame excess if larger; budget %.2f)%n" +
+                        "- noise detections (false positives) from these settings: %.3f per megapixel per frame (noise %.3f + star leakage %.3f, or the real-frame excess if larger; budget %.2f)%n" +
                         "- all real-frame survivors: %.3f per megapixel per frame (includes cosmic rays and real objects)%n" +
-                        "- synthetic sources recovered: %.1f%% (bright %.0f%%), half recovered at peak SNR %s%n" +
+                        "- synthetic test stars found: %.1f%% (bright %.0f%%); detection limit (half found) at peak SNR %s%n" +
                         "- sky hidden by the star mask: %.1f%%%n" +
                         "- star FWHM %.2f px",
                 profile, calibration.withinBudget[p] ? "" : " (no setting met the budget; the cleanest one was used)",
@@ -1251,10 +1256,10 @@ public final class CalibratedAutoTuner {
     // Grid and helpers
     // =========================================================================
 
-    private static List<FrameSetting> frameSettings(double psfCoreArea) {
+    static List<FrameSetting> frameSettings(double psfCoreArea) {
         List<Integer> minPixels = new ArrayList<>();
         for (double f : MIN_PIXEL_AREA_FACTORS) {
-            int mp = Math.max(3, (int) Math.round(f * psfCoreArea));
+            int mp = Math.min(MAX_MIN_PIXELS, Math.max(3, (int) Math.round(f * psfCoreArea)));
             if (!minPixels.contains(mp)) minPixels.add(mp);
         }
         List<FrameSetting> out = new ArrayList<>();

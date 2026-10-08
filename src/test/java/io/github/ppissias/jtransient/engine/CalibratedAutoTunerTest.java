@@ -127,6 +127,23 @@ public class CalibratedAutoTunerTest {
     }
 
     @Test
+    public void minimumPixelCandidatesAreCappedForWideStars() {
+        // FWHM 6 px: core area about 28 px, so the largest factor (3x) would ask for 85 px.
+        double coreArea = Math.PI * 3.0 * 3.0;
+        int largest = 0;
+        for (CalibratedAutoTuner.FrameSetting setting : CalibratedAutoTuner.frameSettings(coreArea)) {
+            largest = Math.max(largest, setting.minPixels);
+        }
+        assertEquals(CalibratedAutoTuner.MAX_MIN_PIXELS, largest);
+        // Sharp stars keep their area-based sizes (FWHM 2 px: largest 3x core area = 9 px).
+        int sharpLargest = 0;
+        for (CalibratedAutoTuner.FrameSetting setting : CalibratedAutoTuner.frameSettings(Math.PI)) {
+            sharpLargest = Math.max(sharpLargest, setting.minPixels);
+        }
+        assertEquals(9, sharpLargest);
+    }
+
+    @Test
     public void configForAppliesEachProfilesChoice() {
         DetectionConfig base = new DetectionConfig();
         for (JTransientAutoTuner.AutoTuneProfile profile : JTransientAutoTuner.AutoTuneProfile.values()) {
