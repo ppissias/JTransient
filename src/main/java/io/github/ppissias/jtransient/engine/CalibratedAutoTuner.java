@@ -56,11 +56,11 @@ import java.util.concurrent.Future;
 public final class CalibratedAutoTuner {
 
     /**
-     * False positives that depend on the settings allowed per megapixel per frame, for conservative, balanced,
-     * aggressive and maximum (indexed by profile ordinal). Because the budget is per megapixel, maximum leaves
+     * False positives that depend on the settings allowed per megapixel per frame, for the low, medium,
+     * high and maximum profiles (indexed by profile ordinal). Because the budget is per megapixel, maximum leaves
      * many candidates on a large sensor; it is meant for small sensors and targeted searches.
      */
-    public static double[] FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME = {0.05, 0.2, 0.6, 3.5};
+    public static double[] FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME = {0.05, 0.4, 1.5, 3.5};
     private static final int PROFILE_COUNT = JTransientAutoTuner.AutoTuneProfile.values().length;
 
     public static double[] SIGMAS_TO_TEST = {2.5, 2.75, 3.0, 3.25, 3.5, 4.0, 4.5, 5.0, 6.0};
@@ -328,7 +328,7 @@ public final class CalibratedAutoTuner {
      *
      * @param poolFrames representative frames of the session (the master is built from all of them)
      * @param baseConfig configuration to start from; tuned fields are overwritten in a clone
-     * @param profile sensitivity profile (conservative = low, balanced = medium, aggressive = high)
+     * @param profile sensitivity profile (low, medium, high or maximum)
      * @param listener optional progress listener
      * @return result in the same shape as the legacy tuner, with {@code summary} filled in
      */
@@ -341,7 +341,7 @@ public final class CalibratedAutoTuner {
         Calibration calibration = calibrate(poolFrames, baseConfig, listener);
         result.calibration = calibration;
         StringBuilder report = new StringBuilder("=== JTransient Calibrated Auto-Tuning Report ===\n");
-        report.append("Profile: ").append(profile).append("\n");
+        report.append("Profile: ").append(profile.displayName()).append("\n");
         if (!calibration.success) {
             report.append(calibration.failureReason).append("\nFalling back to the base configuration.\n");
             result.telemetryReport = report.toString();
@@ -365,7 +365,7 @@ public final class CalibratedAutoTuner {
                         "- synthetic test stars found: %.1f%% (bright %.0f%%); detection limit (half found) at peak SNR %s%n" +
                         "- sky hidden by the star mask: %.1f%%%n" +
                         "- star FWHM %.2f px",
-                profile, calibration.withinBudget[p] ? "" : " (no setting met the budget; the cleanest one was used)",
+                profile.displayName(), calibration.withinBudget[p] ? "" : " (no setting met the budget; the cleanest one was used)",
                 best.sigma, best.growSigma, best.minPixels, best.masterSigma, best.masterGrowSigma, best.masterMinPixels,
                 best.maskOverlap, calibration.jitter,
                 best.falsePositivesPerMpixFrame, best.noisePerMpixFrame, best.leakagePerMpixFrame, FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[p],
@@ -661,11 +661,11 @@ public final class CalibratedAutoTuner {
         }
         report.append(String.format(Locale.US, "Single-frame events every setting detects (cosmic rays, real objects): %.3f per MPix per frame; not counted against the budget.%n",
                 calibration.singleFrameFloorPerMpixFrame));
-        report.append("--- CHOICE PER PROFILE (budget: false positives per MPix per frame) ---\n");
+        report.append("--- CHOICE PER PROFILE (budget: noise detections per MPix per frame) ---\n");
         for (int p = 0; p < PROFILE_COUNT; p++) {
             Candidate c = calibration.chosen[p];
             report.append(String.format(Locale.US, "%s%s (budget %.2f)%s%n   %s%n   %s%n",
-                    p == profileIndex ? "* " : "  ", names[p], FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[p],
+                    p == profileIndex ? "* " : "  ", names[p].displayName(), FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[p],
                     (calibration.withinBudget[p] ? "" : " [NO SETTING WITHIN BUDGET - cleanest setting used]")
                             + (calibration.budgetVerifiable[p] ? "" : " [area too small to confirm this budget - zero false positives accepted]"),
                     c.settingsText(), c.measurementText()));

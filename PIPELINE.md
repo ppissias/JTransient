@@ -106,7 +106,7 @@ What it does:
 3. measures the star FWHM and the residual jitter
 4. builds, for every crop-frame, a negative image (noise only) and a copy with injected synthetic stars, and runs a streak pass to recognise satellite trails
 5. evaluates every combination of detection sigma, grow sigma, minimum pixels, master sigma, master grow sigma, master minimum pixels and veto overlap: noise, star leakage, real-frame excess, recovery of the synthetic stars and mask coverage
-6. picks, for each profile, the most sensitive combination within its false-positive budget (0.05, 0.2, 0.6 and 3.5 per megapixel per frame)
+6. picks, for each profile, the most sensitive combination within its false-positive budget (0.05, 0.4, 1.5 and 3.5 per megapixel per frame for low, medium, high and maximum)
 
 What it returns:
 

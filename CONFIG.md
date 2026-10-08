@@ -689,7 +689,7 @@ Candidates that pass every gate are `HIGH_CONFIDENCE`, one failure gives `POSSIB
 
 ## 9. Interaction With The Auto-Tuner
 
-There are two auto-tuners. Both take an `AutoTuneProfile` (conservative = low sensitivity, balanced = medium, aggressive = high, maximum = as sensitive as possible; the legacy tuner treats maximum like aggressive) and return a `JTransientAutoTuner.AutoTunerResult`. Neither reads extra fields from `DetectionConfig`; their settings are static fields of the tuner classes.
+There are two auto-tuners. Both take an `AutoTuneProfile` (`LOW`, `MEDIUM`, `HIGH` or `MAXIMUM` = as sensitive as possible; the legacy tuner treats maximum like high) and return a `JTransientAutoTuner.AutoTunerResult`. Neither reads extra fields from `DetectionConfig`; their settings are static fields of the tuner classes.
 
 ### `CalibratedAutoTuner` (measured)
 

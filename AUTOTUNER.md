@@ -9,7 +9,7 @@ JTransient has two auto-tuners. Both derive a `DetectionConfig` for a session fr
 
 SpacePixels uses the calibrated tuner by default and offers the legacy one as an option.
 
-The profiles are `CONSERVATIVE` (low sensitivity), `BALANCED` (medium), `AGGRESSIVE` (high) and `MAXIMUM` (as sensitive as possible, for small sensors or targeted searches for a faint object). The legacy tuner treats `MAXIMUM` like `AGGRESSIVE`.
+The profiles are `LOW`, `MEDIUM`, `HIGH` and `MAXIMUM` (as sensitive as possible, for small sensors or targeted searches for a faint object). The legacy tuner treats `MAXIMUM` like `HIGH`. `AutoTuneProfile.parse(...)` also accepts the names of earlier versions (conservative = low, balanced = medium, aggressive = high).
 
 For the broader library surface, see [PIPELINE.md](PIPELINE.md). For individual `DetectionConfig` fields, see [CONFIG.md](CONFIG.md).
 
@@ -27,9 +27,9 @@ Each profile is a false-positive budget per megapixel per frame. Among the combi
 
 | Profile | Budget (false positives per MPix per frame) |
 | --- | --- |
-| `CONSERVATIVE` | 0.05 |
-| `BALANCED` | 0.2 |
-| `AGGRESSIVE` | 0.6 |
+| `LOW` | 0.05 |
+| `MEDIUM` | 0.4 |
+| `HIGH` | 1.5 |
 | `MAXIMUM` | 3.5 |
 
 Because the budget is per megapixel per frame, the number of false detections a profile allows grows with the sensor size and the number of frames. On a 61-megapixel sensor with 33 frames, `MAXIMUM` allows several thousand; it is meant for small sensors and targeted searches.
@@ -572,10 +572,10 @@ This is one reason low-sigma, low-min-pixel combinations often lose even when th
 
 The public profiles are:
 
-- `CONSERVATIVE`
-- `BALANCED`
-- `AGGRESSIVE`
-- `MAXIMUM`, which this tuner treats exactly like `AGGRESSIVE`
+- `LOW`
+- `MEDIUM`
+- `HIGH`
+- `MAXIMUM`, which this tuner treats exactly like `HIGH`
 
 They do not change the search grid. They change the hard limits and score weights.
 
@@ -583,27 +583,27 @@ They do not change the search grid. They change the hard limits and score weight
 
 | Profile | Max transient ratio | Target transients per crop-frame | Sweet-spot band | Main bias |
 | --- | --- | --- | --- | --- |
-| `CONSERVATIVE` | `0.05` | `0.20` | `0.05` to `0.50` | Strongly suppress leakage |
-| `BALANCED` | `0.05` | `0.35` | `0.15` to `0.80` | Middle ground |
-| `AGGRESSIVE` | `0.12` | `1.00` | `0.40` to `2.00` | Allows more leakage to preserve sensitivity |
+| `LOW` | `0.05` | `0.20` | `0.05` to `0.50` | Strongly suppress leakage |
+| `MEDIUM` | `0.05` | `0.35` | `0.15` to `0.80` | Middle ground |
+| `HIGH` | `0.12` | `1.00` | `0.40` to `2.00` | Allows more leakage to preserve sensitivity |
 
 ### Exact score weights
 
 | Profile | Stable | Overflow | Sweet spot | Variance | Mask | Harshness | Low-sigma guard |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `CONSERVATIVE` | `100` | `120` | `20` | `60` | `50` | `22` | `10` |
-| `BALANCED` | `100` | `120` | `25` | `60` | `50` | `20` | `18` |
-| `AGGRESSIVE` | `100` | `70` | `35` | `50` | `50` | `34` | `22` |
+| `LOW` | `100` | `120` | `20` | `60` | `50` | `22` | `10` |
+| `MEDIUM` | `100` | `120` | `25` | `60` | `50` | `20` | `18` |
+| `HIGH` | `100` | `70` | `35` | `50` | `50` | `34` | `22` |
 
 ### Harshness composition weights
 
 | Profile | Sigma weight | Min-pixel weight | Grow-delta weight |
 | --- | --- | --- | --- |
-| `CONSERVATIVE` | `0.40` | `0.35` | `0.25` |
-| `BALANCED` | `0.55` | `0.20` | `0.25` |
-| `AGGRESSIVE` | `0.90` | `0.00` | `0.15` |
+| `LOW` | `0.40` | `0.35` | `0.25` |
+| `MEDIUM` | `0.55` | `0.20` | `0.25` |
+| `HIGH` | `0.90` | `0.00` | `0.15` |
 
-The aggressive profile is notable here:
+The high profile is notable here:
 
 - it tolerates a higher transient ratio
 - it now penalizes high sigma even more strongly than before

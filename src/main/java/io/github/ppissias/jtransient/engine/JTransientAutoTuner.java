@@ -173,17 +173,46 @@ public class JTransientAutoTuner {
      * High-level tuning policy presets.
      */
     public enum AutoTuneProfile {
-        /** Prefer cleaner runs with stricter leakage rejection. */
-        CONSERVATIVE,
-        /** Balanced default between cleanliness and sensitivity. */
-        BALANCED,
-        /** Allow noisier candidates to preserve sensitivity. */
-        AGGRESSIVE,
+        /** Low sensitivity: the fewest noise detections. */
+        LOW,
+        /** Medium sensitivity. */
+        MEDIUM,
+        /** High sensitivity: close to the noise level. */
+        HIGH,
         /**
          * As sensitive as possible: many more candidates to review, for small sensors or targeted searches for
-         * faint objects. The legacy tuner treats it like {@link #AGGRESSIVE}.
+         * faint objects. The legacy tuner treats it like {@link #HIGH}.
          */
-        MAXIMUM
+        MAXIMUM;
+
+        /** The name for display, for example "Medium". */
+        public String displayName() {
+            String name = name().toLowerCase(java.util.Locale.ROOT);
+            return Character.toUpperCase(name.charAt(0)) + name.substring(1);
+        }
+
+        /**
+         * Parses a profile name, case-insensitive. The names of earlier versions are still accepted:
+         * conservative = low, balanced = medium, aggressive = high.
+         */
+        public static AutoTuneProfile parse(String value) {
+            String name = value == null ? "" : value.trim().toUpperCase(java.util.Locale.ROOT);
+            switch (name) {
+                case "CONSERVATIVE":
+                    return LOW;
+                case "BALANCED":
+                    return MEDIUM;
+                case "AGGRESSIVE":
+                    return HIGH;
+                default:
+                    try {
+                        return valueOf(name);
+                    } catch (IllegalArgumentException e) {
+                        throw new IllegalArgumentException("Unknown auto-tune profile '" + value
+                                + "'. Expected low, medium, high or maximum.");
+                    }
+            }
+        }
     }
 
     /**
@@ -424,12 +453,12 @@ public class JTransientAutoTuner {
      * @param allFrames full frame sequence available for sampling
      * @param baseConfig starting configuration that is cloned and refined
      * @param listener optional progress listener
-     * @return tuning result using the balanced policy preset
+     * @return tuning result using the medium profile
      */
     public static AutoTunerResult tune(List<ImageFrame> allFrames,
                                        DetectionConfig baseConfig,
                                        TransientEngineProgressListener listener) {
-        return tune(allFrames, baseConfig, AutoTuneProfile.BALANCED, listener);
+        return tune(allFrames, baseConfig, AutoTuneProfile.MEDIUM, listener);
     }
 
     /**
@@ -1681,7 +1710,7 @@ public class JTransientAutoTuner {
     }
 
     /**
-     * Compares two sweep candidates while allowing the aggressive profile to prefer
+     * Compares two sweep candidates while allowing the high (and maximum) profile to prefer
      * lower sigma when scores are effectively tied.
      */
     private static boolean isBetterSweepCandidate(double candidateScore,
@@ -1697,7 +1726,7 @@ public class JTransientAutoTuner {
             return true;
         }
 
-        if (profile != AutoTuneProfile.AGGRESSIVE && profile != AutoTuneProfile.MAXIMUM) {
+        if (profile != AutoTuneProfile.HIGH && profile != AutoTuneProfile.MAXIMUM) {
             return false;
         }
 
@@ -1759,7 +1788,7 @@ public class JTransientAutoTuner {
      */
     private static AutoTunePolicy getPolicy(AutoTuneProfile profile) {
         switch (profile) {
-            case CONSERVATIVE:
+            case LOW:
                 return new AutoTunePolicy(
                         0.05,
                         0.20,
@@ -1779,7 +1808,7 @@ public class JTransientAutoTuner {
                         3.0   // lowSigmaMinPixSlope
                 );
 
-            case AGGRESSIVE:
+            case HIGH:
             case MAXIMUM:
                 return new AutoTunePolicy(
                         0.12,
@@ -1800,7 +1829,7 @@ public class JTransientAutoTuner {
                         3.0   // lowSigmaMinPixSlope
                 );
 
-            case BALANCED:
+            case MEDIUM:
             default:
                 return new AutoTunePolicy(
                         0.05,

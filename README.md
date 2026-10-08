@@ -10,7 +10,7 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 
 ## What The Library Exposes
 
-- `CalibratedAutoTuner.tune(...)`: derives a `DetectionConfig` for a session by measuring false positives and sensitivity on its own frames, within the false-positive budget of a profile (conservative, balanced, aggressive, maximum)
+- `CalibratedAutoTuner.tune(...)`: derives a `DetectionConfig` for a session by measuring false positives and sensitivity on its own frames, within the false-positive budget of a profile (low, medium, high, maximum)
 - `JTransientAutoTuner.tune(...)`: the original, score-based auto-tuner, kept for comparison
 - `JTransientEngine.runPipeline(...)`: full extraction, quality filtering, master-stack masking, slow-mover candidate detection, track linking, and optional variable-star detection
 - `JTransientEngine.detectTransients(...)`: same early pipeline, but stops after the stationary-star veto and returns per-frame transients
@@ -215,7 +215,7 @@ public final class AutoTuneExample {
         JTransientAutoTuner.AutoTunerResult tuning = CalibratedAutoTuner.tune(
                 frames,
                 baseConfig,
-                JTransientAutoTuner.AutoTuneProfile.BALANCED,
+                JTransientAutoTuner.AutoTuneProfile.MEDIUM,
                 (percent, message) -> System.out.printf("%3d%% %s%n", percent, message)
         );
 
@@ -231,9 +231,9 @@ public final class AutoTuneExample {
 }
 ```
 
-Profiles: `CONSERVATIVE` (fewest false detections), `BALANCED`, `AGGRESSIVE` (close to the noise level) and `MAXIMUM` (as sensitive as possible; on large sensors it leaves many candidates to review, so it is meant for small sensors or targeted searches for a faint object).
+Profiles: `LOW` (fewest false detections), `MEDIUM`, `HIGH` (close to the noise level) and `MAXIMUM` (as sensitive as possible; on large sensors it leaves many candidates to review, so it is meant for small sensors or targeted searches for a faint object).
 
-The legacy tuner has the same signature: `JTransientAutoTuner.tune(frames, baseConfig, profile, listener)`; its three-argument overload defaults to `BALANCED`. It treats `MAXIMUM` like `AGGRESSIVE`. See [AUTOTUNER.md](AUTOTUNER.md) for both.
+The legacy tuner has the same signature: `JTransientAutoTuner.tune(frames, baseConfig, profile, listener)`; its three-argument overload defaults to `MEDIUM`. It treats `MAXIMUM` like `HIGH`. See [AUTOTUNER.md](AUTOTUNER.md) for both.
 
 ### 4. Reuse a precomputed master stack
 

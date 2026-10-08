@@ -113,7 +113,7 @@ public class JTransientAutoTunerJitterTest {
     }
 
     /**
-     * Verifies the AGGRESSIVE profile can prefer a lower sigma candidate when scores are close.
+     * Verifies the HIGH profile can prefer a lower sigma candidate when scores are close.
      * This protects the winner selection from loop-order bias toward tiny minPixels.
      */
     @Test
@@ -126,7 +126,7 @@ public class JTransientAutoTunerJitterTest {
                 4.0,
                 96.0,
                 currentBest,
-                JTransientAutoTuner.AutoTuneProfile.AGGRESSIVE
+                JTransientAutoTuner.AutoTuneProfile.HIGH
         ));
 
         assertFalse(isBetterSweepCandidate(
@@ -134,7 +134,7 @@ public class JTransientAutoTunerJitterTest {
                 4.0,
                 96.0,
                 currentBest,
-                JTransientAutoTuner.AutoTuneProfile.BALANCED
+                JTransientAutoTuner.AutoTuneProfile.MEDIUM
         ));
 
         assertTrue(isBetterSweepCandidate(
@@ -142,17 +142,17 @@ public class JTransientAutoTunerJitterTest {
                 4.0,
                 96.0,
                 currentBest,
-                JTransientAutoTuner.AutoTuneProfile.AGGRESSIVE
+                JTransientAutoTuner.AutoTuneProfile.HIGH
         ));
     }
 
     /**
-     * Verifies the AGGRESSIVE profile keeps a stronger sigma preference while softening
+     * Verifies the HIGH profile keeps a stronger sigma preference while softening
      * the low-sigma/minPixels guard enough for moderate minPixels to stay competitive.
      */
     @Test
     public void aggressiveProfileUsesSofterLowSigmaMinPixGuard() throws Exception {
-        Object policy = getPolicy(JTransientAutoTuner.AutoTuneProfile.AGGRESSIVE);
+        Object policy = getPolicy(JTransientAutoTuner.AutoTuneProfile.HIGH);
 
         assertEquals(8.0, JTransientAutoTuner.AGGRESSIVE_LOWER_SIGMA_SCORE_WINDOW, 0.0001);
         assertEquals(34.0, getDoubleField(policy, "scoreWeightHarshness"), 0.0001);
