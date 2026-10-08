@@ -62,12 +62,19 @@ Notes:
 
 - frames must all have the same dimensions
 - the data should already be aligned/registered to the same pixel grid
-- `sequenceIndex` should be zero-based, contiguous, and chronological (`0..frames.size()-1`); the engine sorts the supplied `List<ImageFrame>` in place by this value, and some per-frame exports use it as a frame-list index
+- `sequenceIndex` must be unique and chronological; gaps are allowed for sparse subsets. The engine sorts the supplied `List<ImageFrame>` in place by this value. Per-frame transient export lists use retained-frame order, while detections preserve their original `sourceFrameIndex` for source-image lookup.
 - time-based linking activates when timestamps are present; for reliable time-based tracking, populate timestamps consistently and in increasing capture order, or leave them as `-1` and rely on geometric linking
 - variable-star detection uses the timestamp and exposure for mid-exposure Julian dates; without timestamps the light curves have no times and the minimum time-span check is skipped
 - for variable-star detection, pass the original linear (unstretched) data; 8-bit frames and most stretches are detected and refused, and a sky clipped at zero limits the result
 
 ## Basic Usage
+
+Each engine uses a bounded worker pool, limited by CPU count, frame count and estimated scratch
+memory for the largest frame. The memory estimate reserves 16 bytes per pixel plus 1 MiB per worker,
+with a budget of at most one quarter of the maximum heap and half the remaining heap headroom.
+This reduces concurrent allocation pressure; it does not guarantee that a large input set fits in
+memory. Reuse an engine sequentially, not for concurrent pipeline calls, and call `shutdown()`
+when finished, or use it in try-with-resources (`JTransientEngine` implements `AutoCloseable`).
 
 The following examples are written as standalone skeletons. Any `load...()` helper
 shown in an example is an application-specific placeholder that you should replace.

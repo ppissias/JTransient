@@ -97,6 +97,33 @@ public class TrackLinkerTransientExportTest {
         return total;
     }
 
+    @Test
+    public void exportsStreaksAtRetainedPositionsAfterAnInteriorFrameWasRejected() {
+        assertSparseStreakExport(new int[]{0, 2, 3});
+    }
+
+    @Test
+    public void exportsStreaksAtRetainedPositionsForAnIterativeSubset() {
+        assertSparseStreakExport(new int[]{0, 5, 10});
+    }
+
+    private static void assertSparseStreakExport(int[] sourceIndices) {
+        SourceExtractor.DetectedObject firstPoint = createPoint(40.0, 40.0, sourceIndices[0]);
+        SourceExtractor.DetectedObject firstStreak = createStreak(10.0, 10.0, sourceIndices[1]);
+        SourceExtractor.DetectedObject secondStreak = createStreak(20.0, 10.0, sourceIndices[2]);
+        List<List<SourceExtractor.DetectedObject>> frames = List.of(
+                List.of(firstPoint), List.of(firstStreak), List.of(secondStreak));
+        TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
+                frames, new ArrayList<>(), new DetectionConfig(), null, 64, 64);
+        assertEquals(3, result.allTransients.size());
+        assertEquals(3, totalObjects(result.allTransients));
+        assertSame(firstPoint, result.allTransients.get(0).get(0));
+        assertSame(firstStreak, result.allTransients.get(1).get(0));
+        assertSame(secondStreak, result.allTransients.get(2).get(0));
+        assertEquals(sourceIndices[1], firstStreak.sourceFrameIndex);
+        assertEquals(sourceIndices[2], secondStreak.sourceFrameIndex);
+    }
+
     private static SourceExtractor.DetectedObject createPoint(double x, double y, int frameIndex) {
         SourceExtractor.DetectedObject obj = new SourceExtractor.DetectedObject(x, y, 100.0, 4);
         obj.sourceFrameIndex = frameIndex;

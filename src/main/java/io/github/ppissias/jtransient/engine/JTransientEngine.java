@@ -31,9 +31,9 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -43,18 +43,47 @@ import java.util.concurrent.atomic.AtomicInteger;
  * instance across runs when practical, and call {@link #shutdown()} when the application no
  * longer needs it.</p>
  */
-public class JTransientEngine {
+public class JTransientEngine implements AutoCloseable {
 
     /** Global debug switch shared by the core library. */
     public static boolean DEBUG = false;
 
-    // Internal thread pool for the library
-    private final ExecutorService executor = Executors.newCachedThreadPool();
+    private final ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(1);
 
     /**
      * Creates a new engine instance backed by its own worker pool.
      */
     public JTransientEngine() {
+    }
+
+    private void configureFrameExecutor(List<ImageFrame> frames) {
+        if (executor.isShutdown()) {
+            throw new IllegalStateException("JTransientEngine has been closed.");
+        }
+        long largestFramePixels = 1L;
+        for (ImageFrame frame : frames) {
+            largestFramePixels = Math.max(largestFramePixels,
+                    (long) frame.pixelData.length * frame.pixelData[0].length);
+        }
+        Runtime runtime = Runtime.getRuntime();
+        long usedHeap = runtime.totalMemory() - runtime.freeMemory();
+        int workers = frameWorkerCount(frames.size(), largestFramePixels, runtime.availableProcessors(),
+                runtime.maxMemory(), usedHeap);
+        if (workers > executor.getMaximumPoolSize()) {
+            executor.setMaximumPoolSize(workers);
+            executor.setCorePoolSize(workers);
+        } else {
+            executor.setCorePoolSize(workers);
+            executor.setMaximumPoolSize(workers);
+        }
+    }
+
+    static int frameWorkerCount(int frameCount, long pixelCount, int processors, long maximumHeap, long usedHeap) {
+        long scratchBytesPerFrame = Math.max(1L, pixelCount) * 16L + 1024L * 1024L;
+        long availableHeap = Math.max(0L, maximumHeap - usedHeap);
+        long memoryBudget = Math.min(maximumHeap / 4L, availableHeap / 2L);
+        long memoryWorkers = Math.max(1L, memoryBudget / scratchBytesPerFrame);
+        return (int) Math.max(1L, Math.min(memoryWorkers, Math.min(Math.max(1, frameCount), Math.max(1, processors))));
     }
 
     /**
@@ -114,6 +143,7 @@ public class JTransientEngine {
      */
     public MasterStackResult generateMasterStackWithDetails(List<ImageFrame> inputFrames, DetectionConfig config,
                                                             TransientEngineProgressListener listener) throws Exception {
+        configureFrameExecutor(inputFrames);
         if (listener != null) {
             listener.onProgressUpdate(0, "Evaluating frames for Master Stack...");
         }
@@ -301,6 +331,7 @@ public class JTransientEngine {
      * @return extraction context reused by the full pipeline and transient-only path
      */
     private ExtractedFramesContext extractSourcesFromFrames(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
+        configureFrameExecutor(inputFrames);
         long startTime = System.currentTimeMillis();
         PipelineTelemetry telemetry = new PipelineTelemetry();
         telemetry.totalFramesLoaded = inputFrames.size();
@@ -781,6 +812,11 @@ public class JTransientEngine {
      */
     public void shutdown() {
         executor.shutdown();
+    }
+
+    @Override
+    public void close() {
+        shutdown();
     }
 
     /**

@@ -16,7 +16,9 @@ import io.github.ppissias.jtransient.telemetry.TrackerTelemetry;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -428,7 +430,7 @@ public class TrackLinker {
         List<List<SourceExtractor.DetectedObject>> allTransients = buildAllTransients(
                 transients,
                 validMovingStreaks,
-                numFrames
+                allFrames
         );
 
         TransientsFilterResult result = new TransientsFilterResult();
@@ -1909,9 +1911,14 @@ public class TrackLinker {
     static List<List<SourceExtractor.DetectedObject>> buildAllTransients(
             List<List<SourceExtractor.DetectedObject>> pointTransients,
             List<SourceExtractor.DetectedObject> validMovingStreaks,
-            int numFrames) {
+            List<List<SourceExtractor.DetectedObject>> retainedFrames) {
+        int numFrames = retainedFrames.size();
+        Map<Integer, Integer> retainedPositions = new HashMap<>();
         List<List<SourceExtractor.DetectedObject>> allTransients = new ArrayList<>(numFrames);
         for (int i = 0; i < numFrames; i++) {
+            for (SourceExtractor.DetectedObject object : retainedFrames.get(i)) {
+                retainedPositions.put(object.sourceFrameIndex, i);
+            }
             List<SourceExtractor.DetectedObject> frameObjects = new ArrayList<>();
             if (pointTransients != null && i < pointTransients.size() && pointTransients.get(i) != null) {
                 frameObjects.addAll(pointTransients.get(i));
@@ -1921,10 +1928,11 @@ public class TrackLinker {
 
         if (validMovingStreaks != null) {
             for (SourceExtractor.DetectedObject streak : validMovingStreaks) {
-                if (streak == null || streak.sourceFrameIndex < 0 || streak.sourceFrameIndex >= numFrames) {
+                Integer position = streak == null ? null : retainedPositions.get(streak.sourceFrameIndex);
+                if (position == null) {
                     continue;
                 }
-                allTransients.get(streak.sourceFrameIndex).add(streak);
+                allTransients.get(position).add(streak);
             }
         }
         return allTransients;
