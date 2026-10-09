@@ -122,12 +122,14 @@ The working threshold is `photometrySaturationFraction x saturationLevel`.
 
 ## 5. Star Selection
 
-`PhotometryStarSelector.select` goes through the master stars and drops, in this order:
+Photometry does not reuse the detection profile's master star list. It extracts its own from the median master stack, at a fixed seed of 3 sigma, grow of 2 sigma and at least 3 pixels (sigmas in units of the stack's measured noise), so its star list, its crowding test and its sky mask do not change with the moving-object settings. The footprints of these stars, grown by one pixel, are the sky mask (section 6.2).
+
+`PhotometryStarSelector.select` goes through these stars and drops, in this order:
 
 1. streaks (`isStreak`)
 2. stars more elongated than `photometryMaxElongation`
 3. stars closer to the edge than `max(edgeMarginPixels, ceil(outer annulus radius) + 1)`, where the outer annulus radius here is `photometryAnnulusOuterFwhmFactor x FWHM + 2 px` (the extra 2 px allows for residual registration offsets), and stars whose outer annulus touches void padding (any master-stack pixel at or below `voidThresholdFraction x` the master-stack sky median)
-4. crowded stars: another master star within `(photometryApertureFwhmFactor + 1) x FWHM`, or a neighbour with at least 10% of the star's flux within `photometryAnnulusInnerFwhmFactor x FWHM`
+4. crowded stars, judged by contamination: the neighbours' light falling inside the star's main aperture, from a Gaussian profile at the session FWHM, exceeds 2% of the star's own aperture light; or a neighbour lies within 1 FWHM (centroids and apertures merge); or a neighbour with at least 10% of the star's flux lies within `photometryAnnulusInnerFwhmFactor x FWHM` (its wings reach the sky ring). A faint neighbour that adds no measurable light no longer makes a star crowded.
 5. stars whose master-stack peak (3 x 3 around the centre) is already at or above the saturation threshold
 
 Bright stars below saturation are kept on purpose: check B needs them to find where linearity ends. Their measurements in frames where they are too bright are flagged later.
@@ -160,13 +162,13 @@ Each star is measured at its master position plus the frame offset, in five conc
 | --- | --- | --- |
 | `R_CI_INNER` | 0.7 x FWHM | Concentration index (check B) |
 | `R_SMALL` | 1.0 x FWHM | APERTURE gate |
-| `R_MAIN` | `photometryApertureFwhmFactor` x FWHM | Photometry |
+| `R_MAIN` | `photometryApertureFwhmFactor` x FWHM | Photometry (main aperture; see section 11 for the per-brightness choice) |
 | `R_LARGE` | 2.0 x FWHM | APERTURE gate |
 | `R_CI_OUTER` | 2.5 x FWHM | Concentration index (check B) |
 
 Every radius is at least 1 px. Pixels near an aperture edge (within 0.75 px) get fractional weights from 5 x 5 sub-pixel sampling.
 
-The sky annulus runs from `max(largest aperture + 1, photometryAnnulusInnerFwhmFactor x FWHM)` to `max(inner + 2, photometryAnnulusOuterFwhmFactor x FWHM)`. Master-star pixels (the veto mask) are excluded. The sky level and noise are a three-pass, 3-sigma clipped median and MAD sigma, and at least 10 pixels are required. The share of annulus pixels at exactly zero is also recorded, for check A.
+The sky annulus runs from `max(largest aperture + 1, photometryAnnulusInnerFwhmFactor x FWHM)` to `max(inner + 2, photometryAnnulusOuterFwhmFactor x FWHM)`. Pixels of photometry's own star mask (section 5) are excluded. The sky level and noise are a three-pass, 3-sigma clipped median and MAD sigma, and at least 10 pixels are required. The share of annulus pixels at exactly zero is also recorded, for check A.
 
 All five apertures are summed in one pass over the pixels, so the concentration index, the photometry flux and the aperture-consistency gate all come from the same data.
 
@@ -193,11 +195,11 @@ Flags set here:
 
 ## 7. Crossing Flags
 
-A moving object passing through a star's aperture or sky annulus changes its measured brightness for a few frames. This is the classic false variable. `VariableStarAnalyzer.flagCrossings` sets `CROSSING` on every star within the outer annulus radius (`photometryAnnulusOuterFwhmFactor x` frame FWHM) of:
+A moving object passing through a star's aperture or sky annulus changes its measured brightness for a few frames. This is the classic false variable. `VariableStarAnalyzer.flagCrossings` sets `CROSSING` on stars near the following. For frame detections the reach is the sky annulus's inner radius (`photometryAnnulusInnerFwhmFactor x` frame FWHM): the aperture and the gap before the sky ring, since the clipped sky median already ignores faint blobs in the ring itself. Tracks and slow-mover footprints reach the outer annulus radius (`photometryAnnulusOuterFwhmFactor x` frame FWHM).
 
 Frame positions (detections, their pixels and track points) are first moved into the master system with the frame's measured registration offset, the same correction the apertures use (section 6), so a residual shift does not make stationary stars look like moving objects.
 
-1. **Moving detections.** A detection in a frame that is not within `max(maxStarJitter, 0.5 x FWHM)` of any master star is not stationary. Each of its pixels flags the stars around it in that frame.
+1. **Moving detections.** A detection in a frame that peaks at 5 sigma or more (or is a streak) and is not within `max(maxStarJitter, 0.5 x FWHM)` of any master star (of the detection or the photometry star list) is not stationary. Each of its pixels flags the stars around it in that frame. Fainter detections are left to the per-measurement checks (contaminated shape, isolated outliers), so a sensitive detection profile no longer floods the light curves with flags.
 2. **Tracks.** For every frame in a track's time span: where the track was observed, every observed point of that frame is used (a streak can be extracted as several fragments); elsewhere the position is interpolated linearly between the surrounding track points, by capture time when the frame and both points have timestamps (pauses make the cadence uneven) and by sequence index otherwise. This covers frames where the object merged with a star and was not detected. Each point is treated as a segment along its footprint (centre, angle, half of `majorExtent - minorExtent`); a star is flagged when its distance to the segment is within the outer annulus radius plus the point's width (its minor extent for a streak, otherwise the larger of FWHM and minor extent). A point source is a segment of length zero, so it flags a disc; a satellite streak flags a band along its line instead of every star within its length. Interpolated frames use the shape of the nearest track point.
 3. **Slow-mover candidates.** The maximum-stack footprint covers the whole session, so its pixels flag nearby stars in every frame.
 
@@ -337,7 +339,9 @@ Light curves are built for every star whatever the verdict. `deltaMag` is the ma
 
 ## 11. Variability Scoring
 
-`VariabilityScorer.score` works on the usable residuals of each star. Before scoring, the ensemble is solved twice more, once with the 1.0 x FWHM aperture and once with the 2.0 x FWHM aperture, using the same rules. These solutions are for the APERTURE gate.
+`VariabilityScorer.score` works on the usable residuals of each star. Before scoring, the ensemble is solved three more times, with the 0.7, 1.0 and 2.0 x FWHM apertures, using the same rules. The 1.0 and 2.0 x FWHM solutions are also used by the APERTURE gate.
+
+**Measuring aperture per brightness.** The scored stars are split into 8 brightness ranges of equal size. In each range the aperture whose solution gives the stars (nearly all constant) the smallest median robust scatter is chosen, and the stars of that range are scored on its residuals. The main aperture stays unless another lowers the scatter by more than 3%, and apertures smaller than 2 px in radius are not used (they turn the centring errors of undersampled stars into noise). Faint stars are limited by sky noise and do best in a small aperture; bright stars keep a larger one. On the test sessions this lowered the scatter of faint stars by 8–41%. The choice is exported as `apertureChoices` and shown in the report.
 
 ### 11.1 Light-curve cleaning
 
@@ -381,7 +385,7 @@ Each candidate is tested against eight gates:
 | `SPLIT_HALF` | The correlation between the first and second points of consecutive non-overlapping pairs is below `variableMinSplitHalfCorrelation` | Noise; white noise gives about zero |
 | `APERTURE` | The 1.0 x and 2.0 x FWHM amplitudes, measured over the same frames, differ by more than `variableMaxApertureAmplitudeDifference x amplitude` | Light from a neighbour leaking in, or a wrong position. Real variability is the same in every aperture |
 | `SYSTEMATICS` | See below | Changes caused by seeing, transparency, sky or registration |
-| `LOCAL` | Fewer than 3 quiet constant stars (`scatterZ < 2`) within `variableLocalRadiusPixels`, or the median absolute correlation with the nearest 10 of them exceeds `variableMaxLocalCorrelation` | A local pattern the plane term cannot model (a dew patch, a local gradient) |
+| `LOCAL` | Fewer than 3 quiet constant stars (`scatterZ < 2`) are found within `variableLocalRadiusPixels`, or, in a sparse field, within 3 times that radius; or the median absolute correlation with the nearest 10 of them exceeds `variableMaxLocalCorrelation` and they also carry at least 30% of the candidate's pattern (median regression slope of their residuals on the candidate's, `localSharedFraction`). A systematic shifts neighbours by about the same amount; a faint copy (light from a bright variable leaking into a neighbour's aperture) or a slight common trend correlates without sharing the amplitude | A local pattern the plane term cannot model (a dew patch, a local gradient) |
 | `LINEARITY` | Any measurement of the star is flagged `SATURATED` or `NONLINEAR` | Stars that come near the linear limit, for example when they brighten |
 
 **SYSTEMATICS** runs two tests for each driver. The gate fails if either test fails for any driver:
@@ -429,6 +433,11 @@ These values are in the code and are not configurable:
 | Saturation level without pile-up | 0.95 x 65535 | `PhotometryStarSelector` |
 | Registration allowance in selection margin | 2 px | `PhotometryStarSelector` |
 | Bright-neighbour flux ratio | 0.1 | `PhotometryStarSelector` |
+| Photometry star list: seed / grow sigma / minimum pixels | 3 / 2 / 3 | `VariableStarAnalyzer` |
+| Largest aperture contamination by neighbours | 2% | `PhotometryStarSelector` |
+| Crossing detection minimum peak | 5 sigma | `VariableStarAnalyzer` |
+| Aperture choice: ranges / minimum gain / minimum radius | 8 / 3% / 2 px | `VariableStarAnalyzer` |
+| Local gate: minimum shared share / widest radius | 30% / 3 x `variableLocalRadiusPixels` | `VariabilityScorer` |
 | Selection grid | 8 x 8 | `PhotometryStarSelector` |
 | Stars for FWHM and offset | 50, skipping the brightest 10%; minimum 5 | `ApertureMeasurer` |
 | Moment window | max(3, 1.5 x extraction FWHM) | `ApertureMeasurer` |
@@ -460,7 +469,7 @@ These values are in the code and are not configurable:
 
 - **Single session, instrumental magnitudes.** There is no catalogue cross-match, no colour or extinction terms, and no transformation to a standard system. Amplitudes are differential within the session.
 - **Variability must show within the session.** A star that changes on timescales much longer than the session looks constant. A star that changes only during the gap between sessions is not visible at all.
-- **Crowded, bright and edge stars are not measured.** A variable with a close neighbour, one saturated in the master stack, or one near the edge or void padding is never selected.
+- **Crowded, bright and edge stars are not measured.** A variable whose neighbours add more than 2% light to its aperture, one saturated in the master stack, or one near the edge or void padding is never selected.
 - **Power-law stretches are not detected** (section 8.5).
 - **`magError` is a lower bound** (sky noise only). Use `expectedScatter` as the realistic error.
 - **Candidates are not confirmed variables.** Even `HIGH_CONFIDENCE` candidates should be checked against the images and a variable-star catalogue.

@@ -71,6 +71,8 @@ public final class StarLightCurve {
     /** Largest correlation between frame-to-frame changes of the light curve and of a systematic. */
     public double maxFrameToFrameSystematicsCorrelation = Double.NaN;
     public double localCorrelation = Double.NaN;
+    /** Median share of this star's pattern carried by the nearby constant stars (regression slope of theirs on it). */
+    public double localSharedFraction = Double.NaN;
     public int localComparisonStars;
 
     /** Classification of this star. */

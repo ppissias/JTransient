@@ -10,6 +10,7 @@
 package io.github.ppissias.jtransient.photometry;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.core.MasterReferenceAnalyzer;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.core.TrackLinker;
 import io.github.ppissias.jtransient.engine.ImageFrame;
@@ -57,6 +58,16 @@ public final class VariableStarAnalyzer {
     private static final int MIN_SHAPE_GROUP_STARS = 30;
     /** A star flagged saturated or non-linear in more than this share of its measurements is not used at all. */
     private static final double MAX_NONLINEAR_SHARE = 0.5;
+    /*
+     * Photometry's own inputs, fixed so its results do not depend on the moving-object detection profile:
+     * its star list and sky mask come from the median stack at these thresholds, and a frame detection flags a
+     * star only when it peaks at CROSSING_PEAK_SIGMA or more. Sigmas are in units of each image's measured noise.
+     */
+    static final double STAR_LIST_SEED_SIGMA = 3.0;
+    static final double STAR_LIST_GROW_SIGMA = 2.0;
+    static final int STAR_LIST_MIN_PIXELS = 3;
+    static final double CROSSING_PEAK_SIGMA = 5.0;
+
     /** Limited verdict when the median linear range is below the minimum plus this margin, in mag. */
     private static final double LIMITED_RANGE_MARGIN_MAG = 1.0;
 
@@ -146,8 +157,16 @@ public final class VariableStarAnalyzer {
         telemetry.saturationLevel = saturationLevel;
         double saturationThreshold = config.photometrySaturationFraction * saturationLevel;
 
+        // Photometry's own star list and sky mask from the median stack, independent of the detection settings.
+        DetectionConfig starConfig = config.clone();
+        starConfig.masterSigmaMultiplier = STAR_LIST_SEED_SIGMA;
+        starConfig.masterGrowSigmaMultiplier = STAR_LIST_GROW_SIGMA;
+        starConfig.masterMinDetectionPixels = STAR_LIST_MIN_PIXELS;
+        List<SourceExtractor.DetectedObject> photometryStars =
+                MasterReferenceAnalyzer.analyzeFromMasterStack(input.masterStack, starConfig).masterStars;
+        boolean[][] skyMask = footprintMask(photometryStars, input.masterStack.length, input.masterStack[0].length);
         List<PhotometryStarSelector.Star> selected = PhotometryStarSelector.select(
-                input.masterStars, input.masterStack, sessionFwhm, saturationThreshold, config, telemetry);
+                photometryStars, input.masterStack, sessionFwhm, saturationThreshold, config, telemetry);
         if (selected.size() < config.linearityMinStars) {
             readiness.verdict = PhotometricReadiness.Verdict.NOT_READY;
             readiness.messages.add(String.format(
@@ -159,9 +178,9 @@ public final class VariableStarAnalyzer {
         // --- Forced aperture photometry on every frame ---
         report(input, 0, "Photometry: measuring " + selected.size() + " stars in every frame...");
         ApertureMeasurer.FrameMeasurement[] measurements = measureFrames(
-                input, selected, frameFwhm, frameBackground, saturationThreshold, config, executor);
+                input, selected, skyMask, frameFwhm, frameBackground, saturationThreshold, config, executor);
         report(input, MEASURING_PROGRESS_SHARE, "Photometry: readiness checks and ensemble solution...");
-        flagCrossings(input, selected, measurements, config);
+        flagCrossings(input, selected, photometryStars, measurements, config);
 
         int nStars = selected.size();
         boolean[] frameActive = new boolean[nFrames];
@@ -410,6 +429,12 @@ public final class VariableStarAnalyzer {
                 series.offsetY[j] = on ? measurements[j].offsetY : Double.NaN;
                 series.julianDate[j] = stats[j].julianDate;
             }
+            EnsembleSolver.Solution tiny = solveForAperture(measurements, ApertureMeasurer.R_CI_INNER, flags, starExcluded,
+                    frameActive, xNorm, yNorm, config);
+            chooseApertures(curves, usable, starExcluded, solution,
+                    new EnsembleSolver.Solution[]{tiny, small, solution, large},
+                    new double[]{ApertureMeasurer.CI_INNER_FWHM_FACTOR, 1.0, config.photometryApertureFwhmFactor, 2.0},
+                    sessionFwhm, telemetry);
             VariabilityScorer.score(curves, usable, small.residual, large.residual, sky, series,
                     readiness.verdict == PhotometricReadiness.Verdict.LIMITED, config, telemetry);
         } else {
@@ -550,6 +575,7 @@ public final class VariableStarAnalyzer {
 
     private static ApertureMeasurer.FrameMeasurement[] measureFrames(Input input,
                                                                      List<PhotometryStarSelector.Star> stars,
+                                                                     boolean[][] skyMask,
                                                                      double[] frameFwhm,
                                                                      double[] frameBackground,
                                                                      double saturationThreshold,
@@ -566,7 +592,7 @@ public final class VariableStarAnalyzer {
                         input.frames.get(frame).pixelData,
                         frameFwhm[frame],
                         stars,
-                        input.masterStarMask,
+                        skyMask,
                         saturationThreshold,
                         frameBackground[frame],
                         config);
@@ -599,6 +625,7 @@ public final class VariableStarAnalyzer {
      */
     private static void flagCrossings(Input input,
                                       List<PhotometryStarSelector.Star> stars,
+                                      List<SourceExtractor.DetectedObject> photometryStars,
                                       ApertureMeasurer.FrameMeasurement[] measurements,
                                       DetectionConfig config) {
         int nFrames = measurements.length;
@@ -610,16 +637,26 @@ public final class VariableStarAnalyzer {
         for (int k = 0; k < input.masterStars.size(); k++) {
             masterGrid.add(input.masterStars.get(k).x, input.masterStars.get(k).y, k);
         }
+        if (photometryStars != input.masterStars) {
+            for (int k = 0; k < photometryStars.size(); k++) {
+                masterGrid.add(photometryStars.get(k).x, photometryStars.get(k).y, -1 - k);
+            }
+        }
 
         for (int j = 0; j < nFrames; j++) {
             ApertureMeasurer.FrameMeasurement m = measurements[j];
-            double radius = config.photometryAnnulusOuterFwhmFactor * m.fwhm;
+            // A detection flags a star only when it reaches the aperture or the gap before the sky ring; the clipped
+            // sky median already ignores faint blobs in the ring itself.
+            double radius = config.photometryAnnulusInnerFwhmFactor * m.fwhm;
             double stationaryRadius = Math.max(config.maxStarJitter, 0.5 * m.fwhm);
             double ox = finiteOrZero(m.offsetX);
             double oy = finiteOrZero(m.offsetY);
 
             if (input.frameDetections != null && j < input.frameDetections.size()) {
                 for (SourceExtractor.DetectedObject d : input.frameDetections.get(j)) {
+                    if (d.peakSigma < CROSSING_PEAK_SIGMA && !d.isStreak) {
+                        continue;
+                    }
                     double dx = d.x - ox;
                     double dy = d.y - oy;
                     if (masterGrid.anyWithin(dx, dy, stationaryRadius)) {
@@ -785,6 +822,120 @@ public final class VariableStarAnalyzer {
                 ? (time - before[6]) / (after[6] - before[6])
                 : (sequence - before[0]) / (after[0] - before[0]);
         return new double[]{before[1] + t * (after[1] - before[1]), before[2] + t * (after[2] - before[2])};
+    }
+
+    /** Brightness ranges, of equal star counts, that each get their own measuring aperture. */
+    private static final int APERTURE_BINS = 8;
+    /** Fewest scored stars per range for the choice; with fewer, the main aperture is kept. */
+    private static final int APERTURE_MIN_STARS_PER_BIN = 20;
+    /** Another aperture replaces the main one only when it lowers the median scatter by more than this fraction. */
+    private static final double APERTURE_MIN_GAIN = 0.03;
+    /** Smallest aperture radius allowed, in pixels: smaller ones turn centring errors of undersampled stars into noise. */
+    private static final double APERTURE_MIN_RADIUS_PIXELS = 2.0;
+
+    /**
+     * Chooses the measuring aperture per brightness range: the one whose ensemble solution gives the stars of that
+     * range (nearly all constant) the smallest median scatter. Faint stars are limited by sky noise and do better in a
+     * small aperture, bright stars in a larger one. Each star's light curve is replaced by the chosen aperture's
+     * residuals; the main aperture stays unless another lowers the scatter by more than {@link #APERTURE_MIN_GAIN}.
+     *
+     * @param options ensemble solutions, one per aperture
+     * @param fwhmFactors aperture radius of each option, in units of the FWHM
+     */
+    private static void chooseApertures(List<StarLightCurve> curves, boolean[][] usable, boolean[] starExcluded,
+                                        EnsembleSolver.Solution main, EnsembleSolver.Solution[] options, double[] fwhmFactors,
+                                        double sessionFwhm, PipelineTelemetry.PhotometryTelemetry telemetry) {
+        int mainIndex = -1;
+        for (int a = 0; a < options.length; a++) {
+            if (options[a] == main) {
+                mainIndex = a;
+            }
+        }
+        int nStars = curves.size();
+        List<double[]> rows = new ArrayList<>();
+        double[][] sigma = new double[nStars][options.length];
+        double[] residuals = new double[usable.length > 0 ? usable[0].length : 0];
+        for (int i = 0; i < nStars; i++) {
+            if (starExcluded[i] || !Double.isFinite(main.starMag[i])) {
+                continue;
+            }
+            boolean ok = true;
+            for (int a = 0; a < options.length && ok; a++) {
+                for (int j = 0; j < residuals.length; j++) {
+                    residuals[j] = usable[i][j] ? options[a].residual[i][j] : Double.NaN;
+                }
+                sigma[i][a] = PhotometryMath.robustSigma(residuals);
+                ok = Double.isFinite(sigma[i][a]);
+            }
+            if (ok) {
+                rows.add(new double[]{main.starMag[i], i});
+            }
+        }
+        if (mainIndex < 0 || rows.size() < APERTURE_BINS * APERTURE_MIN_STARS_PER_BIN) {
+            return;
+        }
+        rows.sort((p, q) -> Double.compare(p[0], q[0]));
+        double[] binUpper = new double[APERTURE_BINS];
+        int[] binChoice = new int[APERTURE_BINS];
+        for (int b = 0; b < APERTURE_BINS; b++) {
+            int from = b * rows.size() / APERTURE_BINS;
+            int to = (b + 1) * rows.size() / APERTURE_BINS;
+            binUpper[b] = rows.get(to - 1)[0];
+            double[] median = new double[options.length];
+            double[] column = new double[to - from];
+            for (int a = 0; a < options.length; a++) {
+                for (int k = from; k < to; k++) {
+                    column[k - from] = sigma[(int) rows.get(k)[1]][a];
+                }
+                median[a] = PhotometryMath.median(column);
+            }
+            int best = mainIndex;
+            for (int a = 0; a < options.length; a++) {
+                if (fwhmFactors[a] * sessionFwhm >= APERTURE_MIN_RADIUS_PIXELS && median[a] < median[best]) {
+                    best = a;
+                }
+            }
+            binChoice[b] = median[best] < (1 - APERTURE_MIN_GAIN) * median[mainIndex] ? best : mainIndex;
+            PipelineTelemetry.PhotometryApertureChoice choice = new PipelineTelemetry.PhotometryApertureChoice();
+            choice.magFrom = rows.get(from)[0];
+            choice.magTo = binUpper[b];
+            choice.fwhmFactor = fwhmFactors[binChoice[b]];
+            choice.radiusPixels = fwhmFactors[binChoice[b]] * sessionFwhm;
+            choice.scatterChange = (median[binChoice[b]] - median[mainIndex]) / median[mainIndex];
+            telemetry.apertureChoices.add(choice);
+        }
+        for (int i = 0; i < nStars; i++) {
+            double mag = main.starMag[i];
+            if (!Double.isFinite(mag)) {
+                continue;
+            }
+            int b = 0;
+            while (b < APERTURE_BINS - 1 && mag > binUpper[b]) {
+                b++;
+            }
+            EnsembleSolver.Solution chosen = options[binChoice[b]];
+            if (chosen != main) {
+                System.arraycopy(chosen.residual[i], 0, curves.get(i).deltaMag, 0, curves.get(i).deltaMag.length);
+            }
+        }
+    }
+
+    /** Star mask for the sky annulus from the footprints of the photometry star list, grown by one pixel. */
+    static boolean[][] footprintMask(List<SourceExtractor.DetectedObject> stars, int height, int width) {
+        boolean[][] mask = new boolean[height][width];
+        for (SourceExtractor.DetectedObject star : stars) {
+            if (star.rawPixels == null) {
+                continue;
+            }
+            for (SourceExtractor.Pixel p : star.rawPixels) {
+                for (int y = Math.max(0, p.y - 1); y <= Math.min(height - 1, p.y + 1); y++) {
+                    for (int x = Math.max(0, p.x - 1); x <= Math.min(width - 1, p.x + 1); x++) {
+                        mask[y][x] = true;
+                    }
+                }
+            }
+        }
+        return mask;
     }
 
     private static double finiteOrZero(double value) {

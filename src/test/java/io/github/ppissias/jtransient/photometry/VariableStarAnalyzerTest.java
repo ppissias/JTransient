@@ -100,6 +100,14 @@ public class VariableStarAnalyzerTest {
         List<StarLightCurve> highConfidence = analysis.highConfidenceCandidates();
         assertEquals("only the injected variable may be high confidence", 1, highConfidence.size());
 
+        // Sky-limited faint stars are measured in a smaller aperture than the bright ones.
+        List<PipelineTelemetry.PhotometryApertureChoice> apertures = analysis.telemetry.apertureChoices;
+        assertEquals(8, apertures.size());
+        PipelineTelemetry.PhotometryApertureChoice faintest = apertures.get(apertures.size() - 1);
+        assertTrue("faintest range aperture " + faintest.fwhmFactor, faintest.fwhmFactor < 1.5);
+        assertTrue(faintest.radiusPixels >= 2.0);
+        assertTrue(faintest.scatterChange < 0);
+
         // The transparency change is absorbed by the zero points, not by the stars.
         double zMin = Double.MAX_VALUE;
         double zMax = -Double.MAX_VALUE;

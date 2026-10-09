@@ -275,11 +275,28 @@ public class PipelineTelemetry {
         /** Expected scatter against magnitude (the session noise model), sorted by magnitude. */
         public final List<PhotometryNoisePoint> noiseModel = new ArrayList<>();
 
+        /** Measuring aperture chosen for each brightness range, brightest first; empty when the session was not scored. */
+        public final List<PhotometryApertureChoice> apertureChoices = new ArrayList<>();
+
         /** Per-frame diagnostics in chronological order; light-curve arrays are aligned with this list. */
         public final List<PhotometryFrameStat> frames = new ArrayList<>();
 
         /** Wall-clock runtime of the photometry stage in milliseconds. */
         public long processingTimeMs;
+    }
+
+    /**
+     * The measuring aperture used for one brightness range of stars.
+     */
+    public static class PhotometryApertureChoice {
+        /** Brightest and faintest mean instrumental magnitude of the range. */
+        public double magFrom;
+        public double magTo;
+        /** Aperture radius in units of the session FWHM, and in pixels. */
+        public double fwhmFactor;
+        public double radiusPixels;
+        /** Change of the median scatter of the range's stars against the main aperture (negative = less scatter). */
+        public double scatterChange;
     }
 
     /**

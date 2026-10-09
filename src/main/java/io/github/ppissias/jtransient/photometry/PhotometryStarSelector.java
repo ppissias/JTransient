@@ -79,13 +79,14 @@ final class PhotometryStarSelector {
         int width = masterStack[0].length;
         double outerRadius = config.photometryAnnulusOuterFwhmFactor * sessionFwhm + OFFSET_ALLOWANCE_PIXELS;
         double innerRadius = config.photometryAnnulusInnerFwhmFactor * sessionFwhm;
-        double closeRadius = (config.photometryApertureFwhmFactor + 1.0) * sessionFwhm;
         double margin = Math.max(config.edgeMarginPixels, Math.ceil(outerRadius) + 1);
 
         double masterSky = sampleMedian(masterStack);
         double voidThreshold = masterSky * config.voidThresholdFraction;
 
         NeighbourIndex neighbours = new NeighbourIndex(masterStars, Math.max(4.0, innerRadius));
+        double apertureRadius = config.photometryApertureFwhmFactor * sessionFwhm;
+        double[] enclosed = enclosedFractionTable(sessionFwhm / 2.355, apertureRadius, innerRadius + apertureRadius);
         telemetry.masterStarsConsidered = masterStars.size();
 
         List<Star> survivors = new ArrayList<>();
@@ -103,7 +104,7 @@ final class PhotometryStarSelector {
                 telemetry.starsRejectedEdgeOrVoid++;
                 continue;
             }
-            if (neighbours.isCrowded(star, closeRadius, innerRadius)) {
+            if (neighbours.isContaminated(star, sessionFwhm, innerRadius, enclosed)) {
                 telemetry.starsRejectedCrowded++;
                 continue;
             }
@@ -252,6 +253,43 @@ final class PhotometryStarSelector {
         return peak;
     }
 
+    /** Largest share of a star's aperture light that its neighbours may add before it counts as crowded. */
+    static final double MAX_APERTURE_CONTAMINATION = 0.02;
+    private static final double ENCLOSED_TABLE_STEP = 0.05;
+
+    /**
+     * Fraction of a Gaussian star's light that falls inside a circular aperture centred {@code d} pixels away,
+     * tabulated every {@link #ENCLOSED_TABLE_STEP} pixels from 0 to {@code maxDistance}.
+     */
+    static double[] enclosedFractionTable(double sigma, double apertureRadius, double maxDistance) {
+        int n = (int) Math.ceil(maxDistance / ENCLOSED_TABLE_STEP) + 2;
+        double[] table = new double[n];
+        int radialSteps = 48;
+        int angularSteps = 96;
+        double dr = apertureRadius / radialSteps;
+        double dt = 2 * Math.PI / angularSteps;
+        double norm = 1.0 / (2 * Math.PI * sigma * sigma);
+        for (int i = 0; i < n; i++) {
+            double d = i * ENCLOSED_TABLE_STEP;
+            double sum = 0;
+            for (int ri = 0; ri < radialSteps; ri++) {
+                double r = (ri + 0.5) * dr;
+                for (int ti = 0; ti < angularSteps; ti++) {
+                    double t = (ti + 0.5) * dt;
+                    double dist2 = r * r + d * d - 2 * r * d * Math.cos(t);
+                    sum += Math.exp(-dist2 / (2 * sigma * sigma)) * r;
+                }
+            }
+            table[i] = norm * sum * dr * dt;
+        }
+        return table;
+    }
+
+    private static double enclosedAt(double[] table, double d) {
+        int i = (int) Math.round(d / ENCLOSED_TABLE_STEP);
+        return i < table.length ? table[i] : 0.0;
+    }
+
     /**
      * Grid lookup of master stars for the crowding test.
      */
@@ -267,11 +305,18 @@ final class PhotometryStarSelector {
             }
         }
 
-        boolean isCrowded(SourceExtractor.DetectedObject star, double closeRadius, double innerRadius) {
-            double searchRadius = Math.max(closeRadius, innerRadius);
+        /**
+         * True when neighbours add more than {@link #MAX_APERTURE_CONTAMINATION} of the star's own aperture light, a
+         * neighbour sits within one FWHM (centroids and apertures merge), or a neighbour of at least
+         * {@link #BRIGHT_NEIGHBOUR_FLUX_RATIO} of the star's flux lies inside the sky annulus's inner radius.
+         */
+        boolean isContaminated(SourceExtractor.DetectedObject star, double fwhm, double innerRadius, double[] enclosed) {
+            double searchRadius = (enclosed.length - 2) * ENCLOSED_TABLE_STEP;
             int span = (int) Math.ceil(searchRadius / cellSize);
             int cx = (int) Math.floor(star.x / cellSize);
             int cy = (int) Math.floor(star.y / cellSize);
+            double own = star.totalFlux * enclosed[0];
+            double added = 0;
             for (int gy = cy - span; gy <= cy + span; gy++) {
                 for (int gx = cx - span; gx <= cx + span; gx++) {
                     List<SourceExtractor.DetectedObject> cell = cells.get(key(gx, gy));
@@ -283,16 +328,19 @@ final class PhotometryStarSelector {
                             continue;
                         }
                         double d = Math.hypot(other.x - star.x, other.y - star.y);
-                        if (d < closeRadius) {
+                        if (d < fwhm) {
                             return true;
                         }
                         if (d < innerRadius && other.totalFlux >= BRIGHT_NEIGHBOUR_FLUX_RATIO * star.totalFlux) {
                             return true;
                         }
+                        if (d <= searchRadius) {
+                            added += Math.max(0.0, other.totalFlux) * enclosedAt(enclosed, d);
+                        }
                     }
                 }
             }
-            return false;
+            return !(own > 0) || added > MAX_APERTURE_CONTAMINATION * own;
         }
 
         private static long key(int gx, int gy) {

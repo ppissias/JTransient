@@ -578,11 +578,11 @@ Master stars more elongated than this are not measured.
 
 ### `photometryApertureFwhmFactor` (default `1.5`)
 
-Main aperture radius in units of each frame's FWHM.
+Main aperture radius in units of each frame's FWHM. Each brightness range of stars is scored with whichever of 0.7, 1.0, this value or 2.0 x FWHM gives its constant stars the least scatter (radius at least 2 px); this value stays unless another lowers the scatter by more than 3%.
 
 ### `photometryAnnulusInnerFwhmFactor` / `photometryAnnulusOuterFwhmFactor` (defaults `3.0` / `5.0`)
 
-Sky annulus radii in FWHM. Master-star pixels inside the annulus are masked. A star is not measured when another master star lies within (aperture factor + 1) x FWHM, or a neighbour with at least 10% of its flux lies within the inner radius.
+Sky annulus radii in FWHM. Pixels of photometry's own star list (extracted from the median stack at 3 sigma, independent of the detection settings) are masked in the annulus. A star is not measured when its neighbours add more than 2% light to its main aperture, a neighbour lies within 1 FWHM, or a neighbour with at least 10% of its flux lies within the inner radius. A frame detection marks a star as crossed only when it peaks at 5 sigma or more and reaches the inner radius.
 
 ### `photometrySaturationFraction` (default `0.85`)
 

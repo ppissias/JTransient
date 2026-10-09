@@ -51,6 +51,45 @@ final class VariabilityScorer {
     private static final int LOCAL_MIN_STARS = 3;
     /** Comparison stars for the local gate must have a scatter z-score below this. */
     private static final double LOCAL_CONSTANT_Z = 2.0;
+    /**
+     * The local gate fails only when the nearby constant stars also carry at least this share of the candidate's
+     * pattern. A systematic shifts neighbours by about the same amount; a faint copy (light leaking from a bright
+     * variable into a neighbour's aperture) or a slight common trend correlates without sharing the amplitude.
+     */
+    private static final double LOCAL_MIN_SHARED_FRACTION = 0.3;
+    /** In a sparse field the local comparison stars may come from up to this multiple of the local radius. */
+    private static final double LOCAL_MAX_RADIUS_FACTOR = 3.0;
+
+    /**
+     * Least-squares slope of {@code y} on {@code x} over the positions where both are finite: how much of x's
+     * pattern y carries (1 = all of it). NaN when fewer than three pairs exist or x is constant.
+     */
+    static double regressionSlope(double[] x, double[] y) {
+        int n = 0;
+        double sx = 0;
+        double sy = 0;
+        for (int i = 0; i < x.length; i++) {
+            if (Double.isFinite(x[i]) && Double.isFinite(y[i])) {
+                sx += x[i];
+                sy += y[i];
+                n++;
+            }
+        }
+        if (n < 3) {
+            return Double.NaN;
+        }
+        double mx = sx / n;
+        double my = sy / n;
+        double sxy = 0;
+        double sxx = 0;
+        for (int i = 0; i < x.length; i++) {
+            if (Double.isFinite(x[i]) && Double.isFinite(y[i])) {
+                sxy += (x[i] - mx) * (y[i] - my);
+                sxx += (x[i] - mx) * (x[i] - mx);
+            }
+        }
+        return sxx > 0 ? sxy / sxx : Double.NaN;
+    }
 
     /** Per-frame series used by the systematics gate. */
     static final class FrameSeries {
@@ -319,26 +358,39 @@ final class VariabilityScorer {
         }
 
         // LOCAL
+        // Constant stars within the local radius; in a sparse field the nearest ones out to a wider radius make up
+        // the minimum, so a star is not failed only for lack of close neighbours.
         List<StarLightCurve> nearby = new ArrayList<>();
+        double widestRadius = LOCAL_MAX_RADIUS_FACTOR * config.variableLocalRadiusPixels;
         for (int k = 0; k < stars.size(); k++) {
             StarLightCurve other = stars.get(k);
             if (k == index || curves[k] == null || other.tier != VariabilityTier.CONSTANT
                     || !(other.scatterZ < LOCAL_CONSTANT_Z)) {
                 continue;
             }
-            if (Math.hypot(other.x - star.x, other.y - star.y) <= config.variableLocalRadiusPixels) {
+            if (Math.hypot(other.x - star.x, other.y - star.y) <= widestRadius) {
                 nearby.add(other);
             }
         }
         nearby.sort((a, b) -> Double.compare(Math.hypot(a.x - star.x, a.y - star.y), Math.hypot(b.x - star.x, b.y - star.y)));
-        int used = Math.min(LOCAL_MAX_STARS, nearby.size());
+        int withinRadius = 0;
+        while (withinRadius < nearby.size()
+                && Math.hypot(nearby.get(withinRadius).x - star.x, nearby.get(withinRadius).y - star.y) <= config.variableLocalRadiusPixels) {
+            withinRadius++;
+        }
+        int used = Math.min(LOCAL_MAX_STARS, Math.max(withinRadius, Math.min(LOCAL_MIN_STARS, nearby.size())));
         double[] correlations = new double[used];
+        double[] shared = new double[used];
         for (int k = 0; k < used; k++) {
             correlations[k] = Math.abs(PhotometryMath.correlation(r, curves[nearby.get(k).id]));
+            shared[k] = Math.abs(regressionSlope(r, curves[nearby.get(k).id]));
         }
         star.localComparisonStars = used;
         star.localCorrelation = PhotometryMath.median(correlations);
-        if (used < LOCAL_MIN_STARS || !(star.localCorrelation <= config.variableMaxLocalCorrelation)) {
+        star.localSharedFraction = PhotometryMath.median(shared);
+        boolean sharedPattern = !(star.localCorrelation <= config.variableMaxLocalCorrelation)
+                && !(star.localSharedFraction < LOCAL_MIN_SHARED_FRACTION);
+        if (used < LOCAL_MIN_STARS || sharedPattern) {
             star.failedGates.add(GATE_LOCAL);
         }
 
