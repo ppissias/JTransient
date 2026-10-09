@@ -210,6 +210,7 @@ public final class VariableStarAnalyzer {
         Arrays.fill(ranges, Double.NaN);
         int shapeFailures = 0;
         int shapeShortRange = 0;
+        int shapeFewStars = 0;
         int shapeEvaluated = 0;
         for (int j = 0; j < nFrames; j++) {
             ApertureMeasurer.FrameMeasurement m = measurements[j];
@@ -232,12 +233,18 @@ public final class VariableStarAnalyzer {
             }
             if (shape.status == PhotometricReadiness.CheckStatus.FAIL) {
                 shapeFailures++;
-                if (!shape.departureFound) {
+                // Without a departing bin the frame failed for lack of range or, with enough range, of stars.
+                boolean fewStars = !shape.departureFound && stats[j].linearRangeMag >= config.linearityMinRangeMag;
+                if (fewStars) {
+                    shapeFewStars++;
+                } else if (!shape.departureFound) {
                     shapeShortRange++;
                 }
                 if (frameActive[j]) {
                     exclude(j, stats[j], frameActive, shape.departureFound
                             ? "Linear range " + format(stats[j].linearRangeMag) + " mag"
+                            : fewStars
+                            ? "Only " + stats[j].linearStars + " stars in the linear range, " + config.linearityMinStars + " needed"
                             : "High-SNR stars span only " + format(stats[j].linearRangeMag) + " mag");
                     telemetry.framesExcludedShapeLinearity++;
                 }
@@ -251,7 +258,7 @@ public final class VariableStarAnalyzer {
             readiness.messages.add("No frame had enough measurable stars for the star-shape linearity check.");
         } else if (shapeFailures > config.linearityMaxFailingFrameFraction * shapeEvaluated) {
             readiness.shapeLinearityCheck = PhotometricReadiness.CheckStatus.FAIL;
-            int departing = shapeFailures - shapeShortRange;
+            int departing = shapeFailures - shapeShortRange - shapeFewStars;
             if (departing > 0) {
                 readiness.messages.add(String.format(
                         "In %d of %d frames bright stars are flatter than faint ones over most of the magnitude range (median linear range %.1f mag). These frames look stretched or non-linear; load the original RAW or FITS frames.",
@@ -261,6 +268,11 @@ public final class VariableStarAnalyzer {
                 readiness.messages.add(String.format(
                         "In %d of %d frames star shapes stay within tolerance, but the stars bright enough for the check (SNR of about 20 or more) span less than the %.1f mag needed to verify linearity. Longer exposures or a richer star field give a longer range.",
                         shapeShortRange, shapeEvaluated, config.linearityMinRangeMag));
+            }
+            if (shapeFewStars > 0) {
+                readiness.messages.add(String.format(
+                        "In %d of %d frames star shapes stay within tolerance, but fewer than %d measurable stars lie in the linear range.",
+                        shapeFewStars, shapeEvaluated, config.linearityMinStars));
             }
         } else if (readiness.medianLinearRangeMag < config.linearityMinRangeMag + LIMITED_RANGE_MARGIN_MAG) {
             readiness.shapeLinearityCheck = PhotometricReadiness.CheckStatus.LIMITED;
@@ -659,11 +671,13 @@ public final class VariableStarAnalyzer {
     }
 
     /**
-     * Interpolates a track's position into every frame of its time span and flags stars near it. Each
-     * point is treated as a segment along its footprint (a point source is a segment of length zero), so a
-     * long streak flags the stars along its line rather than every star within its length.
+     * Flags the stars a track passes in every frame of its time span. Frames where the track was observed
+     * use every observed point (a fragmented streak can have several); other frames use the position
+     * interpolated in capture time, or in sequence index when timestamps are missing. Each point is treated
+     * as a segment along its footprint (a point source is a segment of length zero), so a long streak flags
+     * the stars along its line rather than every star within its length.
      */
-    private static void flagTrack(TrackLinker.Track track,
+    static void flagTrack(TrackLinker.Track track,
                                   List<ImageFrame> frames,
                                   List<PhotometryStarSelector.Star> stars,
                                   PointGrid starGrid,
@@ -677,7 +691,7 @@ public final class VariableStarAnalyzer {
         for (int j = 0; j < frames.size(); j++) {
             frameBySequence.put(frames.get(j).sequenceIndex, j);
         }
-        // {sequence, x, y, angle, half length along the angle, half width across it}
+        // {sequence, x, y, angle, half length along the angle, half width across it, capture time or NaN}
         List<double[]> points = new ArrayList<>(track.points.size());
         for (SourceExtractor.DetectedObject p : track.points) {
             Integer j = frameBySequence.get(p.sourceFrameIndex);
@@ -688,7 +702,8 @@ public final class VariableStarAnalyzer {
             double halfLength = Math.max(0.0, major - minor) / 2.0;
             // A streak's moment FWHM spans its length, so its width is the footprint's minor extent.
             double halfWidth = p.isStreak ? minor : Math.max(finiteOrZero(p.fwhm), minor);
-            points.add(new double[]{p.sourceFrameIndex, p.x - ox, p.y - oy, finiteOrZero(p.angle), halfLength, halfWidth});
+            double time = j == null ? Double.NaN : captureTime(frames.get(j));
+            points.add(new double[]{p.sourceFrameIndex, p.x - ox, p.y - oy, finiteOrZero(p.angle), halfLength, halfWidth, time});
         }
         points.sort((a, b) -> Double.compare(a[0], b[0]));
         int firstSequence = (int) points.get(0)[0];
@@ -698,20 +713,41 @@ public final class VariableStarAnalyzer {
             if (sequence < firstSequence || sequence > lastSequence) {
                 continue;
             }
-            double[] position = interpolate(points, sequence);
-            double[] shape = nearestPoint(points, sequence);
-            double reach = config.photometryAnnulusOuterFwhmFactor * measurements[j].fwhm + shape[5];
-            double ux = Math.cos(shape[3]);
-            double uy = Math.sin(shape[3]);
-            for (int i : starGrid.within(position[0], position[1], reach + shape[4])) {
-                double dx = stars.get(i).x - position[0];
-                double dy = stars.get(i).y - position[1];
-                double along = Math.max(-shape[4], Math.min(shape[4], dx * ux + dy * uy));
-                if (Math.hypot(dx - along * ux, dy - along * uy) <= reach) {
-                    measurements[j].flags[i] |= PhotometryFlags.CROSSING;
+            double annulus = config.photometryAnnulusOuterFwhmFactor * measurements[j].fwhm;
+            boolean observed = false;
+            for (double[] p : points) {
+                if (p[0] == sequence) {
+                    observed = true;
+                    flagSegment(p[1], p[2], p, annulus, stars, starGrid, measurements[j].flags);
                 }
             }
+            if (!observed) {
+                double[] position = interpolate(points, sequence, captureTime(frames.get(j)));
+                flagSegment(position[0], position[1], nearestPoint(points, sequence), annulus,
+                        stars, starGrid, measurements[j].flags);
+            }
         }
+    }
+
+    /** Flags the stars within {@code annulus} plus the shape's half width of a segment centred on (x, y). */
+    private static void flagSegment(double x, double y, double[] shape, double annulus,
+                                    List<PhotometryStarSelector.Star> stars, PointGrid starGrid, int[] flags) {
+        double reach = annulus + shape[5];
+        double ux = Math.cos(shape[3]);
+        double uy = Math.sin(shape[3]);
+        for (int i : starGrid.within(x, y, reach + shape[4])) {
+            double dx = stars.get(i).x - x;
+            double dy = stars.get(i).y - y;
+            double along = Math.max(-shape[4], Math.min(shape[4], dx * ux + dy * uy));
+            if (Math.hypot(dx - along * ux, dy - along * uy) <= reach) {
+                flags[i] |= PhotometryFlags.CROSSING;
+            }
+        }
+    }
+
+    /** Capture time in milliseconds, or NaN when the frame has no timestamp. */
+    private static double captureTime(ImageFrame frame) {
+        return frame.timestamp > 0 ? frame.timestamp : Double.NaN;
     }
 
     /** The track point closest in sequence to {@code sequence}, the earlier one on a tie. */
@@ -725,8 +761,12 @@ public final class VariableStarAnalyzer {
         return best;
     }
 
-    /** Linear position at {@code sequence} between track points given as {sequence, x, y}, sorted by sequence. */
-    private static double[] interpolate(List<double[]> points, int sequence) {
+    /**
+     * Position at {@code sequence} between the surrounding track points, sorted by sequence. The fraction
+     * comes from capture times when the frame and both points have one (pauses make the cadence uneven),
+     * otherwise from sequence indices.
+     */
+    static double[] interpolate(List<double[]> points, int sequence, double time) {
         double[] before = points.get(0);
         double[] after = points.get(points.size() - 1);
         for (double[] p : points) {
@@ -741,7 +781,9 @@ public final class VariableStarAnalyzer {
         if (after[0] == before[0]) {
             return new double[]{before[1], before[2]};
         }
-        double t = (sequence - before[0]) / (after[0] - before[0]);
+        double t = Double.isFinite(time) && Double.isFinite(before[6]) && Double.isFinite(after[6]) && after[6] > before[6]
+                ? (time - before[6]) / (after[6] - before[6])
+                : (sequence - before[0]) / (after[0] - before[0]);
         return new double[]{before[1] + t * (after[1] - before[1]), before[2] + t * (after[2] - before[2])};
     }
 
@@ -872,7 +914,7 @@ public final class VariableStarAnalyzer {
     /**
      * Uniform grid of indexed points for radius queries.
      */
-    private static final class PointGrid {
+    static final class PointGrid {
         private final double cellSize;
         private final Map<Long, List<double[]>> cells = new HashMap<>();
 

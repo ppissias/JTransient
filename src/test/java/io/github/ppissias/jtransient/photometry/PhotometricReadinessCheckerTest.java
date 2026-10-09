@@ -91,6 +91,41 @@ public class PhotometricReadinessCheckerTest {
     }
 
     @Test
+    public void unmeasurableResponseSlopeIsInconclusiveNotPass() {
+        // Every star has the same mean magnitude, so no frame has the leverage to fit a slope.
+        int nStars = 60;
+        int nFrames = 40;
+        EnsembleSolver.Solution solution = new EnsembleSolver.Solution();
+        solution.starMag = new double[nStars];
+        solution.starSigma = new double[nStars];
+        solution.zeroPoint = new double[nFrames];
+        solution.frameSolved = new boolean[nFrames];
+        solution.residual = new double[nStars][nFrames];
+        boolean[][] usable = new boolean[nStars][nFrames];
+        java.util.Random random = new java.util.Random(1);
+        for (int i = 0; i < nStars; i++) {
+            solution.starMag[i] = -12.0;
+            solution.starSigma[i] = 0.01;
+            for (int j = 0; j < nFrames; j++) {
+                solution.residual[i][j] = 0.01 * random.nextGaussian();
+                usable[i][j] = true;
+            }
+        }
+        PipelineTelemetry.PhotometryFrameStat[] stats = new PipelineTelemetry.PhotometryFrameStat[nFrames];
+        for (int j = 0; j < nFrames; j++) {
+            solution.frameSolved[j] = true;
+            solution.zeroPoint[j] = 0.1 * j / (nFrames - 1.0);
+            stats[j] = new PipelineTelemetry.PhotometryFrameStat();
+        }
+
+        PhotometricReadinessChecker.ResponseResult result = PhotometricReadinessChecker.checkResponse(
+                solution, usable, new double[nFrames], stats, new DetectionConfig(), new PhotometricReadiness());
+
+        assertEquals(PhotometricReadiness.CheckStatus.INCONCLUSIVE, result.status);
+        assertEquals("INCONCLUSIVE", stats[0].responseStatus);
+    }
+
+    @Test
     public void shortButLinearRangeFailsWithoutDeparture() {
         PipelineTelemetry.PhotometryFrameStat stat = new PipelineTelemetry.PhotometryFrameStat();
         PhotometricReadinessChecker.ShapeResult result = analyze(frame(1.5, i -> CI), stat);

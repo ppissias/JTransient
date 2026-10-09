@@ -210,6 +210,7 @@ final class PhotometricReadinessChecker {
         Arrays.fill(skies, Double.NaN);
 
         int solved = 0;
+        int measured = 0;
         int failing = 0;
         double[] x = new double[nStars];
         double[] y = new double[nStars];
@@ -236,6 +237,12 @@ final class PhotometricReadinessChecker {
             PipelineTelemetry.PhotometryFrameStat stat = stats[j];
             stat.responseSlope = slope;
             stat.responseSlopeError = slopeError;
+            if (!Double.isFinite(slope)) {
+                // Too little magnitude leverage to fit a slope: not measured, so neither pass nor fail.
+                stat.responseStatus = PhotometricReadiness.CheckStatus.INCONCLUSIVE.name();
+                continue;
+            }
+            measured++;
             boolean fails = Double.isFinite(slope) && Math.abs(slope) > config.linearityMaxFrameSlope
                     && (!Double.isFinite(slopeError) || Math.abs(slope) > SLOPE_SIGNIFICANCE * slopeError);
             result.frameFails[j] = fails;
@@ -249,6 +256,11 @@ final class PhotometricReadinessChecker {
         if (solved < 3) {
             result.status = PhotometricReadiness.CheckStatus.INCONCLUSIVE;
             readiness.messages.add("Check D could not run: fewer than 3 frames could be solved.");
+            return result;
+        }
+        if (measured < 3) {
+            result.status = PhotometricReadiness.CheckStatus.INCONCLUSIVE;
+            readiness.messages.add("Check D could not run: the response slope could be measured in fewer than 3 frames.");
             return result;
         }
 
@@ -265,7 +277,7 @@ final class PhotometricReadinessChecker {
         boolean tracksZeroPoint = conclusive
                 && tracks(slopes, zeroPoints, zeroCorrelation, zeroPointRange, config);
         boolean tracksSky = tracks(slopes, skies, skyCorrelation, skyRange, config);
-        double failingFraction = failing / (double) solved;
+        double failingFraction = failing / (double) measured;
 
         if (tracksZeroPoint) {
             readiness.messages.add(String.format(
@@ -280,7 +292,7 @@ final class PhotometricReadinessChecker {
         if (failingFraction > config.linearityMaxFailingFrameFraction) {
             readiness.messages.add(String.format(
                     "%d of %d frames show a magnitude-dependent response above %.3f mag/mag.",
-                    failing, solved, config.linearityMaxFrameSlope));
+                    failing, measured, config.linearityMaxFrameSlope));
         }
 
         if (tracksZeroPoint || tracksSky || failingFraction > config.linearityMaxFailingFrameFraction) {
