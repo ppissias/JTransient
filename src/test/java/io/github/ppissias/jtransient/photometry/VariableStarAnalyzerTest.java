@@ -14,6 +14,7 @@ import io.github.ppissias.jtransient.core.PixelEncoding;
 import io.github.ppissias.jtransient.engine.ImageFrame;
 import io.github.ppissias.jtransient.engine.JTransientEngine;
 import io.github.ppissias.jtransient.engine.PipelineResult;
+import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -163,6 +164,90 @@ public class VariableStarAnalyzerTest {
         assertTrue("the crossing frame must be flagged",
                 (crossed.flags[CROSSING_FRAME] & PhotometryFlags.CROSSING) != 0);
         assertFalse(crossed.tier == VariabilityTier.HIGH_CONFIDENCE);
+    }
+
+    /**
+     * A frame with a residual 2-pixel shift is measured at the corrected positions; the crossing check must
+     * use the same correction, or every star in the frame looks like a moving object sitting on itself.
+     */
+    @Test
+    public void residualFrameShiftDoesNotFlagStationaryStarsAsCrossings() throws Exception {
+        Session session = createSession(DoubleUnaryOperator.identity());
+        int shifted = 5;
+        ImageFrame original = session.frames.get(shifted);
+        short[][] pixels = new short[SIZE][SIZE];
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                pixels[y][x] = original.pixelData[y][Math.max(0, x - 2)];
+            }
+        }
+        session.frames.set(shifted, new ImageFrame(original.sequenceIndex, original.filename, pixels,
+                original.timestamp, original.exposureDuration));
+
+        PipelineResult result = engine.runPipeline(session.frames, testConfig(), null, null);
+        PipelineTelemetry.PhotometryFrameStat frame = null;
+        PipelineTelemetry.PhotometryFrameStat reference = null;
+        for (PipelineTelemetry.PhotometryFrameStat f : result.variableStarAnalysis.frames) {
+            if (f.filename.equals(original.filename)) {
+                frame = f;
+            } else if (f.filename.equals("frame6.fits")) {
+                reference = f;
+            }
+        }
+
+        assertNotNull(frame);
+        assertNotNull(reference);
+        assertEquals(2.0, frame.registrationOffsetX, 0.1);
+        assertTrue("shifted frame flags " + frame.crossing + " crossings, unshifted " + reference.crossing,
+                frame.crossing <= reference.crossing + 5);
+        assertTrue("the shifted frame must stay in use: " + frame.exclusionReason, frame.used);
+    }
+
+    /**
+     * A satellite streak crossing one frame must flag the stars along its line, not every star within its
+     * length of its centre (which is the whole frame).
+     */
+    @Test
+    public void satelliteStreakFlagsOnlyStarsAlongItsLine() throws Exception {
+        Session session = createSession(DoubleUnaryOperator.identity());
+        int streakFrame = 12;
+        ImageFrame original = session.frames.get(streakFrame);
+        short[][] pixels = new short[SIZE][];
+        for (int y = 0; y < SIZE; y++) {
+            pixels[y] = original.pixelData[y].clone();
+        }
+        // Horizontal streak at y = 200, 10 000 ADU at its core, across the full width.
+        for (int y = 194; y <= 206; y++) {
+            double add = 10_000.0 * Math.exp(-(y - 200.0) * (y - 200.0) / (2 * 1.3 * 1.3));
+            for (int x = 0; x < SIZE; x++) {
+                int value = PixelEncoding.toShiftedPositiveInt(pixels[y][x]) + (int) Math.round(add);
+                pixels[y][x] = (short) (Math.min(65535, value) - 32768);
+            }
+        }
+        session.frames.set(streakFrame, new ImageFrame(original.sequenceIndex, original.filename, pixels,
+                original.timestamp, original.exposureDuration));
+
+        PipelineResult result = engine.runPipeline(session.frames, testConfig(), null, null);
+        PipelineTelemetry.PhotometryFrameStat frame = null;
+        for (PipelineTelemetry.PhotometryFrameStat f : result.variableStarAnalysis.frames) {
+            if (f.filename.equals(original.filename)) {
+                frame = f;
+            }
+        }
+
+        assertNotNull(frame);
+        int nearLine = 0;
+        for (StarLightCurve star : result.variableStarAnalysis.stars) {
+            if (Math.abs(star.y - 200.0) < 10.0) {
+                nearLine++;
+                assertTrue("star on the streak must be flagged at y=" + star.y,
+                        (star.flags[streakFrame] & PhotometryFlags.CROSSING) != 0);
+            }
+        }
+        assertTrue(nearLine > 5);
+        assertTrue("only stars along the line may be flagged: " + frame.crossing + " of " + frame.starsMeasured,
+                frame.crossing < frame.starsMeasured / 3);
+        assertTrue("the streak frame must stay in use: " + frame.exclusionReason, frame.used);
     }
 
     /**

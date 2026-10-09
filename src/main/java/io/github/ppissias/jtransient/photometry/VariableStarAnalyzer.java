@@ -582,7 +582,8 @@ public final class VariableStarAnalyzer {
     /**
      * Flags measurements contaminated by something that moved: pre-veto detections that do not sit on
      * a master star, interpolated track positions in frames where the object merged with a star, and
-     * slow-mover footprints (in every frame).
+     * slow-mover footprints (in every frame). Frame positions are moved into the master system with the
+     * frame's measured registration offset, the same correction the apertures use.
      */
     private static void flagCrossings(Input input,
                                       List<PhotometryStarSelector.Star> stars,
@@ -602,24 +603,28 @@ public final class VariableStarAnalyzer {
             ApertureMeasurer.FrameMeasurement m = measurements[j];
             double radius = config.photometryAnnulusOuterFwhmFactor * m.fwhm;
             double stationaryRadius = Math.max(config.maxStarJitter, 0.5 * m.fwhm);
+            double ox = finiteOrZero(m.offsetX);
+            double oy = finiteOrZero(m.offsetY);
 
             if (input.frameDetections != null && j < input.frameDetections.size()) {
                 for (SourceExtractor.DetectedObject d : input.frameDetections.get(j)) {
-                    if (masterGrid.anyWithin(d.x, d.y, stationaryRadius)) {
+                    double dx = d.x - ox;
+                    double dy = d.y - oy;
+                    if (masterGrid.anyWithin(dx, dy, stationaryRadius)) {
                         continue;
                     }
                     double extent = Math.max(d.fwhm, Math.max(d.majorExtent, 0.0));
-                    if (!starGrid.anyWithin(d.x, d.y, radius + extent + 1.0)) {
+                    if (!starGrid.anyWithin(dx, dy, radius + extent + 1.0)) {
                         continue;
                     }
                     if (d.rawPixels != null && !d.rawPixels.isEmpty()) {
                         for (SourceExtractor.Pixel p : d.rawPixels) {
-                            for (int i : starGrid.within(p.x, p.y, radius)) {
+                            for (int i : starGrid.within(p.x - ox, p.y - oy, radius)) {
                                 m.flags[i] |= PhotometryFlags.CROSSING;
                             }
                         }
                     } else {
-                        for (int i : starGrid.within(d.x, d.y, radius + extent)) {
+                        for (int i : starGrid.within(dx, dy, radius + extent)) {
                             m.flags[i] |= PhotometryFlags.CROSSING;
                         }
                     }
@@ -629,7 +634,7 @@ public final class VariableStarAnalyzer {
 
         if (input.tracks != null) {
             for (TrackLinker.Track track : input.tracks) {
-                flagTrack(track, input.frames, starGrid, measurements, config);
+                flagTrack(track, input.frames, stars, starGrid, measurements, config);
             }
         }
 
@@ -654,53 +659,94 @@ public final class VariableStarAnalyzer {
     }
 
     /**
-     * Interpolates a track's position into every frame of its time span and flags stars near it.
+     * Interpolates a track's position into every frame of its time span and flags stars near it. Each
+     * point is treated as a segment along its footprint (a point source is a segment of length zero), so a
+     * long streak flags the stars along its line rather than every star within its length.
      */
     private static void flagTrack(TrackLinker.Track track,
                                   List<ImageFrame> frames,
+                                  List<PhotometryStarSelector.Star> stars,
                                   PointGrid starGrid,
                                   ApertureMeasurer.FrameMeasurement[] measurements,
                                   DetectionConfig config) {
-        List<SourceExtractor.DetectedObject> points = new ArrayList<>(track.points);
-        if (points.isEmpty()) {
+        if (track.points.isEmpty()) {
             return;
         }
-        points.sort((a, b) -> Integer.compare(a.sourceFrameIndex, b.sourceFrameIndex));
-        int firstSequence = points.get(0).sourceFrameIndex;
-        int lastSequence = points.get(points.size() - 1).sourceFrameIndex;
+        // Track points are in their own frame's coordinates; move each into the master system.
+        Map<Integer, Integer> frameBySequence = new HashMap<>();
+        for (int j = 0; j < frames.size(); j++) {
+            frameBySequence.put(frames.get(j).sequenceIndex, j);
+        }
+        // {sequence, x, y, angle, half length along the angle, half width across it}
+        List<double[]> points = new ArrayList<>(track.points.size());
+        for (SourceExtractor.DetectedObject p : track.points) {
+            Integer j = frameBySequence.get(p.sourceFrameIndex);
+            double ox = j == null ? 0.0 : finiteOrZero(measurements[j].offsetX);
+            double oy = j == null ? 0.0 : finiteOrZero(measurements[j].offsetY);
+            double major = finiteOrZero(p.majorExtent);
+            double minor = finiteOrZero(p.minorExtent);
+            double halfLength = Math.max(0.0, major - minor) / 2.0;
+            // A streak's moment FWHM spans its length, so its width is the footprint's minor extent.
+            double halfWidth = p.isStreak ? minor : Math.max(finiteOrZero(p.fwhm), minor);
+            points.add(new double[]{p.sourceFrameIndex, p.x - ox, p.y - oy, finiteOrZero(p.angle), halfLength, halfWidth});
+        }
+        points.sort((a, b) -> Double.compare(a[0], b[0]));
+        int firstSequence = (int) points.get(0)[0];
+        int lastSequence = (int) points.get(points.size() - 1)[0];
         for (int j = 0; j < frames.size(); j++) {
             int sequence = frames.get(j).sequenceIndex;
             if (sequence < firstSequence || sequence > lastSequence) {
                 continue;
             }
             double[] position = interpolate(points, sequence);
-            double extent = 0;
-            for (SourceExtractor.DetectedObject p : points) {
-                extent = Math.max(extent, Math.max(p.fwhm, p.majorExtent));
+            double[] shape = nearestPoint(points, sequence);
+            double reach = config.photometryAnnulusOuterFwhmFactor * measurements[j].fwhm + shape[5];
+            double ux = Math.cos(shape[3]);
+            double uy = Math.sin(shape[3]);
+            for (int i : starGrid.within(position[0], position[1], reach + shape[4])) {
+                double dx = stars.get(i).x - position[0];
+                double dy = stars.get(i).y - position[1];
+                double along = Math.max(-shape[4], Math.min(shape[4], dx * ux + dy * uy));
+                if (Math.hypot(dx - along * ux, dy - along * uy) <= reach) {
+                    measurements[j].flags[i] |= PhotometryFlags.CROSSING;
+                }
             }
-            double radius = config.photometryAnnulusOuterFwhmFactor * measurements[j].fwhm + extent;
-            for (int i : starGrid.within(position[0], position[1], radius)) {
-                measurements[j].flags[i] |= PhotometryFlags.CROSSING;
-            }
-        }    }
+        }
+    }
 
-    private static double[] interpolate(List<SourceExtractor.DetectedObject> points, int sequence) {
-        SourceExtractor.DetectedObject before = points.get(0);
-        SourceExtractor.DetectedObject after = points.get(points.size() - 1);
-        for (SourceExtractor.DetectedObject p : points) {
-            if (p.sourceFrameIndex <= sequence) {
+    /** The track point closest in sequence to {@code sequence}, the earlier one on a tie. */
+    private static double[] nearestPoint(List<double[]> points, int sequence) {
+        double[] best = points.get(0);
+        for (double[] p : points) {
+            if (Math.abs(p[0] - sequence) < Math.abs(best[0] - sequence)) {
+                best = p;
+            }
+        }
+        return best;
+    }
+
+    /** Linear position at {@code sequence} between track points given as {sequence, x, y}, sorted by sequence. */
+    private static double[] interpolate(List<double[]> points, int sequence) {
+        double[] before = points.get(0);
+        double[] after = points.get(points.size() - 1);
+        for (double[] p : points) {
+            if (p[0] <= sequence) {
                 before = p;
             }
-            if (p.sourceFrameIndex >= sequence) {
+            if (p[0] >= sequence) {
                 after = p;
                 break;
             }
         }
-        if (after.sourceFrameIndex == before.sourceFrameIndex) {
-            return new double[]{before.x, before.y};
+        if (after[0] == before[0]) {
+            return new double[]{before[1], before[2]};
         }
-        double t = (sequence - before.sourceFrameIndex) / (double) (after.sourceFrameIndex - before.sourceFrameIndex);
-        return new double[]{before.x + t * (after.x - before.x), before.y + t * (after.y - before.y)};
+        double t = (sequence - before[0]) / (after[0] - before[0]);
+        return new double[]{before[1] + t * (after[1] - before[1]), before[2] + t * (after[2] - before[2])};
+    }
+
+    private static double finiteOrZero(double value) {
+        return Double.isFinite(value) ? value : 0.0;
     }
 
     private static EnsembleSolver.Solution solveForAperture(ApertureMeasurer.FrameMeasurement[] measurements,

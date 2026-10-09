@@ -195,8 +195,10 @@ Flags set here:
 
 A moving object passing through a star's aperture or sky annulus changes its measured brightness for a few frames. This is the classic false variable. `VariableStarAnalyzer.flagCrossings` sets `CROSSING` on every star within the outer annulus radius (`photometryAnnulusOuterFwhmFactor x` frame FWHM) of:
 
+Frame positions (detections, their pixels and track points) are first moved into the master system with the frame's measured registration offset, the same correction the apertures use (section 6), so a residual shift does not make stationary stars look like moving objects.
+
 1. **Moving detections.** A detection in a frame that is not within `max(maxStarJitter, 0.5 x FWHM)` of any master star is not stationary. Each of its pixels flags the stars around it in that frame.
-2. **Tracks.** For every frame in a track's time span, the position is interpolated linearly by sequence index between track points. This covers frames where the object merged with a star and was not detected. The radius is enlarged by the track's largest FWHM or major extent.
+2. **Tracks.** For every frame in a track's time span, the position is interpolated linearly by sequence index between track points. This covers frames where the object merged with a star and was not detected. Each point is treated as a segment along its footprint (centre, angle, half of `majorExtent - minorExtent`); a star is flagged when its distance to the segment is within the outer annulus radius plus the point's width (its minor extent for a streak, otherwise the larger of FWHM and minor extent). A point source is a segment of length zero, so it flags a disc; a satellite streak flags a band along its line instead of every star within its length. Interpolated frames use the shape of the nearest track point.
 3. **Slow-mover candidates.** The maximum-stack footprint covers the whole session, so its pixels flag nearby stars in every frame.
 
 ### 7.1 Contaminated shape
