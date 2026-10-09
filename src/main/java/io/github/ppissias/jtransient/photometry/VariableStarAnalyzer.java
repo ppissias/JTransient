@@ -209,6 +209,7 @@ public final class VariableStarAnalyzer {
         Arrays.fill(limits, Double.NaN);
         Arrays.fill(ranges, Double.NaN);
         int shapeFailures = 0;
+        int shapeShortRange = 0;
         int shapeEvaluated = 0;
         for (int j = 0; j < nFrames; j++) {
             ApertureMeasurer.FrameMeasurement m = measurements[j];
@@ -231,8 +232,13 @@ public final class VariableStarAnalyzer {
             }
             if (shape.status == PhotometricReadiness.CheckStatus.FAIL) {
                 shapeFailures++;
+                if (!shape.departureFound) {
+                    shapeShortRange++;
+                }
                 if (frameActive[j]) {
-                    exclude(j, stats[j], frameActive, "Linear range " + format(stats[j].linearRangeMag) + " mag");
+                    exclude(j, stats[j], frameActive, shape.departureFound
+                            ? "Linear range " + format(stats[j].linearRangeMag) + " mag"
+                            : "High-SNR stars span only " + format(stats[j].linearRangeMag) + " mag");
                     telemetry.framesExcludedShapeLinearity++;
                 }
             }
@@ -245,9 +251,17 @@ public final class VariableStarAnalyzer {
             readiness.messages.add("No frame had enough measurable stars for the star-shape linearity check.");
         } else if (shapeFailures > config.linearityMaxFailingFrameFraction * shapeEvaluated) {
             readiness.shapeLinearityCheck = PhotometricReadiness.CheckStatus.FAIL;
-            readiness.messages.add(String.format(
-                    "In %d of %d frames bright stars are flatter than faint ones over most of the magnitude range (median linear range %.1f mag). These frames look stretched or non-linear; load the original RAW or FITS frames.",
-                    shapeFailures, shapeEvaluated, readiness.medianLinearRangeMag));
+            int departing = shapeFailures - shapeShortRange;
+            if (departing > 0) {
+                readiness.messages.add(String.format(
+                        "In %d of %d frames bright stars are flatter than faint ones over most of the magnitude range (median linear range %.1f mag). These frames look stretched or non-linear; load the original RAW or FITS frames.",
+                        departing, shapeEvaluated, readiness.medianLinearRangeMag));
+            }
+            if (shapeShortRange > 0) {
+                readiness.messages.add(String.format(
+                        "In %d of %d frames star shapes stay within tolerance, but the stars bright enough for the check (SNR of about 20 or more) span less than the %.1f mag needed to verify linearity. Longer exposures or a richer star field give a longer range.",
+                        shapeShortRange, shapeEvaluated, config.linearityMinRangeMag));
+            }
         } else if (readiness.medianLinearRangeMag < config.linearityMinRangeMag + LIMITED_RANGE_MARGIN_MAG) {
             readiness.shapeLinearityCheck = PhotometricReadiness.CheckStatus.LIMITED;
             readiness.messages.add(String.format(

@@ -32,8 +32,8 @@ final class PhotometricReadinessChecker {
     private static final double REFERENCE_TO = 0.9;
     /** A frame's slope must also exceed this many standard errors to fail check D. */
     private static final double SLOPE_SIGNIFICANCE = 3.0;
-    /** Check B uses only stars whose main-aperture magnitude error is below this (SNR of about 50 or more). */
-    private static final double MAX_SHAPE_MAG_ERROR = 0.02;
+    /** Check B uses only stars whose main-aperture magnitude error is below this (SNR of about 20 or more). */
+    private static final double MAX_SHAPE_MAG_ERROR = 0.05;
     /** A bin may also deviate by this many standard errors of its median concentration. */
     private static final double BIN_NOISE_ALLOWANCE = 2.0;
 
@@ -42,6 +42,8 @@ final class PhotometricReadinessChecker {
         PhotometricReadiness.CheckStatus status = PhotometricReadiness.CheckStatus.INCONCLUSIVE;
         /** Stars brighter (smaller magnitude) than this are non-linear in the frame; NaN when not determined. */
         double linearLimitMag = Double.NaN;
+        /** True when bright stars depart from the faint-star shape; false when the whole measured range is linear. */
+        boolean departureFound;
     }
 
     /** Session outcome of check D. */
@@ -143,13 +145,17 @@ final class PhotometricReadinessChecker {
             stat.concentrationProfile.add(point);
         }
 
+        // Only bins with stars brighter than the reference zone can end the walk: bins inside the
+        // reference scatter around it by definition, so a departure there is noise.
+        int lastWalkBin = Math.min(binCount, (refFrom + binSize - 1) / binSize) - 1;
         int firstLinearBin = 0;
-        for (int b = binCount - 1; b >= 0; b--) {
+        for (int b = lastWalkBin; b >= 0; b--) {
             if (Math.abs(binCi[b] - referenceCi) > binTolerance[b]) {
                 firstLinearBin = b + 1;
                 break;
             }
         }
+        result.departureFound = firstLinearBin > 0;
         double limit = firstLinearBin < binCount ? binBrightest[firstLinearBin] : faintBound;
         double range = faintBound - limit;
         int linearStars = 0;

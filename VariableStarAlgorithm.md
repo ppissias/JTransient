@@ -235,11 +235,11 @@ The concentration index (CI) is `flux(0.7 x FWHM) / flux(2.5 x FWHM)`. An inner 
 
 Per frame (`PhotometricReadinessChecker.analyzeShape`):
 
-1. Use stars without `EDGE_OR_VOID`, `CROSSING` or `BAD_FLUX` and with `magError <= 0.02` (SNR of about 50 or more). If fewer than `linearityMinStars` remain, the frame is `INCONCLUSIVE` and is excluded.
+1. Use stars without `EDGE_OR_VOID`, `CROSSING` or `BAD_FLUX` and with `magError <= 0.05` (SNR of about 20 or more). The cut is wide enough that background-limited data, where stars saturate soon above the sky noise, still spans a usable magnitude range; the per-bin noise allowance absorbs the extra scatter of the fainter stars. If fewer than `linearityMinStars` remain, the frame is `INCONCLUSIVE` and is excluded.
 2. Sort by magnitude. The **reference CI** is the median CI of the stars ranked between 50% and 90% of the brightness order (the faint half, without the faintest and noisiest tenth). The **faint bound** is the magnitude at the 90% rank.
 3. Divide the stars from the brightest down to the faint bound into bins of `max(15, count / 15)` stars. Each bin's tolerance is `linearityMaxConcentrationDrift + 2 x` the standard error of the bin's median CI.
-4. Walk from the faintest bin towards brighter ones. The first bin whose median CI departs from the reference by more than its tolerance marks the end of linearity. The **linear limit** is the brightest magnitude of the next fainter bin. If no bin departs, the limit is the brightest star.
-5. **Linear range** = faint bound − linear limit. The frame passes when the range is at least `linearityMinRangeMag` and at least `linearityMinStars` stars lie inside it.
+4. Walk towards brighter bins, starting at the faintest bin that still holds stars brighter than the reference ranks (bins wholly inside the reference scatter around it by definition, so they cannot end the walk). The first bin whose median CI departs from the reference by more than its tolerance marks the end of linearity. The **linear limit** is the brightest magnitude of the next fainter bin. If no bin departs, the limit is the brightest star.
+5. **Linear range** = faint bound − linear limit. The frame passes when the range is at least `linearityMinRangeMag` and at least `linearityMinStars` stars lie inside it. A failing frame with no departing bin is linear over everything it can measure but too short to verify; its exclusion reason and the session message say so instead of calling it non-linear.
 
 In every evaluated frame, including failing ones, all measurements brighter than the frame's linear limit are flagged `NONLINEAR`. Failing frames are excluded.
 
@@ -434,7 +434,7 @@ These values are in the code and are not configurable:
 | Gate apertures | 1.0 and 2.0 x FWHM | `ApertureMeasurer` |
 | Sky clipping | 3 passes, 3 sigma, minimum 10 pixels | `ApertureMeasurer` |
 | Floor share treated as void | 50% of annulus | `ApertureMeasurer` |
-| Check B star error limit | 0.02 mag | `PhotometricReadinessChecker` |
+| Check B star error limit | 0.05 mag | `PhotometricReadinessChecker` |
 | Check B reference ranks | 50%–90% | `PhotometricReadinessChecker` |
 | Check B bins | max(15 stars, count / 15) | `PhotometricReadinessChecker` |
 | Check B bin noise allowance | 2 standard errors | `PhotometricReadinessChecker` |
