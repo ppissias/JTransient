@@ -27,6 +27,12 @@ import java.util.Set;
  * <p>This is the primary tracker implementation used by the engine. It combines
  * streak chaining, stationary-star vetoing, time-aware candidate ranking, and an
  * optional geometric linker that remains the fallback for sequences without usable timestamps.</p>
+ *
+ * <p>Input frames must have uniform timestamp availability: either every frame has a capture
+ * timestamp in milliseconds, or every frame has no timestamp. Each detection must carry its
+ * source frame's timestamp, using {@code -1} when timestamps are unavailable. Callers must
+ * validate this precondition before invoking the tracker; mixed timestamp availability is
+ * unsupported. All input exposures are expected to have the same duration.</p>
  */
 public class TrackLinker {
 
@@ -208,7 +214,8 @@ public class TrackLinker {
      * Executes the pipeline up to Phase 3.
      * Separates streaks, purges stationary defects, links fast streaks, and applies the Binary Veto Mask.
      *
-     * @param allFrames extracted objects grouped by frame
+     * @param allFrames extracted objects grouped by frame; timestamps must be available for every frame
+     *                  or unavailable ({@code -1}) for every frame
      * @param masterStars stationary objects extracted from the master stack
      * @param config pipeline configuration
      * @param listener optional progress listener
@@ -448,7 +455,8 @@ public class TrackLinker {
     /**
      * Runs the full tracking pipeline, starting from extracted objects and master-stack stars.
      *
-     * @param allFrames extracted objects grouped by frame
+     * @param allFrames extracted objects grouped by frame; timestamps must be available for every frame
+     *                  or unavailable ({@code -1}) for every frame
      * @param masterStars stationary objects extracted from the master stack
      * @param config pipeline configuration
      * @param listener optional progress listener
