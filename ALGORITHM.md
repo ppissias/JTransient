@@ -233,6 +233,8 @@ Four absolute floors keep the rejection envelopes from becoming too tight:
 - `minBrightStarEccentricityEnvelope`
 - `minFwhmEnvelope`
 
+The background envelope is also never smaller than the session's median per-frame sky noise.
+
 Rejected frames are recorded in `PipelineTelemetry.rejectedFrames`. Only the retained frames participate in stacking and tracking.
 
 ## 6. Median Master Stack

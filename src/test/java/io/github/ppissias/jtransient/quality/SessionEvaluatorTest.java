@@ -56,6 +56,32 @@ public class SessionEvaluatorTest {
         assertEquals(1010.0, thresholds.maxAllowedBackgroundMedian, 1.0e-6);
     }
 
+    /**
+     * On a session with equalised sky levels the background MAD is zero, so the allowed sky shift
+     * falls back to the median frame noise: a shift below the noise is kept, a large one rejected.
+     */
+    @Test
+    public void rejectOutlierFramesUsesFrameNoiseAsBackgroundFloor() {
+        DetectionConfig config = new DetectionConfig();
+        config.minFramesForAnalysis = 3;
+
+        List<FrameQualityAnalyzer.FrameMetrics> sessionMetrics = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            FrameQualityAnalyzer.FrameMetrics metrics = createMetrics("frame-" + i, 3.0, 1.12, 1.18);
+            metrics.backgroundNoise = 100.0;
+            sessionMetrics.add(metrics);
+        }
+        sessionMetrics.get(2).backgroundMedian = 1050.0;
+        sessionMetrics.get(4).backgroundMedian = 1300.0;
+
+        SessionEvaluator.SessionThresholds thresholds = SessionEvaluator.rejectOutlierFrames(sessionMetrics, config);
+
+        assertEquals(100.0, thresholds.maxAllowedBackgroundDeviation, 1.0e-6);
+        assertFalse(sessionMetrics.get(2).isRejected);
+        assertTrue(sessionMetrics.get(4).isRejected);
+        assertEquals("Background deviation (Clouds/Light leak)", sessionMetrics.get(4).rejectionReason);
+    }
+
     private static FrameQualityAnalyzer.FrameMetrics createMetrics(String filename,
                                                                    double fwhm,
                                                                    double eccentricity,

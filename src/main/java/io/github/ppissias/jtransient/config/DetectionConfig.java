@@ -238,8 +238,9 @@ public class DetectionConfig implements Cloneable {
 
     // --- Absolute minimum tolerances ---
 
-    /** * An absolute floor for background deviation. Prevents frames from being rejected on perfectly stable nights
-     * just because the sky background shifted by normal, microscopic read-noise amounts.
+    /** * An absolute floor for background deviation. The allowed deviation is also never smaller than the session's
+     * median per-frame sky noise, so frames are not rejected on perfectly stable (or sky-equalised) sessions just
+     * because the sky background shifted by less than the pixel noise.
      */
     public double minBackgroundDeviationADU = 10.0;
 

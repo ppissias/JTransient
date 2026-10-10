@@ -60,6 +60,7 @@ public class SessionEvaluator {
         List<Double> starCounts = new ArrayList<>(count);
         List<Double> eccValues = new ArrayList<>(count);
         List<Double> brightEccValues = new ArrayList<>(count);
+        List<Double> noiseValues = new ArrayList<>(count);
 
         for (FrameQualityAnalyzer.FrameMetrics m : sessionMetrics) {
             fwhmValues.add(m.medianFWHM);
@@ -68,6 +69,9 @@ public class SessionEvaluator {
             eccValues.add(m.medianEccentricity);
             if (Double.isFinite(m.brightStarMedianEccentricity)) {
                 brightEccValues.add(m.brightStarMedianEccentricity);
+            }
+            if (Double.isFinite(m.backgroundNoise) && m.backgroundNoise > 0) {
+                noiseValues.add(m.backgroundNoise);
             }
         }
 
@@ -102,9 +106,16 @@ public class SessionEvaluator {
                 ? brightEccStats[0] + (config.brightStarEccentricitySigmaDeviation * brightEccStats[1])
                 : Double.NaN;
 
-        // Don't let the background threshold drop below the configured minimum ADU.
-        if (thresholds.maxAllowedBackgroundDeviation < config.minBackgroundDeviationADU) {
-            thresholds.maxAllowedBackgroundDeviation = config.minBackgroundDeviationADU;
+        // Don't let the background threshold drop below the typical sky noise of one frame, nor below the
+        // configured minimum ADU. Sessions whose sky levels were equalised during stacking have a background
+        // MAD of almost zero, and a sky shift smaller than the pixel noise is not a reason to drop a frame.
+        double backgroundFloor = config.minBackgroundDeviationADU;
+        if (!noiseValues.isEmpty()) {
+            Collections.sort(noiseValues);
+            backgroundFloor = Math.max(backgroundFloor, noiseValues.get(noiseValues.size() / 2));
+        }
+        if (thresholds.maxAllowedBackgroundDeviation < backgroundFloor) {
+            thresholds.maxAllowedBackgroundDeviation = backgroundFloor;
         }
 
         // Don't let the eccentricity envelope shrink tighter than the configured minimum.

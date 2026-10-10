@@ -270,7 +270,8 @@ Fallback metric value when the analyzer cannot compute a real median.
 
 Absolute floor on the allowed background-median deviation.
 
-- prevents over-sensitive rejection on very stable nights
+- the allowed deviation is also never smaller than the session's median per-frame sky noise
+- prevents over-sensitive rejection on very stable nights and on sessions whose sky levels were equalised during stacking
 
 ### `minEccentricityEnvelope` (default `0.10`)
 
