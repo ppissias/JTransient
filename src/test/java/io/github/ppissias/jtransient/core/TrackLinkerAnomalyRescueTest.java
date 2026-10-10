@@ -257,7 +257,6 @@ public class TrackLinkerAnomalyRescueTest {
     @Test
     public void findMovingObjectsPromotesAlignedLowElongationAnomaliesWithoutElongatedSeed() {
         DetectionConfig config = new DetectionConfig();
-        config.anomalySuspectedStreakMinElongation = 10.0;
 
         SourceExtractor.DetectedObject fragment1 = createFrameAnomaly(10, 10, 30, 4.0, 14.0, (short) 120, 0, 1.4, 0.0);
         SourceExtractor.DetectedObject fragment2 = createFrameAnomaly(22, 10, 30, 4.3, 15.0, (short) 120, 0, 1.2, 0.0);

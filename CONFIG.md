@@ -487,13 +487,6 @@ Minimum footprint size required for anomaly rescue.
 - acts as the general anomaly floor before either rescue branch is considered
 - protects against hot pixels and tiny defects
 
-### `anomalySuspectedStreakMinElongation` (legacy compatibility, default `3.5`)
-
-Retained only for compatibility with older configs. Same-frame suspected streak grouping now evaluates all rescued anomalies in a frame for collinearity and does not require elongation to seed a line.
-
-- no longer changes current grouping behavior
-- safe to leave in older config files without affecting results
-
 ### `suspectedStreakLineTolerance` (default `6.0`)
 
 Maximum perpendicular centroid error allowed when rescued same-frame anomalies are grouped into one suspected streak line.

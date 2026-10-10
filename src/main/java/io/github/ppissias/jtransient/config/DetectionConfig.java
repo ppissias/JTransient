@@ -429,12 +429,6 @@ public class DetectionConfig implements Cloneable {
      */
     public double anomalyMinPeakSigmaFloor = 3;
 
-    /** * Legacy compatibility field retained for existing configs.
-     * Same-frame suspected streak grouping now evaluates all rescued anomalies from one frame for
-     * collinearity, so this value no longer gates line formation.
-     */
-    public double anomalySuspectedStreakMinElongation = 3.5;
-
     /** * Maximum perpendicular centroid distance allowed when grouping rescued same-frame anomalies
      * into a suspected streak line. This is intentionally separate from the multi-frame
      * point-track prediction tolerance so faint streak fragments can be grouped more permissively.
