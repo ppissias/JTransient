@@ -38,7 +38,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Runs stationary-star photometry and variable-star detection on the quality-filtered frames.
  *
  * <p>Stages: star selection, saturation level, forced aperture photometry, crossing flags,
- * readiness checks A and B, ensemble solve, readiness check D (with a re-solve without failing
+ * readiness checks A and B, ensemble solve, a check that leaves out a frame whose leftover
+ * brightness still differs across the field, readiness check D (with a re-solve without failing
  * frames), verdict, and finally variability scoring when the verdict allows it.</p>
  */
 public final class VariableStarAnalyzer {
@@ -363,6 +364,31 @@ public final class VariableStarAnalyzer {
         EnsembleSolver.Solution solution = EnsembleSolver.solve(mag, usable, xNorm, yNorm, frameActive, config.photometryFitPlane);
         excludeUnsolvedFrames(solution, stats, frameActive, telemetry);
 
+        // Leave a frame out of photometry when one ninth of the field is still far from the centre
+        // after the plane fit. Check D below then runs once. With nothing left out, this solve is
+        // the one check D sees, so a clean session is unchanged.
+        SpatialFrameFilter.FrameDecision[] spatial = SpatialFrameFilter.evaluate(
+                solution.residual, usable, xNorm, yNorm, frameActive);
+        int spatialDrops = 0;
+        StringBuilder spatialFrames = new StringBuilder();
+        for (int j = 0; j < nFrames; j++) {
+            if (spatial[j].drop && frameActive[j]) {
+                exclude(j, stats[j], frameActive, String.format(Locale.US,
+                        "Spatial residual %.2f mag", spatial[j].maxOffset));
+                spatialDrops++;
+                if (spatialFrames.length() > 0) {
+                    spatialFrames.append(',');
+                }
+                spatialFrames.append(stats[j].frameIndex + 1);
+            }
+        }
+        if (spatialDrops > 0) {
+            System.out.println("SPATIAL_FRAMES dropped=" + spatialDrops + " frames=" + spatialFrames);
+            usable = usableMatrix(mag, flags, starExcluded, frameActive);
+            solution = EnsembleSolver.solve(mag, usable, xNorm, yNorm, frameActive, config.photometryFitPlane);
+            excludeUnsolvedFrames(solution, stats, frameActive, telemetry);
+        }
+
         // --- Check D, then re-solve without failing frames ---
         double[] frameSky = new double[nFrames];
         for (int j = 0; j < nFrames; j++) {
@@ -474,20 +500,13 @@ public final class VariableStarAnalyzer {
                 telemetry.framesUsed++;
             }
         }
-        if (Boolean.getBoolean("jtransient.spatialFilter.compare")) {
-            try {
-                writeSpatialComparison(solution, mag, flags, sky, starExcluded, starExclusionReason, xNorm, yNorm,
-                        frameActive, measurements, selected, frameSky, stats, curves, readiness, config, sessionFwhm);
-            } catch (RuntimeException | IOException e) {
-                System.err.println("Spatial comparison failed: " + e.getMessage());
-            }
-        }
         return finish(readiness, curves, telemetry, start);
     }
 
     /**
-     * Scores the session a second time without frames whose leftover spatial residual is large, and writes
-     * that comparison. The returned analysis is the first scoring. Nothing here is copied back into it.
+     * Scores an already solved session again without frames whose leftover spatial residual is large, and
+     * writes that comparison. Detection itself now leaves those frames out before check D, so this is not
+     * called from the analysis that the report uses.
      */
     private static void writeSpatialComparison(EnsembleSolver.Solution solution,
                                                double[][] mag,
