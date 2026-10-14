@@ -10,6 +10,7 @@
 package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.core.CommonMotionRejector;
 import io.github.ppissias.jtransient.core.FrameDriftAnalyzer;
 import io.github.ppissias.jtransient.core.MasterReferenceAnalyzer;
 import io.github.ppissias.jtransient.core.MasterMapGenerator;
@@ -758,6 +759,11 @@ public class JTransientEngine implements AutoCloseable {
         }
 
         ResidualTransientAnalysis residualTransientAnalysis = ResidualTransientAnalyzer.analyze(
+                trackResult.unclassifiedTransients,
+                config
+        );
+        residualTransientAnalysis = CommonMotionRejector.apply(
+                residualTransientAnalysis,
                 trackResult.unclassifiedTransients,
                 config
         );

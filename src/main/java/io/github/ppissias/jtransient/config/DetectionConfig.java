@@ -96,6 +96,15 @@ public class DetectionConfig implements Cloneable {
      */
     public boolean enableBinaryStarLikeStreakShapeVeto = true;
 
+    /** * Joins faint elongated pieces that line up in one frame. Pieces already on a streak are extended
+     * along that streak, and a new single-frame streak is built when enough pieces line up on their own.
+     * Pieces below the normal streak gates are included. The normal streak gates are not lowered.
+     */
+    public boolean enableFaintStreakFragments = true;
+
+    /** * Maximum perpendicular distance, in pixels, from a same-frame streak line for a faint piece to be joined. */
+    public double faintStreakLineTolerance = 2.0;
+
     // =================================================================
     // 2. MASTER-STACK AND SLOW-MOVER PARAMETERS
     // =================================================================
@@ -454,6 +463,15 @@ public class DetectionConfig implements Cloneable {
 
     /** * Minimum number of unique frames required before a broad local activity cluster is exported. */
     public int localActivityClusterMinFrames = 3;
+
+    /** * Removes compact sources that share one displacement on at least three frames and sit well apart.
+     * This is the pattern of hot pixels or a registration residual. A pair seen in only two frames is kept.
+     * Removed sources are reported as one common-motion group.
+     */
+    public boolean enableCommonMotionRejection = true;
+
+    /** * How closely, in pixels, separated sources must share the same displacement from a reference frame. */
+    public double commonMotionShiftTolerance = 1.0;
 
     // =================================================================
     // 8. VARIABLE-STAR PHOTOMETRY PARAMETERS

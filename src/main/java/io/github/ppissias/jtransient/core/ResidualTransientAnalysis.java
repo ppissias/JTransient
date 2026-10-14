@@ -21,14 +21,27 @@ public final class ResidualTransientAnalysis {
     public final List<LocalRescueCandidate> localRescueCandidates;
     /** Broader spatial review clusters built from leftover detections not consumed by rescue candidates. */
     public final List<LocalActivityCluster> localActivityClusters;
+    /** Compact sources removed because they share one displacement. Empty when none were found. */
+    public final List<CommonMotionGroup> commonMotionGroups;
 
     /**
      * Creates an immutable residual-analysis result bundle.
      */
     public ResidualTransientAnalysis(List<LocalRescueCandidate> localRescueCandidates,
                                      List<LocalActivityCluster> localActivityClusters) {
+        this(localRescueCandidates, localActivityClusters, Collections.emptyList());
+    }
+
+    /**
+     * Creates an immutable residual-analysis result bundle, including common-motion groups.
+     */
+    public ResidualTransientAnalysis(List<LocalRescueCandidate> localRescueCandidates,
+                                     List<LocalActivityCluster> localActivityClusters,
+                                     List<CommonMotionGroup> commonMotionGroups) {
         this.localRescueCandidates = Collections.unmodifiableList(new ArrayList<>(localRescueCandidates));
         this.localActivityClusters = Collections.unmodifiableList(new ArrayList<>(localActivityClusters));
+        this.commonMotionGroups = Collections.unmodifiableList(new ArrayList<>(
+                commonMotionGroups == null ? Collections.emptyList() : commonMotionGroups));
     }
 
     /**
@@ -36,6 +49,33 @@ public final class ResidualTransientAnalysis {
      */
     public static ResidualTransientAnalysis empty() {
         return new ResidualTransientAnalysis(Collections.emptyList(), Collections.emptyList());
+    }
+
+    /**
+     * Separated compact sources that share one displacement over at least three frames.
+     */
+    public static final class CommonMotionGroup {
+        /** One entry per source, ordered by frame. */
+        public final List<List<SourceExtractor.DetectedObject>> sources;
+        /** Fewest frames shared by every pair of sources in the group. */
+        public final int sharedFrameCount;
+
+        /**
+         * Creates one common-motion group.
+         *
+         * @param sources detections of each separated source
+         * @param sharedFrameCount fewest frames shared by every pair
+         */
+        public CommonMotionGroup(List<List<SourceExtractor.DetectedObject>> sources, int sharedFrameCount) {
+            List<List<SourceExtractor.DetectedObject>> copied = new ArrayList<>();
+            if (sources != null) {
+                for (List<SourceExtractor.DetectedObject> source : sources) {
+                    copied.add(List.copyOf(source));
+                }
+            }
+            this.sources = List.copyOf(copied);
+            this.sharedFrameCount = sharedFrameCount;
+        }
     }
 
     /**

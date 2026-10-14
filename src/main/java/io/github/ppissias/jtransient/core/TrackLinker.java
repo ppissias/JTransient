@@ -945,6 +945,16 @@ public class TrackLinker {
             listener.onProgressUpdate(90, "Scanning for high-energy anomalies...");
         }
 
+        // Faint same-frame pieces are absorbed before anomaly rescue so they are not exported as anomalies.
+        if (config.enableFaintStreakFragments) {
+            FaintStreakFragmentGrouper.assemble(
+                    confirmedTracks,
+                    transients,
+                    filterResult.validMovingStreaks,
+                    usedPoints,
+                    config);
+        }
+
         // =================================================================
         // PHASE 5: HIGH-ENERGY ANOMALY RESCUE (GLINTS & FLASHES)
         // =================================================================
