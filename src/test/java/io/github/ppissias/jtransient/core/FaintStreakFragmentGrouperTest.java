@@ -146,6 +146,58 @@ public class FaintStreakFragmentGrouperTest {
     }
 
     @Test
+    public void extendsAStreakAlongAConnectedChainAndStopsAtAGap() {
+        TrackLinker.Track streak = streak(piece(100, 100, 0), piece(300, 100, 0));
+        SourceExtractor.DetectedObject first = roundPiece(360, 100.3);
+        SourceExtractor.DetectedObject second = roundPiece(430, 100.2);
+        SourceExtractor.DetectedObject tooFar = roundPiece(700, 100.0);
+        SourceExtractor.DetectedObject offLine = roundPiece(360, 110);
+        SourceExtractor.DetectedObject pointingElsewhere = fragment(370, 100.1, Math.PI / 2.0);
+        SourceExtractor.DetectedObject tooSmall = roundPiece(340, 100.2);
+        tooSmall.pixelArea = 3;
+
+        FaintStreakFragmentGrouper.assemble(
+                new ArrayList<>(List.of(streak)),
+                List.of(new ArrayList<>(List.of(first, second, tooFar, offLine, pointingElsewhere, tooSmall))),
+                new ArrayList<>(),
+                new HashSet<>(),
+                new DetectionConfig());
+
+        assertTrue(streak.points.contains(first));
+        assertTrue(streak.points.contains(second));
+        assertFalse(streak.points.contains(tooFar));
+        assertFalse(streak.points.contains(offLine));
+        assertFalse(streak.points.contains(pointingElsewhere));
+        assertFalse(streak.points.contains(tooSmall));
+    }
+
+    @Test
+    public void marksAnAnomalyOnAStreakAndLeavesAFarFlashAlone() {
+        List<SourceExtractor.DetectedObject> line = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            line.add(fragment(100 + i * 80, 100, 0.0));
+        }
+        SourceExtractor.DetectedObject onPath = bright(250, 104);
+        SourceExtractor.DetectedObject farAway = bright(250, 220);
+        line.add(onPath);
+        line.add(farAway);
+
+        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
+        frames.add(line);
+        frames.add(new ArrayList<>());
+        frames.add(new ArrayList<>());
+
+        TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
+                frames, new ArrayList<>(), new DetectionConfig(), null, 800, 800);
+
+        TrackLinker.AnomalyDetection onPathAnomaly = anomalyFor(result, onPath);
+        TrackLinker.AnomalyDetection farAnomaly = anomalyFor(result, farAway);
+        assertTrue(onPathAnomaly.lowConfidence);
+        assertFalse(farAnomaly.lowConfidence);
+        assertFalse(result.tracks.get(0).points.contains(onPath));
+    }
+
+    @Test
     public void staysQuietWhenTheSwitchIsOff() {
         DetectionConfig config = new DetectionConfig();
         config.enableFaintStreakFragments = false;
@@ -200,6 +252,31 @@ public class FaintStreakFragmentGrouperTest {
         object.elongation = 8;
         object.peakSigma = 12;
         object.isStreak = true;
+        return object;
+    }
+
+    private static TrackLinker.AnomalyDetection anomalyFor(TrackLinker.TrackingResult result,
+                                                           SourceExtractor.DetectedObject object) {
+        for (TrackLinker.AnomalyDetection anomaly : result.anomalies) {
+            if (anomaly.object == object) {
+                return anomaly;
+            }
+        }
+        throw new AssertionError("missing anomaly");
+    }
+
+    private static SourceExtractor.DetectedObject roundPiece(double x, double y) {
+        SourceExtractor.DetectedObject object = fragment(x, y, Math.PI / 2.0);
+        object.elongation = 1.2;
+        object.pixelArea = 8;
+        return object;
+    }
+
+    private static SourceExtractor.DetectedObject bright(double x, double y) {
+        SourceExtractor.DetectedObject object = fragment(x, y, 0.0);
+        object.pixelArea = 20;
+        object.elongation = 1.2;
+        object.peakSigma = 10.0;
         return object;
     }
 

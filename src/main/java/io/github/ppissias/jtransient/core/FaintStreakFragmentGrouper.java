@@ -22,12 +22,14 @@ import java.util.Set;
 /**
  * Joins faint same-frame streak pieces that never reach the normal streak gates.
  *
- * <p>An existing streak absorbs pieces that sit on its segment. A round piece has no reliable
- * angle, so only an elongated piece is checked against the streak's direction. A new
- * single-frame streak needs at least three elongated pieces whose angles agree, over a long
- * span with no large gap. Rounder pieces may fill the gaps between those anchors. A line of
- * round pieces alone is not a streak. The normal streak elongation, size and peak gates are
- * left unchanged.</p>
+ * <p>An existing streak absorbs pieces that sit on its segment, and a connected chain may extend
+ * the segment. Each added piece has to stay within {@link #EXTENSION_GAP_PX} of the part of
+ * the streak already accepted, so a collinear point with a large empty gap is left alone.
+ * A round piece has no reliable angle, so only an elongated piece is checked against the
+ * streak's direction. A new single-frame streak needs at least three elongated pieces whose
+ * angles agree, over a long span with no large gap. Rounder pieces may fill the gaps between
+ * those anchors. A line of round pieces alone is not a streak. The normal streak elongation,
+ * size and peak gates are left unchanged.</p>
  */
 public final class FaintStreakFragmentGrouper {
 
@@ -35,7 +37,18 @@ public final class FaintStreakFragmentGrouper {
     static final double MAX_GAP_FRACTION = 0.40;
     static final double MIN_SPAN_PX = 80.0;
     static final double ANGLE_TOLERANCE_RAD = Math.toRadians(25.0);
+    /** How far past the current segment a piece may sit and still join, in pixels. */
     static final double END_MARGIN_PX = 20.0;
+    /**
+     * Largest empty gap, in pixels, across which a same-frame streak may grow.
+     * The growth repeats, so a chain of pieces spaced within this gap is absorbed,
+     * and an isolated point beyond it is not.
+     */
+    static final double EXTENSION_GAP_PX = 80.0;
+    /** Perpendicular distance at which an anomaly still counts as lying on a streak. */
+    static final double ANOMALY_PATH_TOLERANCE_PX = 6.0;
+    /** How far past a streak an anomaly may sit and still count as on its path. */
+    static final double ANOMALY_PATH_MARGIN_PX = 80.0;
     static final double SEED_MIN_ELONGATION = 2.0;
     static final int SEED_MIN_PIXELS = 4;
     static final int STABLE_ANGLE_MIN_PIXELS = 6;
@@ -76,21 +89,7 @@ public final class FaintStreakFragmentGrouper {
             }
         }
 
-        for (TrackLinker.Track track : streakTracks) {
-            if (track == null || !track.isStreakTrack || track.points == null || track.points.isEmpty()) {
-                continue;
-            }
-            Map<Integer, List<SourceExtractor.DetectedObject>> partsByFrame = new HashMap<>();
-            for (SourceExtractor.DetectedObject part : track.points) {
-                if (part == null) {
-                    continue;
-                }
-                partsByFrame.computeIfAbsent(part.sourceFrameIndex, key -> new ArrayList<>()).add(part);
-            }
-            for (Map.Entry<Integer, List<SourceExtractor.DetectedObject>> entry : partsByFrame.entrySet()) {
-                absorbOntoSegment(track, entry.getValue(), byFrame.get(entry.getKey()), tolerance, usedPoints, onStreak);
-            }
-        }
+        absorbExisting(streakTracks, byFrame, tolerance, usedPoints, onStreak);
 
         List<Integer> frames = new ArrayList<>(byFrame.keySet());
         frames.sort(Comparator.naturalOrder());
@@ -115,6 +114,67 @@ public final class FaintStreakFragmentGrouper {
                 pool.removeAll(line);
             }
         }
+
+        // A new line only keeps the window that qualified. Pieces left on that same line,
+        // including a short chain past its ends, join it here.
+        absorbExisting(streakTracks, byFrame, tolerance, usedPoints, onStreak);
+    }
+
+    private static void absorbExisting(List<TrackLinker.Track> streakTracks,
+                                       Map<Integer, List<SourceExtractor.DetectedObject>> byFrame,
+                                       double tolerance,
+                                       Set<SourceExtractor.DetectedObject> usedPoints,
+                                       Set<SourceExtractor.DetectedObject> onStreak) {
+        for (TrackLinker.Track track : streakTracks) {
+            if (track == null || !track.isStreakTrack || track.points == null || track.points.isEmpty()) {
+                continue;
+            }
+            Map<Integer, List<SourceExtractor.DetectedObject>> partsByFrame = new HashMap<>();
+            for (SourceExtractor.DetectedObject part : track.points) {
+                if (part == null) {
+                    continue;
+                }
+                partsByFrame.computeIfAbsent(part.sourceFrameIndex, key -> new ArrayList<>()).add(part);
+            }
+            for (Map.Entry<Integer, List<SourceExtractor.DetectedObject>> entry : partsByFrame.entrySet()) {
+                absorbOntoSegment(track, entry.getValue(), byFrame.get(entry.getKey()), tolerance, usedPoints, onStreak);
+            }
+        }
+    }
+
+    /**
+     * Whether {@code object} lies on a confirmed streak in its own frame.
+     * The corridor is wider than the fragment tolerance because a streak through a star
+     * pulls the measured centre off the line. The object is not absorbed.
+     */
+    static boolean liesOnKnownStreak(SourceExtractor.DetectedObject object, List<TrackLinker.Track> streakTracks) {
+        if (object == null || streakTracks == null) {
+            return false;
+        }
+        for (TrackLinker.Track track : streakTracks) {
+            if (track == null || !track.isStreakTrack || track.isSuspectedStreakTrack || track.points == null) {
+                continue;
+            }
+            List<SourceExtractor.DetectedObject> parts = new ArrayList<>();
+            for (SourceExtractor.DetectedObject part : track.points) {
+                if (part != null && part.sourceFrameIndex == object.sourceFrameIndex) {
+                    parts.add(part);
+                }
+            }
+            if (parts.isEmpty()) {
+                continue;
+            }
+            double[] axis = lineAxis(parts);
+            double[] range = projectionRange(parts, axis[0], axis[1], axis[2], axis[3]);
+            double along = projection(object.x, object.y, axis[0], axis[1], axis[2], axis[3]);
+            double perp = Math.abs(projection(object.x, object.y, axis[0], axis[1], axis[4], axis[5]));
+            if (perp <= ANOMALY_PATH_TOLERANCE_PX
+                    && along >= range[0] - ANOMALY_PATH_MARGIN_PX
+                    && along <= range[1] + ANOMALY_PATH_MARGIN_PX) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void collectCandidates(List<List<SourceExtractor.DetectedObject>> frames,
@@ -172,26 +232,38 @@ public final class FaintStreakFragmentGrouper {
             return;
         }
         double[] axis = lineAxis(parts);
-        double[] range = projectionRange(parts, axis[0], axis[1], axis[2], axis[3]);
+        double reach = Math.max(END_MARGIN_PX, EXTENSION_GAP_PX);
         List<SourceExtractor.DetectedObject> absorbed = new ArrayList<>();
-        for (SourceExtractor.DetectedObject candidate : candidates) {
-            if (!isFragment(candidate, usedPoints, onStreak)) {
-                continue;
+        List<SourceExtractor.DetectedObject> span = new ArrayList<>(parts);
+        boolean grew = true;
+        while (grew) {
+            grew = false;
+            double[] range = projectionRange(span, axis[0], axis[1], axis[2], axis[3]);
+            List<SourceExtractor.DetectedObject> wave = new ArrayList<>();
+            for (SourceExtractor.DetectedObject candidate : candidates) {
+                if (!isFragment(candidate, usedPoints, onStreak) || absorbed.contains(candidate)) {
+                    continue;
+                }
+                double along = projection(candidate.x, candidate.y, axis[0], axis[1], axis[2], axis[3]);
+                double perp = Math.abs(projection(candidate.x, candidate.y, axis[0], axis[1], axis[4], axis[5]));
+                if (perp > tolerance) {
+                    continue;
+                }
+                if (along < range[0] - reach || along > range[1] + reach) {
+                    continue;
+                }
+                if (isElongated(candidate)
+                        && candidate.pixelArea >= STABLE_ANGLE_MIN_PIXELS
+                        && !anglesAgree(candidate.angle, axis[6])) {
+                    continue;
+                }
+                wave.add(candidate);
             }
-            double along = projection(candidate.x, candidate.y, axis[0], axis[1], axis[2], axis[3]);
-            double perp = Math.abs(projection(candidate.x, candidate.y, axis[0], axis[1], axis[4], axis[5]));
-            if (perp > tolerance) {
-                continue;
+            if (!wave.isEmpty()) {
+                absorbed.addAll(wave);
+                span.addAll(wave);
+                grew = true;
             }
-            if (along < range[0] - END_MARGIN_PX || along > range[1] + END_MARGIN_PX) {
-                continue;
-            }
-            if (isElongated(candidate)
-                    && candidate.pixelArea >= STABLE_ANGLE_MIN_PIXELS
-                    && !anglesAgree(candidate.angle, axis[6])) {
-                continue;
-            }
-            absorbed.add(candidate);
         }
         absorbed.sort(Comparator.comparingDouble(piece -> projection(piece.x, piece.y, axis[0], axis[1], axis[2], axis[3])));
         for (SourceExtractor.DetectedObject piece : absorbed) {

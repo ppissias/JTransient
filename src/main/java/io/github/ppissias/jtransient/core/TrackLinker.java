@@ -83,10 +83,17 @@ public class TrackLinker {
         public final SourceExtractor.DetectedObject object;
         /** The rescue path that accepted this anomaly. */
         public final AnomalyType type;
+        /**
+         * True when this detection lies on a confirmed streak in the same frame.
+         * A faint streak through a star can change the star's shape and produce a bright anomaly,
+         * so the detection is kept and marked rather than reclassified as a streak part.
+         */
+        public final boolean lowConfidence;
 
-        private AnomalyDetection(SourceExtractor.DetectedObject object, AnomalyType type) {
+        private AnomalyDetection(SourceExtractor.DetectedObject object, AnomalyType type, boolean lowConfidence) {
             this.object = object;
             this.type = type;
+            this.lowConfidence = lowConfidence;
         }
     }
 
@@ -977,7 +984,8 @@ public class TrackLinker {
                         // Rescue either a sharp glint or a broader high-energy flash.
                         AnomalyType anomalyType = classifyAnomalyRescue(orphan, config);
                         if (anomalyType != null) {
-                            anomalies.add(new AnomalyDetection(orphan, anomalyType));
+                            boolean onStreak = FaintStreakFragmentGrouper.liesOnKnownStreak(orphan, confirmedTracks);
+                            anomalies.add(new AnomalyDetection(orphan, anomalyType, onStreak));
                             usedPoints.add(orphan);
                         }
                     }
