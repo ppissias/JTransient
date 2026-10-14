@@ -19,10 +19,15 @@ import io.github.ppissias.jtransient.engine.TransientEngineProgressListener;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 
+import java.io.File;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -469,7 +474,296 @@ public final class VariableStarAnalyzer {
                 telemetry.framesUsed++;
             }
         }
+        if (Boolean.getBoolean("jtransient.spatialFilter.compare")) {
+            try {
+                writeSpatialComparison(solution, mag, flags, sky, starExcluded, starExclusionReason, xNorm, yNorm,
+                        frameActive, measurements, selected, frameSky, stats, curves, readiness, config, sessionFwhm);
+            } catch (RuntimeException | IOException e) {
+                System.err.println("Spatial comparison failed: " + e.getMessage());
+            }
+        }
         return finish(readiness, curves, telemetry, start);
+    }
+
+    /**
+     * Scores the session a second time without frames whose leftover spatial residual is large, and writes
+     * that comparison. The returned analysis is the first scoring. Nothing here is copied back into it.
+     */
+    private static void writeSpatialComparison(EnsembleSolver.Solution solution,
+                                               double[][] mag,
+                                               int[][] flags,
+                                               double[][] sky,
+                                               boolean[] starExcluded,
+                                               String[] starExclusionReason,
+                                               double[] xNorm,
+                                               double[] yNorm,
+                                               boolean[] frameActive,
+                                               ApertureMeasurer.FrameMeasurement[] measurements,
+                                               List<PhotometryStarSelector.Star> selected,
+                                               double[] frameSky,
+                                               PipelineTelemetry.PhotometryFrameStat[] stats,
+                                               List<StarLightCurve> beforeCurves,
+                                               PhotometricReadiness readiness,
+                                               DetectionConfig config,
+                                               double sessionFwhm) throws IOException {
+        String path = System.getProperty("jtransient.spatialFilter.compareOut");
+        if (path == null || path.isBlank()) {
+            System.err.println("Spatial comparison skipped: jtransient.spatialFilter.compareOut is not set.");
+            return;
+        }
+        int nStars = selected.size();
+        int nFrames = frameActive.length;
+        boolean[] afterActive = frameActive.clone();
+        String[] afterReason = new String[nFrames];
+        SpatialFrameFilter.FrameDecision[] spatial = SpatialFrameFilter.evaluate(
+                solution.residual, usableMatrix(mag, flags, starExcluded, frameActive), xNorm, yNorm, frameActive);
+        int spatialDrops = 0;
+        for (int j = 0; j < nFrames; j++) {
+            if (spatial[j].drop) {
+                spatialDrops++;
+                afterActive[j] = false;
+                afterReason[j] = String.format(Locale.US, "Spatial residual %.2f mag", spatial[j].maxOffset);
+            }
+        }
+
+        // Re-solving when nothing was dropped is not the same session: check D can change its mind on the
+        // second pass. The filter then changes nothing, so the after result is the before result.
+        List<StarLightCurve> afterCurves;
+        PhotometricReadiness shadowReadiness = new PhotometricReadiness();
+        shadowReadiness.verdict = readiness.verdict;
+        if (spatialDrops == 0) {
+            afterCurves = beforeCurves;
+        } else {
+        boolean[][] afterUsable = usableMatrix(mag, flags, starExcluded, afterActive);
+        EnsembleSolver.Solution afterSolution = EnsembleSolver.solve(
+                mag, afterUsable, xNorm, yNorm, afterActive, config.photometryFitPlane);
+        markUnsolved(afterSolution, afterActive, afterReason);
+        shadowReadiness.quantisationCheck = readiness.quantisationCheck;
+        shadowReadiness.shapeLinearityCheck = readiness.shapeLinearityCheck;
+        PipelineTelemetry.PhotometryFrameStat[] shadow = new PipelineTelemetry.PhotometryFrameStat[nFrames];
+        for (int j = 0; j < nFrames; j++) {
+            shadow[j] = new PipelineTelemetry.PhotometryFrameStat();
+        }
+        PhotometricReadinessChecker.ResponseResult response = PhotometricReadinessChecker.checkResponse(
+                afterSolution, afterUsable, frameSky, shadow, config, shadowReadiness);
+        boolean anotherSolve = false;
+        for (int j = 0; j < nFrames; j++) {
+            if (response.frameFails != null && response.frameFails[j] && afterActive[j]) {
+                afterActive[j] = false;
+                afterReason[j] = "Magnitude-dependent response " + format(shadow[j].responseSlope) + " mag/mag";
+                anotherSolve = true;
+            }
+        }
+        if (anotherSolve) {
+            afterUsable = usableMatrix(mag, flags, starExcluded, afterActive);
+            afterSolution = EnsembleSolver.solve(mag, afterUsable, xNorm, yNorm, afterActive, config.photometryFitPlane);
+            markUnsolved(afterSolution, afterActive, afterReason);
+        }
+        shadowReadiness.responseCheck = response.status;
+        decideVerdict(shadowReadiness, afterActive, config);
+
+        afterCurves = new ArrayList<>();
+        if (shadowReadiness.allowsScoring()) {
+            EnsembleSolver.Solution small = solveForAperture(measurements, ApertureMeasurer.R_SMALL, flags, starExcluded,
+                    afterActive, xNorm, yNorm, config);
+            EnsembleSolver.Solution large = solveForAperture(measurements, ApertureMeasurer.R_LARGE, flags, starExcluded,
+                    afterActive, xNorm, yNorm, config);
+            EnsembleSolver.Solution tiny = solveForAperture(measurements, ApertureMeasurer.R_CI_INNER, flags, starExcluded,
+                    afterActive, xNorm, yNorm, config);
+            VariabilityScorer.FrameSeries series = new VariabilityScorer.FrameSeries();
+            series.zeroPoint = new double[nFrames];
+            series.fwhm = new double[nFrames];
+            series.offsetX = new double[nFrames];
+            series.offsetY = new double[nFrames];
+            series.julianDate = new double[nFrames];
+            for (int j = 0; j < nFrames; j++) {
+                boolean on = afterActive[j] && afterSolution.frameSolved[j];
+                series.zeroPoint[j] = on ? afterSolution.zeroPoint[j] : Double.NaN;
+                series.fwhm[j] = on ? measurements[j].fwhm : Double.NaN;
+                series.offsetX[j] = on ? measurements[j].offsetX : Double.NaN;
+                series.offsetY[j] = on ? measurements[j].offsetY : Double.NaN;
+                series.julianDate[j] = stats[j].julianDate;
+            }
+            for (int i = 0; i < nStars; i++) {
+                PhotometryStarSelector.Star star = selected.get(i);
+                StarLightCurve curve = new StarLightCurve(i, star.x, star.y, star.flux, nFrames);
+                curve.meanMag = afterSolution.starMag[i];
+                for (int j = 0; j < nFrames; j++) {
+                    curve.deltaMag[j] = afterSolution.residual[i][j];
+                    curve.magError[j] = measurements[j].magError[i];
+                    curve.flags[j] = flags[i][j] | (afterActive[j] ? 0 : PhotometryFlags.FRAME_EXCLUDED);
+                }
+                if (starExcluded[i]) {
+                    curve.notScoredReason = starExclusionReason[i];
+                }
+                afterCurves.add(curve);
+            }
+            PipelineTelemetry.PhotometryTelemetry afterTelemetry = new PipelineTelemetry.PhotometryTelemetry();
+            chooseApertures(afterCurves, afterUsable, starExcluded, afterSolution,
+                    new EnsembleSolver.Solution[]{tiny, small, afterSolution, large},
+                    new double[]{ApertureMeasurer.CI_INNER_FWHM_FACTOR, 1.0, config.photometryApertureFwhmFactor, 2.0},
+                    sessionFwhm, afterTelemetry);
+            VariabilityScorer.score(afterCurves, afterUsable, small.residual, large.residual, sky, series,
+                    shadowReadiness.verdict == PhotometricReadiness.Verdict.LIMITED, config, afterTelemetry);
+        }
+        }
+
+        int beforeHigh = countTier(beforeCurves, VariabilityTier.HIGH_CONFIDENCE);
+        int beforePossible = countTier(beforeCurves, VariabilityTier.POSSIBLE);
+        int beforeRejected = countTier(beforeCurves, VariabilityTier.REJECTED);
+        int afterHigh = countTier(afterCurves, VariabilityTier.HIGH_CONFIDENCE);
+        int afterPossible = countTier(afterCurves, VariabilityTier.POSSIBLE);
+        int afterRejected = countTier(afterCurves, VariabilityTier.REJECTED);
+        int dropped = 0;
+        for (SpatialFrameFilter.FrameDecision decision : spatial) {
+            if (decision.drop) {
+                dropped++;
+            }
+        }
+        System.out.println("SPATIAL_COMPARE dropped=" + dropped
+                + " before=" + beforeHigh + "/" + beforePossible + "/" + beforeRejected
+                + " after=" + afterHigh + "/" + afterPossible + "/" + afterRejected
+                + " verdict=" + readiness.verdict + "->" + shadowReadiness.verdict
+                + " file=" + path);
+
+        File file = new File(path);
+        File parent = file.getParentFile();
+        if (parent != null) {
+            parent.mkdirs();
+        }
+        try (PrintWriter json = new PrintWriter(file, StandardCharsets.UTF_8.name())) {
+            json.println("{");
+            json.println("  \"before\": " + tierJson(readiness.verdict.name(), beforeHigh, beforePossible, beforeRejected) + ",");
+            json.println("  \"after\": " + tierJson(shadowReadiness.verdict.name(), afterHigh, afterPossible, afterRejected) + ",");
+            json.println("  \"frames\": [");
+            for (int j = 0; j < nFrames; j++) {
+                SpatialFrameFilter.FrameDecision d = spatial[j];
+                json.print("    {\"frame\": " + (stats[j].frameIndex + 1)
+                        + ", \"evaluated\": " + d.evaluated
+                        + ", \"spatialDrop\": " + d.drop
+                        + ", \"afterUsed\": " + afterActive[j]
+                        + ", \"maxOffset\": " + jsonNum(d.maxOffset)
+                        + ", \"worstCell\": " + d.worstCell
+                        + ", \"centreStars\": " + d.centreStars
+                        + ", \"worstStars\": " + d.worstStars
+                        + ", \"centreMedian\": " + jsonNum(d.centreMedian)
+                        + ", \"worstMedian\": " + jsonNum(d.worstMedian)
+                        + ", \"afterReason\": " + jsonText(afterReason[j])
+                        + ", \"cellMedian\": " + jsonArray(d.cellMedian)
+                        + ", \"cellCount\": " + jsonInts(d.cellCount) + "}");
+                json.println(j + 1 < nFrames ? "," : "");
+            }
+            json.println("  ],");
+            json.println("  \"stars\": [");
+            boolean anyStar = false;
+            for (int i = 0; i < beforeCurves.size(); i++) {
+                StarLightCurve before = beforeCurves.get(i);
+                StarLightCurve after = i < afterCurves.size() ? afterCurves.get(i) : null;
+                if (!isReportedTier(before.tier) && (after == null || !isReportedTier(after.tier))) {
+                    continue;
+                }
+                if (anyStar) {
+                    json.println(",");
+                }
+                anyStar = true;
+                json.print("    {\"id\": " + before.id
+                        + ", \"x\": " + jsonNum(before.x)
+                        + ", \"y\": " + jsonNum(before.y)
+                        + ", \"beforeTier\": " + jsonText(before.tier.name())
+                        + ", \"afterTier\": " + jsonText(after == null ? VariabilityTier.NOT_SCORED.name() : after.tier.name())
+                        + ", \"beforeAmplitude\": " + jsonNum(before.amplitude)
+                        + ", \"afterAmplitude\": " + jsonNum(after == null ? Double.NaN : after.amplitude)
+                        + ", \"beforeGates\": " + jsonText(String.join(";", before.failedGates))
+                        + ", \"afterGates\": " + jsonText(after == null ? "" : String.join(";", after.failedGates))
+                        + ", \"beforeDelta\": " + jsonArray(before.deltaMag)
+                        + ", \"afterDelta\": " + jsonArray(after == null ? null : after.deltaMag)
+                        + ", \"beforeKept\": " + jsonKept(before)
+                        + ", \"afterKept\": " + jsonKept(after) + "}");
+            }
+            if (anyStar) {
+                json.println();
+            }
+            json.println("  ]");
+            json.println("}");
+        }
+    }
+
+    private static void markUnsolved(EnsembleSolver.Solution solution, boolean[] active, String[] reasons) {
+        for (int j = 0; j < active.length; j++) {
+            if (active[j] && !solution.frameSolved[j]) {
+                active[j] = false;
+                reasons[j] = "Too few usable stars for the ensemble";
+            }
+        }
+    }
+
+    private static int countTier(List<StarLightCurve> stars, VariabilityTier tier) {
+        int n = 0;
+        for (StarLightCurve star : stars) {
+            if (star.tier == tier) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    private static boolean isReportedTier(VariabilityTier tier) {
+        return tier == VariabilityTier.HIGH_CONFIDENCE || tier == VariabilityTier.POSSIBLE || tier == VariabilityTier.REJECTED;
+    }
+
+    private static String tierJson(String verdict, int high, int possible, int rejected) {
+        return "{\"verdict\": " + jsonText(verdict) + ", \"high\": " + high + ", \"possible\": " + possible
+                + ", \"rejected\": " + rejected + "}";
+    }
+
+    private static String jsonKept(StarLightCurve star) {
+        if (star == null) {
+            return "null";
+        }
+        StringBuilder text = new StringBuilder("[");
+        for (int j = 0; j < star.flags.length; j++) {
+            if (j > 0) {
+                text.append(',');
+            }
+            text.append(star.flags[j] == 0 && Double.isFinite(star.deltaMag[j]));
+        }
+        return text.append(']').toString();
+    }
+
+    private static String jsonArray(double[] values) {
+        if (values == null) {
+            return "null";
+        }
+        StringBuilder text = new StringBuilder("[");
+        for (int i = 0; i < values.length; i++) {
+            if (i > 0) {
+                text.append(',');
+            }
+            text.append(jsonNum(values[i]));
+        }
+        return text.append(']').toString();
+    }
+
+    private static String jsonInts(int[] values) {
+        StringBuilder text = new StringBuilder("[");
+        for (int i = 0; i < values.length; i++) {
+            if (i > 0) {
+                text.append(',');
+            }
+            text.append(values[i]);
+        }
+        return text.append(']').toString();
+    }
+
+    private static String jsonNum(double value) {
+        return Double.isFinite(value) ? String.format(Locale.US, "%.5f", value) : "null";
+    }
+
+    private static String jsonText(String value) {
+        if (value == null) {
+            return "null";
+        }
+        return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
     }
 
     // =================================================================
