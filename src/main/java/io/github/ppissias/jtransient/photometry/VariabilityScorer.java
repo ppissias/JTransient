@@ -49,10 +49,8 @@ final class VariabilityScorer {
     /** Nearby stars used in the local-consistency gate. */
     private static final int LOCAL_MAX_STARS = 10;
     private static final int LOCAL_MIN_STARS = 3;
-    /** Comparison stars for the local gate must have a scatter z-score below this. */
-    private static final double LOCAL_CONSTANT_Z = 2.0;
     /**
-     * The local gate fails only when the nearby constant stars also carry at least this share of the candidate's
+     * The local gate fails only when the nearby comparison stars also carry at least this share of the candidate's
      * pattern. A systematic shifts neighbours by about the same amount; a faint copy (light leaking from a bright
      * variable into a neighbour's aperture) or a slight common trend correlates without sharing the amplitude.
      */
@@ -358,14 +356,16 @@ final class VariabilityScorer {
         }
 
         // LOCAL
-        // Constant stars within the local radius; in a sparse field the nearest ones out to a wider radius make up
-        // the minimum, so a star is not failed only for lack of close neighbours.
+        // References must be precise enough to reveal the candidate's change. Do not preselect quiet stars:
+        // a shared local fault can make all of its useful neighbours candidates too. In a sparse field the
+        // nearest references out to a wider radius make up the minimum.
+        double comparisonNoise = Math.max(sigma,
+                star.amplitude / Math.max(1.0, config.variableAmplitudeNoiseFactor));
         List<StarLightCurve> nearby = new ArrayList<>();
         double widestRadius = LOCAL_MAX_RADIUS_FACTOR * config.variableLocalRadiusPixels;
         for (int k = 0; k < stars.size(); k++) {
             StarLightCurve other = stars.get(k);
-            if (k == index || curves[k] == null || other.tier != VariabilityTier.CONSTANT
-                    || !(other.scatterZ < LOCAL_CONSTANT_Z)) {
+            if (k == index || curves[k] == null || !(other.expectedScatter <= comparisonNoise)) {
                 continue;
             }
             if (Math.hypot(other.x - star.x, other.y - star.y) <= widestRadius) {

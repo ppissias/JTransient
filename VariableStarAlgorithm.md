@@ -385,7 +385,7 @@ Each candidate is tested against eight gates:
 | `SPLIT_HALF` | The correlation between the first and second points of consecutive non-overlapping pairs is below `variableMinSplitHalfCorrelation` | Noise; white noise gives about zero |
 | `APERTURE` | The 1.0 x and 2.0 x FWHM amplitudes, measured over the same frames, differ by more than `variableMaxApertureAmplitudeDifference x amplitude` | Light from a neighbour leaking in, or a wrong position. Real variability is the same in every aperture |
 | `SYSTEMATICS` | See below | Changes caused by seeing, transparency, sky or registration |
-| `LOCAL` | Fewer than 3 quiet constant stars (`scatterZ < 2`) are found within `variableLocalRadiusPixels`, or, in a sparse field, within 3 times that radius; or the median absolute correlation with the nearest 10 of them exceeds `variableMaxLocalCorrelation` and they also carry at least 30% of the candidate's pattern (median regression slope of their residuals on the candidate's, `localSharedFraction`). A systematic shifts neighbours by about the same amount; a faint copy (light from a bright variable leaking into a neighbour's aperture) or a slight common trend correlates without sharing the amplitude | A local pattern the plane term cannot model (a dew patch, a local gradient) |
+| `LOCAL` | Fewer than 3 sufficiently precise comparison stars (including other candidates) are found within `variableLocalRadiusPixels`, or, in a sparse field, within 3 times that radius; or the median absolute correlation with the nearest 10 of them exceeds `variableMaxLocalCorrelation` and they also carry at least 30% of the candidate's pattern (median regression slope of their residuals on the candidate's, `localSharedFraction`). References are selected by their expected scatter, no larger than the greater of the candidate's expected scatter and its amplitude divided by `max(1, variableAmplitudeNoiseFactor)`. Selecting only quiet stars would remove the strongest evidence when a local fault makes neighbouring stars candidates too. A systematic shifts neighbours by about the same amount; a faint copy (light from a bright variable leaking into a neighbour's aperture) or a slight common trend correlates without sharing the amplitude | A local pattern the plane term cannot model (a dew patch, a local gradient) |
 | `LINEARITY` | Any measurement of the star is flagged `SATURATED` or `NONLINEAR` | Stars that come near the linear limit, for example when they brighten |
 
 **SYSTEMATICS** runs two tests for each driver. The gate fails if either test fails for any driver:
@@ -461,7 +461,7 @@ These values are in the code and are not configurable:
 | Persistence threshold | 1.5 x expected scatter | `VariabilityScorer` |
 | Scatter / J spread floors | 5% of expected / 0.02 | `VariabilityScorer` |
 | Systematics neighbours / percentile | 200 constant stars / 99th | `VariabilityScorer` |
-| Local gate stars / minimum / constant z | 10 / 3 / 2 | `VariabilityScorer` |
+| Local gate stars / minimum | 10 / 3 | `VariabilityScorer` |
 
 ---
 

@@ -677,7 +677,7 @@ SYSTEMATICS gate: for each correlated systematic, the response of every constant
 
 ### `variableLocalRadiusPixels` / `variableMaxLocalCorrelation` (defaults `100.0` / `0.3`)
 
-LOCAL gate: median absolute correlation with up to 10 nearby constant stars must not exceed this; at least 3 are required.
+LOCAL gate: compare with up to 10 sufficiently precise nearby stars, including other candidates; at least 3 are required. The gate fails when the median absolute correlation exceeds this limit and the neighbours share at least 30% of the candidate's change. See `VariableStarAlgorithm.md` for reference selection.
 
 Candidates that pass every gate are `HIGH_CONFIDENCE`, one failure gives `POSSIBLE`, more give `REJECTED`. A LINEARITY gate also fails when the star was flagged saturated or non-linear in any frame.
 

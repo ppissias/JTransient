@@ -612,10 +612,10 @@ public class DetectionConfig implements Cloneable {
      */
     public double variableSystematicsResponseFactor = 2.0;
 
-    /** * Radius, in pixels, within which nearby constant stars are compared for a shared pattern. */
+    /** * Radius, in pixels, within which nearby comparison stars are compared for a shared pattern. */
     public double variableLocalRadiusPixels = 100.0;
 
-    /** * Largest allowed median absolute correlation with nearby constant stars. */
+    /** * Largest allowed median absolute correlation with nearby comparison stars. */
     public double variableMaxLocalCorrelation = 0.3;
 
     /**
