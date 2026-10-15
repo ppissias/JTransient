@@ -297,6 +297,44 @@ public final class CalibratedAutoTuner {
         public final Candidate[] chosen = new Candidate[PROFILE_COUNT];
         /** Whether the chosen candidate met the profile's budgets (otherwise the cleanest candidate was used). */
         public final boolean[] withinBudget = new boolean[PROFILE_COUNT];
+        /**
+         * Best setting at each detection sigma, for each profile. Enough to explain the choice without keeping
+         * {@link #candidates}. Filled by {@link CalibratedAutoTuner#buildTradeoff}.
+         */
+        public Tradeoff tradeoff;
+    }
+
+    /** The noise-against-sensitivity summary of one calibration. */
+    public static final class Tradeoff {
+        /** Detection sigmas that were searched, in order. */
+        public double[] sigmas;
+        /** Peak signal-to-noise levels of the synthetic-star curve, matching {@link Candidate#completeness}. */
+        public double[] peakSnr;
+        /** One entry per profile, indexed by {@link JTransientAutoTuner.AutoTuneProfile#ordinal()}. */
+        public ProfileTradeoff[] profiles;
+    }
+
+    /** One profile's budget and its best setting at each detection sigma. */
+    public static final class ProfileTradeoff {
+        /** The profile's own budget, in false detections per megapixel per frame. */
+        public double nominalBudgetPerMpixFrame;
+        /** The budget actually applied, relaxed when the measured area cannot confirm a stricter one. */
+        public double effectiveBudgetPerMpixFrame;
+        /** Parallel to {@link Tradeoff#sigmas}. */
+        public SigmaChoice[] bySigma;
+    }
+
+    /** The best evaluated setting at one detection sigma. */
+    public static final class SigmaChoice {
+        public double sigma;
+        /** False when nothing at this sigma stayed inside the budget; the numbers are then the cleanest setting. */
+        public boolean withinBudget;
+        /** False when this sigma was not evaluated. */
+        public boolean evaluated;
+        public double falsePositivesPerMpixFrame;
+        public double recoveredFraction;
+        public double noisePerMpixFrame;
+        public double leakagePerMpixFrame;
     }
 
     /**
@@ -345,11 +383,13 @@ public final class CalibratedAutoTuner {
         if (!calibration.success) {
             report.append(calibration.failureReason).append("\nFalling back to the base configuration.\n");
             result.telemetryReport = report.toString();
+            discardSweep(calibration);
             return result;
         }
         int p = profile.ordinal();
         Candidate best = calibration.chosen[p];
         appendCalibrationReport(calibration, p, report);
+        discardSweep(calibration);
 
         result.optimizedConfig = configFor(calibration, baseConfig, profile);
         result.success = true;
@@ -632,6 +672,7 @@ public final class CalibratedAutoTuner {
                 calibration.failureReason = "No combination could be evaluated.";
             }
             calibration.elapsedSeconds = (System.currentTimeMillis() - start) / 1000.0;
+            buildTradeoff(calibration);
             progress(listener, 100, "Calibrated auto-tuning complete.");
             return calibration;
         } catch (Exception e) {
@@ -1148,6 +1189,67 @@ public final class CalibratedAutoTuner {
     // =========================================================================
     // Selection and reporting
     // =========================================================================
+
+    /**
+     * Fills {@link Calibration#tradeoff} from the evaluated combinations: the best setting at each detection
+     * sigma for every profile. When the combinations have already been discarded, the stored summary is returned.
+     */
+    public static Tradeoff buildTradeoff(Calibration calibration) {
+        if (calibration == null) {
+            return null;
+        }
+        if (calibration.candidates == null || calibration.candidates.isEmpty()) {
+            return calibration.tradeoff;
+        }
+        Tradeoff tradeoff = new Tradeoff();
+        tradeoff.sigmas = SIGMAS_TO_TEST.clone();
+        tradeoff.peakSnr = INJECTION_PEAK_SNR.clone();
+        tradeoff.profiles = new ProfileTradeoff[PROFILE_COUNT];
+        for (int p = 0; p < PROFILE_COUNT; p++) {
+            ProfileTradeoff profile = new ProfileTradeoff();
+            profile.nominalBudgetPerMpixFrame = FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[p];
+            profile.effectiveBudgetPerMpixFrame = effectiveBudget(
+                    FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[p], calibration.measuredMpixFrames);
+            profile.bySigma = new SigmaChoice[tradeoff.sigmas.length];
+            for (int s = 0; s < tradeoff.sigmas.length; s++) {
+                List<Candidate> atSigma = new ArrayList<>();
+                for (Candidate candidate : calibration.candidates) {
+                    if (candidate.sigma == tradeoff.sigmas[s]) {
+                        atSigma.add(candidate);
+                    }
+                }
+                profile.bySigma[s] = sigmaChoice(tradeoff.sigmas[s], atSigma, profile.effectiveBudgetPerMpixFrame);
+            }
+            tradeoff.profiles[p] = profile;
+        }
+        calibration.tradeoff = tradeoff;
+        return tradeoff;
+    }
+
+    /** Keeps {@link Calibration#tradeoff} and drops the evaluated combinations. */
+    public static void discardSweep(Calibration calibration) {
+        if (calibration == null || calibration.candidates == null || calibration.candidates.isEmpty()) {
+            return;
+        }
+        buildTradeoff(calibration);
+        calibration.candidates.clear();
+    }
+
+    private static SigmaChoice sigmaChoice(double sigma, List<Candidate> atSigma, double budget) {
+        SigmaChoice choice = new SigmaChoice();
+        choice.sigma = sigma;
+        Candidate best = select(atSigma, budget);
+        Candidate shown = best != null ? best : cleanest(atSigma);
+        choice.withinBudget = best != null;
+        choice.evaluated = shown != null;
+        if (shown != null) {
+            choice.falsePositivesPerMpixFrame = shown.falsePositivesPerMpixFrame;
+            choice.recoveredFraction = shown.recoveredFraction;
+            choice.noisePerMpixFrame = shown.noisePerMpixFrame;
+            choice.leakagePerMpixFrame = shown.leakagePerMpixFrame;
+        }
+        return choice;
+    }
 
     /**
      * Within the budgets (checked against the cautious estimates), the candidate recovering the most
