@@ -132,8 +132,8 @@ Key `PipelineResult` fields:
 - `tracks`: returned `TrackLinker.Track` objects, including confirmed tracks and suspected same-frame streak groupings
 - `anomalies`: rescued single-frame anomalies kept separate from normal tracks
 - `allTransients`: per-frame export of the full post-veto transient population carried through tracking, including point detections and mobile streak detections
-- `unclassifiedTransients`: the true leftover detections that remain after tracks and anomalies are exported
-- `residualTransientAnalysis`: post-processing of `unclassifiedTransients` into weak local rescue candidates and broad activity clusters
+- `unclassifiedTransients`: observations remaining after tracks, anomalies and common-motion filtering; local rescue candidates still reference their observations here
+- `residualTransientAnalysis`: common-motion groups plus optional local rescue candidates and activity clusters built after those groups are removed; common-motion filtering has its own switch
 - `masterStackData`: median master stack used to extract stationary stars
 - `maximumStackData`: maximum stack exported for visualization/post-processing
 - `masterStars`: stationary objects extracted from the master stack
@@ -142,9 +142,13 @@ Key `PipelineResult` fields:
 - `slowMoverStackData`, `slowMoverMedianVetoMask`, and `slowMoverCandidates`: compatibility exports; the stack now aliases `maximumStackData`
 - `driftPoints`: per-frame border-drift diagnostics
 - `variableStarAnalysis`: photometric readiness verdict, per-star light curves and variable-star candidates; empty when variable-star detection is disabled
-- `telemetry`: pipeline and tracker counters, including nested `slowMoverTelemetry` and `photometryTelemetry`
+- `telemetry`: pipeline and tracker counters, ordered major-phase wall-clock `stageTimeMs`, and nested slow-mover and photometry diagnostics
 
-Slow-mover diagnostics report `axisRatio = majorExtent / minorExtent`, an optional fill factor, exact median-mask overlap, and two 0–100 frame-based heuristics: `frameSupportPercentage` and `stationaryLikelihoodPercentage`. Their config thresholds default to `0` and `100`, so they are measured without vetoing candidates. `estimatedMotionPixels = majorExtent - minorExtent` is a shape-based estimate; motion is not temporally confirmed.
+Slow-mover diagnostics report `axisRatio = majorExtent / minorExtent`, an optional fill factor, exact median-mask overlap, and two 0–100 frame-based heuristics: `frameSupportPercentage` and `stationaryLikelihoodPercentage`. Their config thresholds default to `40` and `60`, rejecting low-support or stationary-looking candidates when evidence is available; `0` and `100` disable the respective gates. `estimatedMotionPixels = majorExtent - minorExtent` is a shape-based estimate; motion is not temporally confirmed.
+
+The common-motion pass uses only unclassified observations and runs before optional local rescue and activity clustering. Associations are chronological and uniquely nearest in both directions; observations are owned once and ambiguous links are left for review. Groups need at least three frames shared by every member, and remain visible as `residualTransientAnalysis.commonMotionGroups`. Matching displacement suggests instrumental residuals but does not prove that sources are false. See [ALGORITHM.md](ALGORITHM.md) and [CONFIG.md](CONFIG.md).
+
+Runtime diagnostics include every completed major phase from extraction through photometry. `telemetry.processingTimeMs` covers the full engine run; application file loading, Auto-Tune and report generation are outside it. Parallel phases report wall-clock elapsed time, not summed worker time. The faint-fragment cost is `telemetry.trackerTelemetry.faintStreakFragmentTimeMs` (-1 if not run), already included in tracking. Spatial photometry exclusions are counted by `telemetry.photometryTelemetry.framesExcludedSpatial`. See [PIPELINE.md](PIPELINE.md#timing-and-frame-exclusion-telemetry).
 
 ### 2. Detect variable stars
 

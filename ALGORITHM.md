@@ -33,9 +33,12 @@ The full run is organized into these major phases:
 7. stationary-star veto filtering and streak linking
 8. time-based point linking
 9. optional geometric point linking
-10. anomaly rescue, suspected streak grouping, and streak consolidation
-11. residual-transient analysis
-12. output assembly and maximum-stack export
+10. same-frame faint-streak fragment assembly
+11. anomaly rescue, suspected streak grouping, and streak consolidation
+12. common-motion filtering of unclassified observations
+13. optional residual analysis: local rescue, then activity clustering
+14. optional stationary-star photometry and variable-star scoring
+15. output assembly and maximum-stack export
 
 ## Filtering Overview
 
@@ -64,8 +67,10 @@ Filtering happens at several different levels of the pipeline, and not all of it
 - anomaly filtering:
   - peak-sigma and integrated-sigma rescue filter by object area and significance
 - suspected streak grouping is the anomaly-stage same-frame line pass, using rescued anomaly collinearity within one frame
+- common-motion filtering:
+  - separated compact sources with matching displacement on at least three shared frames are set aside before local rescue and clustering; ambiguous associations are kept
 - residual-transient analysis:
-  - leftover unclassified non-streak point detections can be mined for weak local rescue candidates and optional broader local activity clusters
+  - remaining unclassified non-streak point detections can be mined for weak local rescue candidates and optional broader local activity clusters
 
 ## 1. Border Drift Diagnostics
 
@@ -289,7 +294,7 @@ The engine then:
 2. extracts comparison objects from the median master stack with the same slow-mover thresholds and paints their raw pixels into an undilated boolean mask
 3. rejects maximum-stack objects below `masterSlowMoverMinPixels`, outside the `slowMoverMinAxisRatio` to `slowMoverMaxAxisRatio` geometric window, or below `slowMoverMinFillFactor` when that filter is enabled
 4. measures the fraction of each remaining object's raw pixels inside the median mask, rejecting values below `slowMoverMedianSupportOverlapFraction` or above `slowMoverMedianSupportMaxOverlapFraction`
-5. when the original quality-filtered frames are available, searches a compact aperture inside each surviving maximum-stack footprint in every usable frame. It records the percentage of frames with significant localized signal, then the percentage of supported frame positions clustered at one location. `slowMoverMinFrameSupport` can reject low frame support and `slowMoverMaxStationaryLikelihood` can reject stationary-looking sources; defaults `0` and `100` disable these vetoes while keeping their measurements.
+5. when the original quality-filtered frames are available, searches a compact aperture inside each surviving maximum-stack footprint in every usable frame. It records the percentage of frames with significant localized signal, then the percentage of supported frame positions clustered at one location. `slowMoverMinFrameSupport` (default `40`) rejects low frame support and `slowMoverMaxStationaryLikelihood` (default `60`) rejects stationary-looking sources when their measurements are available. Values `0` and `100` disable the respective vetoes while keeping their measurements.
 
 The geometric axis ratio uses oriented raw-pixel extents; it is distinct from intensity-weighted moment elongation. The default minimum fill factor is `0.0`, which disables that veto. The default lower mask-overlap bound is also `0.0`, so a single-frame artifact can pass it. The upper bound defaults to `0.80` and rejects footprints mostly explained by persistent sources. The stacks are not subtracted.
 
@@ -465,7 +470,14 @@ It:
 
 This allows skipped frames while still rejecting erratic or mostly stationary tracks.
 
-## 13. Anomaly Rescue
+## 13. Faint Fragments And Anomaly Rescue
+
+Before anomaly rescue, `FaintStreakFragmentGrouper.assemble(...)` joins same-frame pieces onto confirmed streaks and can discover a new single-frame line. Its switch is `enableFaintStreakFragments`, with perpendicular tolerance `faintStreakLineTolerance`.
+
+A new line needs four pieces, a span of at least 80 pixels, no centroid gap larger than 40% of the span, and at least three stable elongated pieces whose angles agree within 25 degrees, with a strict majority of the stable pieces supporting the line. Stable pieces have at least six pixels and elongation at least 2; all candidate pieces have at least four pixels. Rounder pieces may fill gaps but cannot establish a line alone.
+
+An existing streak can grow through connected pieces with gaps up to 80 pixels. Growth stays in the same frame and checks the angles of stable elongated pieces. The ordinary streak gates are unchanged. This discovery search is intentionally unchanged by the timing instrumentation; long fragment chains can be expensive. Its elapsed cost is `TrackerTelemetry.faintStreakFragmentTimeMs`, included in the tracking phase.
+
 
 This stage gives strong untracked detections one more chance as standalone flashes or same-frame suspected streaks.
 
@@ -490,7 +502,7 @@ A single detection is rescued as an `INTEGRATED_SIGMA` anomaly when:
 
 These rescued anomalies are exported as standalone anomaly results through `TrackingResult.anomalies` and `PipelineResult.anomalies`, rather than as one-point tracks.
 
-The `PEAK_SIGMA` and `INTEGRATED_SIGMA` rescue checks are energy- and size-based. They do not apply a dedicated shape veto at this stage.
+The `PEAK_SIGMA` and `INTEGRATED_SIGMA` rescue checks are energy- and size-based. They do not apply a dedicated shape veto at this stage. An anomaly within six pixels of a confirmed same-frame streak axis, allowing 80 pixels past its ends, is retained with `AnomalyDetection.lowConfidence = true`. It is not automatically reclassified as a streak fragment.
 
 ### 13.3 Suspected streak grouping
 
@@ -523,17 +535,27 @@ This pass:
 
 This means a suspected same-frame grouping can remain as a standalone suspected track, or it can be absorbed into a confirmed streak track when the geometry and motion checks support that merge.
 
-## 14. Residual Transient Analysis
+## 14. Common-Motion Filtering
+
+After the main tracker has assigned streaks, moving tracks, anomalies and suspected streaks, `CommonMotionRejector.reject(trackResult.unclassifiedTransients, config)` processes the remaining observations. It runs independently of the residual-analysis switch, when `enableCommonMotionRejection` is true.
+
+The input has one representation of each observation. Compact sources are linked in chronological order, looking up to six sequence-index steps ahead within 25 pixels. The first frame containing a possible match takes priority over a closer point in a later frame. A match must be uniquely nearest in both directions; a tied or conflicting association ends that source rather than forcing a choice. Unassigned observations can start later sources, and each observation belongs to at most one source.
+
+A group requires two or more sources with centroids at least 30 pixels apart. Every pair's displacement relative to a shared reference frame must agree within `commonMotionShiftTolerance`, and every group member must share at least three of the same frames. Compact observations have area 1–40 pixels and elongation no greater than 2.5.
+
+All observations of an accepted group are removed from the remaining unclassified lists. They stay in `allTransients` and in `residualTransientAnalysis.commonMotionGroups` for report review. The group's `sharedFrameCount` counts frames common to every member. Common displacement is evidence for hot pixels or registration residuals, not proof that an astrophysical source is false.
+
+## 15. Residual Transient Analysis
 
 This final mining stage looks through leftover point detections for weak local patterns that were not strong enough to become normal tracks or anomalies.
 
-After tracking and anomaly export, `JTransientEngine.runPipeline(...)` runs:
+After common-motion filtering, `JTransientEngine.runPipeline(...)` runs:
 
 ```java
 ResidualTransientAnalyzer.analyze(trackResult.unclassifiedTransients, config)
 ```
 
-This stage only operates when `enableResidualTransientAnalysis` is true. It looks at leftover unclassified non-streak point detections after normal tracks and standalone anomalies have already been removed.
+This stage only operates when `enableResidualTransientAnalysis` is true. It looks only at the remaining unclassified non-streak point detections. Common-motion observations have already been removed, so they cannot be rescued again or cause a partly affected cluster to be discarded.
 
 The residual analyzer can export:
 
@@ -550,7 +572,11 @@ Accepted local rescue candidates consume their detections before optional local 
 
 The result is exported as `PipelineResult.residualTransientAnalysis`; it does not add entries to `PipelineResult.tracks` or `PipelineResult.anomalies`.
 
-## 15. Output Assembly
+## 16. Variable-Star Photometry
+
+When `enableVariableStarDetection` is true, stationary master stars are measured on the quality-filtered frames. This uses the master mask, frame detections, accepted tracks and slow-mover candidates for contamination flags; it does not mine the residual common-motion lists. After the initial ensemble solve, spatially uneven frames are excluded and the ensemble is recomputed before response check D. Readiness then determines whether variability can be scored. See [VariableStarAlgorithm.md](VariableStarAlgorithm.md).
+
+## 17. Output Assembly
 
 This stage gathers every accepted product of the run into `PipelineResult` for callers and UIs.
 
@@ -565,7 +591,8 @@ At the end of the run, the engine assembles:
 - master-star detections
 - maximum-stack slow-mover candidates and median-source mask
 - merged per-frame transients
-- residual-transient analysis
+- common-motion groups and residual-transient analysis
+- stationary-star photometry and its telemetry
 - master veto mask
 - drift vectors
 
@@ -577,6 +604,14 @@ The main UI-facing tracking outputs are therefore:
 - `Track.isSuspectedStreakTrack` on entries inside `PipelineResult.tracks`
 
 The engine exports `maximumStackData` for visualization or downstream analysis. When slow-mover detection is enabled, the detector reuses this same array.
+
+## 18. Runtime Diagnostics
+
+`PipelineTelemetry.stageTimeMs` is an insertion-ordered map from `PipelineTelemetry.Stage` to elapsed wall-clock milliseconds. The major phases are drift/padding, parallel extraction and frame measurements, quality filtering, the median master/star map, maximum stacking, optional slow movers, tracking, optional common-motion filtering, optional residual analysis, and optional photometry. Disabled phases are absent; a completed short phase may record zero milliseconds.
+
+`processingTimeMs` covers the entire engine run, including residual analysis and photometry. Durations use `System.nanoTime()`. Parallel phases measure elapsed time, not the sum of worker CPU time. The total excludes application image loading, Auto-Tune and report generation, and includes small orchestration overhead beyond the recorded phases. With a provided median stack, master-reference timing covers its reuse and star extraction, not construction.
+
+`trackerTelemetry.faintStreakFragmentTimeMs` measures faint-fragment assembly within tracking; it is already included in the tracking time and must not be added to the total. It is -1 when the pass did not run. `generateReport()` prints the timing breakdown and this substep.
 
 ## Resulting Behavior
 
@@ -592,6 +627,7 @@ The full algorithm is intentionally layered:
 6. optionally fall back to looser geometry when timestamps are available, and require it when timestamps are missing
 7. rescue strong one-frame events at the end as either peak-sigma or integrated-sigma anomalies
 8. regroup collinear rescued anomalies into same-frame suspected streak tracks
-9. mine leftover unclassified point detections for weaker local residual patterns
+9. set aside reliable compact common-motion groups before optional residual analysis
+10. mine the remaining unclassified points for weaker local rescue and activity patterns
 
 That layering is what lets `runPipeline(...)` handle slow point-like movers, fast streaks, faint same-frame streak fragments, and one-frame flashes within the same overall engine.

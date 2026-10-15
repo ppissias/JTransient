@@ -286,16 +286,20 @@ What it does:
    - fast streak linking
    - time-based point linking when timestamps are available
    - geometric point linking when timestamps are missing or `enableGeometricTrackLinking` is enabled
+   - faint same-frame streak-fragment assembly
    - anomaly rescue
    - suspected same-frame streak grouping and streak consolidation
-6. records pipeline and tracker telemetry
-7. runs residual transient analysis on leftover non-streak point detections
+6. filters compact common-motion groups from unclassified observations, when `enableCommonMotionRejection` is on
+7. runs optional local rescue and activity clustering on the filtered leftovers, when `enableResidualTransientAnalysis` is on
 8. when `enableVariableStarDetection` is on, runs stationary-star photometry and variable-star detection on the retained frames
-9. exports the maximum stack, reusing the same array for slow-mover analysis when enabled
+9. records the complete engine wall-clock total and non-overlapping phase timings
+10. exports the maximum stack, reusing the same array for slow-mover analysis when enabled
 
-The slow-mover branch keeps maximum-stack `DetectedObject` instances whose geometric axis ratio lies within the configured window and whose fill factor passes the optional minimum. It measures each candidate's raw-pixel overlap with an undilated mask of median-stack objects. The optional lower overlap bound and the upper stationary-source veto use that fraction; the two stacks are never subtracted. It also measures frame-support and stationary-likelihood percentages from the original retained frames. Their default thresholds (`0` and `100`) record diagnostics without rejecting candidates. Its output remains a candidate, not a temporally confirmed mover.
+The slow-mover branch keeps maximum-stack `DetectedObject` instances whose geometric axis ratio lies within the configured window and whose fill factor passes the optional minimum. It measures each candidate's raw-pixel overlap with an undilated mask of median-stack objects. The optional lower overlap bound and the upper stationary-source veto use that fraction; the two stacks are never subtracted. It also measures frame-support and stationary-likelihood percentages from the original retained frames. Their default thresholds (`40` and `60`) reject low-support and stationary-looking candidates when evidence is available; `0` and `100` disable the respective gates. Its output remains a candidate, not a temporally confirmed mover.
 
 The variable-star stage measures forced aperture photometry of isolated master stars in every retained frame. Moving detections, tracks and slow-mover footprints flag the measurements they contaminate. Readiness checks test whether the frames respond linearly to light and give a `READY`, `LIMITED` or `NOT_READY` verdict. An ensemble solve removes per-frame zero points and gradients. When the verdict allows it, each star is scored against stars of similar brightness, and candidates must then pass a set of gates. See `VariableStarAlgorithm.md`.
+
+Common-motion filtering is independent of the residual-analysis switch. Its source input contains only unclassified observations, with chronological, uniquely reciprocal associations and exclusive observation ownership. Grouped observations are removed before rescues or clusters are built. The groups remain available as `PipelineResult.residualTransientAnalysis.commonMotionGroups` even when residual analysis is disabled. They are reviewable instrumental candidates, not proof that a source is physically false. The deprecated `CommonMotionRejector.apply(...)` compatibility entry point recomputes residuals when it removes observations; new callers should use `reject(...)` before `ResidualTransientAnalyzer.analyze(...)`.
 
 What it returns:
 
@@ -322,6 +326,16 @@ When slow-mover detection is enabled, `slowMoverStackData` is the same array as 
 
 Use this when you want the library to go end-to-end and return all track-like detections.
 
+## Timing And Frame-Exclusion Telemetry
+
+`PipelineResult.telemetry.stageTimeMs` maps `PipelineTelemetry.Stage` values to elapsed milliseconds in execution order. Its stages are `DRIFT_ANALYSIS`, `SOURCE_EXTRACTION`, `QUALITY_FILTERING`, `MASTER_REFERENCE`, `MAXIMUM_STACK`, `SLOW_MOVERS`, `TRACKING`, `COMMON_MOTION`, `RESIDUAL_ANALYSIS`, and `PHOTOMETRY`. Only phases that ran are present; durations are measured using a monotonic clock.
+
+The phases do not overlap. Parallel extraction/photometry report elapsed wall time rather than summed worker CPU time. `processingTimeMs` includes the full engine run through photometry and orchestration overhead, but excludes application file loading, Auto-Tune and report export. With a provided master, master-reference timing includes only reuse and star extraction. `Stage.getLabel()` supplies a display name.
+
+`trackerTelemetry.faintStreakFragmentTimeMs` is a tracking substep and is already included in `stageTimeMs.get(Stage.TRACKING)`; -1 means the pass did not run. Do not add it to the major-phase sum. The text telemetry report includes both the phase table and this substep.
+
+`photometryTelemetry.framesExcludedSpatial` counts frames removed for a spatial brightness residual after the initial ensemble fit and before response check D. Their per-frame records retain `used = false` and `exclusionReason`. The text report includes this count alongside registration, star-shape, response and insufficient-star exclusions. These exclusions apply to variable-star photometry, not to the main transient detections.
+
 ## What Changes When You Pass `providedMasterStack`
 
 The overloads with `providedMasterStack` skip only the median-stack construction step.
@@ -335,7 +349,7 @@ They still do the following:
 - stationary-star filtering
 - track linking, if you called `runPipeline(...)`
 - slow-mover analysis, if you called `runPipeline(...)` and it is enabled
-- anomaly rescue and residual transient analysis, if you called `runPipeline(...)`
+- anomaly rescue, common-motion filtering and optional residual transient analysis, if you called `runPipeline(...)`
 - variable-star photometry, if you called `runPipeline(...)` and it is enabled; stars are selected from, and positioned on, the provided stack
 - maximum-stack export, if you called `runPipeline(...)`
 

@@ -93,6 +93,19 @@ Enables the binary-star-like shape veto for unmatched single-frame streaks.
 - only applies to unmatched single-frame streak candidates
 - disabling it preserves compatibility with cases where such shapes are expected real streaks
 
+### `enableFaintStreakFragments` (default `true`)
+
+Enables same-frame faint-fragment assembly before anomaly rescue.
+
+- confirmed streak segments absorb compatible pieces and connected extensions with gaps up to 80 pixels
+- a new streak needs at least four pieces spanning at least 80 pixels, including at least three elongated pieces with agreeing angles and a strict majority of stable pieces supporting the line; round pieces may fill gaps
+- the ordinary streak elongation, size and peak-sigma gates are unchanged
+- `TrackerTelemetry.faintStreakFragmentTimeMs` reports this pass's wall-clock cost, included in tracking
+
+### `faintStreakLineTolerance` (default `2.0`)
+
+Maximum perpendicular distance, in pixels, for pieces joining a faint streak line. Negative values are treated as zero.
+
 ### `bgClippingIterations` (default `3`)
 
 Number of sigma-clipping passes for the histogram-based background estimate.
@@ -498,13 +511,30 @@ Maximum perpendicular centroid error allowed when rescued same-frame anomalies a
 - multiple disjoint suspected streaks can be returned from one frame when separate same-frame lines survive
 - does not affect the main multi-frame point-track linker
 
-## 7. Residual Transient Analysis
+## 7. Common Motion And Residual Transient Analysis
+
+### `enableCommonMotionRejection` (default `true`)
+
+Sets aside compact, separated sources sharing a displacement before local rescue and activity clustering. This switch is independent of `enableResidualTransientAnalysis`.
+
+- reads only the unclassified observations remaining after tracks, streaks, anomalies and suspected streaks
+- sources are associated chronologically by uniquely nearest matches in both directions; ambiguous observations remain available for residual review
+- compactness limits are area 1–40 pixels and elongation at most 2.5; the association radius is 25 pixels, with gaps of at most six sequence-index steps
+- a group needs at least two sources separated by 30 pixels or more, with at least three frames common to every source
+- each observation belongs to at most one source and accepted group
+- all grouped observations are removed from subsequent residual analysis, but retained in `residualTransientAnalysis.commonMotionGroups` and the full `allTransients` export
+- shared displacement suggests instrumental residuals; it does not establish that the sources are physically false
+
+### `commonMotionShiftTolerance` (default `1.0`)
+
+Maximum difference, in pixels, between sources' displacement vectors measured relative to a shared reference frame. Negative values are treated as zero. A lower value requires a closer match.
+
 
 ### `enableResidualTransientAnalysis` (default `true`)
 
-Master switch for post-processing leftover non-streak point detections after normal tracking.
+Enables optional local rescue and activity clustering after common-motion filtering. Turning it off does not disable common-motion filtering.
 
-- runs on `PipelineResult.unclassifiedTransients`
+- runs on the remaining `PipelineResult.unclassifiedTransients` after common-motion observations are removed
 - exports results through `PipelineResult.residualTransientAnalysis`
 
 ### `enableLocalRescueCandidates` (default `true`)

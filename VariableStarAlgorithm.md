@@ -13,6 +13,7 @@ The code is in `io.github.ppissias.jtransient.photometry`:
 | `ApertureMeasurer` | Measures FWHM, registration offset, sky and forced aperture fluxes on one frame |
 | `PhotometricReadinessChecker` | Readiness checks A, B and D |
 | `EnsembleSolver` | Ensemble photometry solve |
+| `SpatialFrameFilter` | Detects populated field regions with residual brightness offsets |
 | `VariabilityScorer` | Noise model, scores, candidate gates and tiers |
 | `PhotometryMath` | Robust statistics, neighbour statistics, weighted line fits |
 | `VariableStarAnalysis`, `StarLightCurve`, `PhotometricReadiness`, `PhotometryFlags`, `VariabilityTier` | Results |
@@ -85,6 +86,9 @@ star exclusion: mostly non-linear, low SNR
     |
     v
 ensemble solve  m(i,j) = M(i) + Z(j) + a(j)x + b(j)y
+    |
+    v
+spatial residual check: exclude uneven frames, solve again if needed
     |
     v
 check D: residual slope vs magnitude, per frame and across the session
@@ -323,6 +327,14 @@ Residuals `m − model` are returned for every finite measurement on a solved fr
 
 ---
 
+### 9.4 Spatial frame exclusion
+
+After the initial ensemble solve and exclusion of unsolved frames, `SpatialFrameFilter` divides the normalised field into a 3 × 3 grid. It compares each populated cell's median usable residual with the centre cell. Both cells must contain at least 30 usable stars; an absolute offset of 0.10 mag or more excludes that frame from photometry.
+
+The exclusion happens before response check D. If any frame is dropped, the usable matrix and ensemble are recomputed; check D then runs once on that solution. Readiness, all alternative-aperture solves and final scoring use the filtered frame set. A session with no spatial exclusion keeps its original ensemble solution. The decision uses the main aperture and fixed constants, not a new profile setting.
+
+Frames retain `FRAME_EXCLUDED` flags and per-frame reasons such as `Spatial residual 0.13 mag`. `PhotometryTelemetry.framesExcludedSpatial` counts them separately from other exclusions. This does not remove frames from the main moving-object or slow-mover analysis. A sparse centre or comparison cell cannot be judged by this check, and a fitted plane can absorb smooth gradients; it targets residual spatial differences rather than every possible photometric fault.
+
 ## 10. Verdict
 
 | Verdict | Condition |
@@ -419,6 +431,8 @@ Each candidate is tested against eight gates:
 - `candidates`, `highConfidenceCandidates()`
 - `telemetry`: selection and exclusion counters, measurement-flag counts, gate failure counts, the noise model (scatter against magnitude per scored star, with tier), session FWHM, saturation level, and processing time
 
+`telemetry.framesExcludedSpatial` records spatial exclusions; the aggregate text report includes it alongside other frame-exclusion counts. `telemetry.processingTimeMs` is the elapsed photometry duration. The full engine also records this phase in `PipelineTelemetry.stageTimeMs`; it is part of the engine total, not an additional cost to add to it.
+
 Frame times are mid-exposure Julian dates (`timestamp + exposure / 2`). They are `NaN` without timestamps.
 
 ---
@@ -455,6 +469,7 @@ These values are in the code and are not configurable:
 | Shape check threshold / spread floor | 5 tolerances / 2% | `VariableStarAnalyzer` |
 | Shape check groups / minimum stars per group / minimum measurements per star | 10 / 30 / 5 | `VariableStarAnalyzer` |
 | Ensemble minimum stars per frame / for plane | 10 / 30 | `EnsembleSolver` |
+| Spatial grid / minimum stars per compared cell / offset limit | 3 × 3 / 30 / 0.10 mag | `SpatialFrameFilter` |
 | Ensemble iterations / convergence | 15 / 1e-5 mag | `EnsembleSolver` |
 | Ensemble sigma floor / noise neighbours / Cauchy scale | 0.001 mag / 50 / 3 sigma | `EnsembleSolver` |
 | Outlier / support threshold | 4 / 2 robust sigma | `VariabilityScorer` |
