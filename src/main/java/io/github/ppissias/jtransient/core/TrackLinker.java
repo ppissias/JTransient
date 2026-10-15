@@ -954,12 +954,14 @@ public class TrackLinker {
 
         // Faint same-frame pieces are absorbed before anomaly rescue so they are not exported as anomalies.
         if (config.enableFaintStreakFragments) {
+            long fragmentStartedNanos = System.nanoTime();
             FaintStreakFragmentGrouper.assemble(
                     confirmedTracks,
                     transients,
                     filterResult.validMovingStreaks,
                     usedPoints,
                     config);
+            telemetry.faintStreakFragmentTimeMs = (System.nanoTime() - fragmentStartedNanos) / 1_000_000L;
         }
 
         // =================================================================

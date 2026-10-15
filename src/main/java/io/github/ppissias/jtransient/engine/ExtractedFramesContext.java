@@ -27,8 +27,8 @@ final class ExtractedFramesContext {
     final List<FrameQualityAnalyzer.FrameMetrics> cleanFrameMetrics;
     /** Telemetry accumulated during the early pipeline phases. */
     final PipelineTelemetry telemetry;
-    /** Pipeline start timestamp used to calculate total runtime. */
-    final long startTime;
+    /** Monotonic System.nanoTime() value at pipeline start. */
+    final long startNanos;
     /** Relative per-frame drift diagnostics derived from the valid image footprint. */
     final List<SourceExtractor.Pixel> driftPoints;
 
@@ -36,13 +36,13 @@ final class ExtractedFramesContext {
                            List<ImageFrame> cleanFrames,
                            List<FrameQualityAnalyzer.FrameMetrics> cleanFrameMetrics,
                            PipelineTelemetry telemetry,
-                           long startTime,
+                           long startNanos,
                            List<SourceExtractor.Pixel> driftPoints) {
         this.cleanFramesData = cleanFramesData;
         this.cleanFrames = cleanFrames;
         this.cleanFrameMetrics = cleanFrameMetrics;
         this.telemetry = telemetry;
-        this.startTime = startTime;
+        this.startNanos = startNanos;
         this.driftPoints = driftPoints;
     }
 }

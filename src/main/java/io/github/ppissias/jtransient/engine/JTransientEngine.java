@@ -332,8 +332,8 @@ public class JTransientEngine implements AutoCloseable {
      * @return extraction context reused by the full pipeline and transient-only path
      */
     private ExtractedFramesContext extractSourcesFromFrames(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
+        long startNanos = System.nanoTime();
         configureFrameExecutor(inputFrames);
-        long startTime = System.currentTimeMillis();
         PipelineTelemetry telemetry = new PipelineTelemetry();
         telemetry.totalFramesLoaded = inputFrames.size();
 
@@ -348,7 +348,10 @@ public class JTransientEngine implements AutoCloseable {
         // =================================================================
         // --- NEW: DITHER & DRIFT DIAGNOSTICS ---
         // =================================================================
+        long stageStartedNanos = System.nanoTime();
         List<SourceExtractor.Pixel> driftPoints = analyzeDitherAndDrift(inputFrames, config, listener, telemetry);
+        telemetry.recordStage(PipelineTelemetry.Stage.DRIFT_ANALYSIS, stageStartedNanos);
+        stageStartedNanos = System.nanoTime();
 
         List<Callable<FrameExtractionResult>> tasks = new ArrayList<>();
 
@@ -424,6 +427,8 @@ public class JTransientEngine implements AutoCloseable {
             telemetry.frameExtractionStats.add(stat);
         }
 
+        telemetry.recordStage(PipelineTelemetry.Stage.SOURCE_EXTRACTION, stageStartedNanos);
+        stageStartedNanos = System.nanoTime();
         if (DEBUG) {
             System.out.println("\n--- JTRANSIENT: PHASE 2 & 3 (Quality Filter) ---");
         }
@@ -485,12 +490,13 @@ public class JTransientEngine implements AutoCloseable {
             }
         }
 
+        telemetry.recordStage(PipelineTelemetry.Stage.QUALITY_FILTERING, stageStartedNanos);
         return new ExtractedFramesContext(
                 cleanFramesData,
                 cleanFrames,
                 cleanFrameMetrics,
                 telemetry,
-                startTime,
+                startNanos,
                 driftPoints
         );
     }
@@ -579,7 +585,7 @@ public class JTransientEngine implements AutoCloseable {
      */
     public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
         ExtractedFramesContext context = extractSourcesFromFrames(inputFrames, config, listener);
-        long startTime = context.startTime;
+        long stageStartedNanos = System.nanoTime();
         PipelineTelemetry telemetry = context.telemetry;
         List<SourceExtractor.ExtractionResult> cleanFramesData = context.cleanFramesData;
         List<ImageFrame> cleanFrames = context.cleanFrames;
@@ -630,8 +636,11 @@ public class JTransientEngine implements AutoCloseable {
         // PHASE 0.5 (Maximum-Stack Slow-Mover Candidate Detection)
         // =================================================================
 
+        telemetry.recordStage(PipelineTelemetry.Stage.MASTER_REFERENCE, stageStartedNanos);
         // Build once for both the detector and PipelineResult.maximumStackData.
+        stageStartedNanos = System.nanoTime();
         short[][] maximumStackData = MasterMapGenerator.createMaximumMasterStack(cleanFrames);
+        telemetry.recordStage(PipelineTelemetry.Stage.MAXIMUM_STACK, stageStartedNanos);
         SlowMoverAnalysis slowMoverAnalysis = SlowMoverAnalysis.empty();
         short[][] slowMoverStackData = null;
         boolean[][] slowMoverMedianVetoMask = null;
@@ -639,6 +648,7 @@ public class JTransientEngine implements AutoCloseable {
         PipelineTelemetry.SlowMoverTelemetry smTelemetry = null;
 
         if (config.enableSlowMoverDetection) {
+            stageStartedNanos = System.nanoTime();
             if (DEBUG) {
                 System.out.println("\n--- JTRANSIENT: PHASE 0.5 (Slow Mover Detection) ---");
             }
@@ -696,6 +706,10 @@ public class JTransientEngine implements AutoCloseable {
             }
         }
 
+        if (config.enableSlowMoverDetection) {
+            telemetry.recordStage(PipelineTelemetry.Stage.SLOW_MOVERS, stageStartedNanos);
+        }
+
         // =================================================================
         // PHASE 4 (Track Linking)
         // =================================================================
@@ -735,6 +749,7 @@ public class JTransientEngine implements AutoCloseable {
             }
         }
 
+        stageStartedNanos = System.nanoTime();
         TrackLinker.TrackingResult trackResult = TrackLinker.findMovingObjects(
                 cleanFramesObjects,
                 masterStars,
@@ -744,6 +759,7 @@ public class JTransientEngine implements AutoCloseable {
                 sensorHeight
         );
 
+        telemetry.recordStage(PipelineTelemetry.Stage.TRACKING, stageStartedNanos);
         // Map the track results back to our main telemetry object
         telemetry.totalMasterStarsIdentified = masterStars.size();
         telemetry.totalTracksFound = trackResult.tracks.size();
@@ -752,27 +768,33 @@ public class JTransientEngine implements AutoCloseable {
         telemetry.trackerTelemetry = trackResult.telemetry;
         telemetry.slowMoverTelemetry = smTelemetry;
 
-        telemetry.processingTimeMs = System.currentTimeMillis() - startTime;
-
-        if (listener != null) {
-            listener.onProgressUpdate(92, "Analyzing residual transients...");
+        List<ResidualTransientAnalysis.CommonMotionGroup> commonMotionGroups = List.of();
+        if (config.enableCommonMotionRejection) {
+            stageStartedNanos = System.nanoTime();
+            if (listener != null) {
+                listener.onProgressUpdate(92, "Filtering common-motion transients...");
+            }
+            commonMotionGroups = CommonMotionRejector.reject(trackResult.unclassifiedTransients, config);
+            telemetry.recordStage(PipelineTelemetry.Stage.COMMON_MOTION, stageStartedNanos);
         }
-
-        ResidualTransientAnalysis residualTransientAnalysis = ResidualTransientAnalyzer.analyze(
-                trackResult.unclassifiedTransients,
-                config
-        );
-        residualTransientAnalysis = CommonMotionRejector.apply(
-                residualTransientAnalysis,
-                trackResult.unclassifiedTransients,
-                config
-        );
+        ResidualTransientAnalysis residual = ResidualTransientAnalysis.empty();
+        if (config.enableResidualTransientAnalysis) {
+            stageStartedNanos = System.nanoTime();
+            if (listener != null) {
+                listener.onProgressUpdate(92, "Analyzing residual transients...");
+            }
+            residual = ResidualTransientAnalyzer.analyze(trackResult.unclassifiedTransients, config);
+            telemetry.recordStage(PipelineTelemetry.Stage.RESIDUAL_ANALYSIS, stageStartedNanos);
+        }
+        ResidualTransientAnalysis residualTransientAnalysis = new ResidualTransientAnalysis(
+                residual.localRescueCandidates, residual.localActivityClusters, commonMotionGroups);
 
         // =================================================================
         // PHASE 5 (Variable-Star Photometry)
         // =================================================================
         VariableStarAnalysis variableStarAnalysis = VariableStarAnalysis.empty();
         if (config.enableVariableStarDetection) {
+            stageStartedNanos = System.nanoTime();
             if (DEBUG) {
                 System.out.println("\n--- JTRANSIENT: PHASE 5 (Variable-Star Photometry) ---");
             }
@@ -794,6 +816,7 @@ public class JTransientEngine implements AutoCloseable {
             }
             variableStarAnalysis = VariableStarAnalyzer.analyze(photometryInput, config, executor);
             telemetry.photometryTelemetry = variableStarAnalysis.telemetry;
+            telemetry.recordStage(PipelineTelemetry.Stage.PHOTOMETRY, stageStartedNanos);
         }
 
         if (listener != null) {
@@ -805,6 +828,7 @@ public class JTransientEngine implements AutoCloseable {
             listener.onProgressUpdate(100, "Maximum Stack generation complete.");
         }
 
+        telemetry.processingTimeMs = (System.nanoTime() - context.startNanos) / 1_000_000L;
         return new PipelineResult(trackResult.tracks, telemetry, masterStackData, masterStars,
                 slowMoverAnalysis, slowMoverStackData, slowMoverMedianVetoMask, slowMoverCandidates, trackResult.anomalies,
                 trackResult.allTransients, trackResult.unclassifiedTransients,

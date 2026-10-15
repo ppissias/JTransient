@@ -20,117 +20,83 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Groups compact sources that share one displacement and removes them from the residual review.
+ * Filters compact common-motion sources before local rescue and activity clustering.
  *
- * <p>A group needs at least two sources, separated on the frame, whose positions relative to a
- * shared reference frame agree on at least three frames. One pair seen in only two frames is
- * kept. Local-rescue candidates are examined first, then compact detections that residual
- * analysis left unclassified.</p>
+ * <p>Only unclassified observations are examined. Chronological associations must be uniquely
+ * nearest in both directions; ambiguous associations remain available for residual review.
+ * Each observation belongs to at most one source and one accepted group. A group needs at least
+ * two separated sources and three frames shared by every member.</p>
  */
 public final class CommonMotionRejector {
-
     static final int MIN_SHARED_FRAMES = 3;
     static final double MAX_ELONGATION = 2.5;
     static final int MAX_COMPACT_PIXELS = 40;
     static final double MIN_SEPARATION_PX = 30.0;
     static final double MAX_LINK_SHIFT_PX = 25.0;
     static final int MAX_FRAME_GAP = 6;
+    private static final double DISTANCE_TIE_PX = 1e-6;
 
     private CommonMotionRejector() {
     }
 
     /**
-     * Removes grouped sources from the rescue list and from the unclassified detections.
+     * Finds common-motion groups and removes their observations from the supplied leftovers.
+     * This stage is controlled by enableCommonMotionRejection, independently of the residual switch.
+     * Removed observations remain available in the returned groups and the engine's allTransients.
      *
-     * @param residual residual analysis to filter; returned unchanged when nothing is grouped
-     * @param unclassified per-frame leftovers; matching detections are removed in place
-     * @param config pipeline configuration
-     * @return the original result when no group is found, otherwise a replacement
+     * @param unclassified chronological per-frame leftovers; grouped observations are removed in place
+     * @param config configuration, or null to leave the input unchanged
+     * @return immutable groups; empty when disabled or no match is found
      */
+    public static List<ResidualTransientAnalysis.CommonMotionGroup> reject(
+            List<List<SourceExtractor.DetectedObject>> unclassified, DetectionConfig config) {
+        if (config == null || !config.enableCommonMotionRejection) {
+            return List.of();
+        }
+        List<Source> sources = sourcesFromUnclassified(unclassified);
+        List<List<Source>> groups = groupSources(sources, Math.max(0.0, config.commonMotionShiftTolerance));
+        Set<SourceExtractor.DetectedObject> removed = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        List<ResidualTransientAnalysis.CommonMotionGroup> exported = new ArrayList<>();
+        for (List<Source> group : groups) {
+            List<List<SourceExtractor.DetectedObject>> members = new ArrayList<>();
+            for (Source source : group) {
+                List<SourceExtractor.DetectedObject> points = source.orderedPoints();
+                members.add(points);
+                removed.addAll(points);
+            }
+            exported.add(new ResidualTransientAnalysis.CommonMotionGroup(members, sharedFrames(group).size()));
+        }
+        if (unclassified != null && !removed.isEmpty()) {
+            for (List<SourceExtractor.DetectedObject> frame : unclassified) {
+                if (frame != null) {
+                    frame.removeIf(removed::contains);
+                }
+            }
+        }
+        return List.copyOf(exported);
+    }
+
+    /**
+     * Compatibility entry point for callers that already performed residual analysis.
+     * The source input is exclusively unclassified; rescues are never added as duplicate sources.
+     * When observations are removed, rescues and clusters are recomputed from the remaining input.
+     * Prefer reject before ResidualTransientAnalyzer.analyze to avoid computing residuals twice.
+     */
+    @Deprecated
     public static ResidualTransientAnalysis apply(ResidualTransientAnalysis residual,
                                                   List<List<SourceExtractor.DetectedObject>> unclassified,
                                                   DetectionConfig config) {
-        if (config == null || !config.enableCommonMotionRejection) {
+        List<ResidualTransientAnalysis.CommonMotionGroup> groups = reject(unclassified, config);
+        if (groups.isEmpty()) {
             return residual == null ? ResidualTransientAnalysis.empty() : residual;
         }
-        if (residual == null) {
-            residual = ResidualTransientAnalysis.empty();
+        ResidualTransientAnalysis remaining = ResidualTransientAnalyzer.analyze(unclassified, config);
+        List<ResidualTransientAnalysis.CommonMotionGroup> allGroups = new ArrayList<>();
+        if (residual != null) {
+            allGroups.addAll(residual.commonMotionGroups);
         }
-
-        double tolerance = Math.max(0.0, config.commonMotionShiftTolerance);
-        List<Source> sources = new ArrayList<>();
-        List<ResidualTransientAnalysis.LocalRescueCandidate> rescues = residual.localRescueCandidates;
-        for (int i = 0; i < rescues.size(); i++) {
-            Source source = sourceFromRescue(rescues.get(i), i);
-            if (source != null) {
-                sources.add(source);
-            }
-        }
-        sources.addAll(sourcesFromUnclassified(unclassified));
-
-        List<List<Source>> groups = groupSources(sources, tolerance);
-        if (groups.isEmpty()) {
-            return residual;
-        }
-
-        Set<Integer> removedRescues = new HashSet<>();
-        Set<SourceExtractor.DetectedObject> removedPoints = new HashSet<>();
-        List<ResidualTransientAnalysis.CommonMotionGroup> exported = new ArrayList<>();
-        for (List<Source> group : groups) {
-            List<List<SourceExtractor.DetectedObject>> exportedSources = new ArrayList<>();
-            int shared = minimumSharedFrames(group);
-            for (Source source : group) {
-                exportedSources.add(source.orderedPoints());
-                if (source.rescueIndex >= 0) {
-                    removedRescues.add(source.rescueIndex);
-                } else {
-                    removedPoints.addAll(source.byFrame.values());
-                }
-            }
-            exported.add(new ResidualTransientAnalysis.CommonMotionGroup(exportedSources, shared));
-        }
-
-        List<ResidualTransientAnalysis.LocalRescueCandidate> keptRescues = new ArrayList<>();
-        for (int i = 0; i < rescues.size(); i++) {
-            if (!removedRescues.contains(i)) {
-                keptRescues.add(rescues.get(i));
-            }
-        }
-        if (unclassified != null && !removedPoints.isEmpty()) {
-            for (List<SourceExtractor.DetectedObject> frame : unclassified) {
-                if (frame != null) {
-                    frame.removeIf(removedPoints::contains);
-                }
-            }
-        }
-        List<ResidualTransientAnalysis.LocalActivityCluster> keptClusters = new ArrayList<>();
-        for (ResidualTransientAnalysis.LocalActivityCluster cluster : residual.localActivityClusters) {
-            boolean hit = false;
-            for (SourceExtractor.DetectedObject point : cluster.points) {
-                if (removedPoints.contains(point)) {
-                    hit = true;
-                    break;
-                }
-            }
-            if (!hit) {
-                keptClusters.add(cluster);
-            }
-        }
-        return new ResidualTransientAnalysis(keptRescues, keptClusters, exported);
-    }
-
-    private static Source sourceFromRescue(ResidualTransientAnalysis.LocalRescueCandidate candidate, int rescueIndex) {
-        if (candidate == null || candidate.points == null || candidate.points.size() < MIN_SHARED_FRAMES) {
-            return null;
-        }
-        Source source = new Source(rescueIndex);
-        for (SourceExtractor.DetectedObject point : candidate.points) {
-            if (!isCompact(point) || source.byFrame.containsKey(point.sourceFrameIndex)) {
-                return null;
-            }
-            source.byFrame.put(point.sourceFrameIndex, point);
-        }
-        return source.byFrame.size() >= MIN_SHARED_FRAMES ? source : null;
+        allGroups.addAll(groups);
+        return new ResidualTransientAnalysis(remaining.localRescueCandidates, remaining.localActivityClusters, allGroups);
     }
 
     private static List<Source> sourcesFromUnclassified(List<List<SourceExtractor.DetectedObject>> unclassified) {
@@ -139,13 +105,14 @@ public final class CommonMotionRejector {
             return sources;
         }
         Map<Integer, List<SourceExtractor.DetectedObject>> byFrame = new HashMap<>();
+        Set<SourceExtractor.DetectedObject> seen = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         for (int frameIndex = 0; frameIndex < unclassified.size(); frameIndex++) {
             List<SourceExtractor.DetectedObject> frame = unclassified.get(frameIndex);
             if (frame == null) {
                 continue;
             }
             for (SourceExtractor.DetectedObject point : frame) {
-                if (point == null) {
+                if (point == null || !seen.add(point)) {
                     continue;
                 }
                 if (point.sourceFrameIndex < 0) {
@@ -164,26 +131,20 @@ public final class CommonMotionRejector {
             }
             grids.put(entry.getKey(), grid);
         }
-
+        Set<SourceExtractor.DetectedObject> assigned = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         List<Integer> frames = new ArrayList<>(byFrame.keySet());
         frames.sort(Comparator.naturalOrder());
         for (int frame : frames) {
             for (SourceExtractor.DetectedObject start : byFrame.get(frame)) {
-                if (hasPredecessor(start, frame, grids)) {
+                if (assigned.contains(start)) {
                     continue;
                 }
-                Source source = new Source(-1);
-                source.byFrame.put(frame, start);
+                Source source = new Source();
                 SourceExtractor.DetectedObject current = start;
-                int currentFrame = frame;
-                while (true) {
-                    SourceExtractor.DetectedObject next = nearestAhead(current, currentFrame, grids);
-                    if (next == null) {
-                        break;
-                    }
-                    source.byFrame.put(next.sourceFrameIndex, next);
-                    current = next;
-                    currentFrame = next.sourceFrameIndex;
+                while (current != null) {
+                    assigned.add(current);
+                    source.byFrame.put(current.sourceFrameIndex, current);
+                    current = nextUnambiguous(current, grids, assigned);
                 }
                 if (source.byFrame.size() >= MIN_SHARED_FRAMES) {
                     sources.add(source);
@@ -193,56 +154,66 @@ public final class CommonMotionRejector {
         return sources;
     }
 
-    private static boolean hasPredecessor(SourceExtractor.DetectedObject start,
-                                          int frame,
-                                          Map<Integer, Grid> grids) {
-        for (int earlier = frame - MAX_FRAME_GAP; earlier < frame; earlier++) {
-            Grid grid = grids.get(earlier);
-            if (grid == null) {
-                continue;
-            }
-            if (!grid.near(start.x, start.y, MAX_LINK_SHIFT_PX).isEmpty()) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private static SourceExtractor.DetectedObject nearestAhead(SourceExtractor.DetectedObject current,
-                                                               int frame,
-                                                               Map<Integer, Grid> grids) {
-        SourceExtractor.DetectedObject best = null;
-        double bestDistance = MAX_LINK_SHIFT_PX + 1.0;
-        int bestFrame = Integer.MAX_VALUE;
-        for (int later = frame + 1; later <= frame + MAX_FRAME_GAP; later++) {
+    /** Prefer the first frame with a possible observation; do not jump over an ambiguous match. */
+    private static SourceExtractor.DetectedObject nextUnambiguous(SourceExtractor.DetectedObject current,
+                                                                 Map<Integer, Grid> grids,
+                                                                 Set<SourceExtractor.DetectedObject> assigned) {
+        for (int later = current.sourceFrameIndex + 1; later <= current.sourceFrameIndex + MAX_FRAME_GAP; later++) {
             Grid grid = grids.get(later);
             if (grid == null) {
                 continue;
             }
-            for (SourceExtractor.DetectedObject candidate : grid.near(current.x, current.y, MAX_LINK_SHIFT_PX)) {
-                double distance = Math.hypot(candidate.x - current.x, candidate.y - current.y);
-                if (distance < bestDistance - 1e-6 || (Math.abs(distance - bestDistance) <= 1e-6 && later < bestFrame)) {
-                    best = candidate;
-                    bestDistance = distance;
-                    bestFrame = later;
-                }
+            List<SourceExtractor.DetectedObject> nearby = grid.near(current.x, current.y, MAX_LINK_SHIFT_PX);
+            if (nearby.isEmpty()) {
+                continue;
+            }
+            SourceExtractor.DetectedObject candidate = uniqueNearest(nearby, current.x, current.y);
+            if (candidate == null || assigned.contains(candidate)) {
+                return null;
+            }
+            Grid previous = grids.get(current.sourceFrameIndex);
+            SourceExtractor.DetectedObject reverse = uniqueNearest(
+                    previous.near(candidate.x, candidate.y, MAX_LINK_SHIFT_PX), candidate.x, candidate.y);
+            return reverse == current ? candidate : null;
+        }
+        return null;
+    }
+
+    private static SourceExtractor.DetectedObject uniqueNearest(List<SourceExtractor.DetectedObject> points,
+                                                                double x, double y) {
+        SourceExtractor.DetectedObject best = null;
+        double bestDistance = Double.POSITIVE_INFINITY;
+        double secondDistance = Double.POSITIVE_INFINITY;
+        for (SourceExtractor.DetectedObject point : points) {
+            double distance = Math.hypot(point.x - x, point.y - y);
+            if (distance < bestDistance) {
+                secondDistance = bestDistance;
+                bestDistance = distance;
+                best = point;
+            } else if (distance < secondDistance) {
+                secondDistance = distance;
             }
         }
-        return best;
+        return secondDistance - bestDistance <= DISTANCE_TIE_PX ? null : best;
     }
 
     private static List<List<Source>> groupSources(List<Source> sources, double tolerance) {
-        int count = sources.size();
-        boolean[] used = new boolean[count];
+        boolean[] used = new boolean[sources.size()];
         List<List<Source>> groups = new ArrayList<>();
-        for (int i = 0; i < count; i++) {
+        for (int i = 0; i < sources.size(); i++) {
             if (used[i]) {
                 continue;
             }
             List<Integer> members = new ArrayList<>();
             members.add(i);
-            for (int j = i + 1; j < count; j++) {
-                if (used[j] || sharesPoint(sources, members, sources.get(j))) {
+            Set<Integer> commonFrames = new HashSet<>(sources.get(i).byFrame.keySet());
+            for (int j = i + 1; j < sources.size(); j++) {
+                if (used[j]) {
+                    continue;
+                }
+                Set<Integer> intersection = new HashSet<>(commonFrames);
+                intersection.retainAll(sources.get(j).byFrame.keySet());
+                if (intersection.size() < MIN_SHARED_FRAMES) {
                     continue;
                 }
                 boolean agrees = true;
@@ -254,6 +225,7 @@ public final class CommonMotionRejector {
                 }
                 if (agrees) {
                     members.add(j);
+                    commonFrames = intersection;
                 }
             }
             if (members.size() < 2) {
@@ -268,17 +240,6 @@ public final class CommonMotionRejector {
             groups.add(group);
         }
         return groups;
-    }
-
-    private static boolean sharesPoint(List<Source> sources, List<Integer> members, Source candidate) {
-        for (int member : members) {
-            for (SourceExtractor.DetectedObject point : sources.get(member).byFrame.values()) {
-                if (candidate.byFrame.containsValue(point)) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     private static boolean agrees(Source left, Source right, double tolerance) {
@@ -310,57 +271,32 @@ public final class CommonMotionRejector {
         return true;
     }
 
-    private static int minimumSharedFrames(List<Source> group) {
-        int minimum = Integer.MAX_VALUE;
-        for (int i = 0; i < group.size(); i++) {
-            for (int j = i + 1; j < group.size(); j++) {
-                int shared = 0;
-                for (int frame : group.get(i).byFrame.keySet()) {
-                    if (group.get(j).byFrame.containsKey(frame)) {
-                        shared++;
-                    }
-                }
-                minimum = Math.min(minimum, shared);
-            }
+    private static Set<Integer> sharedFrames(List<Source> group) {
+        Set<Integer> shared = new HashSet<>(group.get(0).byFrame.keySet());
+        for (int i = 1; i < group.size(); i++) {
+            shared.retainAll(group.get(i).byFrame.keySet());
         }
-        return minimum;
+        return shared;
     }
 
     private static boolean isCompact(SourceExtractor.DetectedObject point) {
-        return point != null
+        return point != null && Double.isFinite(point.x) && Double.isFinite(point.y)
                 && point.elongation <= MAX_ELONGATION
-                && point.pixelArea >= 1.0
-                && point.pixelArea <= MAX_COMPACT_PIXELS;
+                && point.pixelArea >= 1.0 && point.pixelArea <= MAX_COMPACT_PIXELS;
     }
 
     private static final class Source {
-        private final int rescueIndex;
         private final Map<Integer, SourceExtractor.DetectedObject> byFrame = new HashMap<>();
-
-        private Source(int rescueIndex) {
-            this.rescueIndex = rescueIndex;
-        }
-
         private List<SourceExtractor.DetectedObject> orderedPoints() {
             List<SourceExtractor.DetectedObject> points = new ArrayList<>(byFrame.values());
             points.sort(Comparator.comparingInt(point -> point.sourceFrameIndex));
             return points;
         }
-
         private double centroidX() {
-            double sum = 0.0;
-            for (SourceExtractor.DetectedObject point : byFrame.values()) {
-                sum += point.x;
-            }
-            return sum / byFrame.size();
+            return byFrame.values().stream().mapToDouble(point -> point.x).average().orElse(Double.NaN);
         }
-
         private double centroidY() {
-            double sum = 0.0;
-            for (SourceExtractor.DetectedObject point : byFrame.values()) {
-                sum += point.y;
-            }
-            return sum / byFrame.size();
+            return byFrame.values().stream().mapToDouble(point -> point.y).average().orElse(Double.NaN);
         }
     }
 

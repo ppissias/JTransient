@@ -2,119 +2,147 @@ package io.github.ppissias.jtransient.core;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import org.junit.Test;
+import java.util.*;
+import static org.junit.Assert.*;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
-
-/**
- * Common-motion grouping removes a separated pair only when the match holds on three frames.
- */
 public class CommonMotionRejectorTest {
-
     @Test
-    public void removesTwoLocalRescuesThatShareAThreeFrameShift() {
-        ResidualTransientAnalysis.LocalRescueCandidate matchingA = rescue(
-                compact(100, 100, 0), compact(99.5, 99.2, 1), compact(99.2, 98.3, 2));
-        ResidualTransientAnalysis.LocalRescueCandidate matchingB = rescue(
-                compact(2000, 1500, 0), compact(1999.7, 1498.9, 1), compact(1999.3, 1498.1, 2));
-        ResidualTransientAnalysis.LocalRescueCandidate different = rescue(
-                compact(500, 500, 0), compact(510, 500, 1), compact(520, 500, 2));
-        ResidualTransientAnalysis.LocalRescueCandidate twoFrames = rescue(
-                compact(40, 40, 0), compact(40.4, 43.6, 1));
-
-        ResidualTransientAnalysis result = CommonMotionRejector.apply(
-                new ResidualTransientAnalysis(List.of(matchingA, matchingB, different, twoFrames), List.of()),
-                new ArrayList<>(),
-                new DetectionConfig());
-
-        assertEquals(2, result.localRescueCandidates.size());
-        assertTrue(result.localRescueCandidates.contains(different));
-        assertTrue(result.localRescueCandidates.contains(twoFrames));
-        assertEquals(1, result.commonMotionGroups.size());
-        assertEquals(2, result.commonMotionGroups.get(0).sources.size());
-        assertEquals(3, result.commonMotionGroups.get(0).sharedFrameCount);
+    public void filtersSharedMotionAndKeepsDifferentAndTwoFrameSources() {
+        var a = path(100,100, new double[]{0,-0.5,-0.8}, new double[]{0,-0.8,-1.7});
+        var b = path(800,600, new double[]{0,-0.4,-0.6}, new double[]{0,-0.9,-1.8});
+        var different = path(500,500,new double[]{0,10,20},new double[]{0,0,0});
+        var two = path(20,20,new double[]{0,0.2},new double[]{0,3.4});
+        var frames = frames(a,b,different,two);
+        var groups = CommonMotionRejector.reject(frames,new DetectionConfig());
+        assertEquals(1,groups.size());
+        assertEquals(2,groups.get(0).sources.size());
+        assertEquals(3,groups.get(0).sharedFrameCount);
+        var expected = new HashSet<SourceExtractor.DetectedObject>();
+        expected.addAll(different); expected.addAll(two);
+        assertEquals(expected,new HashSet<>(flat(frames)));
     }
 
     @Test
-    public void removesTheSamePatternFromUnclassifiedAndKeepsATwoFramePair() {
-        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
-        SourceExtractor.DetectedObject a0 = compact(100, 100, 0);
-        SourceExtractor.DetectedObject a1 = compact(99.5, 99.2, 1);
-        SourceExtractor.DetectedObject a2 = compact(99.2, 98.3, 2);
-        SourceExtractor.DetectedObject b0 = compact(800, 600, 0);
-        SourceExtractor.DetectedObject b1 = compact(799.6, 599.1, 1);
-        SourceExtractor.DetectedObject b2 = compact(799.4, 598.2, 2);
-        SourceExtractor.DetectedObject c0 = compact(20, 20, 0);
-        SourceExtractor.DetectedObject c1 = compact(20.2, 23.4, 1);
-        frames.add(new ArrayList<>(List.of(a0, b0, c0)));
-        frames.add(new ArrayList<>(List.of(a1, b1, c1)));
-        frames.add(new ArrayList<>(List.of(a2, b2)));
-
-        ResidualTransientAnalysis result = CommonMotionRejector.apply(
-                ResidualTransientAnalysis.empty(), frames, new DetectionConfig());
-
-        assertEquals(1, result.commonMotionGroups.size());
-        assertEquals(List.of(c0, c1), flat(frames));
+    public void followsReversingMotionWithoutSkippingTheMiddleFrame() {
+        var frames = frames(path(100,100,new double[]{0,5,1},new double[]{0,0,0}),
+                            path(800,600,new double[]{0,5,1},new double[]{0,0,0}));
+        var groups = CommonMotionRejector.reject(frames,new DetectionConfig());
+        assertEquals(1,groups.size());
+        assertEquals(3,groups.get(0).sharedFrameCount);
+        assertTrue(flat(frames).isEmpty());
     }
 
     @Test
-    public void keepsEverythingWhenTheSwitchIsOff() {
-        ResidualTransientAnalysis.LocalRescueCandidate matchingA = rescue(
-                compact(100, 100, 0), compact(99.5, 99.2, 1), compact(99.2, 98.3, 2));
-        ResidualTransientAnalysis.LocalRescueCandidate matchingB = rescue(
-                compact(2000, 1500, 0), compact(1999.7, 1498.9, 1), compact(1999.3, 1498.1, 2));
-        ResidualTransientAnalysis residual = new ResidualTransientAnalysis(List.of(matchingA, matchingB), List.of());
-        DetectionConfig config = new DetectionConfig();
-        config.enableCommonMotionRejection = false;
-
-        assertSame(residual, CommonMotionRejector.apply(residual, new ArrayList<>(), config));
+    public void keepsAmbiguousConvergingSourcesInsteadOfReusingTheirObservations() {
+        var frames = new ArrayList<List<SourceExtractor.DetectedObject>>();
+        frames.add(new ArrayList<>(List.of(point(100,100,0),point(120,100,0),point(600,100,0),point(1120,100,0))));
+        frames.add(new ArrayList<>(List.of(point(110,100,1),point(610,100,1),point(1110,100,1))));
+        frames.add(new ArrayList<>(List.of(point(135,100,2),point(635,100,2),point(1135,100,2))));
+        assertTrue(CommonMotionRejector.reject(frames,new DetectionConfig()).isEmpty());
+        assertEquals(10,flat(frames).size());
     }
 
     @Test
-    public void doesNotGroupAnElongatedRescue() {
-        ResidualTransientAnalysis.LocalRescueCandidate compactRescue = rescue(
-                compact(100, 100, 0), compact(99.5, 99.2, 1), compact(99.2, 98.3, 2));
-        SourceExtractor.DetectedObject elongated = compact(2000, 1500, 0);
-        elongated.elongation = 6.0;
-        ResidualTransientAnalysis.LocalRescueCandidate streakLike = rescue(
-                elongated, compact(1999.7, 1498.9, 1), compact(1999.3, 1498.1, 2));
-
-        ResidualTransientAnalysis result = CommonMotionRejector.apply(
-                new ResidualTransientAnalysis(List.of(compactRescue, streakLike), List.of()),
-                new ArrayList<>(),
-                new DetectionConfig());
-
-        assertEquals(2, result.localRescueCandidates.size());
-        assertTrue(result.commonMotionGroups.isEmpty());
+    public void compatibilityCallDoesNotExportRescuesTwiceAndRemovesTheirPoints() {
+        var a=path(100,100,new double[]{0,4,1},new double[]{0,0,0});
+        var b=path(800,600,new double[]{0,4,1},new double[]{0,0,0});
+        var residual=new ResidualTransientAnalysis(List.of(rescue(a),rescue(b)),List.of());
+        var frames=frames(a,b);
+        var result=CommonMotionRejector.apply(residual,frames,new DetectionConfig());
+        assertEquals(1,result.commonMotionGroups.size());
+        assertTrue(result.localRescueCandidates.isEmpty());
+        assertTrue(flat(frames).isEmpty());
+        var observations=Collections.newSetFromMap(new IdentityHashMap<SourceExtractor.DetectedObject,Boolean>());
+        for(var group:result.commonMotionGroups)for(var source:group.sources)for(var point:source)assertTrue(observations.add(point));
+        assertSame(result,CommonMotionRejector.apply(result,frames,new DetectionConfig()));
     }
 
+    @Test
+    public void commonMotionIsIndependentOfTheResidualAnalysisSwitch() {
+        var config=new DetectionConfig();config.enableResidualTransientAnalysis=false;
+        var frames=frames(path(100,100,new double[]{0,4,8},new double[]{0,0,0}),
+                          path(800,600,new double[]{0,4,8},new double[]{0,0,0}));
+        assertEquals(1,CommonMotionRejector.reject(frames,config).size());
+        assertTrue(flat(frames).isEmpty());
+        var residual=ResidualTransientAnalyzer.analyze(frames,config);
+        assertTrue(residual.localRescueCandidates.isEmpty());
+        assertTrue(residual.localActivityClusters.isEmpty());
+    }
+
+    @Test
+    public void buildsTheIndependentActivityClusterFromFilteredLeftovers() {
+        var frames=new ArrayList<List<SourceExtractor.DetectedObject>>();
+        frames.add(new ArrayList<>(List.of(point(100,100,0),point(800,600,0),point(110,105,0))));
+        frames.add(new ArrayList<>(List.of(point(104,100,1),point(804,600,1),point(112,109,1))));
+        frames.add(new ArrayList<>(List.of(point(108,100,2),point(808,600,2),point(110,113,2))));
+        var config=new DetectionConfig();config.enableLocalRescueCandidates=false;config.enableLocalActivityClusters=true;
+        assertEquals(1,CommonMotionRejector.reject(frames,config).size());
+        var residual=ResidualTransientAnalyzer.analyze(frames,config);
+        assertEquals(1,residual.localActivityClusters.size());
+        assertEquals(3,residual.localActivityClusters.get(0).points.size());
+        assertEquals(new HashSet<>(flat(frames)),new HashSet<>(residual.localActivityClusters.get(0).points));
+    }
+
+    @Test
+    public void everyGroupMemberMustShareAtLeastThreeOfTheSameFrames() {
+        var a=sparse(100,0,1,2,3);var b=sparse(800,0,1,2,4);var c=sparse(1400,1,2,3,4);
+        var frames=frames(a,b,c);
+        var groups=CommonMotionRejector.reject(frames,new DetectionConfig());
+        assertEquals(1,groups.size());
+        assertEquals(2,groups.get(0).sources.size());
+        assertEquals(3,groups.get(0).sharedFrameCount);
+        assertEquals(new HashSet<>(c),new HashSet<>(flat(frames)));
+    }
+
+    @Test
+    public void toleratesMissingFramesAndDuplicateInputReferences() {
+        var a=sparse(100,0,3,6);var b=sparse(800,0,3,6);
+        var frames=frames(a,b);frames.get(0).add(a.get(0));
+        var groups=CommonMotionRejector.reject(frames,new DetectionConfig());
+        assertEquals(1,groups.size());
+        assertEquals(3,groups.get(0).sharedFrameCount);
+        assertTrue(flat(frames).isEmpty());
+        assertEquals(6,groups.get(0).sources.stream().mapToInt(List::size).sum());
+    }
+
+    @Test
+    public void leavesTheInputAloneWhenDisabledOrWhenOneSourceIsNotCompact() {
+        var config=new DetectionConfig();config.enableCommonMotionRejection=false;
+        var a=path(100,100,new double[]{0,4,8},new double[]{0,0,0});
+        var b=path(800,600,new double[]{0,4,8},new double[]{0,0,0});
+        var frames=frames(a,b);
+        assertTrue(CommonMotionRejector.reject(frames,config).isEmpty());
+        assertEquals(6,flat(frames).size());
+        config.enableCommonMotionRejection=true;b.get(0).elongation=6;
+        assertTrue(CommonMotionRejector.reject(frames,config).isEmpty());
+        assertEquals(6,flat(frames).size());
+    }
+
+    private static List<SourceExtractor.DetectedObject> path(double x,double y,double[] dx,double[] dy) {
+        var out=new ArrayList<SourceExtractor.DetectedObject>();
+        for(int j=0;j<dx.length;j++)out.add(point(x+dx[j],y+dy[j],j));
+        return out;
+    }
+    private static List<SourceExtractor.DetectedObject> sparse(double x,int... indices) {
+        var out=new ArrayList<SourceExtractor.DetectedObject>();
+        for(int frame:indices)out.add(point(x,100,frame));return out;
+    }
+    @SafeVarargs
+    private static List<List<SourceExtractor.DetectedObject>> frames(List<SourceExtractor.DetectedObject>... sources) {
+        int count=Arrays.stream(sources).flatMap(List::stream).mapToInt(p->p.sourceFrameIndex).max().orElse(-1)+1;
+        var out=new ArrayList<List<SourceExtractor.DetectedObject>>();
+        for(int j=0;j<count;j++)out.add(new ArrayList<>());
+        for(var source:sources)for(var p:source)out.get(p.sourceFrameIndex).add(p);
+        return out;
+    }
     private static List<SourceExtractor.DetectedObject> flat(List<List<SourceExtractor.DetectedObject>> frames) {
-        List<SourceExtractor.DetectedObject> all = new ArrayList<>();
-        for (List<SourceExtractor.DetectedObject> frame : frames) {
-            all.addAll(frame);
-        }
-        return all;
+        return frames.stream().flatMap(List::stream).toList();
     }
-
-    private static ResidualTransientAnalysis.LocalRescueCandidate rescue(SourceExtractor.DetectedObject... points) {
-        return new ResidualTransientAnalysis.LocalRescueCandidate(
-                ResidualTransientAnalysis.LocalRescueKind.MICRO_DRIFT,
-                List.of(points),
-                new ResidualTransientAnalysis.LocalTransientMetrics(
-                        points.length, points.length, points.length, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1),
-                1.0);
+    private static ResidualTransientAnalysis.LocalRescueCandidate rescue(List<SourceExtractor.DetectedObject> points) {
+        return new ResidualTransientAnalysis.LocalRescueCandidate(ResidualTransientAnalysis.LocalRescueKind.MICRO_DRIFT,points,
+            new ResidualTransientAnalysis.LocalTransientMetrics(points.size(),points.size(),points.size(),0,1,1,1,0,1,1,1,1,1),1);
     }
-
-    private static SourceExtractor.DetectedObject compact(double x, double y, int frame) {
-        SourceExtractor.DetectedObject object = new SourceExtractor.DetectedObject(x, y, 8, 8);
-        object.pixelArea = 8;
-        object.elongation = 1.3;
-        object.peakSigma = 6;
-        object.sourceFrameIndex = frame;
-        return object;
+    private static SourceExtractor.DetectedObject point(double x,double y,int frame) {
+        var p=new SourceExtractor.DetectedObject(x,y,8,8);p.pixelArea=8;p.elongation=1.3;p.peakSigma=6;p.sourceFrameIndex=frame;return p;
     }
 }

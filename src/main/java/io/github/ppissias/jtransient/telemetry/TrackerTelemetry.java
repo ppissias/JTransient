@@ -23,6 +23,9 @@ public class TrackerTelemetry {
     public int streakTracksFound, pointTracksFound;
     public int anomaliesFound, integratedSigmaAnomaliesFound, suspectedStreakTracksFound;
 
+    /** Faint-fragment assembly wall-clock time; included in tracking, -1 when the pass did not run. */
+    public long faintStreakFragmentTimeMs = -1L;
+
     // --- Phase 3 Star Map Stats ---
     public List<FrameStarMapStat> frameStarMapStats = new ArrayList<>();
     public int totalStationaryStarsPurged = 0;

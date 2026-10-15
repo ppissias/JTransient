@@ -107,7 +107,7 @@ public final class VariableStarAnalyzer {
      * @return analysis result; never null
      */
     public static VariableStarAnalysis analyze(Input input, DetectionConfig config, ExecutorService executor) throws Exception {
-        long start = System.currentTimeMillis();
+        long start = System.nanoTime();
         PipelineTelemetry.PhotometryTelemetry telemetry = new PipelineTelemetry.PhotometryTelemetry();
         PhotometricReadiness readiness = new PhotometricReadiness();
         List<ImageFrame> frames = input.frames;
@@ -376,6 +376,7 @@ public final class VariableStarAnalyzer {
                 exclude(j, stats[j], frameActive, String.format(Locale.US,
                         "Spatial residual %.2f mag", spatial[j].maxOffset));
                 spatialDrops++;
+                telemetry.framesExcludedSpatial++;
                 if (spatialFrames.length() > 0) {
                     spatialFrames.append(',');
                 }
@@ -1343,7 +1344,7 @@ public final class VariableStarAnalyzer {
         telemetry.slopeZeroPointCorrelation = readiness.slopeZeroPointCorrelation;
         telemetry.slopeSkyCorrelation = readiness.slopeSkyCorrelation;
         telemetry.framesFailingResponse = readiness.framesFailingResponse;
-        telemetry.processingTimeMs = System.currentTimeMillis() - start;
+        telemetry.processingTimeMs = (System.nanoTime() - start) / 1_000_000L;
         if (JTransientEngine.DEBUG) {
             System.out.println("DEBUG: Photometry verdict " + readiness.verdict + " " + readiness.messages);
         }

@@ -449,7 +449,8 @@ public class DetectionConfig implements Cloneable {
     // 7. RESIDUAL TRANSIENT ANALYSIS PARAMETERS
     // =================================================================
 
-    /** * Master switch for post-processing leftover non-streak point detections after normal tracking. */
+    /** * Enables local rescue and activity clustering after common-motion filtering.
+     * Does not disable the independently controlled common-motion stage. */
     public boolean enableResidualTransientAnalysis = true;
 
     /** * Enables the object-like local rescue candidate pass over leftover detections. */
@@ -466,7 +467,8 @@ public class DetectionConfig implements Cloneable {
 
     /** * Removes compact sources that share one displacement on at least three frames and sit well apart.
      * This is the pattern of hot pixels or a registration residual. A pair seen in only two frames is kept.
-     * Removed sources are reported as one common-motion group.
+     * Removed sources are reported as one common-motion group. This stage runs before local rescue and
+     * activity clustering, independently of enableResidualTransientAnalysis.
      */
     public boolean enableCommonMotionRejection = true;
 

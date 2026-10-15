@@ -91,6 +91,24 @@ public class VariableStarAnalyzerTest {
         assertEquals(PhotometricReadiness.CheckStatus.PASS, analysis.readiness.shapeLinearityCheck);
         assertEquals(PhotometricReadiness.CheckStatus.PASS, analysis.readiness.responseCheck);
         assertEquals(FRAMES, analysis.frames.size());
+        assertEquals(0, analysis.telemetry.framesExcludedSpatial);
+        List<PipelineTelemetry.Stage> stages = new ArrayList<>(result.telemetry.stageTimeMs.keySet());
+        assertTrue(stages.indexOf(PipelineTelemetry.Stage.COMMON_MOTION) >= 0);
+        assertTrue(stages.indexOf(PipelineTelemetry.Stage.COMMON_MOTION)
+                < stages.indexOf(PipelineTelemetry.Stage.RESIDUAL_ANALYSIS));
+        assertTrue(stages.indexOf(PipelineTelemetry.Stage.RESIDUAL_ANALYSIS)
+                < stages.indexOf(PipelineTelemetry.Stage.PHOTOMETRY));
+        assertTrue(result.telemetry.stageTimeMs.values().stream().mapToLong(Long::longValue).sum()
+                <= result.telemetry.processingTimeMs);
+        assertTrue(result.telemetry.stageTimeMs.get(PipelineTelemetry.Stage.PHOTOMETRY)
+                >= analysis.telemetry.processingTimeMs);
+        assertTrue(result.telemetry.trackerTelemetry.faintStreakFragmentTimeMs >= 0);
+        assertTrue(result.telemetry.trackerTelemetry.faintStreakFragmentTimeMs
+                <= result.telemetry.stageTimeMs.get(PipelineTelemetry.Stage.TRACKING));
+        assertTrue(report.contains("DETECTION STAGE TIMINGS (WALL CLOCK)"));
+        assertTrue(report.contains("included in tracking"));
+        assertTrue(report.contains("spatial residual 0"));
+
         assertTrue("most stars should be measured", analysis.stars.size() > 150);
 
         StarLightCurve variable = nearest(analysis, session.variable);

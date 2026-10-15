@@ -19,6 +19,32 @@ import java.util.Map;
  */
 public class PipelineTelemetry {
 
+    /** Major non-overlapping phases of a full detection run, in execution order. */
+    public enum Stage {
+        DRIFT_ANALYSIS("Frame drift and padding"),
+        SOURCE_EXTRACTION("Source extraction and frame measurements"),
+        QUALITY_FILTERING("Frame quality filtering"),
+        MASTER_REFERENCE("Median master and stationary stars"),
+        MAXIMUM_STACK("Maximum stack"),
+        SLOW_MOVERS("Slow-mover detection"),
+        TRACKING("Star veto, streaks, tracks and anomalies"),
+        COMMON_MOTION("Common-motion filtering"),
+        RESIDUAL_ANALYSIS("Local rescue and activity clustering"),
+        PHOTOMETRY("Variable-star photometry");
+
+        private final String label;
+        Stage(String label) { this.label = label; }
+        public String getLabel() { return label; }
+    }
+
+    /** Wall-clock milliseconds for completed phases; disabled phases are absent. Not worker CPU time. */
+    public final Map<Stage, Long> stageTimeMs = new LinkedHashMap<>();
+
+    /** Records a completed phase from its System.nanoTime() start value. */
+    public void recordStage(Stage stage, long startedNanos) {
+        stageTimeMs.put(stage, Math.max(0L, (System.nanoTime() - startedNanos) / 1_000_000L));
+    }
+
     // --- PHASE 1: Extraction ---
     /** Number of frames submitted to the pipeline before quality rejection. */
     public int totalFramesLoaded = 0;
@@ -249,6 +275,8 @@ public class PipelineTelemetry {
         public int framesExcludedRegistration;
         public int framesExcludedShapeLinearity;
         public int framesExcludedResponse;
+        /** Frames excluded because the residual brightness differs spatially after the ensemble fit. */
+        public int framesExcludedSpatial;
         public int framesExcludedTooFewStars;
 
         /** Measurement flag counters over all stars and frames (one measurement can carry several flags). */
@@ -433,6 +461,21 @@ public class PipelineTelemetry {
             sb.append("\n");
         }
 
+        if (!stageTimeMs.isEmpty()) {
+            sb.append("--- DETECTION STAGE TIMINGS (WALL CLOCK) ---\n");
+            for (Map.Entry<Stage, Long> stage : stageTimeMs.entrySet()) {
+                sb.append(String.format(java.util.Locale.US, "  %s: %.3f seconds\n",
+                        stage.getKey().getLabel(), stage.getValue() / 1000.0));
+                if (stage.getKey() == Stage.TRACKING && trackerTelemetry != null
+                        && trackerTelemetry.faintStreakFragmentTimeMs >= 0) {
+                    sb.append(String.format(java.util.Locale.US,
+                            "    Faint streak fragment assembly: %.3f seconds (included in tracking)\n",
+                            trackerTelemetry.faintStreakFragmentTimeMs / 1000.0));
+                }
+            }
+            sb.append("  Parallel phases are elapsed time, not the sum of worker times. Image loading and report export are outside this total.\n\n");
+        }
+
         if (qualityThresholds.available) {
             sb.append("--- QUALITY CONTROL: SESSION THRESHOLDS ---\n");
             sb.append(String.format(
@@ -508,9 +551,9 @@ public class PipelineTelemetry {
         sb.append(String.format("Stars: %d master, %d selected | Rejected: streak %d, elongated %d, edge/void %d, crowded %d, saturated %d, cap %d | Mostly non-linear: %d, low SNR: %d\n",
                 p.masterStarsConsidered, p.starsSelected, p.starsRejectedStreak, p.starsRejectedElongated,
                 p.starsRejectedEdgeOrVoid, p.starsRejectedCrowded, p.starsRejectedSaturated, p.starsRejectedByCap, p.starsExcludedMostlyNonlinear, p.starsExcludedLowSnr));
-        sb.append(String.format("Frames: %d analysed, %d used | Excluded: registration %d, star shape %d, response %d, too few stars %d\n",
+        sb.append(String.format("Frames: %d analysed, %d used | Excluded: registration %d, star shape %d, spatial residual %d, response %d, too few stars %d\n",
                 p.framesAnalyzed, p.framesUsed, p.framesExcludedRegistration, p.framesExcludedShapeLinearity,
-                p.framesExcludedResponse, p.framesExcludedTooFewStars));
+                p.framesExcludedSpatial, p.framesExcludedResponse, p.framesExcludedTooFewStars));
         sb.append(String.format("Measurements: %d | Saturated %d, non-linear %d, edge/void %d, crossing %d, outlier %d, bad flux %d, contaminated shape %d\n",
                 p.measurementsTotal, p.measurementsSaturated, p.measurementsNonlinear, p.measurementsEdgeOrVoid,
                 p.measurementsCrossing, p.measurementsOutlier, p.measurementsBadFlux, p.measurementsContaminated));

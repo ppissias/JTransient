@@ -57,14 +57,14 @@ public final class ResidualTransientAnalysis {
     public static final class CommonMotionGroup {
         /** One entry per source, ordered by frame. */
         public final List<List<SourceExtractor.DetectedObject>> sources;
-        /** Fewest frames shared by every pair of sources in the group. */
+        /** Number of frames shared by every source in the group. */
         public final int sharedFrameCount;
 
         /**
          * Creates one common-motion group.
          *
          * @param sources detections of each separated source
-         * @param sharedFrameCount fewest frames shared by every pair
+         * @param sharedFrameCount number of frames shared by every source
          */
         public CommonMotionGroup(List<List<SourceExtractor.DetectedObject>> sources, int sharedFrameCount) {
             List<List<SourceExtractor.DetectedObject>> copied = new ArrayList<>();
