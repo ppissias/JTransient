@@ -46,7 +46,7 @@ Status line fields:
 
 SpacePixels refuses to import a folder unless all of the following hold. The FITS checks have
 existed since 2026-10-08 (`FitsSequenceValidator`). The XISF checks and the `BZERO`/`BSCALE`
-comparison were added on 2026-10-17, and the exposure-time check later that day (not committed yet).
+comparison were added on 2026-10-17, and the exposure-time check later that day.
 
 | Rule | FITS | XISF |
 |---|---|---|
@@ -71,7 +71,7 @@ comparison were added on 2026-10-17, and the exposure-time check later that day 
   too high: on Africano the drift padding went unseen (13 single-frame anomalies instead of 2, false
   suspected streak, slow movers and local rescue at the top edge), and on m5-reg every star looked
   saturated to Night & Equipment.
-- **One exposure time (2026-10-17, not committed yet).** The 2 % tolerance is needed because some
+- **One exposure time (2026-10-17).** The 2 % tolerance is needed because some
   cameras record the measured exposure: dc-light-2 has 60.0, 60.1 and 60.2 s. A folder with several
   exposure times, or with only some frames carrying one, is refused. The GUI names the odd frames
   and offers to copy the largest group into a subfolder (for example `_exposure_60s`) and import
