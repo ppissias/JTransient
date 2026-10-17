@@ -6,7 +6,7 @@ the engine integration, and the existing photometry tests. No detection logic wa
 
 ## Scope and input assumptions
 
-This review preserves the assumptions established during the TrackLinker assessment:
+This review preserves the assumptions established during the TrackLinker assessment (now merged into `code-review.md`):
 
 - Frames are chronological, registered images of the same field.
 - Capture timestamps are available for every frame or unavailable for every frame, never mixed.
