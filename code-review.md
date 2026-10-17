@@ -327,6 +327,11 @@ from registration) · **Where:** `SourceExtractor.calculateBackgroundSigmaClippe
   | 25 % | 499 | 57 |
 
 - `FrameDriftAnalyzer` accepts frames with up to 50 % padding.
+- On real frames the effect starts well below 11 %. The three clipping passes stop before they
+  converge once the zeros have widened the first one (XC-4 has the details).
+  - Eagle-noisy: σ 1.2–1.8× too high in frames with 1–8 % fill.
+  - dc-light-2: up to 2.3× at 7 % fill.
+  - Other datasets: hardly affected.
 - The same background drives the thresholds, `peakSigma`, flux and the void test (EX-2).
 
 **Example.**
@@ -1421,8 +1426,8 @@ filters in `SourceExtractor` (`:270–312`); `MasterMapGenerator.createMedianMas
     low, or 0 when more than half have none. Stars there are faint or missing in the star mask.
   - Those stars then appear in the frames that do cover them as transients, anomalies, slow movers
     (they are in the maximum stack but not in the median) and local rescue candidates.
-- When the fill is recognised, the border keeps detection inside the covered area, but it costs a
-  lot of frame:
+- When the fill is recognised, the border keeps detection inside the covered area, apart from the
+  corners of rotated frames (below), but it costs a lot of frame:
   - The border is the deepest fill plus 10 px on all four edges, even edges without fill.
   - The probes stand a whole border width away from the detection, so on the edge with the deepest
     fill the area searched in every frame starts about twice the fill depth in.
@@ -1462,6 +1467,41 @@ filters in `SourceExtractor` (`:270–312`); `MasterMapGenerator.createMedianMas
   - every one at a position with data in only 2–7 of the 16 frames.
 
   The two anomalies that the correct run also found sit where all 16 frames have data.
+
+**What today's strategy does on real data.** Measured with the frames and the reports of earlier
+runs (`TodayCheck.java`, next to `BorderStudy.java`):
+
+- **Per-frame detection:**
+  - On 5 of the 6 drifted datasets, it never looks where a frame lacks data.
+  - On M81-kumar it does, on 0.3 % of the image near two corners (top right and bottom left), with
+    as few as 27 of 41 frames having data. Rotation makes the fill deeper there than in the middle
+    of the edge, where the drift analysis measures it.
+  - The slow-mover search on the maximum stack has the same border.
+  - None of the findings in the existing M81-kumar reports lies in those strips.
+- **Background:** the fill inflates the noise estimate even at a few percent (see EX-1).
+  - Eagle-noisy: 1.2–1.8× in frames with 1–8 % fill.
+  - dc-light-2: up to 2.3×, with 24 of 82 frames at 1.2× or more.
+  - Africano: 1.46× in one frame.
+  - M81-kumar, UG 6524, whynot and klangwolke-1: at most 1.07×.
+
+  The detection threshold scales with it, so frames with more fill are searched less deeply. In
+  Eagle-noisy, quality control rejected frames 42 and 43 (7.3 and 7.8 % fill, noise 1.7× too high)
+  for a low star count.
+- **Photometry uses its own margin, not the detection border:**
+  - It keeps stars at least max(15 px, sky ring + 3 px) from the image edge. The only check on the
+    median stack catches places where more than half the frames have fill.
+  - Stars inside the detection border: 280 of 1,473 (Eagle-noisy), 665 of 6,445 (M81-kumar), 183 of
+    3,752 (whynot), 28 of 520 (UG 6524).
+  - Stars with no data in some frame: 73, 216, 6 and 4.
+  - A measurement is flagged `EDGE_OR_VOID` only when an aperture pixel is below half the sky, or
+    more than half of the sky ring is fill. Measurements with part of the sky ring on the fill are
+    kept.
+  - Three variable candidates lie near the fill (one in Eagle-noisy, two in M81-kumar). Their
+    measurements with the sky ring on the fill stayed within each star's normal scatter. The fill
+    shortened their light curves (by 15 of 44 frames in Eagle-noisy) but didn't create the
+    variability.
+- **Night & Equipment** (SpacePixels) skips a star in a frame only when its cut-out contains an
+  exact 0, so the soft edge is measured.
 
 **Example.**
 
@@ -1538,6 +1578,9 @@ darkness tests.
   area of all frames that registered for the quality metrics (which run before rejection)?
 - **Areas covered by only some frames.** They stay unsearched, as today. Searching them would need
   a median over the covering frames only and a minimum frame count; that could be a later step.
+- **Photometry on stars that only some frames cover** (3–5 % of the stars). Keep them, with gaps in
+  their light curves and flags from each frame's exact data area, or measure only inside the shared
+  area so every light curve is complete?
 
 **Your comments:**
 
@@ -1763,9 +1806,9 @@ works out the engine's current border from the same measurements.
 
 | Dataset | Fill | Soft edge | Data in every frame | … 3 px in | Searched today (every / some frames) | Most limiting frame |
 |---|---|---|---|---|---|---|
-| Eagle-noisy | 7.1 % | 2 px | 88.5 % | 87.6 % | 63.6 % / 73.7 % | +0.5 |
+| Eagle-noisy | 3.4 % | 2 px | 88.5 % | 87.6 % | 63.6 % / 73.7 % | +0.5 |
 | dc-light-2 | 3.7 % | none | 88.1 % | 87.5 % | 68.2 % / 79.1 % | +0.3 |
-| Africano | 14.5 % | 1 px | 90.7 % | 90.2 % | 72.4 % / 81.2 % | +1.8 |
+| Africano | 3.8 % | 1 px | 90.7 % | 90.2 % | 72.4 % / 81.2 % | +1.8 |
 | M81-kumar | 1.8 % | none | 94.3 % | 94.0 % | 78.6 % / 87.0 % | 0.0 |
 | UG 6524-kumar | 1.2 % | none | 94.9 % | 94.5 % | 85.4 % / 90.7 % | 0.0 |
 | whynot | 1.4 % | 1 px | 97.2 % | 96.8 % | 85.5 % / 88.8 % | 0.0 |
@@ -1774,8 +1817,8 @@ works out the engine's current border from the same measurements.
 | Apophis | 0.02 % | — | 99.8 % | 98.6 % | 92.9 % / 93.0 % | 0.0 |
 | Iwamoto and the 9 cropped variable-star sets | none | — | 99.7–100 % | 98.6–99.4 % | 92.7–95.9 % / 93.1–96.0 % | 0.0 |
 
-- **Fill:** the share of all pixels that are registration fill. The cropped sets have only a 1 px
-  dark rim, not 0.
+- **Fill:** the average share of registration fill per frame, leaving out blank frames (2 each in
+  Africano and Eagle-noisy). The cropped sets have only a 1 px dark rim, not 0.
 - **Soft edge:** data pixels next to the fill that are more than 3σ below the sky.
 - **Data in every frame:** the share of the frame where every frame that registered has data.
   "3 px in" moves its edge 3 px inward.
