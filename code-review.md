@@ -30,6 +30,7 @@ Status line fields:
   - *Source:* found by reading the code, not reproduced.
   - *Calculation:* worked out on paper.
   - *Doc:* the documentation disagrees with the code.
+  - *Real data:* measured on the reference datasets (XC-4 only).
 
   None of the probes use real observing data, so how often each issue occurs on real datasets is
   still to be measured.
@@ -45,7 +46,7 @@ Status line fields:
 
 SpacePixels refuses to import a folder unless all of the following hold. The FITS checks have
 existed since 2026-10-08 (`FitsSequenceValidator`). The XISF checks and the `BZERO`/`BSCALE`
-comparison were added on 2026-10-17 and are not committed yet.
+comparison were added on 2026-10-17, and the exposure-time check later that day (not committed yet).
 
 | Rule | FITS | XISF |
 |---|---|---|
@@ -54,13 +55,14 @@ comparison were added on 2026-10-17 and are not committed yet.
 | Same colour layout | same axes, so mono and colour can't be mixed | same channel count and colour space |
 | Same sample type | same `BITPIX`, `BZERO`, `BSCALE` and compression | same `sampleFormat` |
 | Timestamps | every file has a usable observation time, or none has; an unparseable date counts as none | same, from the XISF FITS keywords |
+| Exposure time | every file has the same `EXPTIME` (or `EXPOSURE`) within 2 % (at least 0.1 s), or none has one | same, from the XISF FITS keywords |
 
 - All three import paths apply these checks: the GUI import, the batch API with input preparation,
   and the batch API without it.
 - They run before any conversion, so converting to 16-bit mono can't hide a mixed sequence.
 - Timed sequences are sorted by time, untimed ones by file name.
 - All 20 reference dataset folders pass the new checks.
-- **Unsigned 16-bit only (2026-10-17, not committed yet).** What reaches the engine is always 16-bit
+- **Unsigned 16-bit only (2026-10-17).** What reaches the engine is always 16-bit
   stored as unsigned (`BZERO` 32768, `BSCALE` 1), which is what the engine's `+ 32768` reading
   assumes. The GUI offers to convert signed or scaled 16-bit frames (as it does 32-bit ones), the
   batch command refuses them, and input preparation converts them. Pixels below zero get the same
@@ -69,12 +71,18 @@ comparison were added on 2026-10-17 and are not committed yet.
   too high: on Africano the drift padding went unseen (13 single-frame anomalies instead of 2, false
   suspected streak, slow movers and local rescue at the top edge), and on m5-reg every star looked
   saturated to Night & Equipment.
+- **One exposure time (2026-10-17, not committed yet).** The 2 % tolerance is needed because some
+  cameras record the measured exposure: dc-light-2 has 60.0, 60.1 and 60.2 s. A folder with several
+  exposure times, or with only some frames carrying one, is refused. The GUI names the odd frames
+  and offers to copy the largest group into a subfolder (for example `_exposure_60s`) and import
+  that; the batch command and the API refuse the folder with the same list.
 
 **What the rules don't guarantee.** This matters for several issues below:
 
-- **Exposure metadata.** `EXPTIME`/`EXPOSURE` may be missing, in which case the exposure duration
-  is -1.
-- **Equal exposure lengths.** A session can mix exposure lengths.
+- **Exposure metadata.** `EXPTIME`/`EXPOSURE` may be missing from every frame, in which case the
+  exposure duration is -1. A mix of frames with and without one is refused.
+- **Exactly equal exposure lengths.** Recorded exposures can differ by up to 2 % (at least 0.1 s).
+  Different exposure settings in one session (60 s and 120 s) are refused.
 - **Regular cadence.** Pauses, meridian flips and dropped frames create uneven gaps.
 - **At least three frames after quality control.** Quality control can reduce the session below
   three frames, and nothing checks for it.
@@ -89,9 +97,9 @@ then rescue passes for what is left is the right structure for this problem. The
 careful and conservative.
 
 The import rules remove three of the old TrackLinker findings for SpacePixels (X-1 to X-3).
-Everything else is unchanged by them, apart from three issues that only occur for inputs the rules
-still allow (ST-1, PT-9, IN-3). PT-9 was previously excluded because equal exposure lengths were
-assumed, but the rules don't enforce that.
+Everything else is unchanged by them, apart from two issues that only occur for inputs the rules
+still allow (ST-1, IN-3). PT-9 is excluded for SpacePixels again, since import now requires one
+exposure time; it stays open for other users of the library.
 
 ## All issues at a glance
 
@@ -117,7 +125,7 @@ assumed, but the rules don't enforce that.
 | [PT-6](#pt-6) | Greedy continuation and assignment | Low | No effect | TL extra |
 | [PT-7](#pt-7) | Linker work grows very fast with leftover detections | Low | No effect | TL extra |
 | [PT-8](#pt-8) | Exposure motion limit uses the footprint area | Low | No effect | TL extra |
-| [PT-9](#pt-9) | Start-of-exposure times with mixed exposure lengths | Low | Conditional (was excluded) | TL extra |
+| [PT-9](#pt-9) | Start-of-exposure times with mixed exposure lengths | Low | Excluded for SpacePixels; open for other callers | TL extra |
 | [AN-1](#an-1) | Suspected streaks form from chance alignments | High | No effect | CR-5 |
 | [AN-2](#an-2) | Suspected streak groups lose their seed line | Low | No effect | TL-9 |
 | [AN-3](#an-3) | Suspected streak grouping allocates by largest frame index | Low | No effect | TL extra |
@@ -135,6 +143,7 @@ assumed, but the rules don't enforce that.
 | [XC-1](#xc-1) | Significance numbers assume uncorrelated noise | Low | No effect | CR-12 |
 | [XC-2](#xc-2) | No common estimate of chance alignments (design) | Design | No effect | big picture |
 | [XC-3](#xc-3) | One global background per frame (design) | Design | No effect | big picture |
+| [XC-4](#xc-4) | No session data area: padding is handled by a border and darkness probes | High | No effect | new |
 | [DOC-1](#doc-1) | Documentation that disagrees with the code | Medium | No effect | CR docs |
 | [HY-1](#hy-1) | Dead code and leftover output | Low | No effect | CR-12 / docs |
 | [X-1](#x-1) | One timestamp disables the untimed fallback | — | Excluded | TL-1 |
@@ -334,7 +343,7 @@ from registration) · **Where:** `SourceExtractor.calculateBackgroundSigmaClippe
 
 **Fix direction.** Leave floor-valued pixels out of the histogram, using the same padding
 definition as `FrameDriftAnalyzer` (value ≤ `Short.MIN_VALUE + 8`). Frames without padding are
-unchanged.
+unchanged. XC-4 does this as part of a session data area.
 
 **Your comments:**
 
@@ -391,7 +400,8 @@ unchanged.
     another symptom.
 
 **Fix direction.** One shared, noise-aware padding test used by all four classes, for example "at
-or near the floor value", or "below median − k·σ over a small patch".
+or near the floor value", or "below median − k·σ over a small patch". XC-4 removes the darkness
+test altogether: padding is found from the fill value instead.
 
 **Your comments:**
 
@@ -846,8 +856,9 @@ calibrate on movers.
 <a id="pt-9"></a>
 ### PT-9 · Start-of-exposure times with mixed exposure lengths
 
-**Priority:** Low · **Evidence:** Source · **Import rules:** Conditional. It was excluded in the TL
-review on the assumption of equal exposure lengths, which import doesn't enforce · **Where:**
+**Priority:** Low · **Evidence:** Source · **Import rules:** Excluded for SpacePixels since
+2026-10-17: import requires one exposure time, within 2 %, so the exposure midpoints differ by at
+most 1 % of the exposure (0.6 s at 60 s). Open for other users of the library · **Where:**
 `ImageFrame` timestamps (`DATE-OBS`, usually the exposure start) used directly by the time-based
 linker · **Was:** TL extra
 
@@ -866,7 +877,7 @@ to frame.
 
 **Fix direction.** Two options, both your decision:
 
-- require equal `EXPTIME` at import;
+- require equal `EXPTIME` at import (SpacePixels does this since 2026-10-17);
 - or use `timestamp + exposure / 2` when the exposure length is known.
 
 **Your comments:**
@@ -1384,6 +1395,155 @@ large change. EX-1 removes the worst failure first.
 - Decision: <!-- implement / discuss first / defer / won't fix -->
 - Notes: **Codex assessment:** A genuine limitation for gradients and structured backgrounds, but a larger redesign rather than the prerequisite for every listed fix. Address padding and void handling independently first. A later local mesh must preserve extended emission and propagate local noise consistently; photometry already uses a local sky estimate, so scope this change to the affected extraction paths.
 
+<a id="xc-4"></a>
+### XC-4 · No session data area: padding is handled by a border and darkness probes
+
+**Priority:** High · **Evidence:** Real data (19 reference datasets) and Source · **Import rules:**
+No effect (the fill comes from registration) · **Where:** `FrameDriftAnalyzer`;
+`JTransientEngine.analyzeDitherAndDrift` (`JTransientEngine.java:541–570`); the edge and void
+filters in `SourceExtractor` (`:270–312`); `MasterMapGenerator.createMedianMasterStack`;
+`FrameQualityAnalyzer.evaluateFrame`; `PhotometryStarSelector`, `ApertureMeasurer`,
+`SlowMoverFrameEvidence`; the tuners' `voidProximityRadius = 5` overrides. In SpacePixels:
+`FieldDepth`, `NightEquipment`, `FitsPixelConverter` · **Was:** new (2026-10-17)
+
+**What happens.**
+
+- Registration fills the parts of a frame that the shifted (dithered, drifting or rotated) image
+  doesn't cover. The engine never works out where every frame has data. It protects itself
+  indirectly:
+  - `FrameDriftAnalyzer` measures the deepest fill of any frame on any edge, in the central half of
+    each edge only, and the engine raises `voidProximityRadius` to that depth plus 10 px.
+  - Every detection is then tested with 8 single-pixel probes at that distance. A probe outside
+    the image, or on a pixel at or below half the sky median, rejects it.
+- The protection is needed, because outside the area that every frame covers the stacks are
+  wrong:
+  - The median stack takes the fill's 0 as a value. Where some frames have no data it is biased
+    low, or 0 when more than half have none. Stars there are faint or missing in the star mask.
+  - Those stars then appear in the frames that do cover them as transients, anomalies, slow movers
+    (they are in the maximum stack but not in the median) and local rescue candidates.
+- When the fill is recognised, the border keeps detection inside the covered area, but it costs a
+  lot of frame:
+  - The border is the deepest fill plus 10 px on all four edges, even edges without fill.
+  - The probes stand a whole border width away from the detection, so on the edge with the deepest
+    fill the area searched in every frame starts about twice the fill depth in.
+  - On the six drifted datasets, 10–25 % of the frame has data in every frame but is not searched
+    in every frame (see the table below).
+- Other weaknesses:
+  - Corners of rotated frames can have deeper fill than the central half of the edge, and the 8
+    probes can straddle a fill wedge.
+  - The darkness test misfires when the sky itself is near zero (EX-2).
+  - Each check uses its own padding rule: ≤ 8 ADU for the drift, half the sky median for the probes
+    and photometry, exact zeros in the SpacePixels converter.
+  - Padding also enters the background estimate (EX-1) and the quality metrics. A frame with more
+    fill has fewer stars, and nothing corrects for that.
+  - Raising `voidProximityRadius` changes the caller's config (probe P3, part of IN-1).
+
+**How reliably the data area can be found.** Measured on the 19 monochrome reference datasets
+(dc-large is colour and was left out), every frame read in full. Details in
+[Real-data study of the registration fill](#real-data-study-of-the-registration-fill).
+
+- **The fill is exactly 0 ADU.** In every dataset with fill, 99.98–100 % of the fill pixels are
+  exactly 0. No frame has a constant non-zero fill.
+- **The data area is one run per row and per column**, so it is exact as "first and last data
+  pixel" of every row and column. Two things must not break it:
+  - Dark pixels inside the data area (≤ 8 ADU: cold pixels or clipped noise; up to 2,995 per
+    dataset). A per-pixel darkness rule would punch holes there.
+  - Isolated data pixels inside the fill (up to 11 rows per dataset).
+
+  A run rule handles both: data starts at the first 3 pixels in a row that are not fill.
+- **The soft edge from interpolation is 1–2 px.** The first data pixel next to the fill is
+  −3.4σ (Africano), −7.9σ (whynot) or −18σ and then −3σ (Eagle-noisy) below the sky. After that
+  the profile is flat. The other datasets show no soft edge.
+- **A single frame barely shrinks the common area.** Leaving out the most limiting frame gains at
+  most 1.8 points (Africano), elsewhere 0.5 or less.
+- **It separates the false positives from real findings.** In the earlier `BZERO` 0 copy of
+  Africano, the fill went unrecognised and the run produced 15 findings near the edges:
+  - 11 anomalies on 4 stars, a 5-part suspected streak, 2 slow movers and 1 local rescue;
+  - every one at a position with data in only 2–7 of the 16 frames.
+
+  The two anomalies that the correct run also found sit where all 16 frames have data.
+
+**Example.**
+
+- *Scenario:* Africano, with fill up to 93 px at the top, 64 px on the right, 33 px at the bottom
+  and 3 px on the left.
+- *What happens:*
+  - The engine sets a 103 px border on every edge. It searches 72 % of the frame in every frame and
+    81 % in some.
+  - All frames have data on 90.7 % of the frame (90.2 % with a 3 px margin).
+  - The left edge, which has 3 px of fill, loses 103 px.
+- *Consequence:*
+  - About 9 % of the frame has data in every frame but is never searched, and another 9 % is
+    searched only in some frames.
+  - When the fill isn't recognised (the `BZERO` case, or a tool that fills with another value),
+    nothing protects the areas that only some frames cover.
+
+**Fix direction.** Compute the data area once and use it everywhere instead of the border and the
+darkness tests.
+
+1. **Per-frame data area:**
+   - The fill is a run from the edge of one constant value (0 in all 19 datasets). Detecting any
+     constant also catches a non-zero fill, and fill shifted by a wrong `BZERO`.
+   - Data starts at the first 3 pixels that differ from the fill.
+   - Store the first and last data pixel of every row and column (about 130 KB per 61-megapixel
+     frame). `FrameDriftAnalyzer` already reads every frame row by row, so the cost is negligible.
+2. **Session data area:**
+   - The intersection over the kept frames, moved 3 px in from its edge (the soft edge plus 1 px).
+   - Frames that fail registration (under half data) stay out.
+   - The report names a frame that alone removes more than a few percent of the area.
+3. **Use it everywhere:**
+   - Detection: keep an object when its pixels lie inside the session area. This replaces the edge
+     margin, the probes and the drift-raised radius, so each edge gets its own limit.
+   - The background and the quality metrics are measured inside the area (this closes EX-1). Star
+     counts become comparable between frames with different fill.
+   - Master stars, slow movers (maximum and median stack), photometry star selection,
+     `EDGE_OR_VOID`, slow-mover frame evidence and the tuners' crops use the area. This removes
+     the darkness test, so the padding part of EX-2 goes away.
+   - `PipelineResult` exposes the area, so SpacePixels can draw it in the report (the Overview
+     picture and the track map) and use it in Night & Equipment and `FieldDepth`.
+4. **Settings to retire or review:**
+
+   | Setting or constant | Today | With a data area |
+   |---|---|---|
+   | `voidProximityRadius` (20, raised to deepest fill + 10) | Ring of 8 probes around each detection | Obsolete. A fixed internal margin (3 px) replaces it. |
+   | `voidThresholdFraction` (0.5) | Darkness = no data, in extraction, photometry and slow-mover evidence | Obsolete. Nothing else uses it. |
+   | `edgeMarginPixels` (15) | No effect on detection; lower bound for the photometry margin and the tuner crop | Obsolete. The image edge is part of the area's edge. |
+   | `FrameDriftAnalyzer` radius recommendation (`VOID_RADIUS_SAFETY_PIXELS`, `recommendedVoidProximityRadius`, `maxPaddingPixels`) | Raises the border | Obsolete. The drift points stay, for the dither map and SM-1. |
+   | `FrameDriftAnalyzer` 50 % valid-area rule | Failed registrations | Keep. Failed frames must not shrink the area. |
+   | Tuner and master-star overrides (`voidProximityRadius = 5`, `edgeMarginPixels = 5`) | Ad hoc limits for crops and the master | Use the area of the crop or the master. |
+   | SpacePixels `FieldDepth` reset of the void radius and edge margin | Workaround for cut-outs | Obsolete. |
+   | SpacePixels `NightEquipment` boxes with a pixel ≤ `SPOFFSET` | Fill or sky near zero counts as empty | Use the area. Keep the near-zero sky rule. |
+   | SpacePixels `FitsPixelConverter` zero runs at row ends | Keeps the fill at 0 when adding an offset | Same fill definition as the engine. |
+
+   The three settings are in every saved profile. Removing them uses the existing one-time profile
+   migration, plus `CONFIG.md` and `default_detection_profile.json`.
+5. **Order and checks.** One engine step at a time, each with a regression on the reference
+   datasets:
+   1. Compute and export the area. No detection change; SpacePixels draws it.
+   2. Detection filter. New findings are expected only between the old border and the area's edge,
+      and are checked one by one.
+   3. Background and quality metrics (EX-1).
+   4. Photometry and slow-mover evidence.
+   5. Remove the settings.
+
+   A synthetic test covers what the datasets don't have: rotated frames (wedge fill), a non-zero
+   fill and a frame shifted by 40 %.
+
+**Open questions:**
+
+- **Every frame or most frames.** The data favour "every kept frame": the worst single frame costs
+  1.8 points. Should a frame that alone removes much more be flagged in the report, or rejected by
+  quality control?
+- **Which frames.** Use the area of the frames kept after quality control for detection, and the
+  area of all frames that registered for the quality metrics (which run before rejection)?
+- **Areas covered by only some frames.** They stay unsearched, as today. Searching them would need
+  a median over the covering frames only and a minimum frame count; that could be a later step.
+
+**Your comments:**
+
+- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Notes:
+
 ---
 
 ## Documentation and hygiene
@@ -1548,7 +1708,8 @@ Most issues come back to five themes:
    - list position versus sequence index (RS-2, PT-1);
    - pixels versus pixel² (ST-2);
    - the √2 FWHM (EX-3).
-4. **Two definitions of padding** (EX-2).
+4. **No session data area** (XC-4). Padding is handled by a border and several darkness tests,
+   each with its own definition (EX-1, EX-2).
 5. **Coupling between stages:** `maxStarJitter` has several roles (PT-5), and photometry depends on
    detection outputs (PH-1).
 
@@ -1568,6 +1729,9 @@ Engine fixes go one at a time, each with a real-data regression:
 7. PT-1, rhythm with real frame gaps.
 8. PT-2 and PT-3, whole-track checks for time-based tracks.
 9. DOC-1, at any time, as one "Update docs" commit.
+
+If XC-4 is accepted, it replaces items 2 and 3: EX-1 becomes its step 3, and the padding part of
+EX-2 its steps 2 and 4.
 
 After those:
 
@@ -1590,6 +1754,41 @@ repositories. It uses synthetic inputs and calls the real library classes. It wa
 | P4 | Point mover, 12 frames, 0.25 px noise, with and without timestamps | geometric only: 154 / 200 at 3 px per frame, ≥ 198 at 10+; timed: 200 / 200 | PT-4 |
 | P5 | Suspected streaks from random anomalies in one frame | 4 % of frames with 4 anomalies, 49 % with 10, 100 % with 20 | AN-1 |
 | P6 | Common motion on two stationary leftovers 800 px apart | 2 local rescue candidates → 0 | RS-1 |
+
+### Real-data study of the registration fill
+
+`BorderStudy.java` (session scratchpad `ffcaa988…/border`, outside both repositories) reads every
+frame of the 19 monochrome reference datasets on 2026-10-17. It applies the run rule from XC-4 and
+works out the engine's current border from the same measurements.
+
+| Dataset | Fill | Soft edge | Data in every frame | … 3 px in | Searched today (every / some frames) | Most limiting frame |
+|---|---|---|---|---|---|---|
+| Eagle-noisy | 7.1 % | 2 px | 88.5 % | 87.6 % | 63.6 % / 73.7 % | +0.5 |
+| dc-light-2 | 3.7 % | none | 88.1 % | 87.5 % | 68.2 % / 79.1 % | +0.3 |
+| Africano | 14.5 % | 1 px | 90.7 % | 90.2 % | 72.4 % / 81.2 % | +1.8 |
+| M81-kumar | 1.8 % | none | 94.3 % | 94.0 % | 78.6 % / 87.0 % | 0.0 |
+| UG 6524-kumar | 1.2 % | none | 94.9 % | 94.5 % | 85.4 % / 90.7 % | 0.0 |
+| whynot | 1.4 % | 1 px | 97.2 % | 96.8 % | 85.5 % / 88.8 % | 0.0 |
+| klangwolke-1 | 0.6 % | none | 99.1 % | 98.9 % | 96.5 % / 97.5 % | 0.0 |
+| klangwolde-2 | 0.04 % | none | 99.6 % | 99.4 % | 98.6 % / 99.0 % | +0.1 |
+| Apophis | 0.02 % | — | 99.8 % | 98.6 % | 92.9 % / 93.0 % | 0.0 |
+| Iwamoto and the 9 cropped variable-star sets | none | — | 99.7–100 % | 98.6–99.4 % | 92.7–95.9 % / 93.1–96.0 % | 0.0 |
+
+- **Fill:** the share of all pixels that are registration fill. The cropped sets have only a 1 px
+  dark rim, not 0.
+- **Soft edge:** data pixels next to the fill that are more than 3σ below the sky.
+- **Data in every frame:** the share of the frame where every frame that registered has data.
+  "3 px in" moves its edge 3 px inward.
+- **Searched today:** where the current border and probes accept a detection in every frame, and
+  in at least one frame. Worked out from the measured fill, not from detection runs.
+- **Most limiting frame:** how many points the common area grows when that one frame is left out.
+- In every dataset with fill, 99.98–100 % of the fill pixels are exactly 0 ADU. No frame starts a
+  row with a constant non-zero run.
+- Dark pixels inside the data area: up to 2,995 per dataset, in up to 803 rows (dc-light-2), all
+  isolated. Data pixels inside the fill: up to 11 rows per dataset.
+- Africano, positions of the 15 edge findings of the `BZERO` 0 run: data in 7, 6, 2, 2, 2, 2, 2 and
+  7 of 16 frames (961,52; 1222,47; 1374,28; 2173,31; 1124,31; 2239,33; 723,27; 2565,61). The two
+  anomalies that the correct run also found (1670,676 and 1373,1627): 16 of 16.
 
 ### Reproductions from the TrackLinker review (2026-10-09)
 
