@@ -28,8 +28,8 @@ import java.util.List;
  */
 public class JTransientAutoTuner {
 
-    /** Enables verbose console diagnostics for the tuning process. */
-    public static boolean DEBUG = true;
+    /** Enables verbose console diagnostics for the tuning process; off by default, so the library prints nothing. */
+    public static boolean DEBUG = false;
 
     // =========================================================================
     // AUTO-TUNER CONSTRAINTS

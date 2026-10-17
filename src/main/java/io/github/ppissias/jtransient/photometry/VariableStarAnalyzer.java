@@ -384,7 +384,9 @@ public final class VariableStarAnalyzer {
             }
         }
         if (spatialDrops > 0) {
-            System.out.println("SPATIAL_FRAMES dropped=" + spatialDrops + " frames=" + spatialFrames);
+            if (JTransientEngine.DEBUG) {
+                System.out.println("SPATIAL_FRAMES dropped=" + spatialDrops + " frames=" + spatialFrames);
+            }
             usable = usableMatrix(mag, flags, starExcluded, frameActive);
             solution = EnsembleSolver.solve(mag, usable, xNorm, yNorm, frameActive, config.photometryFitPlane);
             excludeUnsolvedFrames(solution, stats, frameActive, telemetry);
