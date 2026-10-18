@@ -190,11 +190,27 @@ public class SourceExtractor {
      * @return extracted objects and background statistics
      */
     public static ExtractionResult extractSources(short[][] image, double sigmaMultiplier, int minPixels, DetectionConfig config) {
+        return extractSources(image, sigmaMultiplier, minPixels, config, null);
+    }
+
+    /**
+     * Runs the detection pipeline on a single frame, measuring the sky only inside the given area (the part of the
+     * frame where every frame of the session has image data), so registration fill doesn't distort it.
+     *
+     * @param image input frame
+     * @param sigmaMultiplier seed threshold multiplier used for this extraction pass
+     * @param minPixels minimum footprint size required to keep an object
+     * @param config pipeline configuration containing grow and artifact filters
+     * @param backgroundArea where the sky is measured, or null for the whole frame
+     * @return extracted objects and background statistics
+     */
+    public static ExtractionResult extractSources(short[][] image, double sigmaMultiplier, int minPixels, DetectionConfig config,
+                                                  DataArea backgroundArea) {
         int height = image.length;
         int width = image[0].length;
 
         // 1. Calculate Background
-        BackgroundMetrics bg = calculateBackgroundSigmaClipped(image, width, height, sigmaMultiplier, config);
+        BackgroundMetrics bg = calculateBackgroundSigmaClipped(image, width, height, sigmaMultiplier, config, backgroundArea);
 
         if (JTransientEngine.DEBUG) {
             System.out.printf("BACKGROUND STATS -> Median: %.2f | Sigma: %.2f | Seed Thresh: %.2f | Grow Thresh: %.2f%n",
@@ -340,11 +356,25 @@ public class SourceExtractor {
      * @return background median, sigma, and derived threshold
      */
     public static BackgroundMetrics calculateBackgroundSigmaClipped(short[][] image, int width, int height, double sigmaMultiplier, DetectionConfig config) {
+        return calculateBackgroundSigmaClipped(image, width, height, sigmaMultiplier, config, null);
+    }
+
+    /**
+     * Histogram-based background estimation using iterative sigma clipping, on the pixels inside an area only.
+     *
+     * @param area where the sky is measured, or null for the whole frame; an empty area also measures the whole frame
+     * @see #calculateBackgroundSigmaClipped(short[][], int, int, double, DetectionConfig)
+     */
+    public static BackgroundMetrics calculateBackgroundSigmaClipped(short[][] image, int width, int height, double sigmaMultiplier,
+                                                                    DetectionConfig config, DataArea area) {
         BackgroundMetrics metrics = new BackgroundMetrics();
         int[] histogram = new int[65536];
 
+        boolean inArea = area != null && area.getPixelCount() > 0 && area.getWidth() == width && area.getHeight() == height;
         for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width; x++) {
+            int fromX = inArea ? area.getRowStart(y) : 0;
+            int toX = inArea ? area.getRowEnd(y) : width - 1;
+            for (int x = fromX; x <= toX; x++) {
                 int val = PixelEncoding.toShiftedPositiveInt(image[y][x]);
                 histogram[val]++;
             }

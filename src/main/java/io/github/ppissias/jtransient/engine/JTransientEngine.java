@@ -33,7 +33,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
@@ -57,6 +59,13 @@ public class JTransientEngine implements AutoCloseable {
 
     /** Global debug switch shared by the core library. */
     public static boolean DEBUG = false;
+
+    /**
+     * A frame is rejected when leaving it out would enlarge the area where every frame has image data by at least
+     * this share of the frame: it is shifted far from the others, and keeping it would cost every other frame that
+     * much sky. The worst frame of the reference datasets costs 1.8 %.
+     */
+    static final double MAX_SINGLE_FRAME_AREA_LOSS = 0.05;
 
     private final ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(1);
 
@@ -172,7 +181,8 @@ public class JTransientEngine implements AutoCloseable {
         DetectionConfig stageConfig = config.clone();
         PipelineTelemetry telemetry = new PipelineTelemetry();
         inputFrames.sort(Comparator.comparingInt(f -> f.sequenceIndex));
-        analyzeDitherAndDrift(inputFrames, stageConfig, null, telemetry);
+        FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = analyzeDitherAndDrift(inputFrames, stageConfig, null, telemetry);
+        QualityArea quality = qualityArea(driftAnalysis.frameCoverages, telemetry);
 
         List<Callable<FrameExtractionResult>> tasks = new ArrayList<>();
 
@@ -182,7 +192,7 @@ public class JTransientEngine implements AutoCloseable {
         for (ImageFrame frame : inputFrames) {
             tasks.add(() -> {
                 // We only need quality metrics to drop outliers. We skip SourceExtractor to save massive CPU time!
-                FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData, stageConfig);
+                FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData, stageConfig, quality.area);
                 metrics.filename = frame.filename;
 
                 synchronized (framesCompleted) { // keeps the reported progress in order across threads
@@ -213,7 +223,7 @@ public class JTransientEngine implements AutoCloseable {
             listener.onProgressUpdate(55, "Filtering outlier frames...");
         }
 
-        rejectUnusableFrames(sessionMetrics, inputFrames, telemetry.driftExcludedFrames, stageConfig);
+        rejectUnusableFrames(sessionMetrics, inputFrames, telemetry.driftExcludedFrames, quality.coverageOutliers, stageConfig);
 
         List<ImageFrame> cleanFrames = new ArrayList<>();
         List<Integer> keptFrames = new ArrayList<>();
@@ -368,6 +378,7 @@ public class JTransientEngine implements AutoCloseable {
         long stageStartedNanos = System.nanoTime();
         FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = analyzeDitherAndDrift(inputFrames, config, listener, telemetry);
         List<SourceExtractor.Pixel> driftPoints = new ArrayList<>(driftAnalysis.driftPoints);
+        QualityArea quality = qualityArea(driftAnalysis.frameCoverages, telemetry);
         telemetry.recordStage(PipelineTelemetry.Stage.DRIFT_ANALYSIS, stageStartedNanos);
         stageStartedNanos = System.nanoTime();
 
@@ -387,7 +398,8 @@ public class JTransientEngine implements AutoCloseable {
                         frame.pixelData,
                         config.detectionSigmaMultiplier,
                         config.minDetectionPixels,
-                        config
+                        config,
+                        quality.area
                 );
                 List<SourceExtractor.DetectedObject> objectsInFrame = extResult.objects;
 
@@ -399,7 +411,7 @@ public class JTransientEngine implements AutoCloseable {
                 }
 
                 // 2. Quality Metrics (Passing config down)
-                FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData, config);
+                FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData, config, quality.area);
                 metrics.filename = frame.filename;
 
                 // Safely update progress from multiple threads (Mapping Phase 1 to 0-40% of the total bar)
@@ -457,7 +469,7 @@ public class JTransientEngine implements AutoCloseable {
 
         // Pass the config down to the evaluator
         SessionEvaluator.SessionThresholds sessionThresholds =
-                rejectUnusableFrames(sessionMetrics, inputFrames, telemetry.driftExcludedFrames, config);
+                rejectUnusableFrames(sessionMetrics, inputFrames, telemetry.driftExcludedFrames, quality.coverageOutliers, config);
         telemetry.qualityThresholds.available = sessionThresholds.available;
         telemetry.qualityThresholds.minAllowedStarCount = sessionThresholds.minAllowedStarCount;
         telemetry.qualityThresholds.maxAllowedFwhm = sessionThresholds.maxAllowedFwhm;
@@ -523,29 +535,76 @@ public class JTransientEngine implements AutoCloseable {
 
     /**
      * The frame selection of the quality stage, shared by the full pipeline and {@link #generateMasterStack}: marks
-     * the session outliers (quality settings) and the blank or failed-registration frames found by the drift
-     * analysis as rejected.
+     * the session outliers (quality settings), the blank or failed-registration frames found by the drift analysis,
+     * and the frames that alone shrink the common data area a lot, as rejected. The last two reasons take precedence:
+     * they are the cause when such a frame also fails the session statistics.
      *
      * @param sessionMetrics per-frame quality metrics, in the order of {@code inputFrames}; updated in place
      * @param inputFrames the frames, sorted by sequence index
      * @param driftExcludedFrames sequence indices of blank or failed-registration frames
+     * @param coverageOutliers rejection reasons of the frames that alone shrink the common data area, by sequence index
      * @return the session thresholds used for the outlier rejection
      */
     private static SessionEvaluator.SessionThresholds rejectUnusableFrames(List<FrameQualityAnalyzer.FrameMetrics> sessionMetrics,
                                                                           List<ImageFrame> inputFrames,
                                                                           Collection<Integer> driftExcludedFrames,
+                                                                          Map<Integer, String> coverageOutliers,
                                                                           DetectionConfig config) {
         SessionEvaluator.SessionThresholds thresholds = SessionEvaluator.rejectOutlierFrames(sessionMetrics, config);
         for (int i = 0; i < sessionMetrics.size(); i++) {
             FrameQualityAnalyzer.FrameMetrics metrics = sessionMetrics.get(i);
-            if (!metrics.isRejected && driftExcludedFrames.contains(inputFrames.get(i).sequenceIndex)) {
+            int sequenceIndex = inputFrames.get(i).sequenceIndex;
+            if (driftExcludedFrames.contains(sequenceIndex)) {
                 // A partly blank frame can keep enough stars to pass the session statistics, but its sky does
                 // not match the other frames.
                 metrics.isRejected = true;
                 metrics.rejectionReason = "Blank or failed registration (less than half of the pixels hold image data)";
+            } else if (coverageOutliers.containsKey(sequenceIndex)) {
+                metrics.isRejected = true;
+                metrics.rejectionReason = coverageOutliers.get(sequenceIndex);
             }
         }
         return thresholds;
+    }
+
+    /** The area where every registered frame has image data, and the frames rejected for shrinking it a lot. */
+    private static final class QualityArea {
+        /** Where the sky and the quality metrics are measured; null when no frame passed the drift analysis. */
+        final DataArea area;
+        /** Rejection reasons by sequence index. */
+        final Map<Integer, String> coverageOutliers;
+
+        private QualityArea(DataArea area, Map<Integer, String> coverageOutliers) {
+            this.area = area;
+            this.coverageOutliers = coverageOutliers;
+        }
+    }
+
+    /**
+     * The area where every registered frame has image data. A frame that alone shrinks it by at least
+     * {@link #MAX_SINGLE_FRAME_AREA_LOSS} of the frame is left out and rejected, one at a time and at most a tenth of
+     * the frames; a group of frames shifted together is the session's real coverage and stays.
+     *
+     * @param coverages coverage of every frame that passed the drift analysis
+     */
+    private static QualityArea qualityArea(List<FrameCoverage> coverages, PipelineTelemetry telemetry) {
+        List<FrameCoverage> frames = new ArrayList<>(coverages);
+        Map<Integer, String> outliers = new LinkedHashMap<>();
+        int maxOutliers = Math.max(1, frames.size() / 10);
+        while (frames.size() > 2 && outliers.size() < maxOutliers) {
+            List<DataArea.FrameLimit> limits = DataArea.limitingFrames(frames);
+            if (limits.isEmpty() || limits.get(0).gainedFraction < MAX_SINGLE_FRAME_AREA_LOSS) {
+                break;
+            }
+            DataArea.FrameLimit worst = limits.get(0);
+            outliers.put(worst.sequenceIndex, String.format(Locale.US,
+                    "Shifted away from the other frames (without it, every frame has image data on %.1f %% more of the frame)",
+                    100 * worst.gainedFraction));
+            frames.removeIf(frame -> frame.getSequenceIndex() == worst.sequenceIndex);
+        }
+        DataArea area = frames.isEmpty() ? null : DataArea.of(frames);
+        telemetry.qualityAreaFraction = area == null ? Double.NaN : area.getFraction();
+        return new QualityArea(area, outliers);
     }
 
     /**

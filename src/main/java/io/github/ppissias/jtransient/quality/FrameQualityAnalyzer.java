@@ -10,6 +10,7 @@
 package io.github.ppissias.jtransient.quality;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 
 import java.util.ArrayList;
@@ -67,6 +68,19 @@ public class FrameQualityAnalyzer {
      * @return measured frame metrics
      */
     public static FrameMetrics evaluateFrame(short[][] imageData, DetectionConfig config) {
+        return evaluateFrame(imageData, config, null);
+    }
+
+    /**
+     * Extracts the quality metrics inside an area: the sky is measured there and only stars centred there are
+     * counted and measured, so frames with different registration fill are compared on the same part of the sky.
+     *
+     * @param imageData frame pixels to analyze
+     * @param config pipeline configuration supplying quality thresholds
+     * @param area where every frame of the session has image data, or null for the whole frame
+     * @return measured frame metrics
+     */
+    public static FrameMetrics evaluateFrame(short[][] imageData, DetectionConfig config, DataArea area) {
         FrameMetrics metrics = new FrameMetrics();
         DetectionConfig qualityConfig = config.clone();
         qualityConfig.growSigmaMultiplier = config.qualityGrowSigmaMultiplier;
@@ -77,12 +91,16 @@ public class FrameQualityAnalyzer {
                         imageData,
                         config.qualitySigmaMultiplier,
                         config.qualityMinDetectionPixels,
-                        qualityConfig
+                        qualityConfig,
+                        area
                 ).objects;
+        if (area != null && area.getPixelCount() > 0) {
+            objects.removeIf(object -> !area.contains(object.x, object.y));
+        }
 
         // 2. Calculate the background using the same strict parameter
         SourceExtractor.BackgroundMetrics bg = SourceExtractor.calculateBackgroundSigmaClipped(
-                imageData, imageData[0].length, imageData.length, config.qualitySigmaMultiplier, config);
+                imageData, imageData[0].length, imageData.length, config.qualitySigmaMultiplier, config, area);
 
         metrics.backgroundMedian = bg.median;
         metrics.backgroundNoise = bg.sigma;

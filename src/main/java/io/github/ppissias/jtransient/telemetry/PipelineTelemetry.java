@@ -135,6 +135,11 @@ public class PipelineTelemetry {
         /** Share of the frame the data area would gain without this frame, from 0 to 1. */
         public double gainedFraction;
     }
+    /**
+     * Share of the frame where every registered frame has image data, leaving out frames rejected because they alone
+     * shrink it a lot; the sky and the quality metrics are measured there. NaN when not measured.
+     */
+    public double qualityAreaFraction = Double.NaN;
     /** Share of the frame where every kept frame has image data (the session data area), or NaN when not measured. */
     public double dataAreaFraction = Double.NaN;
     /** Kept frames that limit the data area, the largest gain first. */
