@@ -218,6 +218,30 @@ public class TrackLinkerStreakConsolidationTest {
         }
     }
 
+    /**
+     * Two fragments of one trail at x = 40 and x = 240 average to x = 140. An unrelated streak at x = 140.1 in the next
+     * frame has moved 0.1 px along the line, which must not count as motion (the step used to be multiplied by the
+     * 200 px axis).
+     */
+    @Test
+    public void findMovingObjectsDoesNotMergeAStreakThatBarelyMovesAlongTheAxis() {
+        DetectionConfig config = new DetectionConfig();
+        SourceExtractor.DetectedObject left = createStreak(40.0, 40.0, 0, 0.0, 12.0, 0L);
+        SourceExtractor.DetectedObject right = createStreak(240.0, 40.0, 0, 0.0, 12.0, 0L);
+        SourceExtractor.DetectedObject unrelated = createStreak(140.1, 40.0, 1, 0.0, 12.0, 120_000L);
+
+        List<List<SourceExtractor.DetectedObject>> frames = List.of(
+                List.of(left, right), List.of(unrelated), new ArrayList<>());
+        TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
+                frames, new ArrayList<>(), config, null, 300, 100);
+
+        for (TrackLinker.Track track : result.tracks) {
+            boolean hasFirstFrame = track.points.contains(left) || track.points.contains(right);
+            assertFalse("the streak of frame 1 joined the fragments of frame 0",
+                    hasFirstFrame && track.points.contains(unrelated));
+        }
+    }
+
     private static SourceExtractor.DetectedObject createStreak(double x,
                                                                double y,
                                                                int frameIndex,

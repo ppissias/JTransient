@@ -1517,8 +1517,13 @@ public class TrackLinker {
             return true;
         }
 
-        double dx = lineEnd.x - lineStart.x;
-        double dy = lineEnd.y - lineStart.y;
+        // A unit axis, so the projected steps are in pixels like the minimum step.
+        double axisLength = Math.hypot(lineEnd.x - lineStart.x, lineEnd.y - lineStart.y);
+        if (!(axisLength > 0.0)) {
+            return false;
+        }
+        double dx = (lineEnd.x - lineStart.x) / axisLength;
+        double dy = (lineEnd.y - lineStart.y) / axisLength;
         double minimumProjectedStep = Math.max(0.5, config.maxStarJitter * 0.5);
         double directionSign = 0.0;
         List<Double> projectedSpeeds = new ArrayList<>();
