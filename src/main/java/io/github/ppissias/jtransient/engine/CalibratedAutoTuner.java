@@ -10,6 +10,7 @@
 package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.FrameDriftAnalyzer;
 import io.github.ppissias.jtransient.core.MasterMapGenerator;
 import io.github.ppissias.jtransient.core.PixelEncoding;
@@ -95,6 +96,8 @@ public final class CalibratedAutoTuner {
     /** Largest border kept clear of the frame edges; the actual border is the measured drift padding plus
      * {@link #CROP_PADDING_CLEARANCE}, at least {@link #MIN_CROP_BORDER_MARGIN}. */
     public static int CROP_BORDER_MARGIN = 200;
+    /** Synthetic stars are injected at least this far from a crop's edge, in pixels. */
+    private static final int INJECTION_MARGIN = 30;
     public static int MIN_CROP_BORDER_MARGIN = 50;
     public static int CROP_PADDING_CLEARANCE = 50;
 
@@ -461,13 +464,23 @@ public final class CalibratedAutoTuner {
             }
             int margin = Math.min(CROP_BORDER_MARGIN,
                     Math.max(MIN_CROP_BORDER_MARGIN, driftAnalysis.maxPaddingPixels + CROP_PADDING_CLEARANCE));
-            List<int[]> crops = cropRegions(width, height, margin);
+            List<int[]> crops = new ArrayList<>(cropRegions(width, height, margin));
             if (crops.isEmpty()) {
                 calibration.failureReason = "Frames are too small for tuning crops.";
                 return calibration;
             }
+            // A crop must lie where every frame has image data (the corners of rotated frames can reach further in).
+            DataArea poolArea = driftAnalysis.frameCoverages.isEmpty() ? null : DataArea.of(driftAnalysis.frameCoverages);
+            if (poolArea != null) {
+                crops.removeIf(crop -> !insideArea(poolArea, crop));
+                if (crops.isEmpty()) {
+                    calibration.failureReason = "No tuning crop fits where every frame has image data.";
+                    return calibration;
+                }
+            }
             int cropSize = crops.get(0)[2];
-            // On small frames the crops overlap; every pixel is counted in one crop only.
+            // On small frames the crops overlap; every pixel is counted in one crop only. Objects are found up to
+            // DataArea.MARGIN px from a crop's edge, so the rates are per searchable pixel.
             BitSet[] owned = cropOwnership(crops, cropSize);
             double[] ownedMpix = new double[crops.size()];
             double ownedMpixPerFrame = 0;
@@ -735,8 +748,7 @@ public final class CalibratedAutoTuner {
         cfg.detectionSigmaMultiplier = STREAK_PASS_SIGMA;
         cfg.growSigmaMultiplier = STREAK_PASS_GROW;
         BitSet streaks = new BitSet(size * size);
-        for (SourceExtractor.DetectedObject obj
-                : SourceExtractor.extractSources(image, STREAK_PASS_SIGMA, cfg.minDetectionPixels, cfg).objects) {
+        for (SourceExtractor.DetectedObject obj : extractInCrop(image, STREAK_PASS_SIGMA, cfg.minDetectionPixels, cfg)) {
             if (!obj.isStreak || obj.rawPixels == null || obj.rawPixels.isEmpty()) continue;
             int inStars = 0;
             for (SourceExtractor.Pixel p : obj.rawPixels) {
@@ -750,20 +762,35 @@ public final class CalibratedAutoTuner {
         return dilate(streaks, size, radius);
     }
 
-    /** Pixels of every crop that no earlier crop covers. */
+    /** Whether a square crop {x, y, size} lies inside the area. */
+    private static boolean insideArea(DataArea area, int[] crop) {
+        for (int y = crop[1]; y < crop[1] + crop[2]; y++) {
+            if (!area.contains(crop[0], y) || !area.contains(crop[0] + crop[2] - 1, y)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * Pixels of every crop that no earlier crop covers, leaving out the {@link DataArea#MARGIN} px next to the crop's
+     * edge where no object can be found.
+     */
     private static BitSet[] cropOwnership(List<int[]> crops, int cropSize) {
         BitSet[] owned = new BitSet[crops.size()];
+        int margin = DataArea.MARGIN;
         for (int c = 0; c < crops.size(); c++) {
             int[] crop = crops.get(c);
             owned[c] = new BitSet(cropSize * cropSize);
-            for (int y = 0; y < cropSize; y++) {
-                for (int x = 0; x < cropSize; x++) {
+            for (int y = margin; y < cropSize - margin; y++) {
+                for (int x = margin; x < cropSize - margin; x++) {
                     int gx = crop[0] + x;
                     int gy = crop[1] + y;
                     boolean earlier = false;
                     for (int e = 0; e < c && !earlier; e++) {
                         int[] other = crops.get(e);
-                        earlier = gx >= other[0] && gx < other[0] + cropSize && gy >= other[1] && gy < other[1] + cropSize;
+                        earlier = gx >= other[0] + margin && gx < other[0] + cropSize - margin
+                                && gy >= other[1] + margin && gy < other[1] + cropSize - margin;
                     }
                     if (!earlier) owned[c].set(y * cropSize + x);
                 }
@@ -940,12 +967,29 @@ public final class CalibratedAutoTuner {
     }
 
     private static Detection[] extract(short[][] image, FrameSetting fs, DetectionConfig cfg, int width) {
-        List<SourceExtractor.DetectedObject> objects = SourceExtractor.extractSources(image, fs.sigma, fs.minPixels, cfg).objects;
+        List<SourceExtractor.DetectedObject> objects = extractInCrop(image, fs.sigma, fs.minPixels, cfg);
         Detection[] out = new Detection[objects.size()];
         for (int i = 0; i < out.length; i++) {
             out[i] = new Detection(objects.get(i), width);
         }
         return out;
+    }
+
+    /**
+     * Objects of a crop, kept up to {@link DataArea#MARGIN} px from its edge. Crops lie inside the data area, so no
+     * edge band or darkness test is needed.
+     */
+    private static List<SourceExtractor.DetectedObject> extractInCrop(short[][] image, double sigma, int minPixels,
+                                                                      DetectionConfig cfg) {
+        return SourceExtractor.extractSources(image, sigma, minPixels, cfg, null,
+                DataArea.fullFrame(image[0].length, image.length)).objects;
+    }
+
+    /** Stars of a master cut-out, kept up to its edge so the star mask also covers stars cut by the crop's edge. */
+    private static List<SourceExtractor.DetectedObject> extractMasterStars(short[][] master, double sigma, int minPixels,
+                                                                           DetectionConfig cfg) {
+        return SourceExtractor.extractSources(master, sigma, minPixels, cfg, null,
+                DataArea.wholeImage(master[0].length, master.length)).objects;
     }
 
     private static double overlap(Detection d, BitSet mask) {
@@ -963,12 +1007,10 @@ public final class CalibratedAutoTuner {
         DetectionConfig cfg = base.clone();
         cfg.masterSigmaMultiplier = ms.seed;
         cfg.growSigmaMultiplier = ms.grow;
-        cfg.edgeMarginPixels = 5;
-        cfg.voidProximityRadius = 5;
         int h = master.length;
         int w = master[0].length;
         BitSet mask = new BitSet(w * h);
-        List<SourceExtractor.DetectedObject> stars = SourceExtractor.extractSources(master, ms.seed, ms.minPixels, cfg).objects;
+        List<SourceExtractor.DetectedObject> stars = extractMasterStars(master, ms.seed, ms.minPixels, cfg);
         for (SourceExtractor.DetectedObject star : stars) {
             if (star.rawPixels == null) continue;
             for (SourceExtractor.Pixel p : star.rawPixels) {
@@ -1026,7 +1068,7 @@ public final class CalibratedAutoTuner {
 
         int levels = INJECTION_PEAK_SNR.length;
         int count = levels * INJECTIONS_PER_LEVEL_PER_CROP_FRAME;
-        int margin = Math.max(30, base.edgeMarginPixels + 10);
+        int margin = INJECTION_MARGIN;
         int cols = (int) Math.ceil(Math.sqrt(count * (w - 2.0 * margin) / Math.max(1.0, h - 2.0 * margin)));
         int rows = (int) Math.ceil(count / (double) cols);
         double cellW = (w - 2.0 * margin) / cols;
@@ -1073,7 +1115,7 @@ public final class CalibratedAutoTuner {
             int h = image.length;
             int w = image[0].length;
             double background = SourceExtractor.calculateBackgroundSigmaClipped(image, w, h, 3.0, base).median;
-            List<SourceExtractor.DetectedObject> objects = SourceExtractor.extractSources(image, 5.0, 5, probe).objects;
+            List<SourceExtractor.DetectedObject> objects = extractInCrop(image, 5.0, 5, probe);
             for (SourceExtractor.DetectedObject obj : objects) {
                 if (obj.isStreak || obj.elongation > 1.3 || obj.peakSigma < 20 || obj.peakSigma > 150) continue;
                 double window = Math.max(4.0, 2.0 * obj.fwhm);
@@ -1126,17 +1168,15 @@ public final class CalibratedAutoTuner {
                                         DetectionConfig base) {
         DetectionConfig probe = base.clone();
         probe.growSigmaMultiplier = 3.0;
-        probe.edgeMarginPixels = 5;
-        probe.voidProximityRadius = 5;
         List<List<SourceExtractor.DetectedObject>> masterStars = new ArrayList<>();
         for (short[][] master : masters) {
             DetectionConfig mc = probe.clone();
             mc.growSigmaMultiplier = base.masterSigmaMultiplier;
-            masterStars.add(usable(SourceExtractor.extractSources(master, base.masterSigmaMultiplier, base.masterMinDetectionPixels, mc).objects));
+            masterStars.add(usable(extractMasterStars(master, base.masterSigmaMultiplier, base.masterMinDetectionPixels, mc)));
         }
         List<Double> distances = new ArrayList<>();
         for (int i = 0; i < images.size(); i++) {
-            List<SourceExtractor.DetectedObject> frameStars = usable(SourceExtractor.extractSources(images.get(i), 4.0, 5, probe).objects);
+            List<SourceExtractor.DetectedObject> frameStars = usable(extractInCrop(images.get(i), 4.0, 5, probe));
             List<SourceExtractor.DetectedObject> reference = masterStars.get(cropOfImage.get(i));
             for (SourceExtractor.DetectedObject star : reference) {
                 SourceExtractor.DetectedObject match = nearest(star, frameStars);

@@ -10,6 +10,7 @@
 package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.PixelEncoding;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
@@ -654,19 +655,10 @@ public class JTransientAutoTuner {
                             int masterMinPix = testConfig.masterMinDetectionPixels;
 
                             double originalGrowSigma = testConfig.growSigmaMultiplier;
-                            int originalEdgeMargin = testConfig.edgeMarginPixels;
-                            int originalVoidProximity = testConfig.voidProximityRadius;
-
                             testConfig.growSigmaMultiplier = masterSigma;
-                            testConfig.edgeMarginPixels = 5;
-                            testConfig.voidProximityRadius = 5;
-
                             List<SourceExtractor.DetectedObject> masterStars =
-                                    SourceExtractor.extractSources(masterStackData, masterSigma, masterMinPix, testConfig).objects;
-
+                                    extractMasterStars(masterStackData, masterSigma, masterMinPix, testConfig);
                             testConfig.growSigmaMultiplier = originalGrowSigma;
-                            testConfig.edgeMarginPixels = originalEdgeMargin;
-                            testConfig.voidProximityRadius = originalVoidProximity;
 
                             if (masterStars == null || masterStars.isEmpty()) {
                                 if (DEBUG) {
@@ -716,12 +708,12 @@ public class JTransientAutoTuner {
 
                             // STEP C: Extract each cropped frame and test against this crop mask
                             for (CroppedFrame frame : cropFrames) {
-                                List<SourceExtractor.DetectedObject> objects = SourceExtractor.extractSources(
+                                List<SourceExtractor.DetectedObject> objects = extractInCrop(
                                         frame.pixelData,
                                         testConfig.detectionSigmaMultiplier,
                                         testConfig.minDetectionPixels,
                                         testConfig
-                                ).objects;
+                                );
 
                                 totalObjectsExtracted += objects.size();
 
@@ -981,6 +973,23 @@ public class JTransientAutoTuner {
     // =====================================================================
     // ROI HELPERS
     // =====================================================================
+
+    /**
+     * Objects of a crop, kept up to {@link DataArea#MARGIN} px from its edge. The crops lie well inside the frame, so
+     * no edge band or darkness test is needed.
+     */
+    private static List<SourceExtractor.DetectedObject> extractInCrop(short[][] image, double sigma, int minPixels,
+                                                                      DetectionConfig config) {
+        return SourceExtractor.extractSources(image, sigma, minPixels, config, null,
+                DataArea.fullFrame(image[0].length, image.length)).objects;
+    }
+
+    /** Stars of a crop's master stack, kept up to its edge so the star mask also covers stars cut by that edge. */
+    private static List<SourceExtractor.DetectedObject> extractMasterStars(short[][] master, double sigma, int minPixels,
+                                                                           DetectionConfig config) {
+        return SourceExtractor.extractSources(master, sigma, minPixels, config, null,
+                DataArea.wholeImage(master[0].length, master.length)).objects;
+    }
 
     /**
      * Builds the set of representative interior crops used during tuning.
@@ -1477,24 +1486,13 @@ public class JTransientAutoTuner {
 
             DetectionConfig evalConfig = finalConfig.clone();
             double originalGrowSigma = evalConfig.growSigmaMultiplier;
-            int originalEdgeMargin = evalConfig.edgeMarginPixels;
-            int originalVoidProximity = evalConfig.voidProximityRadius;
-
             evalConfig.growSigmaMultiplier = evalConfig.masterSigmaMultiplier;
-            evalConfig.edgeMarginPixels = 5;
-            evalConfig.voidProximityRadius = 5;
-
-            List<SourceExtractor.DetectedObject> masterStars =
-                    SourceExtractor.extractSources(
-                            masterStackData,
-                            evalConfig.masterSigmaMultiplier,
-                            evalConfig.masterMinDetectionPixels,
-                            evalConfig
-                    ).objects;
-
+            List<SourceExtractor.DetectedObject> masterStars = extractMasterStars(
+                    masterStackData,
+                    evalConfig.masterSigmaMultiplier,
+                    evalConfig.masterMinDetectionPixels,
+                    evalConfig);
             evalConfig.growSigmaMultiplier = originalGrowSigma;
-            evalConfig.edgeMarginPixels = originalEdgeMargin;
-            evalConfig.voidProximityRadius = originalVoidProximity;
 
             if (masterStars == null || masterStars.isEmpty()) {
                 telemetry.completed = false;
@@ -1544,12 +1542,12 @@ public class JTransientAutoTuner {
             }
 
             for (CroppedFrame frame : cropFrames) {
-                List<SourceExtractor.DetectedObject> objects = SourceExtractor.extractSources(
+                List<SourceExtractor.DetectedObject> objects = extractInCrop(
                         frame.pixelData,
                         evalConfig.detectionSigmaMultiplier,
                         evalConfig.minDetectionPixels,
                         evalConfig
-                ).objects;
+                );
 
                 totalObjectsExtracted += objects.size();
 
@@ -1896,10 +1894,6 @@ public class JTransientAutoTuner {
         probeConfig.growSigmaMultiplier = INITIAL_JITTER_PROBE_GROW_SIGMA;
         probeConfig.minDetectionPixels = INITIAL_JITTER_PROBE_MIN_PIXELS;
 
-        // These are not very important for this pre-pass, but keep them small/neutral.
-        probeConfig.edgeMarginPixels = 5;
-        probeConfig.voidProximityRadius = 5;
-
         for (int cropIndex = 0; cropIndex < croppedFramesByRegion.size(); cropIndex++) {
             List<CroppedFrame> cropFrames = croppedFramesByRegion.get(cropIndex);
             if (cropFrames.isEmpty()) {
@@ -1910,15 +1904,12 @@ public class JTransientAutoTuner {
 
             DetectionConfig masterConfig = probeConfig.clone();
             masterConfig.growSigmaMultiplier = masterConfig.masterSigmaMultiplier;
-            masterConfig.edgeMarginPixels = 5;
-            masterConfig.voidProximityRadius = 5;
 
-            List<SourceExtractor.DetectedObject> masterStars = SourceExtractor.extractSources(
+            List<SourceExtractor.DetectedObject> masterStars = extractMasterStars(
                     masterStackData,
                     masterConfig.masterSigmaMultiplier,
                     masterConfig.masterMinDetectionPixels,
-                    masterConfig
-            ).objects;
+                    masterConfig);
 
             if (masterStars == null || masterStars.isEmpty()) {
                 continue;
@@ -1926,12 +1917,11 @@ public class JTransientAutoTuner {
 
             List<List<SourceExtractor.DetectedObject>> frameObjectsByCrop = new ArrayList<>(cropFrames.size());
             for (CroppedFrame frame : cropFrames) {
-                frameObjectsByCrop.add(SourceExtractor.extractSources(
+                frameObjectsByCrop.add(extractInCrop(
                         frame.pixelData,
                         probeConfig.detectionSigmaMultiplier,
                         probeConfig.minDetectionPixels,
-                        probeConfig
-                ).objects);
+                        probeConfig));
             }
 
             for (SourceExtractor.DetectedObject masterStar : masterStars) {
