@@ -159,10 +159,10 @@ The extractor computes:
 - intensity-weighted centroid
 - background-subtracted total flux
 - `peakSigma`
-- `integratedSigma`
+- `integratedSigma` (both assume uncorrelated pixel noise; registration resamples the frames, so neighbouring pixels share noise and these significances are optimistic)
 - elongation from second moments
 - dominant angle
-- approximate `fwhm`
+- approximate `fwhm`, computed as `2.355 * sqrt(λ1 + λ2)` from the second moments: for a round star that is √2 times the Gaussian FWHM, and the footprint is also cut at the grow threshold. Session rejection (`minFwhmEnvelope`, `fwhmSigmaDeviation`) and `maxFwhmRatio` are tuned in this unit. Photometry (`ApertureMeasurer`) and the SpacePixels Night & Equipment section measure star size separately, as a true FWHM.
 
 This is the first stage where object shape is measured. At this point, shape is primarily used to classify detections into streak-like versus point-like objects.
 
@@ -240,6 +240,8 @@ Four absolute floors keep the rejection envelopes from becoming too tight:
 
 The background envelope is also never smaller than the session's median per-frame sky noise.
 
+The star count has no absolute floor: its limit is the median minus a multiple of the MAD sigma. Since the counts are measured on the same sky in every frame (the quality area), they vary little between frames, so the limit can sit close to the median; on Africano a frame with 26 % fewer stars than the median is rejected. A relative floor was considered (code review QC-1) and left for later.
+
 Rejected frames are recorded in `PipelineTelemetry.rejectedFrames`. Only the retained frames participate in stacking and tracking.
 
 ## 6. Median Master Stack
@@ -297,7 +299,7 @@ Both stacks measure their sky inside the data area. Maximum-stack candidates mus
 4. measures the fraction of each remaining object's raw pixels inside the median mask, rejecting values below `slowMoverMedianSupportOverlapFraction` or above `slowMoverMedianSupportMaxOverlapFraction`
 5. when the original quality-filtered frames are available, searches a compact aperture inside each surviving maximum-stack footprint in every usable frame. It records the percentage of frames with significant localized signal, then the percentage of supported frame positions clustered at one location. `slowMoverMinFrameSupport` (default `40`) rejects low frame support and `slowMoverMaxStationaryLikelihood` (default `60`) rejects stationary-looking sources when their measurements are available. Values `0` and `100` disable the respective vetoes while keeping their measurements.
 
-The geometric axis ratio uses oriented raw-pixel extents; it is distinct from intensity-weighted moment elongation. The default minimum fill factor is `0.0`, which disables that veto. The default lower mask-overlap bound is also `0.0`, so a single-frame artifact can pass it. The upper bound defaults to `0.80` and rejects footprints mostly explained by persistent sources. The stacks are not subtracted.
+The geometric axis ratio uses oriented raw-pixel extents; it is distinct from intensity-weighted moment elongation. The default minimum fill factor is `0.5`; `0.0` disables that veto. The default lower mask-overlap bound is also `0.0`, so a single-frame artifact can pass it. The upper bound defaults to `0.80` and rejects footprints mostly explained by persistent sources. The stacks are not subtracted.
 
 The survivors are exported as `PipelineResult.slowMoverAnalysis.candidates`, with footprint-based motion estimates, per-candidate diagnostics, and aggregate telemetry. Frame support and stationary likelihood are heuristics, not temporal confirmation or calibrated probabilities; unavailable measurements do not veto candidates. The stack-only analyzer overload does not have frame evidence. `slowMoverStackData`, `slowMoverMedianVetoMask`, and `slowMoverCandidates` remain compatibility exports. The former percentile-stack and residual-footprint settings have been removed.
 

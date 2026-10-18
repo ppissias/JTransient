@@ -23,7 +23,7 @@ Instead of scoring proxies, the calibrated tuner tries a grid of settings on cro
 - **sensitivity**: how many faint objects of known brightness it would find
 - **mask coverage**: how much sky the star mask hides
 
-Each profile is a false-positive budget per megapixel per frame. Among the combinations within budget, the tuner takes the one that recovers the most synthetic sources (near-ties go to the one that keeps more bright sources). A more permissive profile can therefore never be less sensitive.
+Each profile is a false-positive budget per megapixel per frame. The budget counts false single-frame detections, not what a user finally sees (tracks, anomalies and residual candidates); a run within budget can still show a few false tracks. Among the combinations within budget, the tuner takes the one that recovers the most synthetic sources (near-ties go to the one that keeps more bright sources). A more permissive profile can therefore never be less sensitive.
 
 | Profile | Budget (false positives per MPix per frame) |
 | --- | --- |
@@ -425,7 +425,7 @@ For one crop, the tuner does this:
    - stars kept up to the edge of the crop stack
 3. reject the tested combination if no master stars are found
 4. create a veto mask from all master-star pixels
-5. dilate the veto mask by `ceil(maxStarJitter)`
+5. dilate the veto mask by `max(1, round(maxStarJitter / 2))`, the growth the pipeline's star mask uses (`MasterVetoMask`)
 6. reject the combination if that crop's mask coverage exceeds `25%`
 7. extract objects from every cropped frame using the tested configuration
 8. ignore streaks during stable-vs-transient classification

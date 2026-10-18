@@ -30,6 +30,19 @@ The full engine is assembled from these stages:
 
 Different entrypoints execute different subsets of that sequence.
 
+## Input Rules
+
+Every `JTransientEngine` entry point and both auto-tuners check their frames first and throw `IllegalArgumentException`, naming the frames, when:
+
+- the frame list is empty (pipeline entry points), frames have no pixels or ragged rows, frames differ in size, or two frames share a sequence index;
+- some frames have a timestamp and others don't (`-1` means missing; 0 is a real time);
+- some frames have an exposure time and others don't, or the exposure times differ by more than 2 % (at least 0.1 s);
+- a supplied master stack has another size than the frames.
+
+`TrackLinker.findMovingObjects` throws when some detections have a timestamp and others have none. These are the SpacePixels import rules that still apply once the pixels are in memory.
+
+Timestamps are taken as exposure starts. The linker compares them directly; SpacePixels converts to exposure midpoints only for the report.
+
 ## Entry Point Summary
 
 | Entry point | Scope | Generates or uses a master stack | Returns tracks | Primary use |

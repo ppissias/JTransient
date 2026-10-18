@@ -8,7 +8,14 @@ All fields are public and mutable. A few implementation details matter when you 
 - the engine uses stage-local config overrides for master-star and slow-mover extraction so the caller's config object is not left mutated afterward
 - the auto-tuners (`CalibratedAutoTuner.tune(...)`, and the legacy `JTransientAutoTuner.tune(...)`) clone configs while searching and return an optimized clone on success; fallback paths may return the base config
 
-This document tracks the fields that actually exist in `src/main/java/io/github/ppissias/jtransient/config/DetectionConfig.java`.
+This document tracks the fields that actually exist in `src/main/java/io/github/ppissias/jtransient/config/DetectionConfig.java`. The defaults given are the engine's. SpacePixels ships its own profile (`src/dist/config/default_detection_profile.json` in SpacePixels), which differs on purpose, for example:
+
+- `detectionSigmaMultiplier` 3.5 and `growSigmaMultiplier` 2.75;
+- slow movers: `masterSlowMoverMinPixels` 10, `masterSlowMoverSigmaMultiplier` 3.5, `masterSlowMoverGrowSigmaMultiplier` 2.75;
+- `maxStarJitter` 1.0;
+- `enableGeometricTrackLinking` true.
+
+`autoTuneMaxCandidateFrames` exists only in the SpacePixels profile; it is a SpacePixels setting, not a field of `DetectionConfig`.
 
 ## 1. Extraction And Blob Classification
 
@@ -161,19 +168,19 @@ Temporary grow threshold used only during the slow-mover extraction pass.
 
 - slow-mover extraction uses a stage-local `growSigmaMultiplier = masterSlowMoverGrowSigmaMultiplier`
 
-### `slowMoverMinAxisRatio` (default `1.35`)
+### `slowMoverMinAxisRatio` (default `1.2`)
 
 Minimum geometric major/minor extent ratio of a maximum-stack connected footprint. The moment-based `elongation` remains available as a separate diagnostic.
 
 The extents are measured by projecting raw pixels along and across the intensity-derived orientation, adding one pixel to each range. For a capsule-like source, `axisRatio - 1` is an approximate total displacement in source diameters.
 
-### `slowMoverMaxAxisRatio` (default `3.20`)
+### `slowMoverMaxAxisRatio` (default `2.8`)
 
 Maximum geometric axis ratio, intended to exclude longer tracks handled by the normal mover pipeline.
 
-### `slowMoverMinFillFactor` (default `0.0`)
+### `slowMoverMinFillFactor` (default `0.5`)
 
-Optional minimum raw-pixel count divided by the area of the oriented bounding rectangle. Zero disables this veto while preserving the measured fill factor in diagnostics.
+Minimum raw-pixel count divided by the area of the oriented bounding rectangle. Zero disables this veto while preserving the measured fill factor in diagnostics.
 
 ### `slowMoverMedianSupportOverlapFraction` (default `0.00`)
 
@@ -189,11 +196,11 @@ Maximum fraction of a maximum-stack footprint that may overlap the exact median-
 - lower values reject candidates that look too similar to stationary median-stack sources
 - `1.0` disables this upper veto; the effective upper bound is clamped to at least `slowMoverMedianSupportOverlapFraction`
 
-### `slowMoverMinFrameSupport` (default `0.0`)
+### `slowMoverMinFrameSupport` (default `40.0`)
 
 Minimum percentage (0–100) of usable quality-filtered frames with significant localized signal inside a maximum-stack candidate's footprint. The measurement searches a small aperture within the footprint in each original frame, so the source can move between positions. It requires integrated signal-to-noise of at least `5.0`; this measurement floor is fixed. Zero disables the rejection gate but still records the measured percentage.
 
-### `slowMoverMaxStationaryLikelihood` (default `100.0`)
+### `slowMoverMaxStationaryLikelihood` (default `60.0`)
 
 Maximum allowed stationary-likelihood percentage (0–100). This heuristic is the largest fraction of supported frame positions clustering within the configured star-jitter scale of one location. It is not a calibrated probability. A high value indicates a persistent source at nearly the same position, but genuinely slow motion below the positional resolution can also score high. `100.0` disables the rejection gate but still records the measured percentage.
 

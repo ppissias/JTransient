@@ -34,7 +34,7 @@ This repository is a Gradle Java library project. Install a local JDK first and 
 .\gradlew.bat build
 ```
 
-The project name is `JTransient` and the current library version in `build.gradle` is `1.0.0`.
+The project name is `JTransient` and the current library version in `build.gradle` is `1.0.3`.
 
 To prepare a Maven Central release bundle locally:
 

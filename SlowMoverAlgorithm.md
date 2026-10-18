@@ -800,7 +800,7 @@ median stack  -> contextual veto
 
 # 20. Optional Temporal Confirmation
 
-The current implementation measures candidate frame-support and stationary-likelihood percentages directly in the retained original frames. Their configurable vetoes default to disabled. The three-bin stacking and measured-motion validation proposed below remain future work.
+The current implementation measures candidate frame-support and stationary-likelihood percentages directly in the retained original frames. Their configurable vetoes default to 40 % minimum frame support and 60 % maximum stationary likelihood. The three-bin stacking and measured-motion validation proposed below remain future work.
 
 Maximum-stack morphology identifies objects that **look like** a slow-moving swept source.
 
@@ -964,8 +964,8 @@ slowMoverMaxAxisRatio
 Current defaults:
 
 ```text
-slowMoverMinAxisRatio = 1.35
-slowMoverMaxAxisRatio = 3.20
+slowMoverMinAxisRatio = 1.2
+slowMoverMaxAxisRatio = 2.8
 ```
 
 Optional:
@@ -1401,8 +1401,8 @@ For initial experimentation only:
 ```text
 enableSlowMoverDetection = true
 
-slowMoverMinAxisRatio = 1.35
-slowMoverMaxAxisRatio = 3.20
+slowMoverMinAxisRatio = 1.2
+slowMoverMaxAxisRatio = 2.8
 
 slowMoverMedianSupportOverlapFraction = 0.0
 slowMoverMedianSupportMaxOverlapFraction = 0.80
