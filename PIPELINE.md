@@ -23,7 +23,7 @@ The full engine is assembled from these stages:
 9. fast streak linking
 10. time-based point linking when timestamps exist
 11. geometric point linking when timestamps are missing or explicitly enabled
-12. anomaly rescue, suspected same-frame streak grouping, and streak consolidation
+12. anomaly rescue and streak consolidation
 13. residual transient analysis
 14. optional stationary-star photometry and variable-star detection
 15. maximum-stack result export
@@ -288,7 +288,7 @@ What it does:
    - geometric point linking when timestamps are missing or `enableGeometricTrackLinking` is enabled
    - faint same-frame streak-fragment assembly
    - anomaly rescue
-   - suspected same-frame streak grouping and streak consolidation
+   - streak consolidation
 6. filters compact common-motion groups from unclassified observations, when `enableCommonMotionRejection` is on
 7. runs optional local rescue and activity clustering on the filtered leftovers, when `enableResidualTransientAnalysis` is on
 8. when `enableVariableStarDetection` is on, runs stationary-star photometry and variable-star detection on the retained frames

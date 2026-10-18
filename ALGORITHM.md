@@ -34,7 +34,7 @@ The full run is organized into these major phases:
 8. time-based point linking
 9. optional geometric point linking
 10. same-frame faint-streak fragment assembly
-11. anomaly rescue, suspected streak grouping, and streak consolidation
+11. anomaly rescue and streak consolidation
 12. common-motion filtering of unclassified observations
 13. optional residual analysis: local rescue, then activity clustering
 14. optional stationary-star photometry and variable-star scoring
@@ -66,7 +66,6 @@ Filtering happens at several different levels of the pipeline, and not all of it
   - time-based linking can additionally reject a pair through `strictExposureKinematics`
 - anomaly filtering:
   - peak-sigma and integrated-sigma rescue filter by object area and significance
-- suspected streak grouping is the anomaly-stage same-frame line pass, using rescued anomaly collinearity within one frame
 - common-motion filtering:
   - separated compact sources with matching displacement on at least three shared frames are set aside before local rescue and clustering; ambiguous associations are kept
 - residual-transient analysis:
@@ -479,7 +478,7 @@ A new line needs four pieces, a span of at least 80 pixels, no centroid gap larg
 An existing streak can grow through connected pieces with gaps up to 80 pixels. Growth stays in the same frame and checks the angles of stable elongated pieces. The ordinary streak gates are unchanged. This discovery search is intentionally unchanged by the timing instrumentation; long fragment chains can be expensive. Its elapsed cost is `TrackerTelemetry.faintStreakFragmentTimeMs`, included in the tracking phase.
 
 
-This stage gives strong untracked detections one more chance as standalone flashes or same-frame suspected streaks.
+This stage gives strong untracked detections one more chance as standalone flashes.
 
 If `enableAnomalyRescue` is enabled, the tracker scans merged transient detections that were not consumed by any accepted track.
 
@@ -504,40 +503,27 @@ These rescued anomalies are exported as standalone anomaly results through `Trac
 
 The `PEAK_SIGMA` and `INTEGRATED_SIGMA` rescue checks are energy- and size-based. They do not apply a dedicated shape veto at this stage. An anomaly within six pixels of a confirmed same-frame streak axis, allowing 80 pixels past its ends, is retained with `AnomalyDetection.lowConfidence = true`. It is not automatically reclassified as a streak fragment.
 
-### 13.3 Suspected streak grouping
+A streak can break into pieces that are rescued as anomalies, for example in the frames between the two ends of a satellite trail. After anomaly rescue, the tracker therefore groups the rescued anomalies of each frame that lie on a line (at least three within 6 px) and offers each group to the final streak consolidation. A group that the consolidation merges into a confirmed streak track becomes part of that track. Every other group is dropped and its anomalies stay standalone anomalies: a group is never returned on its own. (Until October 2026 such groups were returned as "suspected streak" tracks; on noisy frames random anomalies formed them too easily.) Pieces of a faint streak next to a known streak in the same frame are absorbed earlier, by the faint-fragment assembly (start of this section).
 
-After anomaly rescue, the tracker runs a same-frame grouping pass over the rescued anomalies from one frame.
-
-Any rescued anomalies from the same frame that form a collinear group can be promoted into a suspected streak track inside the returned `tracks` list.
-
-The grouping pass only links against other rescued anomalies from the same frame. It does not search nearby orphan blobs. The final grouped line must still fit within `suspectedStreakLineTolerance`.
-
-Elongation and measured blob angle are not required to seed the line. Once a same-frame line is accepted, every rescued anomaly from that frame that also falls within the same collinearity tolerance is absorbed into that returned suspected streak track.
-
-The pass can return multiple disjoint suspected streak tracks from one frame. It repeatedly removes the accepted line and searches the remaining rescued anomalies from that frame again.
-
-If a rescued anomaly is absorbed into a suspected streak track, it is removed from the standalone anomaly list. The final returned categories are therefore mutually exclusive:
+The final returned categories are mutually exclusive:
 
 - tracks in `TrackingResult.tracks` and `PipelineResult.tracks`
-- standalone suspected same-frame streak groupings are still returned through those same `tracks` lists, flagged by `Track.isSuspectedStreakTrack`
 - standalone anomalies (`PEAK_SIGMA` or `INTEGRATED_SIGMA`) in `TrackingResult.anomalies` and `PipelineResult.anomalies`
 
-### 13.4 Final streak consolidation
+### 13.3 Final streak consolidation
 
-After suspected streak grouping, the tracker runs `consolidateStreakTracks(...)` over confirmed streak tracks and suspected streak tracks.
+After anomaly rescue, the tracker runs `consolidateStreakTracks(...)` over the confirmed streak tracks, the promoted single streaks and the anomaly groups.
 
 This pass:
 
-1. orders stronger confirmed streaks ahead of weaker suspected fragments
+1. orders confirmed streaks ahead of anomaly groups, then streaks seen in more frames, then with more points, then brighter ones
 2. normalizes same-frame streak-fragment ordering along the best-fit streak axis
-3. merges streak-like tracks when they pass frame-gap, angle, line-error, and motion-consistency checks
-4. promotes a merged track to `isStreakTrack` if it contains a confirmed streak or spans multiple frames
-
-This means a suspected same-frame grouping can remain as a standalone suspected track, or it can be absorbed into a confirmed streak track when the geometry and motion checks support that merge.
+3. merges tracks when they pass frame-gap, angle, line-error (twice `predictionTolerance`, at least 6 px), and motion-consistency checks
+4. promotes a merged track to `isStreakTrack` if it contains a confirmed streak or spans multiple frames, and drops a track made only of anomaly groups
 
 ## 14. Common-Motion Filtering
 
-After the main tracker has assigned streaks, moving tracks, anomalies and suspected streaks, `CommonMotionRejector.reject(trackResult.unclassifiedTransients, config)` processes the remaining observations. It runs independently of the residual-analysis switch, when `enableCommonMotionRejection` is true.
+After the main tracker has assigned streaks, moving tracks and anomalies, `CommonMotionRejector.reject(trackResult.unclassifiedTransients, config)` processes the remaining observations. It runs independently of the residual-analysis switch, when `enableCommonMotionRejection` is true.
 
 The input has one representation of each observation. Compact sources are linked in chronological order, looking up to six sequence-index steps ahead within 25 pixels. The first frame containing a possible match takes priority over a closer point in a later frame. A match must be uniquely nearest in both directions; a tied or conflicting association ends that source rather than forcing a choice. Unassigned observations can start later sources, and each observation belongs to at most one source.
 
@@ -584,7 +570,6 @@ At the end of the run, the engine assembles:
 
 - confirmed tracks
 - standalone anomalies
-- standalone or consolidated suspected streak tracks folded into the returned track list
 - pipeline telemetry
 - tracker telemetry
 - median master stack
@@ -601,7 +586,6 @@ The main UI-facing tracking outputs are therefore:
 - `PipelineResult.tracks`
 - `PipelineResult.anomalies`
 - `PipelineResult.residualTransientAnalysis`
-- `Track.isSuspectedStreakTrack` on entries inside `PipelineResult.tracks`
 
 The engine exports `maximumStackData` for visualization or downstream analysis. When slow-mover detection is enabled, the detector reuses this same array.
 
@@ -626,8 +610,7 @@ The full algorithm is intentionally layered:
 5. try the strictest track linker first
 6. optionally fall back to looser geometry when timestamps are available, and require it when timestamps are missing
 7. rescue strong one-frame events at the end as either peak-sigma or integrated-sigma anomalies
-8. regroup collinear rescued anomalies into same-frame suspected streak tracks
-9. set aside reliable compact common-motion groups before optional residual analysis
-10. mine the remaining unclassified points for weaker local rescue and activity patterns
+8. set aside reliable compact common-motion groups before optional residual analysis
+9. mine the remaining unclassified points for weaker local rescue and activity patterns
 
 That layering is what lets `runPipeline(...)` handle slow point-like movers, fast streaks, faint same-frame streak fragments, and one-frame flashes within the same overall engine.

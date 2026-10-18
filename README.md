@@ -112,7 +112,6 @@ public final class RunPipelineExample {
                 System.out.println(
                         "Track points=" + track.points.size()
                                 + " streak=" + track.isStreakTrack
-                                + " suspectedStreak=" + track.isSuspectedStreakTrack
                                 + " timeBased=" + track.isTimeBasedTrack
                 );
             });
@@ -129,7 +128,7 @@ public final class RunPipelineExample {
 
 Key `PipelineResult` fields:
 
-- `tracks`: returned `TrackLinker.Track` objects, including confirmed tracks and suspected same-frame streak groupings
+- `tracks`: returned `TrackLinker.Track` objects: streak tracks, single streaks and point tracks
 - `anomalies`: rescued single-frame anomalies kept separate from normal tracks
 - `allTransients`: per-frame export of the full post-veto transient population carried through tracking, including point detections and mobile streak detections
 - `unclassifiedTransients`: observations remaining after tracks, anomalies and common-motion filtering; local rescue candidates still reference their observations here

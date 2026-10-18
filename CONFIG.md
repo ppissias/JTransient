@@ -501,23 +501,13 @@ Minimum footprint size required for anomaly rescue.
 - acts as the general anomaly floor before either rescue branch is considered
 - protects against hot pixels and tiny defects
 
-### `suspectedStreakLineTolerance` (default `6.0`)
-
-Maximum perpendicular centroid error allowed when rescued same-frame anomalies are grouped into one suspected streak line.
-
-- this is separate from `predictionTolerance`
-- larger values make same-frame faint-streak grouping more permissive
-- smaller values require tighter collinearity
-- multiple disjoint suspected streaks can be returned from one frame when separate same-frame lines survive
-- does not affect the main multi-frame point-track linker
-
 ## 7. Common Motion And Residual Transient Analysis
 
 ### `enableCommonMotionRejection` (default `true`)
 
 Sets aside compact, separated sources sharing a displacement before local rescue and activity clustering. This switch is independent of `enableResidualTransientAnalysis`.
 
-- reads only the unclassified observations remaining after tracks, streaks, anomalies and suspected streaks
+- reads only the unclassified observations remaining after tracks, streaks and anomalies
 - sources are associated chronologically by uniquely nearest matches in both directions; ambiguous observations remain available for residual review
 - compactness limits are area 1–40 pixels and elongation at most 2.5; the association radius is 25 pixels, with gaps of at most six sequence-index steps
 - a group needs at least two sources separated by 30 pixels or more, with at least three frames common to every source
