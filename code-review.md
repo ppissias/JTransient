@@ -42,6 +42,37 @@ Status line fields:
 - **Was:** the issue's number in the first version of this review (CR-n) or in
   `Tracklinker-ASSESSMENT.md` (TL-n).
 
+## Implementation status (2026-10-18)
+
+What was done with the decisions in the **Your comments** blocks. JTransient commits unless marked
+SP (SpacePixels). The descriptions below each issue still describe the code at `2f58ccf`.
+
+| ID | Outcome | Commits |
+|---|---|---|
+| IN-1 | Done: Manual Transient Inspection runs on a copy of the settings. | SP fd98a9a, 475fc15 |
+| IN-2 | Done: the engine and both tuners check the SpacePixels input rules that still apply in memory (`InputRules`); see `PIPELINE.md`, "Input Rules". | 0f28d7d |
+| IN-3 | Not implemented (decision). | — |
+| IN-4 | Done: never fewer than three points, and a ratio that isn't positive counts as the default. | 3468ac1 |
+| XC-4 | Done in steps: the quality area (sky and QC, coverage outliers rejected), the data area (detection, slow movers, photometry), tuner crops inside the area, settings removed, report drawing. | 0200684, 5e99e43, ba7c75a, 13f7bce, 8dcb41b, bec3455; SP 55d76f0, 8250230, e752869 |
+| EX-1 | Done with XC-4: the background histogram covers only the quality area. | 5e99e43 |
+| EX-2 | Obsolete: the darkness probe and `voidThresholdFraction` are gone; padding is found by the fill level. | ba7c75a, bec3455 |
+| EX-3 | Documented (`ALGORITHM.md`); formula unchanged. | ed5aaea |
+| QC-1 | Not implemented; documented (`ALGORITHM.md`). | ed5aaea |
+| ST-2 | Done: motion compared in pixels along a unit axis. | b502535 |
+| ST-3 | Done: a streak in several frames with no motion fails the check. | 46e1dda |
+| AN-1 | Done: suspected streaks removed; same-frame anomaly groups are kept only when they join a confirmed streak (option 2), otherwise they stay anomalies. | b92a985; SP 9ab65a7 |
+| RS-1 | Left as it is for now (maintainer). | — |
+| RS-2 | Done: span, gaps and coverage counted in kept frames; the linearity fit still uses sequence indices. | 48d7a9b |
+| AT-1, AT-2 | Done with XC-4: crops and injections inside the area, rates per searchable pixel. | 8dcb41b |
+| AT-4 | Deferred; one sentence in `AUTOTUNER.md`. | ed5aaea |
+| AT-5 | Done: the legacy tuner grows the star mask like the pipeline, max(1, round(jitter / 2)). | 15f63b3 |
+| XC-1 | Documented as optimistic (`ALGORITHM.md`). | ed5aaea |
+| DOC-1 | Done: engine defaults vs the SpacePixels profile, slow-mover defaults, version, input rules, exposure starts, FWHM unit, Javadoc. | a6069a5, ed5aaea and the "Update docs" commits after each step |
+| HY-1 | Done: unused code removed (engine output went behind the debug switches on 2026-10-17). | e2e89d2, 6992e9e |
+| AN-3 | Fixed along with AN-1: the same-frame groups are built from a map of the frames present. | b92a985 |
+| ST-1, ST-4, PT-1 to PT-8, SM-1, SM-2, PH-1, AN-2, RS-3, AT-3, XC-2, XC-3 | Not implemented or deferred (decision). AN-2 matters less now: the groups are no longer exported, only offered to the streak consolidation. | — |
+| PT-9, X-1 to X-3 | Won't fix (decision). | — |
+
 ## The SpacePixels import rules
 
 SpacePixels refuses to import a folder unless all of the following hold. The FITS checks have
