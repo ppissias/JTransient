@@ -374,13 +374,37 @@ public class VariableStarAnalyzerTest {
 
         List<PhotometryStarSelector.Star> stars = Collections.singletonList(new PhotometryStarSelector.Star(32.3, 31.6, flux));
         DetectionConfig config = new DetectionConfig();
-        ApertureMeasurer.FrameMeasurement m = ApertureMeasurer.measure(pixels, fwhm, stars, null, 70_000, SKY, config);
+        ApertureMeasurer.FrameMeasurement m = ApertureMeasurer.measure(pixels, fwhm, stars, null, 70_000, config);
 
         double radius = m.radii[ApertureMeasurer.R_MAIN];
         double expected = flux * (1.0 - Math.exp(-radius * radius / (2 * sigma * sigma)));
         assertEquals(expected, m.flux[ApertureMeasurer.R_MAIN][0], 0.01 * expected);
         assertEquals(SKY, m.sky[0], 1.0);
         assertEquals(0, m.flags[0]);
+    }
+
+    @Test
+    public void lowSkyNoiseIsNotTakenForPaddingButADeadPixelIs() {
+        // A sky of 60 ADU with 20 ADU of noise: pixels below half the sky are ordinary noise, not padding.
+        double sigma = 1.3;
+        double fwhm = 2.355 * sigma;
+        java.util.Random noise = new java.util.Random(7);
+        double[][] image = new double[64][64];
+        for (double[] row : image) {
+            for (int x = 0; x < row.length; x++) {
+                row[x] = 60 + 20 * noise.nextGaussian();
+            }
+        }
+        renderStar(image, 32.3, 31.6, 20_000.0, sigma);
+        short[][] pixels = toPixels(image, v -> Math.max(10.0, v));
+        List<PhotometryStarSelector.Star> stars = Collections.singletonList(new PhotometryStarSelector.Star(32.3, 31.6, 20_000.0));
+        DetectionConfig config = new DetectionConfig();
+        ApertureMeasurer.FrameMeasurement clean = ApertureMeasurer.measure(pixels, fwhm, stars, null, 70_000, config);
+        assertEquals(0, clean.flags[0] & PhotometryFlags.EDGE_OR_VOID);
+
+        pixels[34][30] = Short.MIN_VALUE;
+        ApertureMeasurer.FrameMeasurement dead = ApertureMeasurer.measure(pixels, fwhm, stars, null, 70_000, config);
+        assertTrue((dead.flags[0] & PhotometryFlags.EDGE_OR_VOID) != 0);
     }
 
     // =================================================================

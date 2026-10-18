@@ -25,8 +25,10 @@ import java.util.List;
  * edge that interpolation leaves next to the fill (1–2 px on the reference data) plus one pixel.</p>
  */
 public final class DataArea {
-    /** Pixels at or below this stored value (8 ADU) are registration fill, as in {@link FrameDriftAnalyzer}. */
-    public static final int FILL_THRESHOLD = Short.MIN_VALUE + 8;
+    /** Pixels at or below this level (in ADU) are registration fill, or dead pixels inside the image. */
+    public static final int FILL_LEVEL = 8;
+    /** The same level as a stored (signed-short) value, as in {@link FrameDriftAnalyzer}. */
+    public static final int FILL_THRESHOLD = Short.MIN_VALUE + FILL_LEVEL;
     /** Distance kept from the fill and from the image edge, in pixels. */
     public static final int MARGIN = 3;
     /** Tolerance of the simplified outline, in pixels. */
@@ -200,6 +202,24 @@ public final class DataArea {
     /** Whether the pixel nearest to the position lies inside the area. */
     public boolean contains(double x, double y) {
         return contains((int) Math.floor(x + 0.5), (int) Math.floor(y + 0.5));
+    }
+
+    /** Whether every pixel within the radius of the position lies inside the area. */
+    public boolean containsDisc(double cx, double cy, double radius) {
+        int fromY = (int) Math.ceil(cy - radius);
+        int toY = (int) Math.floor(cy + radius);
+        if (fromY < 0 || toY >= height) {
+            return false;
+        }
+        for (int y = fromY; y <= toY; y++) {
+            double halfWidth = Math.sqrt(Math.max(0.0, radius * radius - (y - cy) * (y - cy)));
+            int fromX = (int) Math.ceil(cx - halfWidth);
+            int toX = (int) Math.floor(cx + halfWidth);
+            if (fromX < rowStart[y] || toX > rowEnd[y]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /** First column of the area in the row, larger than {@link #getRowEnd} when the row is outside it. */

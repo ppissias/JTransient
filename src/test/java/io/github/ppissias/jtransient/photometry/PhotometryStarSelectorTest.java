@@ -10,6 +10,8 @@
 package io.github.ppissias.jtransient.photometry;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.core.DataArea;
+import io.github.ppissias.jtransient.core.FrameCoverage;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 import org.junit.Test;
@@ -38,6 +40,28 @@ public class PhotometryStarSelectorTest {
         }
         return PhotometryStarSelector.select(stars, stack, FWHM, 60000, new DetectionConfig(),
                 new PipelineTelemetry.PhotometryTelemetry());
+    }
+
+    @Test
+    public void starsAreMeasuredOnlyWhereTheirSkyRingIsInsideTheDataArea() {
+        short[][] stack = new short[240][240];
+        for (short[] row : stack) {
+            java.util.Arrays.fill(row, (short) (1000 - 32768));
+        }
+        // Every frame has data from column 40 on: the area starts at 43.
+        short[][] frame = new short[240][240];
+        for (short[] row : frame) {
+            java.util.Arrays.fill(row, (short) (1000 - 32768));
+            java.util.Arrays.fill(row, 0, 40, Short.MIN_VALUE);
+        }
+        DataArea area = DataArea.of(List.of(FrameCoverage.measure(0, frame)));
+        List<SourceExtractor.DetectedObject> stars = new ArrayList<>();
+        stars.add(star(50, 120, 10_000));
+        stars.add(star(120, 120, 10_000));
+        List<PhotometryStarSelector.Star> result = PhotometryStarSelector.select(stars, stack, FWHM, 60000,
+                new DetectionConfig(), new PipelineTelemetry.PhotometryTelemetry(), area);
+        assertFalse(selected(result, 50, 120));
+        assertTrue(selected(result, 120, 120));
     }
 
     private static boolean selected(List<PhotometryStarSelector.Star> result, double x, double y) {

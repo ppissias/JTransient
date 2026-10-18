@@ -116,6 +116,15 @@ public class DataAreaTest {
         assertTrue(DataArea.limitingFrames(List.of(a, b, c)).isEmpty());
     }
 
+    @Test
+    public void discMustLieEntirelyInsideTheArea() {
+        DataArea area = DataArea.of(List.of(FrameCoverage.measure(0, frame(60, 40, 10, 0, 0, 0))));
+        assertTrue(area.containsDisc(30, 20, 8));
+        assertTrue(area.containsDisc(21, 20, 8));
+        assertFalse(area.containsDisc(20, 20, 8));
+        assertFalse(area.containsDisc(30, 10, 8));
+    }
+
     /** A sky frame with fill bands of the given widths on the left, right, top and bottom. */
     private static short[][] frame(int width, int height, int left, int right, int top, int bottom) {
         short[][] frame = new short[height][width];

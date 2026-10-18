@@ -10,6 +10,7 @@
 package io.github.ppissias.jtransient.photometry;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.PixelEncoding;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.engine.ImageFrame;
@@ -60,14 +61,6 @@ final class PhotometryStarSelector {
 
     /**
      * Selects isolated, point-like master stars away from edges and void padding.
-     *
-     * @param masterStars stationary sources extracted from the master stack
-     * @param masterStack median master stack
-     * @param sessionFwhm median FWHM of the clean frames, in pixels
-     * @param saturationThreshold peak level (shifted domain) at or above which a master star is treated as saturated
-     * @param config pipeline configuration
-     * @param telemetry receives the selection counters
-     * @return selected stars, brightest first
      */
     static List<Star> select(List<SourceExtractor.DetectedObject> masterStars,
                              short[][] masterStack,
@@ -75,6 +68,30 @@ final class PhotometryStarSelector {
                              double saturationThreshold,
                              DetectionConfig config,
                              PipelineTelemetry.PhotometryTelemetry telemetry) {
+        return select(masterStars, masterStack, sessionFwhm, saturationThreshold, config, telemetry, null);
+    }
+
+    /**
+     * Selects isolated, point-like master stars whose aperture and sky ring lie inside the data area, so every
+     * light curve has data in every kept frame. Without a data area, stars are kept away from the image edge and
+     * from dark padding in the median stack instead.
+     *
+     * @param masterStars stationary sources extracted from the master stack
+     * @param masterStack median master stack
+     * @param sessionFwhm median FWHM of the clean frames, in pixels
+     * @param saturationThreshold peak level (shifted domain) at or above which a master star is treated as saturated
+     * @param config pipeline configuration
+     * @param telemetry receives the selection counters
+     * @param dataArea where every kept frame has image data, or null
+     * @return selected stars, brightest first
+     */
+    static List<Star> select(List<SourceExtractor.DetectedObject> masterStars,
+                             short[][] masterStack,
+                             double sessionFwhm,
+                             double saturationThreshold,
+                             DetectionConfig config,
+                             PipelineTelemetry.PhotometryTelemetry telemetry,
+                             DataArea dataArea) {
         int height = masterStack.length;
         int width = masterStack[0].length;
         double outerRadius = config.photometryAnnulusOuterFwhmFactor * sessionFwhm + OFFSET_ALLOWANCE_PIXELS;
@@ -99,8 +116,11 @@ final class PhotometryStarSelector {
                 telemetry.starsRejectedElongated++;
                 continue;
             }
-            if (star.x < margin || star.y < margin || star.x > width - 1 - margin || star.y > height - 1 - margin
-                    || touchesVoid(masterStack, star.x, star.y, outerRadius, voidThreshold)) {
+            boolean outside = dataArea != null
+                    ? !dataArea.containsDisc(star.x, star.y, outerRadius)
+                    : star.x < margin || star.y < margin || star.x > width - 1 - margin || star.y > height - 1 - margin
+                    || touchesVoid(masterStack, star.x, star.y, outerRadius, voidThreshold);
+            if (outside) {
                 telemetry.starsRejectedEdgeOrVoid++;
                 continue;
             }

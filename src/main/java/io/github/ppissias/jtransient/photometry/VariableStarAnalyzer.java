@@ -10,6 +10,7 @@
 package io.github.ppissias.jtransient.photometry;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.MasterReferenceAnalyzer;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.core.TrackLinker;
@@ -87,6 +88,8 @@ public final class VariableStarAnalyzer {
         public boolean[][] masterStarMask;
         public List<TrackLinker.Track> tracks = new ArrayList<>();
         public List<SourceExtractor.DetectedObject> slowMoverCandidates = new ArrayList<>();
+        /** Where every kept frame has image data; stars are measured only inside it. Null to use the image edge. */
+        public DataArea dataArea;
         /** Optional progress listener, 0 to 100 over the photometry stage. */
         public TransientEngineProgressListener progress;
     }
@@ -136,11 +139,9 @@ public final class VariableStarAnalyzer {
 
         // --- Star selection and saturation level ---
         double[] frameFwhm = new double[nFrames];
-        double[] frameBackground = new double[nFrames];
         for (int j = 0; j < nFrames; j++) {
             FrameQualityAnalyzer.FrameMetrics metrics = input.frameMetrics.get(j);
             frameFwhm[j] = validFwhm(metrics.medianFWHM, config) ? metrics.medianFWHM : Double.NaN;
-            frameBackground[j] = metrics.backgroundMedian;
         }
         double sessionFwhm = PhotometryMath.median(frameFwhm);
         if (!Double.isFinite(sessionFwhm)) {
@@ -168,7 +169,7 @@ public final class VariableStarAnalyzer {
                 MasterReferenceAnalyzer.analyzeFromMasterStack(input.masterStack, starConfig).masterStars;
         boolean[][] skyMask = footprintMask(photometryStars, input.masterStack.length, input.masterStack[0].length);
         List<PhotometryStarSelector.Star> selected = PhotometryStarSelector.select(
-                photometryStars, input.masterStack, sessionFwhm, saturationThreshold, config, telemetry);
+                photometryStars, input.masterStack, sessionFwhm, saturationThreshold, config, telemetry, input.dataArea);
         if (selected.size() < config.linearityMinStars) {
             readiness.verdict = PhotometricReadiness.Verdict.NOT_READY;
             readiness.messages.add(String.format(
@@ -180,7 +181,7 @@ public final class VariableStarAnalyzer {
         // --- Forced aperture photometry on every frame ---
         report(input, 0, "Photometry: measuring " + selected.size() + " stars in every frame...");
         ApertureMeasurer.FrameMeasurement[] measurements = measureFrames(
-                input, selected, skyMask, frameFwhm, frameBackground, saturationThreshold, config, executor);
+                input, selected, skyMask, frameFwhm, saturationThreshold, config, executor);
         report(input, MEASURING_PROGRESS_SHARE, "Photometry: readiness checks and ensemble solution...");
         flagCrossings(input, selected, photometryStars, measurements, config);
 
@@ -607,7 +608,6 @@ public final class VariableStarAnalyzer {
                                                                      List<PhotometryStarSelector.Star> stars,
                                                                      boolean[][] skyMask,
                                                                      double[] frameFwhm,
-                                                                     double[] frameBackground,
                                                                      double saturationThreshold,
                                                                      DetectionConfig config,
                                                                      ExecutorService executor) throws Exception {
@@ -624,7 +624,6 @@ public final class VariableStarAnalyzer {
                         stars,
                         skyMask,
                         saturationThreshold,
-                        frameBackground[frame],
                         config);
                 synchronized (measured) { // keeps the reported progress in order across threads
                     int done = measured.incrementAndGet();

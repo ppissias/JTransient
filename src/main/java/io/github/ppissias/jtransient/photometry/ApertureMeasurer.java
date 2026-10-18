@@ -10,6 +10,7 @@
 package io.github.ppissias.jtransient.photometry;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.PixelEncoding;
 
 import java.util.Arrays;
@@ -106,7 +107,6 @@ final class ApertureMeasurer {
      * @param stars selected stars, brightest first
      * @param otherStarMask pixels belonging to master stars (excluded from sky), may be null
      * @param saturationThreshold peak level (shifted domain) at or above which a measurement is saturated
-     * @param frameBackground frame background median (shifted domain), used for the void test
      * @param config pipeline configuration
      */
     static FrameMeasurement measure(short[][] pixels,
@@ -114,7 +114,6 @@ final class ApertureMeasurer {
                                     List<PhotometryStarSelector.Star> stars,
                                     boolean[][] otherStarMask,
                                     double saturationThreshold,
-                                    double frameBackground,
                                     DetectionConfig config) {
         int n = stars.size();
         FrameMeasurement m = new FrameMeasurement(extractionFwhm, n);
@@ -131,7 +130,6 @@ final class ApertureMeasurer {
         double maxApertureRadius = Arrays.stream(m.radii).max().orElse(MIN_RADIUS_PIXELS);
         double innerRadius = Math.max(maxApertureRadius + 1.0, config.photometryAnnulusInnerFwhmFactor * fwhm);
         double outerRadius = Math.max(innerRadius + 2.0, config.photometryAnnulusOuterFwhmFactor * fwhm);
-        double voidThreshold = frameBackground * config.voidThresholdFraction;
 
         double[] floorShares = new double[n];
         Arrays.fill(floorShares, Double.NaN);
@@ -206,7 +204,9 @@ final class ApertureMeasurer {
                     }
                     if (d <= m.radii[R_MAIN]) {
                         peak = Math.max(peak, v);
-                        if (voidThreshold > 0 && sky > 0 && v < voidThreshold) {
+                        // Registration fill or a dead pixel. A darkness test relative to the sky would also catch
+                        // ordinary noise when the sky is only a few sigma above zero.
+                        if (v <= DataArea.FILL_LEVEL) {
                             voidPixel = true;
                         }
                     }

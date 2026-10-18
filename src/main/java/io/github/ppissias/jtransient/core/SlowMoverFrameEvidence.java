@@ -104,8 +104,7 @@ final class SlowMoverFrameEvidence {
 
             LocalBackground background = estimateBackground(frame.pixelData, minX, maxX, minY, maxY,
                     innerMargin, outerMargin);
-            if (background == null || isMostlyVoid(frame.pixelData, object, background.median,
-                    config.voidThresholdFraction)) {
+            if (background == null || isMostlyVoid(frame.pixelData, object)) {
                 continue;
             }
 
@@ -198,13 +197,14 @@ final class SlowMoverFrameEvidence {
                 : sortedValues[count / 2];
     }
 
-    /** Excludes a frame when at least half the candidate footprint lies in registration padding. */
-    private static boolean isMostlyVoid(short[][] image, SourceExtractor.DetectedObject object,
-                                        double background, double voidThresholdFraction) {
+    /**
+     * Excludes a frame when at least half the candidate footprint is at the fill level (registration padding). The
+     * fill level is absolute, so a sky only a few sigma above zero doesn't count as padding.
+     */
+    private static boolean isMostlyVoid(short[][] image, SourceExtractor.DetectedObject object) {
         int voidPixels = 0;
         for (SourceExtractor.Pixel pixel : object.rawPixels) {
-            if (PixelEncoding.toShiftedPositiveInt(image[pixel.y][pixel.x])
-                    <= background * voidThresholdFraction) {
+            if (PixelEncoding.toShiftedPositiveInt(image[pixel.y][pixel.x]) <= DataArea.FILL_LEVEL) {
                 voidPixels++;
             }
         }
