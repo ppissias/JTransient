@@ -36,6 +36,10 @@ import java.util.Set;
  */
 public class TrackLinker {
 
+    /** A point track needs at least this many points. */
+    static final int MIN_TRACK_POINTS = 3;
+    private static final double DEFAULT_TRACK_MIN_FRAME_RATIO = new DetectionConfig().trackMinFrameRatio;
+
     // =================================================================
     // DATA MODELS
     // =================================================================
@@ -508,10 +512,7 @@ public class TrackLinker {
         // =================================================================
         // PHASE 4: GEOMETRIC COLLINEAR LINKING
         // =================================================================
-        int minPointsRequired = Math.max(3, (int) Math.ceil(numFrames / config.trackMinFrameRatio));
-        if (minPointsRequired > config.absoluteMaxPointsRequired) {
-            minPointsRequired = config.absoluteMaxPointsRequired;
-        }
+        int minPointsRequired = requiredTrackPoints(numFrames, config);
 
         List<Track> pointTracks = new ArrayList<>();
         Set<SourceExtractor.DetectedObject> usedPoints = new HashSet<>();
@@ -1113,6 +1114,17 @@ public class TrackLinker {
                 unclassifiedTransients,
                 filterResult.masterVetoMask
         );
+    }
+
+    /**
+     * Number of points a point track needs: the frame count divided by {@code trackMinFrameRatio}, capped at
+     * {@code absoluteMaxPointsRequired}, and never fewer than three, whatever the profile says. A ratio that is not
+     * a positive number counts as the default.
+     */
+    static int requiredTrackPoints(int frameCount, DetectionConfig config) {
+        double ratio = config.trackMinFrameRatio > 0.0 ? config.trackMinFrameRatio : DEFAULT_TRACK_MIN_FRAME_RATIO;
+        int required = Math.min((int) Math.ceil(frameCount / ratio), config.absoluteMaxPointsRequired);
+        return Math.max(MIN_TRACK_POINTS, required);
     }
 
     /**
