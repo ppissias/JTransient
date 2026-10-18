@@ -197,8 +197,9 @@ for the normal detection runs, which already pass a copy.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: Please re-assess  in light of XC-4. If we have a new way of marking the area where SpacePixels will do its processing, then perhaps this configuration propertty and this issue will become opbsolete. Please re-assess in light of XC-4. I want this implementeed, but maybe after XC-4 it will be obsolete. 
 - Notes: **Codex assessment:** Confirmed from the call chain; this is the clearest first fix. Clone once at each public processing boundary and use that copy throughout the run, so effective drift settings still reach every stage. Check that inspection leaves the live config and saved profile unchanged and that ordinary detection results remain identical.
+- Notes: **Assessment:** Re-checked against XC-4. A session data area does retire `voidProximityRadius`, but only once detection uses that area and the setting is removed. Until then, Manual Transient Inspection still writes the raised radius into the live settings, and the next Save keeps it for every later dataset. The clone does not keep the old border alive: it only stops one run from editing the caller's config. Keep the clone now. When XC-4 drops the setting, delete this write rather than preserving the value.
 
 <a id="in-2"></a>
 ### IN-2 · The engine doesn't check its own input rules
@@ -238,8 +239,9 @@ This costs almost nothing and doesn't change results for SpacePixels.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: implement, please do the same checks that we do on SpacePixels when importing a dataset (where applicable for the input opf JTransient)
 - Notes: **Codex assessment:** Valid library-boundary issue despite SpacePixels validation. Validate nonempty rectangular dimensions, supplied master dimensions, configuration invariants and uniform timestamp availability. Define the missing-time contract explicitly: zero is also the Unix epoch, so initializing omitted metadata to -1 is safer than treating every zero as malformed. No new 16-bit check is needed for an already typed short[][] payload.
+- Notes: **Assessment:** Do the import checks that still mean something once the pixels are in memory. That is equal width and height, including a supplied master; a timestamp on every frame or on none; an exposure duration on every frame or on none; and, when durations are present, the same 2% band (at least 0.1 s). File type, colour, `BITPIX`, `BZERO` and `BSCALE` are already resolved by the reader, so the engine should not repeat them. Missing time stays -1. A timestamp of 0 is a real time and must not be rejected. Throw `IllegalArgumentException` and name the odd frames. SpacePixels sessions already pass these rules, so their results should not change. This also closes PT-9 for other callers. X-1 to X-3 are covered here and need no separate linker change.
 
 <a id="in-3"></a>
 ### IN-3 · Fewer than three frames discards every result
@@ -270,8 +272,9 @@ control, so SpacePixels can show it.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: not implement. The other categories are not really meaningful with less than 3 frames. 
 - Notes: **Codex assessment:** The early return does discard every tracker output, although separate slow-mover and photometry stages can still produce pipeline results. Preserve valid single-frame categories and expose an explicit insufficient-frames diagnostic. A one/two-frame fixture should cover strong streaks, anomalies and the absence of confirmed point tracks before changing this behavior.
+- Notes: **Assessment:** The early return is before `filterTransients`, so a bright trail and the anomalies die even though the debug line only mentions point tracks. Slow movers and photometry sit outside this method and still run, so "every pipeline result" is too strong. Keep the three-frame minimum on point-track discovery only, and put a reason on the telemetry when fewer than three frames remain. Reference sessions all have more than three frames, so the regression should be unchanged; the new behaviour belongs in a two-frame fixture.
 
 <a id="in-4"></a>
 ### IN-4 · A point cap below three defeats the three-point minimum
@@ -296,8 +299,9 @@ example a cap of at least 3, and ratios greater than 0.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: implement fix direction.
 - Notes: **Codex assessment:** Confirmed: the cap is applied after the three-point minimum, and the time-based branch can accept its two-point seed. Prefer a clear validation error for caps below three and nonpositive/nonfinite ratios over silently accepting an invalid profile. The default cap is unaffected.
+- Notes: **Assessment:** Confirmed at `TrackLinker.java:511–513`: the cap is applied after `max(3, …)`, so a saved 2 wins. Floor the effective minimum at 3 where it is used, and treat a non-positive or non-finite `trackMinFrameRatio` as the default ratio. I would not throw. A throw aborts a batch over one experimental field, and the three-point rule is an invariant rather than a tunable. The default cap of 5 is unchanged, so the reference runs should not move.
 
 ---
 
@@ -352,8 +356,9 @@ unchanged. XC-4 does this as part of a session data area.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: implement taking into account the solution for XC-4. After we determine the area where SpacePixels will work, do the assessment only on that area. Please re-assess in light of XC-4. Maybe the fix direction is enough, but please re-assess.
 - Notes: **Codex assessment:** Confirmed contamination of the background histogram; high priority. The approximate 11% transition follows the median-centred clipping model and is not universal across sky levels or clipping settings. Reuse a consistent padding definition, guard empty samples, and check genuinely clipped low-background pixels before claiming all unpadded frames are unchanged.
+- Notes: **Assessment:** This is the detection bug to fix first. Every pixel enters the histogram, and on Eagle-noisy and dc-light-2 the noise is already high at a few percent of fill, well before the 11% cliff. Leave out the same floor values `FrameDriftAnalyzer` treats as padding, and if that removes every sample, keep today's estimate rather than emitting a zero sigma. Do not wait for XC-4. The data area can later replace the floor test; it should not block this. The regression has to compare rejected frames and star counts on the drifted sets, not only the tracks. A frame with no fill should be unchanged.
 
 <a id="ex-2"></a>
 ### EX-2 · Void test misfires when the sky is close to zero
@@ -410,8 +415,9 @@ test altogether: padding is found from the fill value instead.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: Please re-assess in oight of XC-4. When we have determined the fixed area in XC-4, we perhaps no longer need the void test and this part becomes obsolete. Please re-assess. 
 - Notes: **Codex assessment:** Confirmed extraction/aperture concern; use spatial and noise evidence rather than a single faint pixel to identify padding. The slow-mover check requires at least half the footprint to be low, so the quoted star-loss rate does not establish the same loss there. FieldDepth's cut-out workaround addresses edge geometry, rather than independently proving this low-sky failure.
+- Notes: **Assessment:** The extraction and aperture failures are real. One pixel at or below half the sky rejects a detection, and at a sky of about 3σ that pixel is ordinary noise. I would not add a new k·σ darkness test. Replace the half-median comparison with the same fill floor the drift analyzer already uses, in the eight probes and in `ApertureMeasurer`'s single-pixel flag. Keep the out-of-image probe. `isMostlyVoid` already requires half the footprint, so point it at the same floor and leave its fraction alone. XC-4 should own how far in each edge is searched. Agree this floor rule, then implement it; do not invent a third padding definition.
 
 <a id="ex-3"></a>
 ### EX-3 · Extraction FWHM reads about √2 too large
@@ -440,8 +446,9 @@ formula is changed, scale the dependent thresholds by 1/√2 in the same change.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: Please go ahead as follows: Document it in DOC-1, including that photometry and Night & Equipment measure size separately. Do not change the formula.
 - Notes: **Codex assessment:** The Gaussian normalization issue is real, with additional bias from threshold-truncated footprints. Document the legacy extraction metric first; photometry and Night & Equipment have separate star-size measurements, so the example does not apply to every report FWHM. A formula change needs an audit of all consumers and profile/threshold compatibility, not just rescaling one setting.
+- Notes: **Assessment:** For a round star, `2.355 * sqrt(λ1 + λ2)` is √2 times the Gaussian FWHM, and the footprint is also cut by the threshold. Session rejection and the FWHM gates are tuned in that unit. Document it in DOC-1, including that photometry and Night & Equipment measure size separately. Do not change the formula.
 
 ---
 
@@ -477,8 +484,9 @@ being less than 10 % below the median star count.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: Not implement at this stage. Document this issue so that we are aware in the future. 
 - Notes: **Codex assessment:** Source confirms the missing floor, but a 10% allowance is a policy choice rather than an established correct threshold. Measure rejection changes on stable, cloudy and sparse sessions before choosing it, and preserve a meaningful distinction between Strict and Lenient. Fix EX-1 first so distorted star counts do not drive that calibration.
+- Notes: **Assessment:** The missing floor is real: star count is the only session metric with no absolute envelope. A flat 10% is a guess, and EX-1 currently pushes star counts down on padded frames, so a floor chosen now would be fit to that bug. Measure after EX-1, on a stable set and on a cloudy set, and keep Strict tighter than Lenient. A relative floor is the right shape. The number is not ready to code.
 
 ---
 
@@ -513,8 +521,9 @@ decision.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: not implement at this stage. 
 - Notes: **Codex assessment:** Confirmed: the guard discards usable capture times solely because exposure duration is unavailable. Retain those times independently of duration, keep exposure-dependent checks conditional, and test irregular cadence with unknown exposure. Requiring extra import metadata would unnecessarily exclude otherwise usable observations.
+- Notes: **Assessment:** Confirmed in `buildStreakFrameSamples`: a real timestamp is kept only when `exposureDuration > 0`. Import still allows a timed session with no `EXPTIME` on any frame. Keep the timestamp whenever it is not -1, and leave every check that needs the exposure length conditional. Sessions that already have `EXPTIME` should not change. A fixture with a pause and no exposure is the test.
 
 <a id="st-2"></a>
 ### ST-2 · Streak motion compared in pixel² instead of pixels
@@ -552,8 +561,9 @@ decision.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: implement
 - Notes: **Codex assessment:** Confirmed dimensional mismatch where projection differences are compared with pixel thresholds. Normalize the axis for physical-distance comparisons and explicitly handle degenerate axes; ordering alone does not need normalization. Treat fragment-range continuation as a separate behavioral change, with forward/reverse and same-frame-fragment fixtures, so its impact can be distinguished from the unit correction.
+- Notes: **Assessment:** `projectionAlongLine` returns the raw dot product, and `hasConsistentStreakMotion` compares it with a threshold in pixels. A long axis makes a fraction of a pixel look like a large step, which is how the unrelated fragment gets merged. Divide by the axis length and fail a zero-length axis. Do not change consolidation to use fragment ranges in the same edit. That is a different behaviour and needs its own before/after. Speed ratios are already scale-free; only the absolute step test is wrong. Expect some streak merges to move, and regress the known satellite trails.
 
 <a id="st-3"></a>
 ### ST-3 · A streak that doesn't move passes the motion check
@@ -580,8 +590,9 @@ single-streak path.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: implement
 - Notes: **Codex assessment:** Confirmed fail-open branch for a degenerate axis. Multi-frame motion needs positive evidence, while same-frame fragments and individually significant streaks should remain representable through their existing paths. Test those cases separately so rejecting a stationary track does not silently remove its constituent detections.
+- Notes: **Assessment:** `passesStreakTimeConsistency` returns true when `determineStreakLineEndpoints` finds no two frame centres 1 px apart. Being unable to measure motion is treated as motion. Multi-frame streaks must fail that check. Same-frame fragment merging and the single-streak path stay as they are. Test a stationary mark and a trail that does move, and check that the stationary pieces are still reported rather than deleted.
 
 <a id="st-4"></a>
 ### ST-4 · Streak chains have no common-line check and no distance limit
@@ -611,8 +622,9 @@ with a pixel tolerance, plus a speed-consistent distance limit.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: not implement. keep current linking behaviour. 
 - Notes: **Codex assessment:** The missing whole-track geometry check is real. Prefer a residual limit tied to positional uncertainty and a time-aware continuation test; a fixed maximum jump would also reject genuine fast satellites. Keep initial linking and consolidation consistent, and measure how a straight-line assumption behaves on long or visibly curved trails.
+- Notes: **Assessment:** The chain checks each step against 2° and never refits the whole line, so a long jump can bend by many pixels and still pass. Do not add a fixed maximum distance. The satellite trails in the reference sets jump hundreds of pixels a frame. Use the pixel residual consolidation already applies, on the initial chain as well, and limit a gap by the speed already measured. Look at one long trail before freezing the tolerance. The rule is not ready to code as written.
 
 ---
 
@@ -651,8 +663,9 @@ don't invent missing frames from distance ratios.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: not implement. this is part of the geometric linker which does not make any assumptions on time.
 - Notes: **Codex assessment:** Confirmed: distance multiples substitute for known frame gaps. Normalize by original frame-index differences for the untimed regular-cadence model, and use elapsed time when available; unequal capture intervals remain possible even without rejected frames. Test both a genuinely skipped observation and an incorrect doubled step in consecutive frames.
+- Notes: **Assessment:** `hasSteadyRhythm` ignores `sourceFrameIndex` and invents missed frames from the jump lengths. That both rejects a real mover missed in one frame and accepts a doubled step on consecutive frames. Divide each jump by the index gap. When both samples have timestamps, scale by elapsed time instead, so a meridian flip is not treated as one frame. The geometric pass is on in the shipped profile, so tracks on gapped sessions can change. Regress those, and keep the two fixtures in the review.
 
 <a id="pt-2"></a>
 ### PT-2 · Stationary detections can extend a time-based track
@@ -680,8 +693,9 @@ every single step to exceed the jitter, because that would reject real slow move
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: not implement at this point. 
 - Notes: **Codex assessment:** The acceptance path lacks a whole-track motion-significance gate, so the concern is well founded. Compare moving and stationary fits using an empirical positional-error floor, rather than imposing a minimum on every step. Validate on known slow movers and noisy stationary residuals to avoid trading these false tracks for lost slow objects.
+- Notes: **Assessment:** A small noisy first step plus the jitter allowance can confirm a track that is stationary after that. The failure is real. Do not require every step to beat the jitter, or the slow movers go with it. Agree a whole-track comparison against a stationary model, using the positional scatter of the track, and run it on the slow-mover fixtures and on a stationary residual before coding. Do this together with PT-3 so there is one acceptance test, not two.
 
 <a id="pt-3"></a>
 ### PT-3 · Time-based tracks can bend without a final straightness check
@@ -710,8 +724,9 @@ reject points or tracks beyond the tolerance.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: not implement, bending is acceptable. 
 - Notes: **Codex assessment:** Confirmed that earlier points are not revalidated against the final trajectory and the fit score only ranks proposals. A robust whole-track position-versus-time fit is appropriate; prune/refit a supported subset before discarding an entire track. Specify residual tolerances and preserve genuinely slow or mildly nonlinear motion in the validation set.
+- Notes: **Assessment:** Each new point is checked against a line that itself moves, and earlier points are never checked again. Length is ranked above the fit score, so a bent track can win. Fit the whole track before acceptance, and drop the offending points rather than the track when a straight subset still qualifies. Use the same tolerance as PT-2. Not ready to code until that tolerance is stated, because this changes reported asteroid positions.
 
 <a id="pt-4"></a>
 ### PT-4 · Geometric linker uses a fixed 2° direction tolerance
@@ -736,8 +751,9 @@ steps breaks the direction test.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: defer, not implement
 - Notes: **Codex assessment:** The fixed-angle sensitivity difference is supported by source; the 25% loss is specific to the cited synthetic setup. Relaxing the angle at short baselines can admit many chance links, so do not copy the dynamic formula without a bounded tolerance and whole-track validation. Compare completeness and false tracks together.
+- Notes: **Assessment:** The geometric linker keeps 2° where the time-based linker widens the angle for a short step. The one-in-four loss is one synthetic noise draw, not a measured miss on the reference sets. Copying the widening without a cap adds chance links. Revisit after PT-1 and the whole-track checks. No change now.
 
 <a id="pt-5"></a>
 ### PT-5 · `maxStarJitter` does too many jobs
@@ -774,8 +790,9 @@ the minimum mover speed, even if the second defaults to a multiple of the first.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: I believe we should do as part of the quality checks registration assessment. Keep that as an optional idea for the future, not implement something now. If we have registration issues, the whole process does not really work and we get too many false positives.  
 - Notes: **Codex assessment:** The coupling is real but partly intentional: registration uncertainty also limits measurable motion. Separate a policy minimum speed from the uncertainty model, rather than simply allowing motion below the measured jitter. Discuss defaults and profile compatibility before adding settings; keep existing hidden settings hidden.
+- Notes: **Assessment:** One field really does set the mask growth, the stationary test and the slowest motion the linker will seed. Those are different jobs, and a poor registration should not silently raise the minimum asteroid speed. A split is a new profile field and a migration. The minimum speed must not be set below the measured jitter, or noise becomes a track. Agree the default, keep the new field hidden, and only then add it. Do not change the current field's meaning in place.
 
 <a id="pt-6"></a>
 ### PT-6 · Greedy continuation and assignment
@@ -804,8 +821,9 @@ rejecting it. A global assignment step is possible later.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: defer
 - Notes: **Codex assessment:** This is an assignment trade-off, not an unconditional correctness bug. Retrying a conflicting proposal after removing used points is a reasonable limited experiment, provided it is rescored and still passes point-count, motion and whole-track gates. Benchmark crossing cases before considering a substantially more expensive global assignment.
+- Notes: **Assessment:** A shared detection can sink a second proposal, and another seed may still recover it. Nothing in the reference runs shows an asteroid lost this way. A retry that removes the shared point and rescores is a fair later experiment. It is not a fix to schedule now.
 
 <a id="pt-7"></a>
 ### PT-7 · Linker work grows very fast with leftover detections
@@ -829,8 +847,9 @@ can approach O(F³ D³) work, and stored proposals O(F³ D²). Many baselines de
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: defer
 - Notes: **Codex assessment:** The loop structure supports a severe worst-case scaling concern, but the quoted complexity is not a measured runtime diagnosis. Profile proposal counts, allocation and extension scans on noisy sessions first. Spatial indexing and deduplication of equivalent proposals are promising, provided deterministic ranking and the accepted detections are preserved.
+- Notes: **Assessment:** The seed loops can grow much faster than the number of real movers. That has not been timed. Profile proposal counts on a noisy set such as Eagle-noisy before adding a spatial index. No code until there is a number.
 
 <a id="pt-8"></a>
 ### PT-8 · Exposure motion limit uses the footprint area
@@ -855,8 +874,9 @@ calibrate on movers.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: defer
 - Notes: **Codex assessment:** This is a conservative shape heuristic, not a dimensional error: sqrt(area) is already a length. A measured major extent may better describe an elongated source, but depends on extraction threshold and seeing. Calibrate the replacement on known point/streak boundary cases instead of assuming major extent is the true exposure-motion length.
+- Notes: **Assessment:** `sqrt(pixelArea)` is a length, not a unit error. `strictExposureKinematics` defaults to true, so the check is live on sessions that have an exposure. No reference mover has been shown to die because of it. A major-axis limit is not automatically the trail length either, because the threshold cuts the footprint. Leave it until a real point-versus-streak case shows the rejection.
 
 <a id="pt-9"></a>
 ### PT-9 · Start-of-exposure times with mixed exposure lengths
@@ -887,8 +907,9 @@ to frame.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: won't fix
 - Notes: **Codex assessment:** Valid for mixed exposure durations; the report's midpoint correction does not fix the engine's linking times. Prefer an explicit start-time versus midpoint API contract and one shared conversion, with a documented fallback for missing duration. Avoid adding half an exposure twice for external callers that already supply midpoints; equal-duration sessions should remain equivalent.
+- Notes: **Assessment:** SpacePixels already refuses mixed exposure times, and IN-2 should apply that same check at the engine boundary. The leftover midpoint error on an accepted session is at most about 1% of the exposure. Shifting every timestamp by half the exposure inside the linker would move the speed of every timed track and would shift a caller who already passed midpoints a second time. State in DOC-1 that these timestamps are exposure starts. No time shift in the linker.
 
 ---
 
@@ -927,8 +948,9 @@ anomaly density to be small (see XC-2).
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: This was an attempt to rule out false positive high energy anomalies, as sometimes faint streaks touch stars and change their shape. Is this related to anomaly rescue items? If not we need to re-assess and perhaps remove that linking altogether if this is for any detected object. Lets discuss after your assessment. 
 - Notes: **Codex assessment:** The permissive search creates a credible multiple-trials false-alignment problem; the quoted rates are specific to uniform random points. Do not copy the 40% gap rule unchanged: three collinear points necessarily have a largest gap of at least 50% of their span. Choose criteria for three-fragment cases explicitly and validate known faint streaks as well as random fields.
+- Notes: **Assessment:** This is the high-priority linker bug. Any three anomalies within 6 px of some line become a suspected streak, with no span and no gap limit, and the probe's chance rate is credible. Do not copy the faint-fragment 40% gap rule. For three collinear points the largest gap is always at least half the span, so that rule rejects every three-point group, including a real one. The proposal needs a minimum span, a gap fraction that three points can meet, and the footprint axis along the line when the piece is elongated. Recompute the chance rate with that rule, and check it against the known faint streaks, before coding.
 
 <a id="an-2"></a>
 ### AN-2 · Suspected streak groups lose their seed line
@@ -953,8 +975,9 @@ ordering, consolidation and display.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: defer
 - Notes: **Codex assessment:** Confirmed loss of the geometry that justified membership. Fit one canonical line, recheck every member against its tolerance, and use that same geometry for ordering, merging and display. Keeping an arbitrary seed line alone would preserve consistency but can retain a poorer fit.
+- Notes: **Assessment:** The group is accepted on one line and later ordered on the farthest pair, which can be a different line. That is a real inconsistency and a small one. Fit one line as part of the AN-1 change, and recheck membership against it. Not a separate edit.
 
 <a id="an-3"></a>
 ### AN-3 · Suspected streak grouping allocates by largest frame index
@@ -976,8 +999,9 @@ instead of one per frame present.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: defer
 - Notes: **Codex assessment:** Confirmed sparse-index memory issue; low impact for normal SpacePixels sequences. A TreeMap or equivalent ordered sparse grouping avoids allocation by the maximum index while preserving deterministic frame order. Cover widely spaced original indices and the existing handling of unknown/negative indices.
+- Notes: **Assessment:** The code allocates one list for every index up to the largest `sourceFrameIndex`. A caller who keeps original indices such as 100000 pays for that. SpacePixels renumbers from zero, so the cost there is zero. Use a map when that method is next edited. Not its own change.
 
 ---
 
@@ -1008,8 +1032,9 @@ agree, or handle zero-motion groups separately.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: discuss first, not implement yet. Common motion is about catching remaining hot pixels that follow the dither pattern or drift. Please re-assess taking into account the notes below.  
 - Notes: **Codex assessment:** Confirmed: matching displacement differences also accepts two zero-motion sources. Require statistically meaningful shared motion or preserve stationary groups for transient assessment. The source is removed from local rescue, although it can still appear in the common-motion report section; describing it as completely absent from every output overstates the scope.
+- Notes: **Assessment:** Confirmed. `agrees` compares displacement differences, two stationary sources both have zero, and a pair across three frames at least 30 px apart is enough. A nova next to one leaking star is removed from local rescue. It can still appear in the common-motion section, so it is not gone from the report. Requiring every shared motion to exceed the jitter also stops the filter catching stationary hot pixels, which is part of what the filter is for. A pair at zero motion should not be enough. A larger stationary group still should. Agree that count, and check that a moving pair such as LR2/LR3 still matches, before coding.
 
 <a id="rs-2"></a>
 ### RS-2 · Residual analysis mixes two frame-numbering units
@@ -1039,8 +1064,9 @@ only for reporting.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: implement
 - Notes: **Codex assessment:** Confirmed inconsistent notions of an available frame. Use retained-frame ordinals for opportunity-based coverage and gap gates, while retaining original indices/timestamps for physical motion fits and provenance. Changing original indices to report-only information would also lose elapsed-gap information; define the intended units for each metric before fixing them.
+- Notes: **Assessment:** The chain and `maxFrameGap` use the position in the kept-frame list. Span, coverage, gap totals and the line-fit time use `sourceFrameIndex`, which still counts a frame quality control removed. Use the list ordinal for the gap gate and for coverage. Keep `sourceFrameIndex` for the reported frame number and for the position-versus-time fit, because a rejected frame is a real gap in time. Do not collapse both onto one unit. A session with no rejected frames should not change.
 
 <a id="rs-3"></a>
 ### RS-3 · Two-point LOCAL_REPEAT has no check against chance
@@ -1071,8 +1097,9 @@ density (see XC-2), or require a third point unless the pair is very significant
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: defer
 - Notes: **Codex assessment:** The density dependence is real, but the calculation estimates raw chance pairs under uniform independence, not the final accepted-candidate count after other gates. Measure the residual population and existing candidate filters first. Requiring three observations would sacrifice genuine brief events, so prefer a calibrated score/diagnostic before a blanket minimum increase.
+- Notes: **Assessment:** Two detections a few pixels apart can become a candidate, and the raw chance count does grow with the square of the leftover density. The quoted ~115 is that raw count under a uniform model, not the number that survives the other gates. Raising the minimum to 3 would drop a real brief event. Count what Eagle-noisy and a clean set actually emit before changing the gate. A chance note beside the candidate can wait for XC-2.
 
 ---
 
@@ -1106,8 +1133,9 @@ path within the jitter.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: not implement. 
 - Notes: **Codex assessment:** A plausible artifact mechanism, not a demonstrated failure on the named dataset. First retain the per-frame centroids and original frame mapping; match coordinate/sign conventions to the tuner's existing sensor-recurrence logic. Drift agreement is evidence of an artifact, not proof, so initially flag it rather than vetoing real movers with coincidentally similar motion.
+- Notes: **Assessment:** On an uncalibrated drift, a hot pixel becomes a short smear in the maximum stack and can pass the slow-mover gates. The drift points already exist, and nothing compares a candidate to them. This has not been shown on whynot, so do not delete candidates yet. Compare per-frame centroids with the inverse drift on whynot and on one clean set, and report how many current slow movers match. Flag the matches. A later veto needs that count, because a real mover can share the drift by coincidence.
 
 <a id="sm-2"></a>
 ### SM-2 · Sigma on the maximum stack is on a different scale
@@ -1140,8 +1168,9 @@ measure the maximum stack's noise empirically, for example from the negative-ima
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: defer
 - Notes: **Codex assessment:** The scale mismatch is real under the stated maximum-of-Gaussians model; the numerical false-seed ratio is not a calibration of the actual clipped background estimator or registered data. Keep the sigmas independently tuned until empirical null-stack tests cover frame count, varying noise and correlations. A frame-count-only conversion is insufficient in general.
+- Notes: **Assessment:** A threshold on the per-pixel maximum of many frames is not the single-frame detection sigma. The factor of about 10 assumes independent Gaussian frames and a plain maximum, which is not this clipped estimator. Leave the two sigmas independent. The hand test of tying them should use a null stack, not a formula in the frame count. No code now.
 
 ---
 
@@ -1175,8 +1204,9 @@ the detection profile.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: not implement
 - Notes: **Codex assessment:** Confirmed conservative masking of the whole candidate footprint in every frame; a false candidate can therefore remove useful photometry. Per-frame positions/support are the right prerequisite for narrowing it, with conservative treatment of genuinely unobserved intervals. Compare affected stars and contamination rates before relaxing these flags, and correct the independence claim in the documentation.
+- Notes: **Assessment:** Confirmed at `VariableStarAnalyzer.java:1006–1021`. Each slow-mover candidate flags every star within 5 FWHM as `CROSSING` in every frame, so photometry does depend on the detection profile. The comment near line 67 is about the star list and the peak-sigma floor, and it reads as a broader promise than the code keeps. Do not narrow the flags until a per-frame position exists. First count how many photometry stars the current candidates remove on the reference sets. Correct the comment in DOC-1 now. A false candidate from SM-1 would make this worse, so measure before relaxing.
 
 The other photometry findings stay in `VariableStar-ASSESSMENT.md`; findings 2, 5, 6, 8 and 9 there
 remain deferred. Low-sky `EDGE_OR_VOID` flags are part of EX-2.
@@ -1207,8 +1237,9 @@ outside the crop count as void.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: In light of XC-4, we will define an area where all SpacePixels processing will take place. We just need to make sure that the crops fall into that area. Please re-assess in light of XC-4.  
 - Notes: **Codex assessment:** The ownership denominator includes crop interiors where edge/void gates prevent detections, producing an extra crop-boundary bias relative to full-frame extraction. Intersect ownership with the actual searchable region and define whether the budget is per total or searchable megapixel. Include overlap ownership and edgeMarginPixels, rather than subtracting an approximate border area independently.
+- Notes: **Assessment:** The rates divide by the owned crop area, while `extractAll` still uses the caller's void radius, so a band inside the crop edge cannot produce a detection. The 25% figure is a 70 px session radius on a 1000 px crop. The mask builder forces a void radius of 5, but the detection pass does not, so a normal tune is not that 25% case and a raised radius is. Measure the dead fraction on one real tune before changing the denominator, and decide whether the published budget is per crop pixel or per searchable pixel. Overlap ownership has to stay in the same definition. This changes tuned settings, so it is not a silent edit.
 
 <a id="at-2"></a>
 ### AT-2 · Tuner injections near crop edges can't be recovered
@@ -1230,8 +1261,9 @@ the void probes reject them.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: See comment in AT-1, in light of XC-4, we need to make sure the probe falls inside that area. Please re-assess. 
 - Notes: **Codex assessment:** Confirmed mismatch between injection placement and the inherited void radius. Size the injection margin from all active exclusion distances plus the source footprint, and explicitly report crops with no usable injection interior. This remains relevant for deliberately enlarged void settings even after IN-1 stops accidental mutations.
+- Notes: **Assessment:** Injections can be placed 30 px from a crop edge, and `extractAll` rejects anything inside the caller's void radius, which can be larger. After IN-1, inspection no longer raises that radius by accident. Set the margin from the void radius when that line is next edited. Not a separate tuner change.
 
 <a id="at-3"></a>
 ### AT-3 · Negative image matches noise only under equal seeing
@@ -1254,8 +1286,9 @@ or choose tuner frames with seeing close to the median.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: defer for now. 
 - Notes: **Codex assessment:** Seeing mismatch can affect the null residuals, but the proposed star-mask veto already runs on negative-image detections in the tuner's evaluate method. Quantify the survivors outside/partly overlapping that mask before changing it. Equal seeing alone is insufficient: flux/background differences and master-stack noise matter too, and selecting only median-seeing frames could hide genuine difficult-frame leakage.
+- Notes: **Assessment:** A seeing mismatch leaves rings around stars in the `2 × master − frame` image. Those detections already have to survive the veto before they count as noise. The remaining risk is a ring outside that mask. Count those before changing the null image. Do not restrict the tuner to median-seeing frames. Those are the easy frames, and the hard frames are where leakage matters.
 
 <a id="at-4"></a>
 ### AT-4 · Tuner budget counts detections, not what users see
@@ -1278,8 +1311,9 @@ a track-level term to the budget.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: defer, please add a sentence in the tuner docs, with DOC-1
 - Notes: **Codex assessment:** This is an explicit objective limitation rather than a miscomputed budget. Keep the current inexpensive extraction-level calibration and label its units clearly; evaluate track-level false outputs as a secondary diagnostic first. Replacing the objective would require representative multi-frame null sequences and a justified runtime budget.
+- Notes: **Assessment:** The budget limits false single-frame detections. Users see tracks, anomalies and residual candidates. That is a limit of the objective, not a wrong count. Leave the calibration as it is. A track-level term needs a multi-frame null sequence and a runtime budget that has not been justified. A sentence in the tuner docs, with DOC-1, is enough.
 
 <a id="at-5"></a>
 ### AT-5 · Legacy tuner differs from the pipeline
@@ -1305,8 +1339,9 @@ a track-level term to the budget.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: implement
 - Notes: **Codex assessment:** Source confirms the mask-growth mismatch in both legacy evaluation paths, plus the stale comment and enabled debug output. Reuse MasterVetoMask.dilationRadius consistently, then compare legacy recommendations before/after; unlike the logging cleanup, changing the mask can change tuned settings. Keep this separate from changes to the calibrated tuner's objective.
+- Notes: **Assessment:** The legacy tuner still grows the mask by `ceil(maxStarJitter)`, while `MasterVetoMask` uses `max(1, round(jitter / 2))`. At a jitter of 3 px that is 3 px against 2 px, so the tune is scored on a cleaner frame than detection sees. Matching the pipeline is right, and it will change legacy recommendations, so it needs a before/after on one tune rather than a silent edit. `DEBUG` is already false on current main (`6992e9e`, after the reviewed commit). Fix the "streaks bypass the veto" comment in DOC-1. The mask change stays its own step.
 
 ---
 
@@ -1338,8 +1373,9 @@ and apply it.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: Document the figures as optimistic in DOC-1
 - Notes: **Codex assessment:** The usual direction needs correcting: positive pixel correlations overstate significance and understate magnitude errors. The numerical 7-to-4/5 example is unmeasured, and the correction depends on resampling and aperture size. Document the errors as lower bounds first; calibrating them requires blank-aperture tests plus a separate treatment of source photon noise.
+- Notes: **Assessment:** Resampling makes neighbouring pixels share noise, so integrated sigma and the aperture signal-to-noise are too high, and the magnitude errors are too small. The step from 7 down to 4–5 is not a measurement. Document the figures as optimistic in DOC-1. Do not apply a correlation factor until blank apertures have been measured. Detection thresholds were set empirically, so what is detected does not change.
 
 <a id="xc-2"></a>
 ### XC-2 · No common estimate of chance alignments (design)
@@ -1372,8 +1408,9 @@ reports the expectation next to the result.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: not implement, defer for now
 - Notes: **Codex assessment:** Useful design direction, but one density/area formula cannot calibrate every stage: spatial clustering, repeated sensor defects, shared trials and correlated frames violate uniform independence. Start with stage-specific null diagnostics and expose their assumptions. A common helper can share bookkeeping without presenting expected counts as calibrated per-candidate probabilities.
+- Notes: **Assessment:** Suspected streaks, local repeats, common motion and the geometric linker each decide that a pattern is too regular, and none of them says how often the frame's density would produce it. A shared helper is the right long-term check. One uniform-density formula will not fit hot pixels, repeated frames or a search that tries every pair. Start with a diagnostic beside the candidate, not a new acceptance gate, and not before AN-1 has its own rule. Do not block the concrete fixes on this.
 
 <a id="xc-3"></a>
 ### XC-3 · One global background per frame (design)
@@ -1397,8 +1434,9 @@ large change. EX-1 removes the worst failure first.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: defer for now, keep for a later improvement. 
 - Notes: **Codex assessment:** A genuine limitation for gradients and structured backgrounds, but a larger redesign rather than the prerequisite for every listed fix. Address padding and void handling independently first. A later local mesh must preserve extended emission and propagate local noise consistently; photometry already uses a local sky estimate, so scope this change to the affected extraction paths.
+- Notes: **Assessment:** One median and one sigma per frame will over-detect on the bright side of a gradient and miss faint sources on the dark side. A local mesh is the usual answer and it is a large change. It is not required to fix the padding bugs. Photometry already measures a local sky. Do EX-1 first, and leave the mesh as a later project.
 
 <a id="xc-4"></a>
 ### XC-4 · No session data area: padding is handled by a border and darkness probes
@@ -1573,19 +1611,24 @@ darkness tests.
 
 - **Every frame or most frames.** The data favour "every kept frame": the worst single frame costs
   1.8 points. Should a frame that alone removes much more be flagged in the report, or rejected by
-  quality control?
+  quality control? Answer: A frame that alone removes much more should be rejected by quality control and flagged in the report. 
 - **Which frames.** Use the area of the frames kept after quality control for detection, and the
-  area of all frames that registered for the quality metrics (which run before rejection)?
+  area of all frames that registered for the quality metrics (which run before rejection)? Answer: Yes. For the quality metrics, can we first calculate the common area in all images, rejecting any outlier frames as per the question above and then measure quality on that common area? That way quality metrics are more reliable as we measure them on the same area that we will do the detection. What do you think? 
 - **Areas covered by only some frames.** They stay unsearched, as today. Searching them would need
-  a median over the covering frames only and a minimum frame count; that could be a later step.
+  a median over the covering frames only and a minimum frame count; that could be a later step. Answer: agreed
 - **Photometry on stars that only some frames cover** (3–5 % of the stars). Keep them, with gaps in
   their light curves and flags from each frame's exact data area, or measure only inside the shared
-  area so every light curve is complete?
+  area so every light curve is complete? Answer: measure only inside the shared area
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
-- Notes:
+- Decision: I have my answers on the open questions above. Please go ahead. What is the role of the driftAnalyzer now ? Just to show the drift and have the measurements for the user? 
+- Notes: **Assessment:** The measurements justify a session data area, and I would accept it as the replacement for the border and the darkness probes. I would not start the detection change until the four open questions below are settled, and I would not hold EX-1 for this project. The histogram bug is already hurting Eagle-noisy and dc-light-2.
+
+  On the open questions:
+  - Use every kept frame. On these sets the worst single frame costs at most 1.8 points. Flag a frame that alone removes more than a few percent. Do not reject it for that. The existing half-frame rule already drops a failed registration.
+  - Use two areas. Quality metrics run before rejection, so they use every frame that passed the half-frame registration check. Detection uses the intersection of the frames kept afterwards, so one cloudy, shifted frame does not set the border.
+
 
 ---
 
@@ -1639,8 +1682,9 @@ the SpacePixels profile differences, and states the input rules in `PIPELINE.md`
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: implement
 - Notes: **Codex assessment:** The listed default/version mismatches are confirmed and are suitable for a separate documentation update. Distinguish engine defaults from the shipped SpacePixels profile: autoTuneMaxCandidateFrames is an active SpacePixels wrapper setting, not a DetectionConfig field. Describe current contracts without silently turning proposed algorithm or API changes into documented guarantees.
+- Notes: **Assessment:** The slow-mover defaults in the docs do not match `DetectionConfig`: the code has 1.2, 2.8, 0.5, 40 and 60, and the docs still say the filters are off. `README.md` still says 1.0.0 while the build is 1.0.3. This can be one documentation commit at any time. Say which numbers are engine defaults and which are the shipped SpacePixels profile. `autoTuneMaxCandidateFrames` is a SpacePixels setting, not a field of `DetectionConfig`. Also record the extraction FWHM unit (EX-3), that integrated sigma ignores correlated pixels (XC-1), that linker timestamps are exposure starts (PT-9), and the input rules once IN-2 lands. Do not document the data area or other proposed behaviour as if it already exists.
 
 <a id="hy-1"></a>
 ### HY-1 · Dead code and leftover output
@@ -1670,8 +1714,9 @@ false, and remove `isTrackAlreadyFound`.
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: Please check if any of these is used by SpacePixels or is part of the public JTransient API, if not then please remove them. The logging has already been partly fixed in the meanwhile. 
 - Notes: **Codex assessment:** Logging cleanup and genuinely unused private code are reasonable. The SourceExtractor helpers are public API, so lack of internal callers does not justify removal without a compatibility decision. isTrackAlreadyFound is still called by the geometric linker; establish its redundancy before deleting it rather than labelling it uncalled dead code.
+- Notes: **Assessment:** The review is stale on the logging. On current main, `JTransientEngine.DEBUG` and `JTransientAutoTuner.DEBUG` are already false, and the `SPATIAL_FRAMES` print is already behind `DEBUG` (`6992e9e`, after `2f58ccf`). `writeSpatialComparison` is private and unused. Leave it until that class is next edited. `isBinaryStarAnomaly` and `isIrregularStreakShape` are public, so no internal caller is not a reason to remove them. `isTrackAlreadyFound` is still called by the geometric linker. No cleanup commit.
 
 ---
 
@@ -1697,8 +1742,9 @@ programs using JTransient they remain possible until IN-2 is done. No separate a
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: won't fix
 - Notes: **Codex assessment:** Excluded by current SpacePixels import validation, but still relevant to direct mixed-timestamp callers when the geometric pass is disabled. Cover it through IN-2's explicit uniform-metadata contract; keep a rejection/untimed control test so future importer changes do not reopen it.
+- Notes: **Assessment:** No separate linker change. Import already refuses a mix of timed and untimed frames, and IN-2 should make the engine throw on the same mix. A test that a mixed session is rejected, and that an untimed session still uses the geometric linker, belongs with IN-2.
 
 <a id="x-2"></a>
 ### X-2 · The "no timestamp" value used as a real time
@@ -1715,8 +1761,9 @@ programs using JTransient they remain possible until IN-2 is done. No separate a
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: won't fix
 - Notes: **Codex assessment:** Excluded for validated SpacePixels sequences. The linker still needs to reject mixed known/missing timestamps at its own public boundary before calculating differences; silently treating -1 as an epoch is unsafe. Handle this with IN-2 rather than a separate algorithm change.
+- Notes: **Assessment:** No separate linker change. The loops treat -1 as a time only when a caller mixed missing and real timestamps. IN-2 should reject that mix before any difference is computed. Do not treat a genuine timestamp of 0 as missing.
 
 <a id="x-3"></a>
 ### X-3 · Direct callers leave timestamps at 0
@@ -1736,8 +1783,9 @@ programs using JTransient they remain possible until IN-2 is done. No separate a
 
 **Your comments:**
 
-- Decision: <!-- implement / discuss first / defer / won't fix -->
+- Decision: won't fix
 - Notes: **Codex assessment:** Confirmed direct-call trap: DetectedObject's default timestamp contradicts the documented -1 sentinel. Initialize absent metadata explicitly and document direct SourceExtractor-to-TrackLinker usage; preserve intentionally supplied Unix-epoch timestamps. SpacePixels assigns metadata through the engine, so this is API hardening under IN-2.
+- Notes: **Assessment:** No separate linker change. The default timestamp on `DetectedObject` is 0, while missing time everywhere else is -1, so a direct caller who forgets the metadata gets zero time steps and no geometric fallback. If IN-2 is implemented, construct the missing time as -1 and leave a caller-supplied 0 as a real timestamp. SpacePixels fills the metadata in the engine, so its results do not move.
 
 ---
 

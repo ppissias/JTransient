@@ -311,10 +311,9 @@ For normal elongated candidates this should rarely be necessary because `obj.ang
 
 ```text
 isBinaryStarLikeStreakShape(...)
-isIrregularStreakShape(...)
 ```
 
-Those methods currently calculate:
+That method currently calculates:
 
 ```text
 parallel extent
