@@ -469,11 +469,13 @@ public class JTransientAutoTuner {
      * @param profile policy preset controlling scoring aggressiveness
      * @param listener optional progress listener
      * @return tuning result containing the best configuration or a fallback to {@code baseConfig}
+     * @throws IllegalArgumentException if the frames break the engine's input rules (see {@link JTransientEngine})
      */
     public static AutoTunerResult tune(List<ImageFrame> allFrames,
                                        DetectionConfig baseConfig,
                                        AutoTuneProfile profile,
                                        TransientEngineProgressListener listener) {
+        InputRules.checkFrames(allFrames);
 
         if (DEBUG) {
             System.out.println("\n==================================================");

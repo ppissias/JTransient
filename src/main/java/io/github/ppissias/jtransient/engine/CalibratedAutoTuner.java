@@ -421,6 +421,8 @@ public final class CalibratedAutoTuner {
     /**
      * Measures noise, leakage, mask coverage and sensitivity for the whole settings grid and chooses the
      * best setting for every profile.
+     *
+     * @throws IllegalArgumentException if the frames break the engine's input rules (see {@link JTransientEngine})
      */
     public static Calibration calibrate(List<ImageFrame> poolFrames,
                                         DetectionConfig baseConfig,
@@ -431,6 +433,7 @@ public final class CalibratedAutoTuner {
             calibration.failureReason = "At least 5 frames are needed for calibrated auto-tuning.";
             return calibration;
         }
+        InputRules.checkFrames(poolFrames);
         ExecutorService executor = Executors.newFixedThreadPool(Math.max(1, Runtime.getRuntime().availableProcessors()));
         try {
             List<ImageFrame> pool = new ArrayList<>();

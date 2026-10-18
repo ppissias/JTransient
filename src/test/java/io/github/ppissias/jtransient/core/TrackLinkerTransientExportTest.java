@@ -142,6 +142,8 @@ public class TrackLinkerTransientExportTest {
     private static SourceExtractor.DetectedObject createStreak(double x, double y, int frameIndex) {
         SourceExtractor.DetectedObject obj = new SourceExtractor.DetectedObject(x, y, 500.0, 20);
         obj.sourceFrameIndex = frameIndex;
+        obj.timestamp = -1L;
+        obj.exposureDuration = -1L;
         obj.isStreak = true;
         obj.angle = 0.0;
         obj.peakSigma = 9.0;

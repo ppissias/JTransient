@@ -43,6 +43,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <p>The engine owns an internal executor for concurrent frame processing. Reuse the same
  * instance across runs when practical, and call {@link #shutdown()} when the application no
  * longer needs it.</p>
+ *
+ * <p>Every entry point checks its input first and throws {@link IllegalArgumentException}, naming the frames, when
+ * the list is empty, the frames differ in size or share a sequence index, some frames have a timestamp and others
+ * don't ({@code -1}), some have an exposure time and others don't, the exposure times differ by more than 2 % (at
+ * least 0.1 s), or a supplied master stack has another size. A timestamp of 0 is a real time.</p>
  */
 public class JTransientEngine implements AutoCloseable {
 
@@ -57,10 +62,14 @@ public class JTransientEngine implements AutoCloseable {
     public JTransientEngine() {
     }
 
-    private void configureFrameExecutor(List<ImageFrame> frames) {
+    private void ensureOpen() {
         if (executor.isShutdown()) {
             throw new IllegalStateException("JTransientEngine has been closed.");
         }
+    }
+
+    private void configureFrameExecutor(List<ImageFrame> frames) {
+        ensureOpen();
         long largestFramePixels = 1L;
         for (ImageFrame frame : frames) {
             largestFramePixels = Math.max(largestFramePixels,
@@ -144,6 +153,8 @@ public class JTransientEngine implements AutoCloseable {
      */
     public MasterStackResult generateMasterStackWithDetails(List<ImageFrame> inputFrames, DetectionConfig config,
                                                             TransientEngineProgressListener listener) throws Exception {
+        ensureOpen();
+        InputRules.checkPipelineInput(inputFrames, null);
         configureFrameExecutor(inputFrames);
         if (listener != null) {
             listener.onProgressUpdate(0, "Evaluating frames for Master Stack...");
@@ -276,6 +287,8 @@ public class JTransientEngine implements AutoCloseable {
      * @throws Exception if extraction or vetoing fails
      */
     public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
+        ensureOpen();
+        InputRules.checkPipelineInput(inputFrames, providedMasterStack);
         ExtractedFramesContext context = extractSourcesFromFrames(inputFrames, config, listener);
 
         if (providedMasterStack != null) {
@@ -584,6 +597,8 @@ public class JTransientEngine implements AutoCloseable {
      * @throws Exception if extraction, tracking, or residual analysis fails
      */
     public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
+        ensureOpen();
+        InputRules.checkPipelineInput(inputFrames, providedMasterStack);
         ExtractedFramesContext context = extractSourcesFromFrames(inputFrames, config, listener);
         long stageStartedNanos = System.nanoTime();
         PipelineTelemetry telemetry = context.telemetry;

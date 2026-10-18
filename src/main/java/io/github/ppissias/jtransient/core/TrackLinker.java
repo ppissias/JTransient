@@ -20,6 +20,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Links per-frame transient detections into moving-object tracks.
@@ -30,9 +31,9 @@ import java.util.Set;
  *
  * <p>Input frames must have uniform timestamp availability: either every frame has a capture
  * timestamp in milliseconds, or every frame has no timestamp. Each detection must carry its
- * source frame's timestamp, using {@code -1} when timestamps are unavailable. Callers must
- * validate this precondition before invoking the tracker; mixed timestamp availability is
- * unsupported. All input exposures are expected to have the same duration.</p>
+ * source frame's timestamp, using {@code -1} when timestamps are unavailable; 0 is a real time.
+ * {@link #findMovingObjects} throws {@link IllegalArgumentException} when some detections have a
+ * timestamp and others have none. All input exposures are expected to have the same duration.</p>
  */
 public class TrackLinker {
 
@@ -483,6 +484,7 @@ public class TrackLinker {
             int sensorWidth,
             int sensorHeight) {
 
+        checkUniformTimestamps(allFrames);
         int numFrames = allFrames.size();
         if (JTransientEngine.DEBUG) System.out.println("\nDEBUG: [START] findMovingObjects initialized with " + numFrames + " frames.");
 
@@ -1114,6 +1116,25 @@ public class TrackLinker {
                 unclassifiedTransients,
                 filterResult.masterVetoMask
         );
+    }
+
+    /**
+     * Throws when some detections carry a capture time and others have none ({@code -1}); see the class description.
+     * A timestamp of 0 is a real time.
+     */
+    static void checkUniformTimestamps(List<List<SourceExtractor.DetectedObject>> allFrames) {
+        Set<Integer> timedFrames = new TreeSet<>();
+        Set<Integer> untimedFrames = new TreeSet<>();
+        for (int i = 0; i < allFrames.size(); i++) {
+            for (SourceExtractor.DetectedObject object : allFrames.get(i)) {
+                (object.timestamp == -1L ? untimedFrames : timedFrames).add(i);
+            }
+        }
+        if (!timedFrames.isEmpty() && !untimedFrames.isEmpty()) {
+            throw new IllegalArgumentException("Either every detection has a capture time or none has. Frames (by "
+                    + "position in the list) with detections without one: " + untimedFrames + "; with one: "
+                    + timedFrames + ".");
+        }
     }
 
     /**
