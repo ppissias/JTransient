@@ -1615,7 +1615,9 @@ public class TrackLinker {
 
         SourceExtractor.DetectedObject[] endpoints = determineStreakLineEndpoints(points);
         if (endpoints == null) {
-            return true;
+            // No line can be measured: same-frame fragments are fine, but streaks in several frames that did not
+            // move are not a moving object.
+            return countUniqueFrames(points) <= 1;
         }
 
         return hasConsistentStreakMotion(points, endpoints[0], endpoints[1], config);

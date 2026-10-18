@@ -242,6 +242,54 @@ public class TrackLinkerStreakConsolidationTest {
         }
     }
 
+    /**
+     * An artifact that leaves the same short mark in three frames does not move, so it is not a streak track; the
+     * marks are still reported, as single streaks.
+     */
+    @Test
+    public void findMovingObjectsDoesNotLinkAStreakThatDoesNotMove() {
+        DetectionConfig config = new DetectionConfig();
+        SourceExtractor.DetectedObject first = createStreak(40.0, 40.0, 0, 0.0, 12.0, 0L);
+        SourceExtractor.DetectedObject second = createStreak(40.0, 40.0, 1, 0.0, 12.0, 120_000L);
+        SourceExtractor.DetectedObject third = createStreak(40.0, 40.0, 2, 0.0, 12.0, 240_000L);
+
+        List<List<SourceExtractor.DetectedObject>> frames = List.of(List.of(first), List.of(second), List.of(third));
+        TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
+                frames, new ArrayList<>(), config, null, 100, 100);
+
+        int reported = 0;
+        for (TrackLinker.Track track : result.tracks) {
+            assertTrue("a multi-frame track was formed from a stationary mark", countFrames(track) <= 1);
+            reported += track.points.size();
+        }
+        assertEquals(3, reported);
+    }
+
+    /** A streak that moves 20 px per frame still forms a streak track. */
+    @Test
+    public void findMovingObjectsLinksAStreakThatMoves() {
+        DetectionConfig config = new DetectionConfig();
+        SourceExtractor.DetectedObject first = createStreak(20.0, 40.0, 0, 0.0, 12.0, 0L);
+        SourceExtractor.DetectedObject second = createStreak(40.0, 40.0, 1, 0.0, 12.0, 120_000L);
+        SourceExtractor.DetectedObject third = createStreak(60.0, 40.0, 2, 0.0, 12.0, 240_000L);
+
+        List<List<SourceExtractor.DetectedObject>> frames = List.of(List.of(first), List.of(second), List.of(third));
+        TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
+                frames, new ArrayList<>(), config, null, 100, 100);
+
+        assertEquals(1, result.tracks.size());
+        assertTrue(result.tracks.get(0).isStreakTrack);
+        assertEquals(3, countFrames(result.tracks.get(0)));
+    }
+
+    private static int countFrames(TrackLinker.Track track) {
+        java.util.Set<Integer> frames = new java.util.HashSet<>();
+        for (SourceExtractor.DetectedObject point : track.points) {
+            frames.add(point.sourceFrameIndex);
+        }
+        return frames.size();
+    }
+
     private static SourceExtractor.DetectedObject createStreak(double x,
                                                                double y,
                                                                int frameIndex,
