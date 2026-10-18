@@ -9,6 +9,7 @@
  */
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
@@ -31,18 +32,22 @@ final class ExtractedFramesContext {
     final long startNanos;
     /** Relative per-frame drift diagnostics derived from the valid image footprint. */
     final List<SourceExtractor.Pixel> driftPoints;
+    /** Where every clean frame has image data, or null when no frame was kept. */
+    final DataArea dataArea;
 
     ExtractedFramesContext(List<SourceExtractor.ExtractionResult> cleanFramesData,
                            List<ImageFrame> cleanFrames,
                            List<FrameQualityAnalyzer.FrameMetrics> cleanFrameMetrics,
                            PipelineTelemetry telemetry,
                            long startNanos,
-                           List<SourceExtractor.Pixel> driftPoints) {
+                           List<SourceExtractor.Pixel> driftPoints,
+                           DataArea dataArea) {
         this.cleanFramesData = cleanFramesData;
         this.cleanFrames = cleanFrames;
         this.cleanFrameMetrics = cleanFrameMetrics;
         this.telemetry = telemetry;
         this.startNanos = startNanos;
         this.driftPoints = driftPoints;
+        this.dataArea = dataArea;
     }
 }

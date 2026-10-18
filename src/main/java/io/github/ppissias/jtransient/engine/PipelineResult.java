@@ -9,6 +9,7 @@
  */
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.ResidualTransientAnalysis;
 import io.github.ppissias.jtransient.core.SlowMoverAnalysis;
 import io.github.ppissias.jtransient.core.SourceExtractor;
@@ -67,6 +68,12 @@ public class PipelineResult {
 
     /** Stationary-star photometry, readiness verdict and variable-star candidates; empty when disabled. */
     public final VariableStarAnalysis variableStarAnalysis;
+
+    /**
+     * Where every kept frame holds image data, {@value DataArea#MARGIN} px in from the registration fill and the image
+     * edge; null when not measured.
+     */
+    public final DataArea dataArea;
 
     /**
      * Creates the unified pipeline result payload using the legacy slow-mover export fields.
@@ -166,6 +173,34 @@ public class PipelineResult {
                           List<SourceExtractor.Pixel> driftPoints,
                           short[][] maximumStackData,
                           VariableStarAnalysis variableStarAnalysis) {
+        this(tracks, telemetry, masterStackData, masterStars, slowMoverAnalysis, slowMoverStackData,
+                slowMoverMedianVetoMask, slowMoverCandidates, anomalies, allTransients, unclassifiedTransients,
+                residualTransientAnalysis, masterVetoMask, driftPoints, maximumStackData, variableStarAnalysis, null);
+    }
+
+    /**
+     * Creates the unified pipeline result payload including the variable-star analysis and the data area.
+     *
+     * @param variableStarAnalysis photometry result, or null for an empty one
+     * @param dataArea where every kept frame holds image data, or null when not measured
+     */
+    public PipelineResult(List<TrackLinker.Track> tracks,
+                          PipelineTelemetry telemetry,
+                          short[][] masterStackData,
+                          List<SourceExtractor.DetectedObject> masterStars,
+                          SlowMoverAnalysis slowMoverAnalysis,
+                          short[][] slowMoverStackData,
+                          boolean[][] slowMoverMedianVetoMask,
+                          List<SourceExtractor.DetectedObject> slowMoverCandidates,
+                          List<TrackLinker.AnomalyDetection> anomalies,
+                          List<List<SourceExtractor.DetectedObject>> allTransients,
+                          List<List<SourceExtractor.DetectedObject>> unclassifiedTransients,
+                          ResidualTransientAnalysis residualTransientAnalysis,
+                          boolean[][] masterVetoMask,
+                          List<SourceExtractor.Pixel> driftPoints,
+                          short[][] maximumStackData,
+                          VariableStarAnalysis variableStarAnalysis,
+                          DataArea dataArea) {
         this.tracks = tracks;
         this.telemetry = telemetry;
         this.masterStackData = masterStackData;
@@ -182,5 +217,6 @@ public class PipelineResult {
         this.driftPoints = driftPoints;
         this.maximumStackData = maximumStackData;
         this.variableStarAnalysis = variableStarAnalysis != null ? variableStarAnalysis : VariableStarAnalysis.empty();
+        this.dataArea = dataArea;
     }
 }

@@ -1,6 +1,7 @@
 package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.core.FrameDriftAnalyzer;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 import org.junit.Test;
@@ -97,7 +98,6 @@ public class JTransientEngineDriftTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private static List<SourceExtractor.Pixel> analyze(JTransientEngine engine,
                                                        List<ImageFrame> frames,
                                                        DetectionConfig config) throws Exception {
@@ -109,7 +109,8 @@ public class JTransientEngineDriftTest {
                 PipelineTelemetry.class
         );
         method.setAccessible(true);
-        return (List<SourceExtractor.Pixel>) method.invoke(engine, frames, config, null, new PipelineTelemetry());
+        return ((FrameDriftAnalyzer.DriftAnalysisResult) method.invoke(engine, frames, config, null, new PipelineTelemetry()))
+                .driftPoints;
     }
 
     private static short[][] createFrame(int width,

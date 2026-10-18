@@ -11,6 +11,8 @@ package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.CommonMotionRejector;
+import io.github.ppissias.jtransient.core.DataArea;
+import io.github.ppissias.jtransient.core.FrameCoverage;
 import io.github.ppissias.jtransient.core.FrameDriftAnalyzer;
 import io.github.ppissias.jtransient.core.MasterReferenceAnalyzer;
 import io.github.ppissias.jtransient.core.MasterMapGenerator;
@@ -30,7 +32,9 @@ import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -362,7 +366,8 @@ public class JTransientEngine implements AutoCloseable {
         // --- NEW: DITHER & DRIFT DIAGNOSTICS ---
         // =================================================================
         long stageStartedNanos = System.nanoTime();
-        List<SourceExtractor.Pixel> driftPoints = analyzeDitherAndDrift(inputFrames, config, listener, telemetry);
+        FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = analyzeDitherAndDrift(inputFrames, config, listener, telemetry);
+        List<SourceExtractor.Pixel> driftPoints = new ArrayList<>(driftAnalysis.driftPoints);
         telemetry.recordStage(PipelineTelemetry.Stage.DRIFT_ANALYSIS, stageStartedNanos);
         stageStartedNanos = System.nanoTime();
 
@@ -503,6 +508,7 @@ public class JTransientEngine implements AutoCloseable {
             }
         }
 
+        DataArea dataArea = sessionDataArea(driftAnalysis.frameCoverages, cleanFrames, telemetry);
         telemetry.recordStage(PipelineTelemetry.Stage.QUALITY_FILTERING, stageStartedNanos);
         return new ExtractedFramesContext(
                 cleanFramesData,
@@ -510,7 +516,8 @@ public class JTransientEngine implements AutoCloseable {
                 cleanFrameMetrics,
                 telemetry,
                 startNanos,
-                driftPoints
+                driftPoints,
+                dataArea
         );
     }
 
@@ -542,6 +549,43 @@ public class JTransientEngine implements AutoCloseable {
     }
 
     /**
+     * The area where every kept frame holds image data, and the kept frames that limit it, recorded in the telemetry.
+     *
+     * @param coverages coverage of every frame that passed the drift analysis
+     * @param keptFrames the frames kept by quality control
+     * @return the area, or null when no frame was kept
+     */
+    private static DataArea sessionDataArea(List<FrameCoverage> coverages, List<ImageFrame> keptFrames,
+                                            PipelineTelemetry telemetry) {
+        Map<Integer, FrameCoverage> bySequence = new HashMap<>();
+        for (FrameCoverage coverage : coverages) {
+            bySequence.put(coverage.getSequenceIndex(), coverage);
+        }
+        Map<Integer, String> names = new HashMap<>();
+        List<FrameCoverage> kept = new ArrayList<>();
+        for (ImageFrame frame : keptFrames) {
+            FrameCoverage coverage = bySequence.get(frame.sequenceIndex);
+            if (coverage != null) {
+                kept.add(coverage);
+                names.put(frame.sequenceIndex, frame.filename);
+            }
+        }
+        if (kept.isEmpty()) {
+            return null;
+        }
+        DataArea area = DataArea.of(kept);
+        telemetry.dataAreaFraction = area.getFraction();
+        for (DataArea.FrameLimit limit : DataArea.limitingFrames(kept)) {
+            PipelineTelemetry.DataAreaFrameStat stat = new PipelineTelemetry.DataAreaFrameStat();
+            stat.frameIndex = limit.sequenceIndex;
+            stat.filename = names.get(limit.sequenceIndex);
+            stat.gainedFraction = limit.gainedFraction;
+            telemetry.dataAreaLimitingFrames.add(stat);
+        }
+        return area;
+    }
+
+    /**
      * Analyzes sequence dither and corner drift by measuring the valid-image bounds per frame.
      * Applies any required void-radius increase at the orchestration layer after core drift analysis runs.
      *
@@ -549,9 +593,9 @@ public class JTransientEngine implements AutoCloseable {
      * @param config pipeline configuration that may be updated with a safer void radius
      * @param listener optional progress listener
      * @param telemetry telemetry that records the frames left out of the drift analysis
-     * @return A list of translation vectors (dx, dy) representing the relative movement per frame.
+     * @return the drift analysis: translation vectors (dx, dy) per frame, failed registrations and frame coverages
      */
-    private List<SourceExtractor.Pixel> analyzeDitherAndDrift(List<ImageFrame> inputFrames, DetectionConfig config,
+    private FrameDriftAnalyzer.DriftAnalysisResult analyzeDitherAndDrift(List<ImageFrame> inputFrames, DetectionConfig config,
                                                               TransientEngineProgressListener listener,
                                                               PipelineTelemetry telemetry) {
         if (listener != null) {
@@ -579,7 +623,7 @@ public class JTransientEngine implements AutoCloseable {
             }
             config.voidProximityRadius = driftAnalysis.recommendedVoidProximityRadius;
         }
-        return new ArrayList<>(driftAnalysis.driftPoints);
+        return driftAnalysis;
     }
 
     /**
@@ -848,7 +892,7 @@ public class JTransientEngine implements AutoCloseable {
                 slowMoverAnalysis, slowMoverStackData, slowMoverMedianVetoMask, slowMoverCandidates, trackResult.anomalies,
                 trackResult.allTransients, trackResult.unclassifiedTransients,
                 residualTransientAnalysis, trackResult.masterVetoMask, context.driftPoints,
-                maximumStackData, variableStarAnalysis);
+                maximumStackData, variableStarAnalysis, context.dataArea);
     }
 
     /**

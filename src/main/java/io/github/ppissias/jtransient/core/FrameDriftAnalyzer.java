@@ -18,7 +18,9 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Measures per-frame border padding caused by alignment drift and recommends a safe void radius.
+ * Measures per-frame border padding caused by alignment drift and recommends a safe void radius. It also records
+ * where each usable frame holds image data ({@link FrameCoverage}), from which the engine builds the session's
+ * {@link DataArea}.
  *
  * <p>The padding depth is measured on every row (left and right edges) and every column (top and bottom
  * edges), using only the central half of each edge so that the padding of the neighbouring edges does not
@@ -28,7 +30,7 @@ import java.util.List;
  */
 public final class FrameDriftAnalyzer {
     /** Pixels at the signed-short floor are treated as synthetic alignment padding, not real image data. */
-    private static final int DRIFT_VALID_PIXEL_THRESHOLD = Short.MIN_VALUE + 8;
+    private static final int DRIFT_VALID_PIXEL_THRESHOLD = DataArea.FILL_THRESHOLD;
     private static final int VOID_RADIUS_SAFETY_PIXELS = 10;
     /**
      * A frame with less than this fraction of valid pixels is blank or a failed registration. It is left out
@@ -50,6 +52,8 @@ public final class FrameDriftAnalyzer {
         public final int recommendedVoidProximityRadius;
         /** Sequence indices of blank or failed-registration frames (left out of the drift analysis). */
         public final List<Integer> failedRegistrationFrames;
+        /** Where each usable frame holds image data, in sequence order (failed registrations are left out). */
+        public final List<FrameCoverage> frameCoverages;
 
         public DriftAnalysisResult(List<SourceExtractor.Pixel> driftPoints,
                                    int maxPaddingPixels,
@@ -61,10 +65,20 @@ public final class FrameDriftAnalyzer {
                                    int maxPaddingPixels,
                                    int recommendedVoidProximityRadius,
                                    List<Integer> failedRegistrationFrames) {
+            this(driftPoints, maxPaddingPixels, recommendedVoidProximityRadius, failedRegistrationFrames,
+                    Collections.emptyList());
+        }
+
+        public DriftAnalysisResult(List<SourceExtractor.Pixel> driftPoints,
+                                   int maxPaddingPixels,
+                                   int recommendedVoidProximityRadius,
+                                   List<Integer> failedRegistrationFrames,
+                                   List<FrameCoverage> frameCoverages) {
             this.driftPoints = Collections.unmodifiableList(new ArrayList<>(driftPoints));
             this.maxPaddingPixels = maxPaddingPixels;
             this.recommendedVoidProximityRadius = recommendedVoidProximityRadius;
             this.failedRegistrationFrames = Collections.unmodifiableList(new ArrayList<>(failedRegistrationFrames));
+            this.frameCoverages = Collections.unmodifiableList(new ArrayList<>(frameCoverages));
         }
     }
 
@@ -79,6 +93,7 @@ public final class FrameDriftAnalyzer {
         int maxDrift = 0;
         List<SourceExtractor.Pixel> driftPoints = new ArrayList<>();
         List<Integer> failedRegistrationFrames = new ArrayList<>();
+        List<FrameCoverage> frameCoverages = new ArrayList<>();
         List<ImageFrame> sortedFrames = new ArrayList<>(inputFrames);
         sortedFrames.sort(Comparator.comparingInt(frame -> frame.sequenceIndex));
 
@@ -89,6 +104,7 @@ public final class FrameDriftAnalyzer {
                 continue;
             }
             driftPoints.add(new SourceExtractor.Pixel(measurement.dx, measurement.dy, frame.sequenceIndex));
+            frameCoverages.add(FrameCoverage.measure(frame.sequenceIndex, frame.pixelData));
             if (measurement.maxPaddingExtent > maxDrift) {
                 maxDrift = measurement.maxPaddingExtent;
             }
@@ -99,7 +115,8 @@ public final class FrameDriftAnalyzer {
             recommendedVoidRadius = Math.max(currentVoidProximityRadius, maxDrift + VOID_RADIUS_SAFETY_PIXELS);
         }
 
-        return new DriftAnalysisResult(driftPoints, maxDrift, recommendedVoidRadius, failedRegistrationFrames);
+        return new DriftAnalysisResult(driftPoints, maxDrift, recommendedVoidRadius, failedRegistrationFrames,
+                frameCoverages);
     }
 
     /**

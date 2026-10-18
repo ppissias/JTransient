@@ -126,6 +126,20 @@ public class PipelineTelemetry {
     /** Sequence indices of blank or failed-registration frames left out of the drift analysis. */
     public List<Integer> driftExcludedFrames = new ArrayList<>();
 
+    /**
+     * One frame that limits the session data area: without it, the area would be larger by this share of the frame.
+     */
+    public static class DataAreaFrameStat {
+        public int frameIndex;
+        public String filename;
+        /** Share of the frame the data area would gain without this frame, from 0 to 1. */
+        public double gainedFraction;
+    }
+    /** Share of the frame where every kept frame has image data (the session data area), or NaN when not measured. */
+    public double dataAreaFraction = Double.NaN;
+    /** Kept frames that limit the data area, the largest gain first. */
+    public List<DataAreaFrameStat> dataAreaLimitingFrames = new ArrayList<>();
+
     // --- PHASE 4: Tracking ---
     /** Number of stationary master-stack stars extracted for the veto mask. */
     public int totalMasterStarsIdentified = 0;
