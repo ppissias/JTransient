@@ -126,7 +126,7 @@ The working threshold is `photometrySaturationFraction x saturationLevel`.
 
 ## 5. Star Selection
 
-Photometry does not reuse the detection profile's master star list. It extracts its own from the median master stack, at a fixed seed of 3 sigma, grow of 2 sigma and at least 3 pixels (sigmas in units of the stack's measured noise), so its star list, its crowding test and its sky mask do not change with the moving-object settings. The footprints of these stars, grown by one pixel, are the sky mask (section 6.2).
+Photometry does not reuse the detection profile's master star list. It extracts its own from the median master stack, at a fixed seed of 3 sigma, grow of 2 sigma and at least 3 pixels (sigmas in units of the stack's measured noise, with one sky level for the whole stack, unlike the detection's master stars, which add a pass against the local sky), so its star list, its crowding test and its sky mask do not change with the moving-object settings. The footprints of these stars, grown by one pixel, are the sky mask (section 6.2).
 
 `PhotometryStarSelector.select` goes through these stars and drops, in this order:
 

@@ -70,7 +70,8 @@ SP (SpacePixels). The descriptions below each issue still describe the code at `
 | DOC-1 | Done: engine defaults vs the SpacePixels profile, slow-mover defaults, version, input rules, exposure starts, FWHM unit, Javadoc. | a6069a5, ed5aaea and the "Update docs" commits after each step |
 | HY-1 | Done: unused code removed (engine output went behind the debug switches on 2026-10-17). | e2e89d2, 6992e9e |
 | AN-3 | Fixed along with AN-1: the same-frame groups are built from a map of the frames present. | b92a985 |
-| ST-1, ST-4, PT-1 to PT-8, SM-1, SM-2, PH-1, AN-2, RS-3, AT-3, XC-2, XC-3 | Not implemented or deferred (decision). AN-2 matters less now: the groups are no longer exported, only offered to the streak consolidation. | — |
+| XC-3 (part) | Master stars are also found against the local sky (sky map), after the M81-kumar analysis of 2026-10-18; the frames still use one sky level. | ffa60aa |
+| ST-1, ST-4, PT-1 to PT-8, SM-1, SM-2, PH-1, AN-2, RS-3, AT-3, XC-2 | Not implemented or deferred (decision). AN-2 matters less now: the groups are no longer exported, only offered to the streak consolidation. | — |
 | PT-9, X-1 to X-3 | Won't fix (decision). | — |
 
 ## The SpacePixels import rules

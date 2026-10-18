@@ -269,16 +269,21 @@ The engine next extracts stationary objects from the median master stack using a
 - `growSigmaMultiplier = masterSigmaMultiplier`
 - no position limit: master stars are kept up to the image edge, so the star mask also covers stars cut by the frame edge
 
-Then it runs:
+`MasterReferenceAnalyzer.extractStars` then finds the stars in two passes with the same thresholds:
 
-```java
-SourceExtractor.extractSources(
-        masterStackData,
-        extractionConfig.masterSigmaMultiplier,
-        extractionConfig.masterMinDetectionPixels,
-        extractionConfig
-)
-```
+1. on the stack with one sky level for the whole stack, as the frames are searched;
+2. on a copy with the smooth sky subtracted (`SkyBackground.flatten`), seeded at 5 sigma (or the master sigma if higher) and grown as the first. An object of this pass is added when it shares no pixel with one of the first pass, so no object is listed twice and the mask covers at least what the first pass covers.
+
+The second pass is for sky gradients. With one sky level, the noise estimate includes the gradient (5 times the real noise on M81-kumar), so the threshold is far above the sky on the dark side, where faint stars were left out of the mask and came back as hundreds of stationary leftovers in the frames (local rescue candidates, common-motion groups). The first pass stays because the frames are still searched with one sky level each: they also detect bright emission larger than a sky box, such as the nebula of klangwolke-1, and only the first pass masks it (the second pass alone left 2,000 leftovers per frame there). The second pass seeds at 5 sigma because the master sigma was chosen against a noise estimate that the gradient inflated: on the real noise it adds noise peaks (565 on Apophis, one of them on the path of Apophis itself), while a stationary source that a frame can detect stands out of the median of ten or more frames by about 5 sigma or more.
+
+The sky map:
+
+1. the stack is cut into boxes of about 512 px; each box's sky is the median of its pixels after clipping the stars (3 sigma, repeated);
+2. a 3 x 3 median filter over the boxes removes boxes raised by a bright star or a galaxy of up to about a box across;
+3. the sky at each pixel is interpolated between the box centres, continued linearly to the image edge;
+4. registration fill is left out, and a box with more than a tenth of fill takes its level from its neighbours, continued linearly.
+
+The stack itself is not changed: the report, slow movers and photometry measure on the original.
 
 The resulting `masterStars` are the stationary reference objects used for veto masking. The caller's live `DetectionConfig` is left unchanged by this stage.
 

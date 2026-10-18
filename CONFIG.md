@@ -121,6 +121,7 @@ Optional physical speed limit for point-like detections.
 
 Seed threshold for extracting stationary objects from the median master stack.
 
+- the seed of the first master pass, with one sky level for the whole stack; a second pass against the local sky (`SkyBackground`) seeds at 5 sigma or this value if higher, and adds the faint stars a sky gradient hides from the first pass (`ALGORITHM.md`, section 7)
 - usually lower than the main detection sigma
 - used with `masterMinDetectionPixels`
 - the calibrated auto-tuner searches this field; the legacy tuner preserves it

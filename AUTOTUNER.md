@@ -84,7 +84,7 @@ It sets `detectionSigmaMultiplier`, `growSigmaMultiplier`, `minDetectionPixels`,
 
 - Detection sigma 2.5 to 6.0; grow sigma = detection sigma minus 0.75 or 1.25.
 - Minimum pixels: 0.3, 0.5, 0.75, 1, 1.5, 2 and 3 times the star core area (pi x (FWHM/2)^2), at least 3 and at most 15 pixels (`MAX_MIN_PIXELS`). Without the upper limit, wide stars would lead to sizes of 25 pixels and more, which reject small faint movers.
-- Master sigma 1.5 to 5.0; master grow = master sigma minus 0, 0.5 or 1.0; master minimum pixels 3 or 0.25, 0.5 and 1 times the core area. The star mask is grown by max(1, round(jitter / 2)) px, as in the pipeline.
+- Master sigma 1.5 to 5.0; master grow = master sigma minus 0, 0.5 or 1.0; master minimum pixels 3 or 0.25, 0.5 and 1 times the core area. The star mask is grown by max(1, round(jitter / 2)) px, and its stars are found in the pipeline's two passes (one sky level, then the local sky), both as in the pipeline.
 - Veto overlap 0.5, 0.65, 0.75, 0.85 and 0.95.
 
 Settings that already drown in noise before any veto are skipped. Every combination is evaluated exactly as the pipeline would: extraction on the crops, then the star-mask veto.
@@ -423,6 +423,7 @@ For one crop, the tuner does this:
    - `masterMinDetectionPixels`
    - temporary `growSigmaMultiplier = masterSigmaMultiplier`
    - stars kept up to the edge of the crop stack
+   - in the pipeline's two passes: one sky level for the crop stack, then its local sky (`MasterReferenceAnalyzer.extractStars`)
 3. reject the tested combination if no master stars are found
 4. create a veto mask from all master-star pixels
 5. dilate the veto mask by `max(1, round(maxStarJitter / 2))`, the growth the pipeline's star mask uses (`MasterVetoMask`)
