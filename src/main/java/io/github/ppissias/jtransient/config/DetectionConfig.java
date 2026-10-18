@@ -302,14 +302,15 @@ public class DetectionConfig implements Cloneable {
      */
     public boolean strictExposureKinematics = true;
 
-    /** * Controls whether the frame-agnostic geometric point-track linker runs when timestamps are available.
-     * Keep this enabled unless the time-based linker is preferred exclusively.
+    /** * Controls whether the frame-agnostic geometric point-track linker also runs when timestamps are available.
+     * Off by default, so timed sessions use only the time-based linker (the SpacePixels profile turns it on).
      * If timestamps are missing, the engine still forces geometric linking because it is the only point-track fallback.
      */
     public boolean enableGeometricTrackLinking = false;
 
     /** * Determines how many points are needed to confirm a track by dividing the total number of frames
-     * by this ratio (e.g., 20 frames / 3.0 = ~7 points required).
+     * by this ratio, capped at {@link #absoluteMaxPointsRequired} and never below 3 (e.g., 12 frames / 3.0 = 4
+     * points; 20 frames / 3.0 = 7, capped at 5). A value that is not positive counts as the default.
      */
     public double trackMinFrameRatio = 3.0;
 

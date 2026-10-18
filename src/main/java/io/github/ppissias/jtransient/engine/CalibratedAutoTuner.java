@@ -1438,7 +1438,11 @@ public final class CalibratedAutoTuner {
         return out;
     }
 
-    /** Up to three square crops: upper-left interior, centre, lower-right interior. */
+    /**
+     * Square crops away from the frame border: a grid of up to {@link #MAX_CROPS_PER_SIDE} per side when that grid
+     * holds more than {@link #CROP_COUNT} crops, otherwise the centre and up to four interior corners (at most
+     * {@link #CROP_COUNT}). A frame too small for that gets one centred crop.
+     */
     private static List<int[]> cropRegions(int width, int height, int margin) {
         List<int[]> out = new ArrayList<>();
         int usableW = width - 2 * margin;

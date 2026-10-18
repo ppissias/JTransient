@@ -62,9 +62,12 @@ public final class VariableStarAnalyzer {
     /** A star flagged saturated or non-linear in more than this share of its measurements is not used at all. */
     private static final double MAX_NONLINEAR_SHARE = 0.5;
     /*
-     * Photometry's own inputs, fixed so its results do not depend on the moving-object detection profile:
-     * its star list and sky mask come from the median stack at these thresholds, and a frame detection flags a
-     * star only when it peaks at CROSSING_PEAK_SIGMA or more. Sigmas are in units of each image's measured noise.
+     * Photometry's own star list and sky mask come from the median stack at these fixed thresholds, and a frame
+     * detection flags a star only when it peaks at CROSSING_PEAK_SIGMA or more, so the detection sigmas don't change
+     * them. Sigmas are in units of each image's measured noise. The results still depend on the detection run in
+     * other ways: the kept frames and their FWHM, the tracks crossing stars, and the slow-mover candidates, which
+     * flag every star within the outer sky radius (photometryAnnulusOuterFwhmFactor x FWHM) of their footprint in
+     * every frame.
      */
     static final double STAR_LIST_SEED_SIGMA = 3.0;
     static final double STAR_LIST_GROW_SIGMA = 2.0;
