@@ -16,16 +16,15 @@ public class FrameDriftAnalyzerTest {
     private static final int HEIGHT = 150;
 
     @Test
-    public void ordinaryDriftSetsVoidRadius() {
+    public void ordinaryDriftIsMeasured() {
         List<ImageFrame> frames = Arrays.asList(
                 frame(0, 0, 0),
                 frame(1, 12, 0),
                 frame(2, 0, 7));
 
-        FrameDriftAnalyzer.DriftAnalysisResult result = FrameDriftAnalyzer.analyze(frames, 5);
+        FrameDriftAnalyzer.DriftAnalysisResult result = FrameDriftAnalyzer.analyze(frames);
 
         assertEquals(12, result.maxPaddingPixels);
-        assertEquals(22, result.recommendedVoidProximityRadius);
         assertEquals(Collections.emptyList(), result.failedRegistrationFrames);
         assertEquals(3, result.driftPoints.size());
         assertEquals(12, result.driftPoints.get(1).x);
@@ -41,10 +40,9 @@ public class FrameDriftAnalyzerTest {
                 frame(2, 140, 0),
                 frame(3, 0, 7));
 
-        FrameDriftAnalyzer.DriftAnalysisResult result = FrameDriftAnalyzer.analyze(frames, 5);
+        FrameDriftAnalyzer.DriftAnalysisResult result = FrameDriftAnalyzer.analyze(frames);
 
         assertEquals(12, result.maxPaddingPixels);
-        assertEquals(22, result.recommendedVoidProximityRadius);
         assertEquals(Collections.singletonList(2), result.failedRegistrationFrames);
         assertEquals(3, result.driftPoints.size());
         assertEquals(3, result.driftPoints.get(2).value);
@@ -64,7 +62,7 @@ public class FrameDriftAnalyzerTest {
                 new ImageFrame(1, "blank", blank, 1000L, 1000L),
                 frame(2, 6, 0));
 
-        FrameDriftAnalyzer.DriftAnalysisResult result = FrameDriftAnalyzer.analyze(frames, 5);
+        FrameDriftAnalyzer.DriftAnalysisResult result = FrameDriftAnalyzer.analyze(frames);
 
         assertEquals(Collections.singletonList(1), result.failedRegistrationFrames);
         assertEquals(2, result.driftPoints.size());
@@ -88,7 +86,7 @@ public class FrameDriftAnalyzerTest {
         List<ImageFrame> frames = Arrays.asList(frame(0, 0, 0),
                 new ImageFrame(1, "rotated", pixels, 1000L, 1000L));
 
-        FrameDriftAnalyzer.DriftAnalysisResult result = FrameDriftAnalyzer.analyze(frames, 5);
+        FrameDriftAnalyzer.DriftAnalysisResult result = FrameDriftAnalyzer.analyze(frames);
 
         SourceExtractor.Pixel drift = result.driftPoints.get(1);
         assertTrue("dy " + drift.y, Math.abs(drift.y - 30) <= 1);

@@ -18,9 +18,9 @@ import java.util.Comparator;
 import java.util.List;
 
 /**
- * Measures per-frame border padding caused by alignment drift and recommends a safe void radius. It also records
- * where each usable frame holds image data ({@link FrameCoverage}), from which the engine builds the session's
- * {@link DataArea}.
+ * Measures per-frame border padding caused by alignment drift (the drift and dither path), leaves out blank or
+ * failed registrations, and records where each usable frame holds image data ({@link FrameCoverage}), from which
+ * the engine builds the session's {@link DataArea}.
  *
  * <p>The padding depth is measured on every row (left and right edges) and every column (top and bottom
  * edges), using only the central half of each edge so that the padding of the neighbouring edges does not
@@ -31,11 +31,10 @@ import java.util.List;
 public final class FrameDriftAnalyzer {
     /** Pixels at the signed-short floor are treated as synthetic alignment padding, not real image data. */
     private static final int DRIFT_VALID_PIXEL_THRESHOLD = DataArea.FILL_THRESHOLD;
-    private static final int VOID_RADIUS_SAFETY_PIXELS = 10;
     /**
      * A frame with less than this fraction of valid pixels is blank or a failed registration. It is left out
-     * of the drift trajectory and does not drive the void radius (otherwise one such frame would push the
-     * radius past the frame size and reject every detection, or add a false jump to the trajectory).
+     * of the drift trajectory and of the data area (otherwise one such frame would shrink the area to almost
+     * nothing, or add a false jump to the trajectory).
      */
     private static final double MIN_VALID_AREA_FRACTION = 0.5;
 
@@ -48,8 +47,8 @@ public final class FrameDriftAnalyzer {
     public static final class DriftAnalysisResult {
         /** Translation (dx, dy) of every usable frame; {@code value} holds the frame's sequence index. */
         public final List<SourceExtractor.Pixel> driftPoints;
+        /** Deepest padding of any usable frame, measured in the central half of each edge, in pixels. */
         public final int maxPaddingPixels;
-        public final int recommendedVoidProximityRadius;
         /** Sequence indices of blank or failed-registration frames (left out of the drift analysis). */
         public final List<Integer> failedRegistrationFrames;
         /** Where each usable frame holds image data, in sequence order (failed registrations are left out). */
@@ -57,37 +56,21 @@ public final class FrameDriftAnalyzer {
 
         public DriftAnalysisResult(List<SourceExtractor.Pixel> driftPoints,
                                    int maxPaddingPixels,
-                                   int recommendedVoidProximityRadius) {
-            this(driftPoints, maxPaddingPixels, recommendedVoidProximityRadius, Collections.emptyList());
-        }
-
-        public DriftAnalysisResult(List<SourceExtractor.Pixel> driftPoints,
-                                   int maxPaddingPixels,
-                                   int recommendedVoidProximityRadius,
-                                   List<Integer> failedRegistrationFrames) {
-            this(driftPoints, maxPaddingPixels, recommendedVoidProximityRadius, failedRegistrationFrames,
-                    Collections.emptyList());
-        }
-
-        public DriftAnalysisResult(List<SourceExtractor.Pixel> driftPoints,
-                                   int maxPaddingPixels,
-                                   int recommendedVoidProximityRadius,
                                    List<Integer> failedRegistrationFrames,
                                    List<FrameCoverage> frameCoverages) {
             this.driftPoints = Collections.unmodifiableList(new ArrayList<>(driftPoints));
             this.maxPaddingPixels = maxPaddingPixels;
-            this.recommendedVoidProximityRadius = recommendedVoidProximityRadius;
             this.failedRegistrationFrames = Collections.unmodifiableList(new ArrayList<>(failedRegistrationFrames));
             this.frameCoverages = Collections.unmodifiableList(new ArrayList<>(frameCoverages));
         }
     }
 
     /**
-     * Measures drift across the supplied frames and returns a safe void-radius recommendation.
+     * Measures the drift, the failed registrations and the coverage of the supplied frames.
      */
-    public static DriftAnalysisResult analyze(List<ImageFrame> inputFrames, int currentVoidProximityRadius) {
+    public static DriftAnalysisResult analyze(List<ImageFrame> inputFrames) {
         if (inputFrames == null || inputFrames.isEmpty()) {
-            return new DriftAnalysisResult(Collections.emptyList(), 0, currentVoidProximityRadius);
+            return new DriftAnalysisResult(Collections.emptyList(), 0, Collections.emptyList(), Collections.emptyList());
         }
 
         int maxDrift = 0;
@@ -110,13 +93,7 @@ public final class FrameDriftAnalyzer {
             }
         }
 
-        int recommendedVoidRadius = currentVoidProximityRadius;
-        if (maxDrift > 0) {
-            recommendedVoidRadius = Math.max(currentVoidProximityRadius, maxDrift + VOID_RADIUS_SAFETY_PIXELS);
-        }
-
-        return new DriftAnalysisResult(driftPoints, maxDrift, recommendedVoidRadius, failedRegistrationFrames,
-                frameCoverages);
+        return new DriftAnalysisResult(driftPoints, maxDrift, failedRegistrationFrames, frameCoverages);
     }
 
     /**
@@ -218,7 +195,7 @@ public final class FrameDriftAnalyzer {
     private static final class FrameDriftMeasurement {
         private final int dx;
         private final int dy;
-        /** Deepest edge padding within the central bands, used for the void radius. */
+        /** Deepest edge padding within the central bands. */
         private final int maxPaddingExtent;
         private final double validAreaFraction;
 

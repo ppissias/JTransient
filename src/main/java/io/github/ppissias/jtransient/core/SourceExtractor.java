@@ -180,8 +180,8 @@ public class SourceExtractor {
     // =================================================================
 
     /**
-     * Main method to run the detection pipeline on a single frame.
-     * Allows overriding the primary thresholds (used by FrameQualityAnalyzer).
+     * Main method to run the detection pipeline on a single frame, keeping objects up to
+     * {@link DataArea#MARGIN} px from the image edge. Allows overriding the primary thresholds.
      *
      * @param image input frame
      * @param sigmaMultiplier seed threshold multiplier used for this extraction pass
@@ -195,7 +195,8 @@ public class SourceExtractor {
 
     /**
      * Runs the detection pipeline on a single frame, measuring the sky only inside the given area (the part of the
-     * frame where every frame of the session has image data), so registration fill doesn't distort it.
+     * frame where every frame of the session has image data), so registration fill doesn't distort it. Objects are
+     * kept up to {@link DataArea#MARGIN} px from the image edge.
      *
      * @param image input frame
      * @param sigmaMultiplier seed threshold multiplier used for this extraction pass
@@ -211,15 +212,14 @@ public class SourceExtractor {
 
     /**
      * Runs the detection pipeline on a single frame, keeping only objects inside a search area: every pixel of a point
-     * source, and the centroid of a streak (a trail may continue where only this frame has data). With a search area
-     * the edge margin and the void probes are not used; without one they are, as before.
+     * source, and the centroid of a streak (a trail may continue where only this frame has data).
      *
      * @param image input frame
      * @param sigmaMultiplier seed threshold multiplier used for this extraction pass
      * @param minPixels minimum footprint size required to keep an object
      * @param config pipeline configuration containing grow and artifact filters
      * @param backgroundArea where the sky is measured, or null for the whole frame
-     * @param searchArea where objects are kept, or null for the edge margin and void probes
+     * @param searchArea where objects are kept, or null for the whole frame less {@link DataArea#MARGIN} px
      * @return extracted objects and background statistics
      */
     public static ExtractionResult extractSources(short[][] image, double sigmaMultiplier, int minPixels, DetectionConfig config,
@@ -239,7 +239,7 @@ public class SourceExtractor {
 
         double seedThreshold = bg.median + (bg.sigma * sigmaMultiplier);
         double growThreshold = bg.median + (bg.sigma * config.growSigmaMultiplier);
-        double voidValueThreshold = bg.median * config.voidThresholdFraction;
+        DataArea area = searchArea != null ? searchArea : DataArea.fullFrame(width, height);
 
         // 2. Setup for BFS Blob Detection
         List<DetectedObject> detectedObjects = new ArrayList<>();
@@ -249,7 +249,6 @@ public class SourceExtractor {
         int statBfsTriggers = 0;
         int statRejectedNoise = 0;
         int statRejectedEdge = 0;
-        int statRejectedVoid = 0;
 
         // 3. Scan the image
         for (int y = 0; y < height; y++) {
@@ -302,59 +301,10 @@ public class SourceExtractor {
                         //we always have this
                         obj.rawPixels = currentBlob;
 
-                        if (searchArea != null) {
-                            if (!isInside(obj, searchArea)) {
-                                statRejectedEdge++;
-                                continue;
-                            }
-                            obj.pixelArea = currentBlob.size();
-                            detectedObjects.add(obj);
+                        if (!isInside(obj, area)) {
+                            statRejectedEdge++;
                             continue;
                         }
-
-                        // ==========================================================
-                        // FILTER 1: PHYSICAL SENSOR EDGE
-                        // ==========================================================
-                        if (!obj.isStreak) {
-                            if (obj.x < config.edgeMarginPixels || obj.x >= (width - config.edgeMarginPixels) ||
-                                    obj.y < config.edgeMarginPixels || obj.y >= (height - config.edgeMarginPixels)) {
-                                statRejectedEdge++;
-                                continue;
-                            }
-                        }
-
-                        // ==========================================================
-                        // FILTER 2: FAST VIRTUAL EDGE (ALIGNMENT VOID) CHECK
-                        // ==========================================================
-                        boolean nearVirtualEdge = false;
-                        int vr = config.voidProximityRadius;
-                        int cx = (int) obj.x;
-                        int cy = (int) obj.y;
-
-                        int[] px = {cx, cx + vr, cx + vr, cx + vr, cx, cx - vr, cx - vr, cx - vr};
-                        int[] py = {cy - vr, cy - vr, cy, cy + vr, cy + vr, cy + vr, cy, cy - vr};
-
-                        for (int i = 0; i < 8; i++) {
-                            int testX = px[i];
-                            int testY = py[i];
-
-                            if (testX < 0 || testX >= width || testY < 0 || testY >= height) {
-                                nearVirtualEdge = true;
-                                break;
-                            }
-
-                            int vValue = PixelEncoding.toShiftedPositiveInt(image[testY][testX]);
-                            if (vValue <= voidValueThreshold) {
-                                nearVirtualEdge = true;
-                                break;
-                            }
-                        }
-
-                        if (nearVirtualEdge) {
-                            statRejectedVoid++;
-                            continue;
-                        }
-
                         obj.pixelArea = currentBlob.size();
                         detectedObjects.add(obj);
                     } else {
@@ -366,8 +316,8 @@ public class SourceExtractor {
 
         // --- PRINT FINAL FRAME TELEMETRY SUMMARY ---
         if (JTransientEngine.DEBUG) {
-            System.out.printf("  -> Extracted %d valid objects. [BFS Triggers: %d | Rejected Noise: %d | Rejected Edge: %d | Rejected Void: %d]%n",
-                    detectedObjects.size(), statBfsTriggers, statRejectedNoise, statRejectedEdge, statRejectedVoid);
+            System.out.printf("  -> Extracted %d valid objects. [BFS Triggers: %d | Rejected Noise: %d | Outside Search Area: %d]%n",
+                    detectedObjects.size(), statBfsTriggers, statRejectedNoise, statRejectedEdge);
         }
 
         return new ExtractionResult(detectedObjects, bg, seedThreshold, growThreshold);

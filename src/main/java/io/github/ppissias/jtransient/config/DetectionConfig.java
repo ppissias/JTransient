@@ -54,25 +54,6 @@ public class DetectionConfig implements Cloneable {
      */
     public int minDetectionPixels = 10;
 
-    // --- Border and void rejection ---
-
-    /** * A safety border (dead zone). If the calculated mathematical centroid falls within this many pixels
-     * of the absolute edge of the array, the object is discarded to prevent image alignment/stacking artifacts
-     * from being misclassified as streaks.
-     */
-    public int edgeMarginPixels = 15;
-
-    /** * Used to combat dark, empty spaces created when images are registered/aligned.
-     * Fraction of the background median below which a pixel is considered artificial padding.
-     */
-    public double voidThresholdFraction = 0.5;
-
-    /** * Distance (in pixels) to look ahead for a void edge. If an object is classified as a streak, the engine
-     * looks around it by this radius. If a significant portion touches the void padding, it assumes the streak
-     * is an interpolation artifact and kills it.
-     */
-    public int voidProximityRadius = 20;
-
     // --- Streak classification ---
 
     /** * Uses Image Moments (spatial variance) to determine shape. If the square root of the ratio of its

@@ -53,7 +53,7 @@ public class JTransientEngineDriftTest {
         JTransientEngine engine = new JTransientEngine();
         try {
             DetectionConfig config = new DetectionConfig();
-            config.voidProximityRadius = 5;
+            String before = new com.google.gson.Gson().toJson(config);
 
             short[][] frame = createFrame(60, 60, 12, 1, 2, 7, (short) -32500);
             List<SourceExtractor.Pixel> driftPoints = analyze(engine, Arrays.asList(
@@ -63,7 +63,7 @@ public class JTransientEngineDriftTest {
             assertEquals(1, driftPoints.size());
             assertEquals(11, driftPoints.get(0).x);
             assertEquals(-5, driftPoints.get(0).y);
-            assertEquals(5, config.voidProximityRadius);
+            assertEquals(before, new com.google.gson.Gson().toJson(config));
         } finally {
             engine.shutdown();
         }

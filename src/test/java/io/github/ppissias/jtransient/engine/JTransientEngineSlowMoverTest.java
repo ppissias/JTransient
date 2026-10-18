@@ -296,8 +296,6 @@ public class JTransientEngineSlowMoverTest {
         config.masterSlowMoverMinPixels = 10;
         config.masterSlowMoverSigmaMultiplier = 4.0;
         config.masterSlowMoverGrowSigmaMultiplier = 3.5;
-        config.edgeMarginPixels = 4;
-        config.voidProximityRadius = 4;
         return config;
     }
 

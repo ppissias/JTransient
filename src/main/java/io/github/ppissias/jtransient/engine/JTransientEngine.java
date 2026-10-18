@@ -669,10 +669,7 @@ public class JTransientEngine implements AutoCloseable {
             listener.onProgressUpdate(0, "Analyzing sequence dither and corner drift...");
         }
 
-        FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = FrameDriftAnalyzer.analyze(
-                inputFrames,
-                config.voidProximityRadius
-        );
+        FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = FrameDriftAnalyzer.analyze(inputFrames);
 
         telemetry.driftExcludedFrames.addAll(driftAnalysis.failedRegistrationFrames);
         if (DEBUG && !driftAnalysis.failedRegistrationFrames.isEmpty()) {

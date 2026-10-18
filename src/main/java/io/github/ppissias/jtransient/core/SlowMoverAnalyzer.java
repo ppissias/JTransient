@@ -71,7 +71,7 @@ public final class SlowMoverAnalyzer {
      * must lie inside it. Stars of the median stack are kept up to the image edge, so the median mask also covers
      * stars that straddle the area's edge.
      *
-     * @param dataArea where every kept frame has image data, or null for the edge margin and void probes
+     * @param dataArea where every kept frame has image data, or null for the whole frame
      * @see #analyze(short[][], short[][], List, DetectionConfig)
      */
     public static SlowMoverAnalysis analyze(short[][] maximumStackData,

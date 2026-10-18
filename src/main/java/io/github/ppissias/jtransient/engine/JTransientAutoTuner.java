@@ -1142,7 +1142,8 @@ public class JTransientAutoTuner {
                         + " (Index: " + frame.sequenceIndex + ")...");
             }
 
-            FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData, samplingConfig);
+            FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData, samplingConfig,
+                    DataArea.ofFrame(frame.pixelData));
             double score = metrics.backgroundNoise * metrics.medianFWHM;
             records.add(new FrameQualityRecord(frame, metrics, score));
         }
@@ -1230,9 +1231,6 @@ public class JTransientAutoTuner {
         List<String> samplingDeltas = new ArrayList<>();
         List<String> carriedButIgnored = new ArrayList<>();
 
-        appendIntDelta(samplingDeltas, "edgeMargin", baseConfig.edgeMarginPixels, defaults.edgeMarginPixels);
-        appendDoubleDelta(samplingDeltas, "voidThresholdFraction", baseConfig.voidThresholdFraction, defaults.voidThresholdFraction);
-        appendIntDelta(samplingDeltas, "voidProximityRadius", baseConfig.voidProximityRadius, defaults.voidProximityRadius);
         appendIntDelta(samplingDeltas, "bgClippingIterations", baseConfig.bgClippingIterations, defaults.bgClippingIterations);
         appendDoubleDelta(samplingDeltas, "bgClippingFactor", baseConfig.bgClippingFactor, defaults.bgClippingFactor);
         appendDoubleDelta(samplingDeltas, "qualitySigma", baseConfig.qualitySigmaMultiplier, defaults.qualitySigmaMultiplier);
@@ -1257,14 +1255,11 @@ public class JTransientAutoTuner {
                 baseConfig.maxMaskOverlapFraction,
                 baseConfig.maxStarJitter));
         report.append(String.format(
-                "Frame-Sampling Inputs -> QualitySigma: %.2f | QualityGrowSigma: %.2f | QualityMinPix: %d | QualityMaxElongationForFwhm: %.2f | Edge: %d | VoidFrac: %.2f | VoidRadius: %d | BgClipIter: %d | BgClipFactor: %.2f | StreakElong: %.2f | StreakMinPix: %d%n",
+                "Frame-Sampling Inputs -> QualitySigma: %.2f | QualityGrowSigma: %.2f | QualityMinPix: %d | QualityMaxElongationForFwhm: %.2f | BgClipIter: %d | BgClipFactor: %.2f | StreakElong: %.2f | StreakMinPix: %d%n",
                 baseConfig.qualitySigmaMultiplier,
                 baseConfig.qualityGrowSigmaMultiplier,
                 baseConfig.qualityMinDetectionPixels,
                 baseConfig.qualityMaxElongationForFwhm,
-                baseConfig.edgeMarginPixels,
-                baseConfig.voidThresholdFraction,
-                baseConfig.voidProximityRadius,
                 baseConfig.bgClippingIterations,
                 baseConfig.bgClippingFactor,
                 baseConfig.streakMinElongation,
@@ -1305,14 +1300,11 @@ public class JTransientAutoTuner {
                                                   DetectionConfig samplingConfig,
                                                   StringBuilder report) {
         report.append(String.format(
-                "Effective Frame-Sampling Config -> QualitySigma: %.2f | QualityGrowSigma: %.2f | QualityMinPix: %d | QualityMaxElongationForFwhm: %.2f | Edge: %d | VoidFrac: %.2f | VoidRadius: %d | BgClipIter: %d | BgClipFactor: %.2f | StreakElong: %.2f | StreakMinPix: %d%n",
+                "Effective Frame-Sampling Config -> QualitySigma: %.2f | QualityGrowSigma: %.2f | QualityMinPix: %d | QualityMaxElongationForFwhm: %.2f | BgClipIter: %d | BgClipFactor: %.2f | StreakElong: %.2f | StreakMinPix: %d%n",
                 samplingConfig.qualitySigmaMultiplier,
                 samplingConfig.qualityGrowSigmaMultiplier,
                 samplingConfig.qualityMinDetectionPixels,
                 samplingConfig.qualityMaxElongationForFwhm,
-                samplingConfig.edgeMarginPixels,
-                samplingConfig.voidThresholdFraction,
-                samplingConfig.voidProximityRadius,
                 samplingConfig.bgClippingIterations,
                 samplingConfig.bgClippingFactor,
                 samplingConfig.streakMinElongation,
@@ -1335,9 +1327,6 @@ public class JTransientAutoTuner {
         DetectionConfig defaults = new DetectionConfig();
         List<String> deltas = new ArrayList<>();
 
-        appendIntDelta(deltas, "edgeMargin", baseConfig.edgeMarginPixels, defaults.edgeMarginPixels);
-        appendDoubleDelta(deltas, "voidThresholdFraction", baseConfig.voidThresholdFraction, defaults.voidThresholdFraction);
-        appendIntDelta(deltas, "voidProximityRadius", baseConfig.voidProximityRadius, defaults.voidProximityRadius);
         appendIntDelta(deltas, "bgClippingIterations", baseConfig.bgClippingIterations, defaults.bgClippingIterations);
         appendDoubleDelta(deltas, "bgClippingFactor", baseConfig.bgClippingFactor, defaults.bgClippingFactor);
         appendDoubleDelta(deltas, "streakMinElongation", baseConfig.streakMinElongation, defaults.streakMinElongation);
@@ -1346,10 +1335,7 @@ public class JTransientAutoTuner {
         appendIntDelta(deltas, "masterMinPix", baseConfig.masterMinDetectionPixels, defaults.masterMinDetectionPixels);
 
         report.append(String.format(
-                "Phase 1 Baseline -> Edge: %d | VoidFrac: %.2f | VoidRadius: %d | BgClipIter: %d | BgClipFactor: %.2f | StreakElong: %.2f | StreakMinPix: %d | MasterSigma: %.2f | MasterMinPix: %d | MinGrowSigmaFloor: %.2f | CalibratedJitter: %.2f%n",
-                baseConfig.edgeMarginPixels,
-                baseConfig.voidThresholdFraction,
-                baseConfig.voidProximityRadius,
+                "Phase 1 Baseline -> BgClipIter: %d | BgClipFactor: %.2f | StreakElong: %.2f | StreakMinPix: %d | MasterSigma: %.2f | MasterMinPix: %d | MinGrowSigmaFloor: %.2f | CalibratedJitter: %.2f%n",
                 baseConfig.bgClippingIterations,
                 baseConfig.bgClippingFactor,
                 baseConfig.streakMinElongation,

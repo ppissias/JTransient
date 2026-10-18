@@ -86,6 +86,14 @@ public final class DataArea {
         return fromExtents(width, height, rowStart, rowEnd, columnStart, columnEnd);
     }
 
+    /**
+     * Where one frame holds image data, {@link #MARGIN} pixels in from its registration fill and the image edge: the
+     * area to use when a single frame is searched on its own.
+     */
+    public static DataArea ofFrame(short[][] frame) {
+        return of(Collections.singletonList(FrameCoverage.measure(0, frame)));
+    }
+
     /** The whole frame up to its edge, without the margin: no restriction at all. */
     public static DataArea wholeImage(int width, int height) {
         return new DataArea(width, height, filled(height, 0), filled(height, width - 1));

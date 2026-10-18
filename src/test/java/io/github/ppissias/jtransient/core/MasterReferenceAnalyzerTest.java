@@ -14,8 +14,6 @@ public class MasterReferenceAnalyzerTest {
         config.masterSigmaMultiplier = 1.5;
         config.masterMinDetectionPixels = 3;
         config.growSigmaMultiplier = 7.5;
-        config.edgeMarginPixels = 21;
-        config.voidProximityRadius = 34;
 
         short[][] masterStack = new short[30][30];
         for (int y = 14; y <= 16; y++) {
@@ -33,7 +31,5 @@ public class MasterReferenceAnalyzerTest {
         assertTrue(analysis.masterStars.size() >= 1);
 
         assertEquals(7.5, config.growSigmaMultiplier, 0.0);
-        assertEquals(21, config.edgeMarginPixels);
-        assertEquals(34, config.voidProximityRadius);
     }
 }

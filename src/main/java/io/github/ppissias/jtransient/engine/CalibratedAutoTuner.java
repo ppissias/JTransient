@@ -457,7 +457,7 @@ public final class CalibratedAutoTuner {
 
             // Frame drift: sizes the border kept clear of alignment padding, and lets detections fixed on the
             // sensor (hot pixels) be recognised although they move across the registered frames.
-            FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = FrameDriftAnalyzer.analyze(pool, 0);
+            FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = FrameDriftAnalyzer.analyze(pool);
             Map<Integer, SourceExtractor.Pixel> driftBySequence = new HashMap<>();
             for (SourceExtractor.Pixel p : driftAnalysis.driftPoints) {
                 driftBySequence.put(p.value, p);

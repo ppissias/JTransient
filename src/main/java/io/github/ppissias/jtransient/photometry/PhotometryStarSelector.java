@@ -73,8 +73,7 @@ final class PhotometryStarSelector {
 
     /**
      * Selects isolated, point-like master stars whose aperture and sky ring lie inside the data area, so every
-     * light curve has data in every kept frame. Without a data area, stars are kept away from the image edge and
-     * from dark padding in the median stack instead.
+     * light curve has data in every kept frame. Without a data area, the whole frame less 3 px is used.
      *
      * @param masterStars stationary sources extracted from the master stack
      * @param masterStack median master stack
@@ -82,7 +81,7 @@ final class PhotometryStarSelector {
      * @param saturationThreshold peak level (shifted domain) at or above which a master star is treated as saturated
      * @param config pipeline configuration
      * @param telemetry receives the selection counters
-     * @param dataArea where every kept frame has image data, or null
+     * @param dataArea where every kept frame has image data, or null for the whole frame
      * @return selected stars, brightest first
      */
     static List<Star> select(List<SourceExtractor.DetectedObject> masterStars,
@@ -96,10 +95,7 @@ final class PhotometryStarSelector {
         int width = masterStack[0].length;
         double outerRadius = config.photometryAnnulusOuterFwhmFactor * sessionFwhm + OFFSET_ALLOWANCE_PIXELS;
         double innerRadius = config.photometryAnnulusInnerFwhmFactor * sessionFwhm;
-        double margin = Math.max(config.edgeMarginPixels, Math.ceil(outerRadius) + 1);
-
-        double masterSky = sampleMedian(masterStack);
-        double voidThreshold = masterSky * config.voidThresholdFraction;
+        DataArea area = dataArea != null ? dataArea : DataArea.fullFrame(width, height);
 
         NeighbourIndex neighbours = new NeighbourIndex(masterStars, Math.max(4.0, innerRadius));
         double apertureRadius = config.photometryApertureFwhmFactor * sessionFwhm;
@@ -116,11 +112,7 @@ final class PhotometryStarSelector {
                 telemetry.starsRejectedElongated++;
                 continue;
             }
-            boolean outside = dataArea != null
-                    ? !dataArea.containsDisc(star.x, star.y, outerRadius)
-                    : star.x < margin || star.y < margin || star.x > width - 1 - margin || star.y > height - 1 - margin
-                    || touchesVoid(masterStack, star.x, star.y, outerRadius, voidThreshold);
-            if (outside) {
+            if (!area.containsDisc(star.x, star.y, outerRadius)) {
                 telemetry.starsRejectedEdgeOrVoid++;
                 continue;
             }
@@ -194,35 +186,6 @@ final class PhotometryStarSelector {
             }
         }
         return PhotometryMath.median(sample, n);
-    }
-
-    private static boolean touchesVoid(short[][] image, double cx, double cy, double radius, double voidThreshold) {
-        if (voidThreshold <= 0) {
-            return false;
-        }
-        int r = (int) Math.ceil(radius);
-        int x0 = (int) Math.round(cx);
-        int y0 = (int) Math.round(cy);
-        double r2 = radius * radius;
-        for (int dy = -r; dy <= r; dy++) {
-            int y = y0 + dy;
-            if (y < 0 || y >= image.length) {
-                return true;
-            }
-            for (int dx = -r; dx <= r; dx++) {
-                if (dx * dx + dy * dy > r2) {
-                    continue;
-                }
-                int x = x0 + dx;
-                if (x < 0 || x >= image[0].length) {
-                    return true;
-                }
-                if (PixelEncoding.toShiftedPositiveInt(image[y][x]) <= voidThreshold) {
-                    return true;
-                }
-            }
-        }
-        return false;
     }
 
     /**
