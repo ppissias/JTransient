@@ -11,6 +11,7 @@ package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.DataArea;
+import io.github.ppissias.jtransient.core.MasterVetoMask;
 import io.github.ppissias.jtransient.core.PixelEncoding;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
@@ -670,7 +671,8 @@ public class JTransientAutoTuner {
 
                             // STEP B: Build veto mask for this crop
                             boolean[][] masterMask = new boolean[cropHeight][cropWidth];
-                            int dilationRadius = (int) Math.ceil(testConfig.maxStarJitter);
+                            // The same growth as the pipeline's star mask (MasterVetoMask).
+                            int dilationRadius = MasterVetoMask.dilationRadius(testConfig.maxStarJitter);
                             int maskTrueCountThisCrop = 0;
 
                             for (SourceExtractor.DetectedObject mStar : masterStars) {
@@ -721,8 +723,8 @@ public class JTransientAutoTuner {
                                 int transientThisFrame = 0;
 
                                 for (SourceExtractor.DetectedObject obj : objects) {
-                                    // Streaks bypass the veto mask in the main engine. 
-                                    // We do not want a real meteor in the sample frame to be penalized as noise!
+                                    // Streaks are not counted: a real trail in a sample frame must not count as noise.
+                                    // (The pipeline vetoes streaks against the same star mask as point sources.)
                                     if (obj.isStreak) {
                                         continue;
                                     }
@@ -1488,7 +1490,7 @@ public class JTransientAutoTuner {
             }
 
             boolean[][] masterMask = new boolean[cropHeight][cropWidth];
-            int dilationRadius = (int) Math.ceil(evalConfig.maxStarJitter);
+            int dilationRadius = MasterVetoMask.dilationRadius(evalConfig.maxStarJitter);
             int maskTrueCountThisCrop = 0;
 
             for (SourceExtractor.DetectedObject mStar : masterStars) {
