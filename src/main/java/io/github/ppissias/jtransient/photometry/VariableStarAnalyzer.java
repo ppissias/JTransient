@@ -11,7 +11,6 @@ package io.github.ppissias.jtransient.photometry;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.DataArea;
-import io.github.ppissias.jtransient.core.MasterReferenceAnalyzer;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.core.TrackLinker;
 import io.github.ppissias.jtransient.engine.ImageFrame;
@@ -163,13 +162,14 @@ public final class VariableStarAnalyzer {
         telemetry.saturationLevel = saturationLevel;
         double saturationThreshold = config.photometrySaturationFraction * saturationLevel;
 
-        // Photometry's own star list and sky mask from the median stack, independent of the detection settings.
+        // Photometry's own star list and sky mask from the median stack, independent of the detection settings, with
+        // one sky level for the whole stack. (The detection's master stars add a pass against the local sky; on the
+        // reference data its extra stars, mostly too faint to measure, changed which stars photometry selected.)
         DetectionConfig starConfig = config.clone();
-        starConfig.masterSigmaMultiplier = STAR_LIST_SEED_SIGMA;
-        starConfig.masterGrowSigmaMultiplier = STAR_LIST_GROW_SIGMA;
-        starConfig.masterMinDetectionPixels = STAR_LIST_MIN_PIXELS;
-        List<SourceExtractor.DetectedObject> photometryStars =
-                MasterReferenceAnalyzer.analyzeFromMasterStack(input.masterStack, starConfig).masterStars;
+        starConfig.growSigmaMultiplier = STAR_LIST_GROW_SIGMA;
+        List<SourceExtractor.DetectedObject> photometryStars = SourceExtractor.extractSources(input.masterStack,
+                STAR_LIST_SEED_SIGMA, STAR_LIST_MIN_PIXELS, starConfig, null,
+                DataArea.wholeImage(input.masterStack[0].length, input.masterStack.length)).objects;
         boolean[][] skyMask = footprintMask(photometryStars, input.masterStack.length, input.masterStack[0].length);
         List<PhotometryStarSelector.Star> selected = PhotometryStarSelector.select(
                 photometryStars, input.masterStack, sessionFwhm, saturationThreshold, config, telemetry, input.dataArea);

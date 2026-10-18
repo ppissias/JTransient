@@ -13,6 +13,7 @@ import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.FrameDriftAnalyzer;
 import io.github.ppissias.jtransient.core.MasterMapGenerator;
+import io.github.ppissias.jtransient.core.MasterReferenceAnalyzer;
 import io.github.ppissias.jtransient.core.PixelEncoding;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 
@@ -985,11 +986,10 @@ public final class CalibratedAutoTuner {
                 DataArea.fullFrame(image[0].length, image.length)).objects;
     }
 
-    /** Stars of a master cut-out, kept up to its edge so the star mask also covers stars cut by the crop's edge. */
+    /** Stars of a master cut-out, found as the pipeline finds its master stars. */
     private static List<SourceExtractor.DetectedObject> extractMasterStars(short[][] master, double sigma, int minPixels,
                                                                            DetectionConfig cfg) {
-        return SourceExtractor.extractSources(master, sigma, minPixels, cfg, null,
-                DataArea.wholeImage(master[0].length, master.length)).objects;
+        return MasterReferenceAnalyzer.extractStars(master, sigma, minPixels, cfg);
     }
 
     private static double overlap(Detection d, BitSet mask) {

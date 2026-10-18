@@ -11,6 +11,7 @@ package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.DataArea;
+import io.github.ppissias.jtransient.core.MasterReferenceAnalyzer;
 import io.github.ppissias.jtransient.core.MasterVetoMask;
 import io.github.ppissias.jtransient.core.PixelEncoding;
 import io.github.ppissias.jtransient.core.SourceExtractor;
@@ -986,11 +987,10 @@ public class JTransientAutoTuner {
                 DataArea.fullFrame(image[0].length, image.length)).objects;
     }
 
-    /** Stars of a crop's master stack, kept up to its edge so the star mask also covers stars cut by that edge. */
+    /** Stars of a crop's master stack, found as the pipeline finds its master stars. */
     private static List<SourceExtractor.DetectedObject> extractMasterStars(short[][] master, double sigma, int minPixels,
                                                                            DetectionConfig config) {
-        return SourceExtractor.extractSources(master, sigma, minPixels, config, null,
-                DataArea.wholeImage(master[0].length, master.length)).objects;
+        return MasterReferenceAnalyzer.extractStars(master, sigma, minPixels, config);
     }
 
     /**
