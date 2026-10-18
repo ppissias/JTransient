@@ -186,7 +186,7 @@ The tuner does not treat all `DetectionConfig` fields equally.
 | Direct sweep variables | `detectionSigmaMultiplier`, `growSigmaMultiplier`, `minDetectionPixels`, `maxMaskOverlapFraction` | Explicitly searched in Phase 1 |
 | Calibrated from data | `maxStarJitter` | Measured from sampled stars, not searched directly |
 | Preserved from base config | `streakMinElongation` and most other untouched config fields | Carried through to the returned config unless temporarily overridden internally |
-| Used during frame sampling | `qualitySigmaMultiplier`, `qualityGrowSigmaMultiplier`, `qualityMinDetectionPixels`, `qualityMaxElongationForFwhm`, `edgeMarginPixels`, `voidThresholdFraction`, `voidProximityRadius`, `bgClippingIterations`, `bgClippingFactor`, `streakMinElongation`, `streakMinPixels` | Affect which frames are considered good enough to tune on |
+| Used during frame sampling | `qualitySigmaMultiplier`, `qualityGrowSigmaMultiplier`, `qualityMinDetectionPixels`, `qualityMaxElongationForFwhm`, `bgClippingIterations`, `bgClippingFactor`, `streakMinElongation`, `streakMinPixels` | Affect which frames are considered good enough to tune on |
 | Ignored during frame sampling | `detectionSigmaMultiplier`, `growSigmaMultiplier`, `minDetectionPixels`, `maxMaskOverlapFraction`, `maxStarJitter` | These do not affect the frame-quality pass |
 
 The key separation is:
@@ -422,8 +422,7 @@ For one crop, the tuner does this:
    - `masterSigmaMultiplier`
    - `masterMinDetectionPixels`
    - temporary `growSigmaMultiplier = masterSigmaMultiplier`
-   - temporary `edgeMarginPixels = 5`
-   - temporary `voidProximityRadius = 5`
+   - stars kept up to the edge of the crop stack
 3. reject the tested combination if no master stars are found
 4. create a veto mask from all master-star pixels
 5. dilate the veto mask by `ceil(maxStarJitter)`

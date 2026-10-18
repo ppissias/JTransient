@@ -4,7 +4,7 @@
 
 All fields are public and mutable. A few implementation details matter when you use it:
 
-- `JTransientEngine` may raise `voidProximityRadius` during drift diagnostics if the data demands it
+- the engine never changes the caller's config object; registration fill is handled by the session data area, not by a setting
 - the engine uses stage-local config overrides for master-star and slow-mover extraction so the caller's config object is not left mutated afterward
 - the auto-tuners (`CalibratedAutoTuner.tune(...)`, and the legacy `JTransientAutoTuner.tune(...)`) clone configs while searching and return an optimized clone on success; fallback paths may return the base config
 
@@ -40,29 +40,7 @@ Minimum blob size required before shape analysis.
 - applies to the main extraction pass
 - both auto-tuners search this field
 
-### `edgeMarginPixels` (default `15`)
-
-Dead zone around the physical image border.
-
-- only applies to non-streak detections
-- streaks bypass this filter
-- the engine temporarily sets it to `5` for master-star extraction
-
-### `voidThresholdFraction` (default `0.5`)
-
-Threshold fraction used to define black registration voids.
-
-- extraction computes `voidValueThreshold = backgroundMedian * voidThresholdFraction`
-- border drift diagnostics use a separate signed-short padding threshold when scanning inward from the image edges
-
-### `voidProximityRadius` (default `20`)
-
-Radius of the virtual-edge test around each detected object.
-
-- the extractor samples 8 points on a ring around the centroid
-- if any point is out of bounds or below the void threshold, the object is rejected
-- drift diagnostics may increase this field in place to match real border padding
-- the engine temporarily sets it to `5` for master-star extraction
+There are no border or void settings any more (`edgeMarginPixels`, `voidThresholdFraction` and `voidProximityRadius` were removed in October 2026). Detection keeps to the session data area: where every kept frame has image data, 3 px in from the registration fill and the image edge (`ALGORITHM.md`, section 1).
 
 ### `streakMinElongation` (default `6.0`)
 

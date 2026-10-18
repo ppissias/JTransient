@@ -80,7 +80,7 @@ Before extracting sources, `JTransientEngine` delegates border-padding measureme
 For each frame, `FrameDriftAnalyzer` measures how deep the alignment padding reaches from each edge:
 
 1. It considers a pixel to be valid if its value is above a low threshold (`DRIFT_VALID_PIXEL_THRESHOLD`).
-2. **Usability check.** A frame where less than half of the pixels are valid is blank or a failed registration. It is left out of the drift trajectory and of the void-radius recommendation, and its sequence index is reported in `failedRegistrationFrames` (telemetry: `driftExcludedFrames`). The engine later rejects such frames at the session quality stage, even if they keep enough stars to pass the session statistics.
+2. **Usability check.** A frame where less than half of the pixels are valid is blank or a failed registration. It is left out of the drift trajectory and of the data areas, and its sequence index is reported in `failedRegistrationFrames` (telemetry: `driftExcludedFrames`). The engine later rejects such frames at the session quality stage, even if they keep enough stars to pass the session statistics.
 3. **Edge depths.** On every row of the central half of the frame height it counts the padded pixels from the left and from the right edge; on every column of the central half of the width, from the top and from the bottom. Fully padded rows and columns are skipped. Using only the central band keeps the padding of the neighbouring edges out of each measurement at the corners.
 4. **Translation.** The median depth of each edge is its depth at the middle of the edge, so frames that registration also rotated (wedge-shaped padding) still give the right shift, and a few stray valid pixels in the padding do not change it:
    - `dx = median(left depth) - median(right depth)`
@@ -89,7 +89,12 @@ For each frame, `FrameDriftAnalyzer` measures how deep the alignment padding rea
 
 The vectors of the usable frames are exported as `PipelineResult.driftPoints` (each point's `value` is the frame's sequence index).
 
-Across the usable frames, the analyzer also returns the maximum padding extent and a recommended safe `voidProximityRadius` (extent + 10 px). `JTransientEngine` applies that recommendation only if it is larger than the current config value. That keeps the measurement logic pure while preserving the existing conservative extraction behavior.
+The analyzer also records each usable frame's coverage (`FrameCoverage`): the first and last data pixel of every row and column, where data start at the first 3 pixels above the fill level (8 ADU). A few stray pixels inside the fill therefore don't end it, and cold pixels inside the image don't punch holes into it. From these the engine builds two areas (`DataArea`), each the intersection of the frames' coverages kept 3 px away from the fill and the image edge:
+
+- the **quality area**, over every usable frame. A frame that alone shrinks it by 5 % of the frame or more is left out and rejected ("Shifted away from the other frames"), one at a time and at most a tenth of the frames. The sky and the quality metrics are measured here.
+- the **data area**, over the frames kept by quality control (section 5). Detection, slow movers and photometry keep to it, and it is exported as `PipelineResult.dataArea` with the frames that limit it most (`PipelineTelemetry.dataAreaLimitingFrames`).
+
+The engine never changes the caller's configuration.
 
 ## 2. Parallel Extraction And Quality Measurement
 
@@ -123,7 +128,7 @@ This stage turns bright connected pixels in one image into measured objects with
 
 ### 3.1 Background estimation
 
-`calculateBackgroundSigmaClipped(...)` builds a full 16-bit histogram from shifted pixel values (`pixel + 32768`) and iteratively estimates the background:
+`calculateBackgroundSigmaClipped(...)` builds a 16-bit histogram from the shifted pixel values (`pixel + 32768`) inside the quality area, so registration fill doesn't widen it, and iteratively estimates the background:
 
 1. compute the median within the current histogram bounds
 2. compute sigma around that median
@@ -134,7 +139,6 @@ The extraction thresholds are then:
 
 - `seedThreshold = bg.median + bg.sigma * sigmaMultiplier`
 - `growThreshold = bg.median + bg.sigma * growSigmaMultiplier`
-- `voidValueThreshold = bg.median * voidThresholdFraction`
 
 ### 3.2 Hysteresis blob detection
 
@@ -171,12 +175,7 @@ Otherwise it stays alive as a point-like detection.
 
 ### 3.4 Per-object filtering
 
-After shape analysis the extractor applies:
-
-1. physical-edge rejection for non-streaks using `edgeMarginPixels`
-2. virtual-edge rejection using an 8-point ring at `voidProximityRadius`
-
-If any virtual-edge test point is out of bounds or falls below the void threshold, the object is rejected as an alignment-border artifact.
+The extractor keeps an object only inside a search area: every pixel of a point source, and the centroid of a streak (a trail may continue where only this frame has data). The frame pass searches the whole frame less 3 px; after quality control the objects of the kept frames are filtered by the data area, because outside it some kept frame has no data and the median stack and star mask are wrong there.
 
 ## 4. Frame Quality Analysis
 
@@ -205,6 +204,8 @@ Important detail:
 - the bright-star metric is reported as unavailable if too few bright stars qualify
 
 These are frame-quality filters, not object-track filters. Shape is used here only to decide whether an entire frame is trustworthy enough to keep.
+
+The sky is measured, and stars are counted and measured, only inside the quality area, so frames with a wider registration border are compared on the same sky as the others.
 
 If the analyzer cannot compute a meaningful median, it falls back to `errorFallbackValue`.
 
@@ -264,8 +265,7 @@ In plain English, this stage finds the stationary objects in the median stack so
 The engine next extracts stationary objects from the median master stack using a stage-local extraction config:
 
 - `growSigmaMultiplier = masterSigmaMultiplier`
-- `edgeMarginPixels = 5`
-- `voidProximityRadius = 5`
+- no position limit: master stars are kept up to the image edge, so the star mask also covers stars cut by the frame edge
 
 Then it runs:
 
@@ -285,6 +285,8 @@ The resulting `masterStars` are the stationary reference objects used for veto m
 The engine builds one per-pixel maximum stack from the quality-filtered, aligned frames with `MasterMapGenerator.createMaximumMasterStack(...)`. It uses that stack for candidate extraction and exports the same stack as `PipelineResult.maximumStackData`. The median master stack supplies a separate mask of persistent sources. A maximum-stack footprint is a shape candidate, not a measured track or confirmation of motion.
 
 The engine then:
+
+Both stacks measure their sky inside the data area. Maximum-stack candidates must lie inside it; median-stack stars are kept up to the image edge so the mask also covers stars that straddle the area's edge.
 
 1. extracts connected objects from the maximum stack using:
    - `masterSlowMoverSigmaMultiplier`

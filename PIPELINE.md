@@ -177,9 +177,9 @@ short[][] generateMasterStack(
 What it does (the same frame selection as `runPipeline(...)`, so the stack is identical to the pipeline's):
 
 1. sorts frames by `sequenceIndex`
-2. runs the drift analysis, which finds blank or failed-registration frames (on a copy of the configuration, so the caller's void radius is not changed)
-3. runs `FrameQualityAnalyzer.evaluateFrame(...)` on every frame
-4. rejects outlier frames with `SessionEvaluator` and the blank or failed-registration frames, in the same shared step as the pipeline
+2. runs the drift analysis, which finds blank or failed-registration frames and builds the quality area
+3. runs `FrameQualityAnalyzer.evaluateFrame(...)` on every frame, inside the quality area
+4. rejects outlier frames with `SessionEvaluator`, the blank or failed-registration frames and the frames shifted far from the others, in the same shared step as the pipeline
 5. builds a median master stack from the retained frames
 
 What it returns:
@@ -221,10 +221,10 @@ This is the transient-only path of the engine. Internally it runs the same share
 
 What it does:
 
-1. runs border drift diagnostics and may raise `voidProximityRadius`; frames where less than half of the pixels hold image data (blank frames, failed registrations) are left out of the drift analysis and rejected with the outlier frames
-2. extracts sources from every frame
-3. computes frame quality metrics
-4. rejects outlier frames for the session
+1. runs border drift diagnostics and records where each frame holds image data; frames where less than half of the pixels hold image data (blank frames, failed registrations) are left out and rejected with the outlier frames, as is a frame that alone shrinks the common area by 5 % of the frame or more
+2. extracts sources from every frame, measuring the sky inside the quality area
+3. computes frame quality metrics inside the quality area
+4. rejects outlier frames for the session, then keeps only the objects inside the data area of the kept frames
 5. generates a median master stack, or uses `providedMasterStack`
 6. extracts `masterStars` from that stack
 7. calls `TrackLinker.filterTransients(...)`

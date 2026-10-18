@@ -132,7 +132,7 @@ Photometry does not reuse the detection profile's master star list. It extracts 
 
 1. streaks (`isStreak`)
 2. stars more elongated than `photometryMaxElongation`
-3. stars closer to the edge than `max(edgeMarginPixels, ceil(outer annulus radius) + 1)`, where the outer annulus radius here is `photometryAnnulusOuterFwhmFactor x FWHM + 2 px` (the extra 2 px allows for residual registration offsets), and stars whose outer annulus touches void padding (any master-stack pixel at or below `voidThresholdFraction x` the master-stack sky median)
+3. stars whose aperture and sky ring do not lie entirely inside the session data area (where every kept frame has image data), using an outer radius of `photometryAnnulusOuterFwhmFactor x FWHM + 2 px` (the extra 2 px allows for residual registration offsets). Every measured star therefore has data in every kept frame.
 4. crowded stars, judged by contamination: the neighbours' light falling inside the star's main aperture, from a Gaussian profile at the session FWHM, exceeds 2% of the star's own aperture light; or a neighbour lies within 1 FWHM (centroids and apertures merge); or a neighbour with at least 10% of the star's flux lies within `photometryAnnulusInnerFwhmFactor x FWHM` (its wings reach the sky ring). A faint neighbour that adds no measurable light no longer makes a star crowded.
 5. stars whose master-stack peak (3 x 3 around the centre) is already at or above the saturation threshold
 
@@ -191,7 +191,7 @@ Flags set here:
 
 | Flag | Condition |
 | --- | --- |
-| `EDGE_OR_VOID` | Annulus leaves the image, fewer than 10 sky pixels, more than 50% of annulus pixels at zero, or a main-aperture pixel below `voidThresholdFraction x` frame background |
+| `EDGE_OR_VOID` | Annulus leaves the image, fewer than 10 sky pixels, more than 50% of annulus pixels at zero, or a main-aperture pixel at the fill level (8 ADU or less: a dead pixel) |
 | `SATURATED` | Main-aperture peak at or above the saturation threshold |
 | `BAD_FLUX` | Main-aperture flux not positive (no magnitude) |
 
@@ -484,7 +484,7 @@ These values are in the code and are not configurable:
 
 - **Single session, instrumental magnitudes.** There is no catalogue cross-match, no colour or extinction terms, and no transformation to a standard system. Amplitudes are differential within the session.
 - **Variability must show within the session.** A star that changes on timescales much longer than the session looks constant. A star that changes only during the gap between sessions is not visible at all.
-- **Crowded, bright and edge stars are not measured.** A variable whose neighbours add more than 2% light to its aperture, one saturated in the master stack, or one near the edge or void padding is never selected.
+- **Crowded, bright and edge stars are not measured.** A variable whose neighbours add more than 2% light to its aperture, one saturated in the master stack, or one whose sky ring reaches outside the session data area is never selected.
 - **Power-law stretches are not detected** (section 8.5).
 - **`magError` is a lower bound** (sky noise only). Use `expectedScatter` as the realistic error.
 - **Candidates are not confirmed variables.** Even `HIGH_CONFIDENCE` candidates should be checked against the images and a variable-star catalogue.
