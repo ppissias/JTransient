@@ -72,8 +72,8 @@ public class FrameQualityAnalyzer {
     }
 
     /**
-     * Extracts the quality metrics inside an area: the sky is measured there and only stars centred there are
-     * counted and measured, so frames with different registration fill are compared on the same part of the sky.
+     * Extracts the quality metrics inside an area: the sky is measured there and only stars inside it are counted and
+     * measured, so frames with different registration fill are compared on the same part of the sky.
      *
      * @param imageData frame pixels to analyze
      * @param config pipeline configuration supplying quality thresholds
@@ -92,11 +92,9 @@ public class FrameQualityAnalyzer {
                         config.qualitySigmaMultiplier,
                         config.qualityMinDetectionPixels,
                         qualityConfig,
-                        area
+                        area,
+                        area != null && area.getPixelCount() > 0 ? area : null
                 ).objects;
-        if (area != null && area.getPixelCount() > 0) {
-            objects.removeIf(object -> !area.contains(object.x, object.y));
-        }
 
         // 2. Calculate the background using the same strict parameter
         SourceExtractor.BackgroundMetrics bg = SourceExtractor.calculateBackgroundSigmaClipped(

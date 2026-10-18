@@ -81,14 +81,16 @@ public final class MasterReferenceAnalyzer {
 
         // Use a stage-local config so master-star extraction cannot leak temporary thresholds back to callers.
         extractionConfig.growSigmaMultiplier = effectiveMasterGrowSigma(config);
-        extractionConfig.edgeMarginPixels = 5;
-        extractionConfig.voidProximityRadius = 5;
 
+        // Master stars are kept up to the image edge: the star mask has to cover every star that a frame detection
+        // inside the data area can touch, including stars cut by the edge of the frame.
         List<SourceExtractor.DetectedObject> masterStars = SourceExtractor.extractSources(
                 masterStackData,
                 extractionConfig.masterSigmaMultiplier,
                 extractionConfig.masterMinDetectionPixels,
-                extractionConfig
+                extractionConfig,
+                null,
+                DataArea.wholeImage(sensorWidth, sensorHeight)
         ).objects;
 
         return new MasterReferenceAnalysis(masterStackData, masterStars, sensorWidth, sensorHeight);

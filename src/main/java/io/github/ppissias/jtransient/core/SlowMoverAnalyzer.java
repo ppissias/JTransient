@@ -63,6 +63,22 @@ public final class SlowMoverAnalyzer {
                                             short[][] medianStackData,
                                             List<ImageFrame> cleanFrames,
                                             DetectionConfig config) {
+        return analyze(maximumStackData, medianStackData, cleanFrames, config, null);
+    }
+
+    /**
+     * Finds slow-mover candidates inside the session data area: both stacks measure their sky there, and candidates
+     * must lie inside it. Stars of the median stack are kept up to the image edge, so the median mask also covers
+     * stars that straddle the area's edge.
+     *
+     * @param dataArea where every kept frame has image data, or null for the edge margin and void probes
+     * @see #analyze(short[][], short[][], List, DetectionConfig)
+     */
+    public static SlowMoverAnalysis analyze(short[][] maximumStackData,
+                                            short[][] medianStackData,
+                                            List<ImageFrame> cleanFrames,
+                                            DetectionConfig config,
+                                            DataArea dataArea) {
         if (config == null || !config.enableSlowMoverDetection
                 || maximumStackData == null || maximumStackData.length == 0 || maximumStackData[0].length == 0
                 || medianStackData == null || medianStackData.length != maximumStackData.length
@@ -74,17 +90,23 @@ public final class SlowMoverAnalyzer {
         DetectionConfig extractionConfig = config.clone();
         extractionConfig.growSigmaMultiplier = config.masterSlowMoverGrowSigmaMultiplier;
 
+        DataArea wholeFrame = dataArea == null ? null
+                : DataArea.fullFrame(maximumStackData[0].length, maximumStackData.length);
         List<SourceExtractor.DetectedObject> maximumObjects = SourceExtractor.extractSources(
                 maximumStackData,
                 config.masterSlowMoverSigmaMultiplier,
                 config.masterSlowMoverMinPixels,
-                extractionConfig
+                extractionConfig,
+                dataArea,
+                dataArea
         ).objects;
         List<SourceExtractor.DetectedObject> medianObjects = SourceExtractor.extractSources(
                 medianStackData,
                 config.masterSlowMoverSigmaMultiplier,
                 config.masterSlowMoverMinPixels,
-                extractionConfig
+                extractionConfig,
+                dataArea,
+                wholeFrame
         ).objects;
 
         boolean[][] medianMask = buildMedianMask(

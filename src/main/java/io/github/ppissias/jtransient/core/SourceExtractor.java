@@ -206,6 +206,24 @@ public class SourceExtractor {
      */
     public static ExtractionResult extractSources(short[][] image, double sigmaMultiplier, int minPixels, DetectionConfig config,
                                                   DataArea backgroundArea) {
+        return extractSources(image, sigmaMultiplier, minPixels, config, backgroundArea, null);
+    }
+
+    /**
+     * Runs the detection pipeline on a single frame, keeping only objects inside a search area: every pixel of a point
+     * source, and the centroid of a streak (a trail may continue where only this frame has data). With a search area
+     * the edge margin and the void probes are not used; without one they are, as before.
+     *
+     * @param image input frame
+     * @param sigmaMultiplier seed threshold multiplier used for this extraction pass
+     * @param minPixels minimum footprint size required to keep an object
+     * @param config pipeline configuration containing grow and artifact filters
+     * @param backgroundArea where the sky is measured, or null for the whole frame
+     * @param searchArea where objects are kept, or null for the edge margin and void probes
+     * @return extracted objects and background statistics
+     */
+    public static ExtractionResult extractSources(short[][] image, double sigmaMultiplier, int minPixels, DetectionConfig config,
+                                                  DataArea backgroundArea, DataArea searchArea) {
         int height = image.length;
         int width = image[0].length;
 
@@ -284,6 +302,16 @@ public class SourceExtractor {
                         //we always have this
                         obj.rawPixels = currentBlob;
 
+                        if (searchArea != null) {
+                            if (!isInside(obj, searchArea)) {
+                                statRejectedEdge++;
+                                continue;
+                            }
+                            obj.pixelArea = currentBlob.size();
+                            detectedObjects.add(obj);
+                            continue;
+                        }
+
                         // ==========================================================
                         // FILTER 1: PHYSICAL SENSOR EDGE
                         // ==========================================================
@@ -343,6 +371,24 @@ public class SourceExtractor {
         }
 
         return new ExtractionResult(detectedObjects, bg, seedThreshold, growThreshold);
+    }
+
+    /**
+     * Whether an object lies inside an area: every pixel of a point source, the centroid of a streak.
+     *
+     * @param object detected object with its footprint
+     * @param area where every frame has image data
+     */
+    public static boolean isInside(DetectedObject object, DataArea area) {
+        if (object.isStreak || object.rawPixels == null) {
+            return area.contains(object.x, object.y);
+        }
+        for (Pixel pixel : object.rawPixels) {
+            if (!area.contains(pixel.x, pixel.y)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

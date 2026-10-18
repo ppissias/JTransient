@@ -45,11 +45,11 @@ public class JTransientEngineDriftTest {
     }
 
     /**
-     * Verifies the engine raises voidProximityRadius to cover the largest measured padding extent.
-     * This protects later extraction passes from underestimating real registration voids.
+     * The drift analysis measures the padding but leaves the caller's configuration alone: detection keeps to the
+     * session data area instead of a raised void radius.
      */
     @Test
-    public void analyzeDitherAndDriftRaisesVoidRadiusFromLargestPadding() throws Exception {
+    public void analyzeDitherAndDriftLeavesTheConfigurationUnchanged() throws Exception {
         JTransientEngine engine = new JTransientEngine();
         try {
             DetectionConfig config = new DetectionConfig();
@@ -63,7 +63,7 @@ public class JTransientEngineDriftTest {
             assertEquals(1, driftPoints.size());
             assertEquals(11, driftPoints.get(0).x);
             assertEquals(-5, driftPoints.get(0).y);
-            assertEquals(22, config.voidProximityRadius);
+            assertEquals(5, config.voidProximityRadius);
         } finally {
             engine.shutdown();
         }

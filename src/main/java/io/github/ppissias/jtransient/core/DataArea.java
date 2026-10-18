@@ -84,6 +84,11 @@ public final class DataArea {
         return fromExtents(width, height, rowStart, rowEnd, columnStart, columnEnd);
     }
 
+    /** The whole frame up to its edge, without the margin: no restriction at all. */
+    public static DataArea wholeImage(int width, int height) {
+        return new DataArea(width, height, filled(height, 0), filled(height, width - 1));
+    }
+
     /** The whole frame, {@link #MARGIN} pixels in from the image edge: the area when the frames have no fill. */
     public static DataArea fullFrame(int width, int height) {
         int[] rowStart = filled(height, 0);

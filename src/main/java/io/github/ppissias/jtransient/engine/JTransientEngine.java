@@ -162,7 +162,7 @@ public class JTransientEngine implements AutoCloseable {
     /**
      * Builds the master stack exactly as the pipeline does: the same drift analysis, quality metrics and frame
      * selection ({@link #rejectUnusableFrames}), then the median of the kept frames. The caller's configuration is
-     * not changed (the pipeline may raise the void radius for its own run).
+     * not changed.
      */
     public MasterStackResult generateMasterStackWithDetails(List<ImageFrame> inputFrames, DetectionConfig config,
                                                             TransientEngineProgressListener listener) throws Exception {
@@ -177,11 +177,9 @@ public class JTransientEngine implements AutoCloseable {
             System.out.println("\n--- JTRANSIENT: PRE-COMPUTING MASTER STACK ---");
         }
 
-        // The drift analysis may raise the void radius, which the quality metrics then use, as in the pipeline.
-        DetectionConfig stageConfig = config.clone();
         PipelineTelemetry telemetry = new PipelineTelemetry();
         inputFrames.sort(Comparator.comparingInt(f -> f.sequenceIndex));
-        FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = analyzeDitherAndDrift(inputFrames, stageConfig, null, telemetry);
+        FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = analyzeDitherAndDrift(inputFrames, config, null, telemetry);
         QualityArea quality = qualityArea(driftAnalysis.frameCoverages, telemetry);
 
         List<Callable<FrameExtractionResult>> tasks = new ArrayList<>();
@@ -192,7 +190,7 @@ public class JTransientEngine implements AutoCloseable {
         for (ImageFrame frame : inputFrames) {
             tasks.add(() -> {
                 // We only need quality metrics to drop outliers. We skip SourceExtractor to save massive CPU time!
-                FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData, stageConfig, quality.area);
+                FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData, config, quality.area);
                 metrics.filename = frame.filename;
 
                 synchronized (framesCompleted) { // keeps the reported progress in order across threads
@@ -223,7 +221,7 @@ public class JTransientEngine implements AutoCloseable {
             listener.onProgressUpdate(55, "Filtering outlier frames...");
         }
 
-        rejectUnusableFrames(sessionMetrics, inputFrames, telemetry.driftExcludedFrames, quality.coverageOutliers, stageConfig);
+        rejectUnusableFrames(sessionMetrics, inputFrames, telemetry.driftExcludedFrames, quality.coverageOutliers, config);
 
         List<ImageFrame> cleanFrames = new ArrayList<>();
         List<Integer> keptFrames = new ArrayList<>();
@@ -386,6 +384,9 @@ public class JTransientEngine implements AutoCloseable {
 
         // Ensure input frames are sorted chronologically before processing
         inputFrames.sort(Comparator.comparingInt(f -> f.sequenceIndex));
+        // Objects are kept up to the image edge here; after quality control only those inside the area where every
+        // kept frame has image data remain.
+        DataArea wholeFrame = DataArea.fullFrame(inputFrames.get(0).pixelData[0].length, inputFrames.get(0).pixelData.length);
 
         // --- SAFE CONCURRENT PROGRESS TRACKING ---
         int totalFrames = inputFrames.size();
@@ -399,7 +400,8 @@ public class JTransientEngine implements AutoCloseable {
                         config.detectionSigmaMultiplier,
                         config.minDetectionPixels,
                         config,
-                        quality.area
+                        quality.area,
+                        wholeFrame
                 );
                 List<SourceExtractor.DetectedObject> objectsInFrame = extResult.objects;
 
@@ -521,6 +523,12 @@ public class JTransientEngine implements AutoCloseable {
         }
 
         DataArea dataArea = sessionDataArea(driftAnalysis.frameCoverages, cleanFrames, telemetry);
+        if (dataArea != null) {
+            // Outside this area some kept frame has no data, so the median stack and the star mask are wrong there.
+            for (SourceExtractor.ExtractionResult frameData : cleanFramesData) {
+                frameData.objects.removeIf(object -> !SourceExtractor.isInside(object, dataArea));
+            }
+        }
         telemetry.recordStage(PipelineTelemetry.Stage.QUALITY_FILTERING, stageStartedNanos);
         return new ExtractedFramesContext(
                 cleanFramesData,
@@ -645,11 +653,11 @@ public class JTransientEngine implements AutoCloseable {
     }
 
     /**
-     * Analyzes sequence dither and corner drift by measuring the valid-image bounds per frame.
-     * Applies any required void-radius increase at the orchestration layer after core drift analysis runs.
+     * Analyzes sequence dither and corner drift by measuring the valid-image bounds per frame, and records where each
+     * frame holds image data. The configuration is not changed.
      *
      * @param inputFrames frames to inspect
-     * @param config pipeline configuration that may be updated with a safer void radius
+     * @param config pipeline configuration
      * @param listener optional progress listener
      * @param telemetry telemetry that records the frames left out of the drift analysis
      * @return the drift analysis: translation vectors (dx, dy) per frame, failed registrations and frame coverages
@@ -671,16 +679,9 @@ public class JTransientEngine implements AutoCloseable {
             System.out.println("DEBUG: Dither Diagnostics left out blank or failed-registration frames "
                     + "(less than half the pixels valid): " + driftAnalysis.failedRegistrationFrames);
         }
-        if (driftAnalysis.recommendedVoidProximityRadius > config.voidProximityRadius) {
-            if (DEBUG) {
-                System.out.println(
-                        "DEBUG: Dither Diagnostics found corner drift of "
-                                + driftAnalysis.maxPaddingPixels
-                                + "px. Overriding config.voidProximityRadius to "
-                                + driftAnalysis.recommendedVoidProximityRadius
-                );
-            }
-            config.voidProximityRadius = driftAnalysis.recommendedVoidProximityRadius;
+        if (DEBUG && driftAnalysis.maxPaddingPixels > 0) {
+            System.out.println("DEBUG: Dither Diagnostics found registration padding up to "
+                    + driftAnalysis.maxPaddingPixels + " px.");
         }
         return driftAnalysis;
     }
@@ -778,7 +779,8 @@ public class JTransientEngine implements AutoCloseable {
                     maximumStackData,
                     masterStackData,
                     cleanFrames,
-                    config
+                    config,
+                    context.dataArea
             );
             slowMoverStackData = slowMoverAnalysis.slowMoverStackData;
             slowMoverMedianVetoMask = slowMoverAnalysis.medianVetoMask;
