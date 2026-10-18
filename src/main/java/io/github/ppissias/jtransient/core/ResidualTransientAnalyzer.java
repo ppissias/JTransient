@@ -136,14 +136,15 @@ public final class ResidualTransientAnalyzer {
             return Collections.emptyList();
         }
 
+        Map<Integer, Integer> ordinals = frameOrdinals(transients);
         List<LocalRescueCandidateScore> rawCandidates = new ArrayList<>();
         for (Node start : nodes) {
-            LocalRescueCandidateScore candidate = growLocalRescueCandidate(start, nodes);
+            LocalRescueCandidateScore candidate = growLocalRescueCandidate(start, nodes, ordinals);
             if (candidate != null) {
                 rawCandidates.add(candidate);
             }
         }
-        rawCandidates.addAll(buildClusterCandidates(nodes));
+        rawCandidates.addAll(buildClusterCandidates(nodes, ordinals));
 
         rawCandidates.sort((left, right) -> {
             int scoreComparison = Double.compare(right.score, left.score);
@@ -200,9 +201,10 @@ public final class ResidualTransientAnalyzer {
         List<ResidualTransientAnalysis.LocalActivityCluster> clusters = new ArrayList<>();
         double linkageRadius = Math.max(0.0, config.localActivityClusterRadiusPixels);
         int minimumFrames = Math.max(1, config.localActivityClusterMinFrames);
+        Map<Integer, Integer> ordinals = frameOrdinals(transients);
         for (List<Node> clusterNodes : clusterNodesByProximity(nodes, linkageRadius)) {
             List<SourceExtractor.DetectedObject> points = orderPoints(clusterNodes);
-            ResidualTransientAnalysis.LocalTransientMetrics metrics = computeMetrics(points);
+            ResidualTransientAnalysis.LocalTransientMetrics metrics = computeMetrics(points, ordinals);
             if (metrics.uniqueFrameCount < minimumFrames) {
                 continue;
             }
@@ -244,7 +246,8 @@ public final class ResidualTransientAnalyzer {
     }
 
     private static LocalRescueCandidateScore growLocalRescueCandidate(Node start,
-                                                                      List<Node> nodes) {
+                                                                      List<Node> nodes,
+                                                                      Map<Integer, Integer> ordinals) {
         List<Node> chain = new ArrayList<>();
         chain.add(start);
 
@@ -316,10 +319,10 @@ public final class ResidualTransientAnalyzer {
             return null;
         }
 
-        return evaluateCandidate(orderPoints(chain));
+        return evaluateCandidate(orderPoints(chain), ordinals);
     }
 
-    private static List<LocalRescueCandidateScore> buildClusterCandidates(List<Node> nodes) {
+    private static List<LocalRescueCandidateScore> buildClusterCandidates(List<Node> nodes, Map<Integer, Integer> ordinals) {
         if (nodes.size() < LOCAL_RESCUE_THRESHOLDS.minRepeatPoints) {
             return Collections.emptyList();
         }
@@ -330,7 +333,7 @@ public final class ResidualTransientAnalyzer {
                 continue;
             }
 
-            LocalRescueCandidateScore candidate = evaluateCandidate(orderPoints(clusterNodes));
+            LocalRescueCandidateScore candidate = evaluateCandidate(orderPoints(clusterNodes), ordinals);
             if (candidate != null) {
                 candidates.add(candidate);
             }
@@ -338,8 +341,9 @@ public final class ResidualTransientAnalyzer {
         return candidates;
     }
 
-    private static LocalRescueCandidateScore evaluateCandidate(List<SourceExtractor.DetectedObject> points) {
-        ResidualTransientAnalysis.LocalTransientMetrics metrics = computeMetrics(points);
+    private static LocalRescueCandidateScore evaluateCandidate(List<SourceExtractor.DetectedObject> points,
+                                                               Map<Integer, Integer> ordinals) {
+        ResidualTransientAnalysis.LocalTransientMetrics metrics = computeMetrics(points, ordinals);
         ResidualTransientAnalysis.LocalRescueKind kind = classifyLocalRescueKind(metrics);
         if (kind == null) {
             return null;
@@ -451,7 +455,36 @@ public final class ResidualTransientAnalyzer {
         return clusters;
     }
 
-    private static ResidualTransientAnalysis.LocalTransientMetrics computeMetrics(List<SourceExtractor.DetectedObject> points) {
+    /**
+     * Position of each frame in the list of kept frames, by sequence index. The chain, its gaps and its coverage
+     * count the frames that were available: a frame that quality control left out is not a missed observation.
+     */
+    private static Map<Integer, Integer> frameOrdinals(List<List<SourceExtractor.DetectedObject>> transients) {
+        Map<Integer, Integer> ordinals = new HashMap<>();
+        for (int i = 0; i < transients.size(); i++) {
+            List<SourceExtractor.DetectedObject> frame = transients.get(i);
+            if (frame == null) {
+                continue;
+            }
+            for (SourceExtractor.DetectedObject detection : frame) {
+                if (detection != null) {
+                    ordinals.putIfAbsent(detection.sourceFrameIndex, i);
+                }
+            }
+        }
+        return ordinals;
+    }
+
+    private static int ordinal(SourceExtractor.DetectedObject point, Map<Integer, Integer> ordinals) {
+        return ordinals.getOrDefault(point.sourceFrameIndex, point.sourceFrameIndex);
+    }
+
+    /**
+     * Metrics of a candidate. Span, gaps and coverage are counted in kept frames; the position-against-time fit uses
+     * the frames' sequence indices, because a left-out frame is still a real gap in time.
+     */
+    private static ResidualTransientAnalysis.LocalTransientMetrics computeMetrics(List<SourceExtractor.DetectedObject> points,
+                                                                                  Map<Integer, Integer> ordinals) {
         if (points == null || points.isEmpty()) {
             return new ResidualTransientAnalysis.LocalTransientMetrics(
                     0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
@@ -473,7 +506,7 @@ public final class ResidualTransientAnalyzer {
 
         SourceExtractor.DetectedObject first = orderedPoints.get(0);
         SourceExtractor.DetectedObject last = orderedPoints.get(orderedPoints.size() - 1);
-        int frameSpan = (last.sourceFrameIndex - first.sourceFrameIndex) + 1;
+        int frameSpan = (ordinal(last, ordinals) - ordinal(first, ordinals)) + 1;
         double totalDisplacement = Math.hypot(last.x - first.x, last.y - first.y);
 
         for (int i = 0; i < orderedPoints.size(); i++) {
@@ -486,7 +519,7 @@ public final class ResidualTransientAnalyzer {
                 continue;
             }
             SourceExtractor.DetectedObject previous = orderedPoints.get(i - 1);
-            int gap = Math.max(1, point.sourceFrameIndex - previous.sourceFrameIndex);
+            int gap = Math.max(1, ordinal(point, ordinals) - ordinal(previous, ordinals));
             totalGapFrames += Math.max(0, gap - 1);
             double step = Math.hypot(point.x - previous.x, point.y - previous.y);
             totalStep += step;

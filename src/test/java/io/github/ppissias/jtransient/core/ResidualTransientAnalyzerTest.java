@@ -153,6 +153,41 @@ public class ResidualTransientAnalyzerTest {
         assertTrue(analysis.localActivityClusters.isEmpty());
     }
 
+    /**
+     * Frame 3 was left out by quality control, so the kept frames are 0, 1, 2, 4, 5, 6. A repeat seen in frames 1, 2,
+     * 4 and 5 was seen in every kept frame it spans: coverage 1, no gap.
+     */
+    @Test
+    public void framesLeftOutByQualityControlAreNotCountedAsGaps() {
+        DetectionConfig config = new DetectionConfig();
+        int[] sequenceOfPosition = {0, 1, 2, 4, 5, 6};
+        List<List<SourceExtractor.DetectedObject>> remaining = emptyFrameList(sequenceOfPosition.length);
+        double[][] positions = {{88.0, 44.0}, {88.1, 44.0}, {88.0, 44.1}, {88.1, 44.1}};
+        for (int i = 0; i < positions.length; i++) {
+            SourceExtractor.DetectedObject point = addPoint(remaining, i + 1, positions[i][0], positions[i][1], 7.0, 7.5);
+            point.sourceFrameIndex = sequenceOfPosition[i + 1];
+        }
+
+        ResidualTransientAnalysis analysis = ResidualTransientAnalyzer.analyze(remaining, config);
+
+        assertEquals(1, analysis.localRescueCandidates.size());
+        ResidualTransientAnalysis.LocalTransientMetrics metrics = analysis.localRescueCandidates.get(0).metrics;
+        assertTrue("the candidate spans the left-out frame", spansSequence(analysis.localRescueCandidates.get(0).points, 3));
+        assertEquals(analysis.localRescueCandidates.get(0).points.size(), metrics.frameSpan);
+        assertEquals(0, metrics.totalGapFrames);
+        assertEquals(1.0, metrics.frameCoverage, 1e-9);
+    }
+
+    private static boolean spansSequence(List<SourceExtractor.DetectedObject> points, int sequence) {
+        int first = Integer.MAX_VALUE;
+        int last = Integer.MIN_VALUE;
+        for (SourceExtractor.DetectedObject point : points) {
+            first = Math.min(first, point.sourceFrameIndex);
+            last = Math.max(last, point.sourceFrameIndex);
+        }
+        return first < sequence && sequence < last;
+    }
+
     private static List<List<SourceExtractor.DetectedObject>> emptyFrameList(int frameCount) {
         List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
         for (int i = 0; i < frameCount; i++) {
