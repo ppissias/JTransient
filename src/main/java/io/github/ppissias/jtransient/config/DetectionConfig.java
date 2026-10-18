@@ -439,12 +439,6 @@ public class DetectionConfig implements Cloneable {
      */
     public double anomalyMinPeakSigmaFloor = 3;
 
-    /** * Maximum perpendicular centroid distance allowed when grouping rescued same-frame anomalies
-     * into a suspected streak line. This is intentionally separate from the multi-frame
-     * point-track prediction tolerance so faint streak fragments can be grouped more permissively.
-     */
-    public double suspectedStreakLineTolerance = 6.0;
-
     // =================================================================
     // 7. RESIDUAL TRANSIENT ANALYSIS PARAMETERS
     // =================================================================

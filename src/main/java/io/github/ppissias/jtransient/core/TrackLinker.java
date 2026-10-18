@@ -39,6 +39,8 @@ public class TrackLinker {
 
     /** A point track needs at least this many points. */
     static final int MIN_TRACK_POINTS = 3;
+    /** Rescued anomalies of one frame within this distance of a line are offered to a streak as one group, in pixels. */
+    private static final double ANOMALY_GROUP_LINE_TOLERANCE = 6.0;
     private static final double DEFAULT_TRACK_MIN_FRAME_RATIO = new DetectionConfig().trackMinFrameRatio;
 
     // =================================================================
@@ -48,19 +50,18 @@ public class TrackLinker {
     /**
      * One returned track-like detection.
      *
-     * <p>A track can represent a confirmed point track, a confirmed streak track, or a
-     * suspected same-frame streak grouping. Standalone anomalies are not represented here;
-     * they are exported separately as {@link AnomalyDetection}.</p>
+     * <p>A track can represent a confirmed point track or a confirmed streak track. Standalone
+     * anomalies are not represented here; they are exported separately as {@link AnomalyDetection}.</p>
      */
     public static class Track {
         /** Chronological points that make up the track. */
         public List<SourceExtractor.DetectedObject> points = new ArrayList<>();
         /** Whether the track is composed of streak detections. */
         public boolean isStreakTrack = false;
-        /** Whether the track groups same-frame rescued anomalies into a suspected faint streak. */
-        public boolean isSuspectedStreakTrack = false;
         /** Whether the track was accepted by the time-aware linker. */
         public boolean isTimeBasedTrack = false;
+        /** The track is only a group of rescued same-frame anomalies, offered to the streak consolidation. */
+        private boolean anomalyGroup = false;
 
         /**
          * Appends one detection to the track.
@@ -126,7 +127,7 @@ public class TrackLinker {
      * Output of the complete tracking stage.
      */
     public static class TrackingResult {
-        /** All returned track-like detections, including suspected same-frame streak groupings. */
+        /** All returned tracks: streak tracks, single streaks and point tracks. */
         public List<Track> tracks;
         /** Rescued single-frame anomalies that did not form tracks. */
         public List<AnomalyDetection> anomalies;
@@ -171,14 +172,13 @@ public class TrackLinker {
     }
 
     /**
-     * One same-frame suspected streak proposal before it is materialized as a returned track.
+     * One line through rescued anomalies of one frame, before it becomes a group.
      */
-    private static class SuspectedStreakLineCandidate {
+    private static class AnomalyLineCandidate {
         private final List<SourceExtractor.DetectedObject> objects;
         private final double span;
 
-        private SuspectedStreakLineCandidate(List<SourceExtractor.DetectedObject> objects,
-                                             double span) {
+        private AnomalyLineCandidate(List<SourceExtractor.DetectedObject> objects, double span) {
             this.objects = objects;
             this.span = span;
         }
@@ -971,7 +971,6 @@ public class TrackLinker {
         // PHASE 5: HIGH-ENERGY ANOMALY RESCUE (GLINTS & FLASHES)
         // =================================================================
         List<AnomalyDetection> anomalies = new ArrayList<>();
-        List<Track> suspectedStreakTracks = new ArrayList<>();
         List<List<SourceExtractor.DetectedObject>> anomalyCandidates = buildPhase5AnomalyCandidates(
                 filterResult.allTransients,
                 confirmedTracks,
@@ -998,19 +997,18 @@ public class TrackLinker {
             }
         }
 
-        //now search for suspected streak tracks
-        if (!anomalies.isEmpty()) {
-            suspectedStreakTracks = groupSuspectedStreakTracks(anomalies, config);
-            if (!suspectedStreakTracks.isEmpty()) {
-                Set<SourceExtractor.DetectedObject> groupedObjects = new HashSet<>();
-                for (Track track : suspectedStreakTracks) {
-                    groupedObjects.addAll(track.points);
-                }
-                anomalies.removeIf(anomaly -> groupedObjects.contains(anomaly.object));
+        // A streak can break into pieces that are rescued as anomalies. Collinear anomalies of one frame are offered
+        // to the streak consolidation as a group; a group that joins no confirmed streak track stays as anomalies.
+        List<Track> anomalyGroups = groupSameFrameAnomalies(anomalies);
+        confirmedTracks = consolidateStreakTracks(confirmedTracks, anomalyGroups, config);
+        confirmedTracks.removeIf(track -> track.anomalyGroup);
+        if (!anomalyGroups.isEmpty()) {
+            Set<SourceExtractor.DetectedObject> joinedStreaks = new HashSet<>();
+            for (Track track : confirmedTracks) {
+                joinedStreaks.addAll(track.points);
             }
+            anomalies.removeIf(anomaly -> joinedStreaks.contains(anomaly.object));
         }
-
-        confirmedTracks = consolidateStreakTracks(confirmedTracks, suspectedStreakTracks, config);
 
         int integratedSigmaAnomaliesRescued = 0;
         for (AnomalyDetection anomaly : anomalies) {
@@ -1020,11 +1018,8 @@ public class TrackLinker {
         }
 
         int consolidatedStreakTracksFound = 0;
-        int consolidatedSuspectedTracksFound = 0;
         for (Track track : confirmedTracks) {
-            if (track.isSuspectedStreakTrack) {
-                consolidatedSuspectedTracksFound++;
-            } else if (track.isStreakTrack) {
+            if (track.isStreakTrack) {
                 consolidatedStreakTracksFound++;
             }
         }
@@ -1033,7 +1028,6 @@ public class TrackLinker {
         telemetry.pointTracksFound = pointTracks.size();
         telemetry.anomaliesFound = anomalies.size();
         telemetry.integratedSigmaAnomaliesFound = integratedSigmaAnomaliesRescued;
-        telemetry.suspectedStreakTracksFound = consolidatedSuspectedTracksFound;
 
         if (JTransientEngine.DEBUG) {
             System.out.println("\n--------------------------------------------------");
@@ -1063,9 +1057,8 @@ public class TrackLinker {
             System.out.println("   - Returned Confirmed Streaks    : " + telemetry.streakTracksFound);
             System.out.println("   - Binary-Star Streak Rejects    : " + telemetry.rejectedBinaryStarStreakShape);
             System.out.println("   - Slow Point Tracks (Phase 4)   : " + telemetry.pointTracksFound);
-            System.out.println("   - Suspected Streak Tracks       : " + telemetry.suspectedStreakTracksFound);
             System.out.println("   - TOTAL RETURNED TRACKS         : "
-                    + (telemetry.streakTracksFound + telemetry.pointTracksFound + telemetry.suspectedStreakTracksFound));
+                    + (telemetry.streakTracksFound + telemetry.pointTracksFound));
             System.out.println("   - Single-Frame Anomalies        : " + telemetry.anomaliesFound);
             System.out.println("      -> Integrated-Sigma Rescue   : " + telemetry.integratedSigmaAnomaliesFound);
             System.out.println("--------------------------------------------------\n");
@@ -1078,14 +1071,11 @@ public class TrackLinker {
         confirmedTracks.addAll(pointTracks);
         if (JTransientEngine.DEBUG) {
             int finalStreakTracks = 0;
-            int finalSuspectedTracks = 0;
             int finalTimeBasedPointTracks = 0;
             int finalGeometricPointTracks = 0;
 
             for (Track track : confirmedTracks) {
-                if (track.isSuspectedStreakTrack) {
-                    finalSuspectedTracks++;
-                } else if (track.isStreakTrack) {
+                if (track.isStreakTrack) {
                     finalStreakTracks++;
                 } else if (track.isTimeBasedTrack) {
                     finalTimeBasedPointTracks++;
@@ -1095,9 +1085,8 @@ public class TrackLinker {
             }
 
             System.out.printf(
-                    "DEBUG: [FINAL TRACK SUMMARY] streak=%d suspected=%d timeBasedPoint=%d geometricPoint=%d%n",
+                    "DEBUG: [FINAL TRACK SUMMARY] streak=%d timeBasedPoint=%d geometricPoint=%d%n",
                     finalStreakTracks,
-                    finalSuspectedTracks,
                     finalTimeBasedPointTracks,
                     finalGeometricPointTracks
             );
@@ -1177,82 +1166,40 @@ public class TrackLinker {
     }
 
     /**
-     * Groups rescued anomalies into one or more same-frame suspected streak tracks per frame.
-     *
-     * <p>All rescued anomalies from the same frame are evaluated for collinearity. Any accepted
-     * grouping stays frame-local and never links across frames.</p>
+     * Groups the rescued anomalies of each frame that lie on a line (at least three within
+     * {@link #ANOMALY_GROUP_LINE_TOLERANCE}). A group never links across frames, and is only a candidate piece of a
+     * streak: it is kept when the consolidation merges it into a confirmed streak track.
      */
-    private static List<Track> groupSuspectedStreakTracks(List<AnomalyDetection> anomalies, DetectionConfig config) {
-        List<Track> suspectedTracks = new ArrayList<>();
-
-        int maxFrameIndex = -1;
+    private static List<Track> groupSameFrameAnomalies(List<AnomalyDetection> anomalies) {
+        Map<Integer, List<SourceExtractor.DetectedObject>> byFrame = new java.util.TreeMap<>();
         for (AnomalyDetection anomaly : anomalies) {
             if (anomaly.object.sourceFrameIndex >= 0) {
-                maxFrameIndex = Math.max(maxFrameIndex, anomaly.object.sourceFrameIndex);
+                byFrame.computeIfAbsent(anomaly.object.sourceFrameIndex, frame -> new ArrayList<>()).add(anomaly.object);
             }
         }
-
-        if (maxFrameIndex < 0) {
-            return suspectedTracks;
-        }
-
-        List<List<SourceExtractor.DetectedObject>> frameObjects = new ArrayList<>();
-        for (int i = 0; i <= maxFrameIndex; i++) {
-            frameObjects.add(new ArrayList<>());
-        }
-
-        for (AnomalyDetection anomaly : anomalies) {
-            if (anomaly.object.sourceFrameIndex >= 0) {
-                frameObjects.get(anomaly.object.sourceFrameIndex).add(anomaly.object);
+        List<Track> groups = new ArrayList<>();
+        for (List<SourceExtractor.DetectedObject> frameObjects : byFrame.values()) {
+            List<SourceExtractor.DetectedObject> remainingObjects = new ArrayList<>(frameObjects);
+            while (remainingObjects.size() >= 3) {
+                AnomalyLineCandidate bestLine = bestAnomalyLine(remainingObjects);
+                if (bestLine == null) {
+                    break;
+                }
+                Track group = new Track();
+                group.anomalyGroup = true;
+                group.points.addAll(bestLine.objects);
+                groups.add(group);
+                remainingObjects.removeAll(bestLine.objects);
             }
         }
-
-        for (List<SourceExtractor.DetectedObject> currentFrameObjects : frameObjects) {
-            suspectedTracks.addAll(buildSuspectedStreakTracksForFrame(currentFrameObjects, config));
-        }
-
-        return suspectedTracks;
+        return groups;
     }
 
     /**
-     * Repeatedly extracts disjoint same-frame suspected streaks so parallel fragments can all be returned.
+     * The line through the most anomalies of one frame, the longest one among equals; null when no line holds three.
      */
-    private static List<Track> buildSuspectedStreakTracksForFrame(List<SourceExtractor.DetectedObject> frameObjects,
-                                                                  DetectionConfig config) {
-        if (frameObjects.size() < 3) {
-            return new ArrayList<>();
-        }
-
-        List<Track> suspectedTracks = new ArrayList<>();
-        List<SourceExtractor.DetectedObject> remainingObjects = new ArrayList<>(frameObjects);
-        while (remainingObjects.size() >= 3) {
-            SuspectedStreakLineCandidate bestLine = buildBestSuspectedStreakTrack(remainingObjects, config);
-            if (bestLine == null) {
-                break;
-            }
-
-            Track suspectedTrack = new Track();
-            suspectedTrack.isSuspectedStreakTrack = true;
-            suspectedTrack.points.addAll(bestLine.objects);
-            suspectedTracks.add(suspectedTrack);
-            remainingObjects.removeAll(bestLine.objects);
-        }
-
-        return suspectedTracks;
-    }
-
-    /**
-     * Finds the strongest same-frame collinear grouping among rescued anomalies from one frame.
-     */
-    private static SuspectedStreakLineCandidate buildBestSuspectedStreakTrack(List<SourceExtractor.DetectedObject> frameObjects,
-                                                                              DetectionConfig config) {
-        if (frameObjects.size() < 3) {
-            return null;
-        }
-
-        SuspectedStreakLineCandidate bestLine = null;
-        double maxLineError = getSuspectedStreakLineTolerance(config);
-
+    private static AnomalyLineCandidate bestAnomalyLine(List<SourceExtractor.DetectedObject> frameObjects) {
+        AnomalyLineCandidate bestLine = null;
         for (int i = 0; i < frameObjects.size() - 1; i++) {
             for (int j = i + 1; j < frameObjects.size(); j++) {
                 SourceExtractor.DetectedObject start = frameObjects.get(i);
@@ -1261,80 +1208,39 @@ public class TrackLinker {
                 if (baselineDistance < 1.0) {
                     continue;
                 }
-
                 List<SourceExtractor.DetectedObject> collinearObjects = new ArrayList<>();
                 for (SourceExtractor.DetectedObject candidate : frameObjects) {
-                    if (distanceToLineOptimized(start, end, candidate, baselineDistance) <= maxLineError) {
+                    if (distanceToLineOptimized(start, end, candidate, baselineDistance) <= ANOMALY_GROUP_LINE_TOLERANCE) {
                         collinearObjects.add(candidate);
                     }
                 }
-
                 if (collinearObjects.size() < 3) {
                     continue;
                 }
-
-                orderObjectsAlongLine(collinearObjects, start, end);
-                double span = distance(
-                        collinearObjects.get(0).x,
-                        collinearObjects.get(0).y,
-                        collinearObjects.get(collinearObjects.size() - 1).x,
-                        collinearObjects.get(collinearObjects.size() - 1).y
-                );
-
-                SuspectedStreakLineCandidate currentLine = new SuspectedStreakLineCandidate(
-                        collinearObjects,
-                        span
-                );
-                if (isBetterSuspectedStreakLineCandidate(currentLine, bestLine)) {
+                double dx = end.x - start.x;
+                double dy = end.y - start.y;
+                collinearObjects.sort((left, right) -> Double.compare(
+                        projectionAlongLine(left, start.x, start.y, dx, dy),
+                        projectionAlongLine(right, start.x, start.y, dx, dy)));
+                SourceExtractor.DetectedObject first = collinearObjects.get(0);
+                SourceExtractor.DetectedObject last = collinearObjects.get(collinearObjects.size() - 1);
+                AnomalyLineCandidate currentLine = new AnomalyLineCandidate(collinearObjects,
+                        distance(first.x, first.y, last.x, last.y));
+                if (bestLine == null || currentLine.objects.size() > bestLine.objects.size()
+                        || (currentLine.objects.size() == bestLine.objects.size() && currentLine.span > bestLine.span + 1e-6)) {
                     bestLine = currentLine;
                 }
             }
         }
-
         return bestLine;
     }
 
     /**
-     * Prefers lines with denser total support, then larger span.
-     */
-    private static boolean isBetterSuspectedStreakLineCandidate(SuspectedStreakLineCandidate currentLine,
-                                                                SuspectedStreakLineCandidate bestLine) {
-        if (bestLine == null) {
-            return true;
-        }
-        if (currentLine.objects.size() != bestLine.objects.size()) {
-            return currentLine.objects.size() > bestLine.objects.size();
-        }
-        return currentLine.span > bestLine.span + 1e-6;
-    }
-
-    /**
-     * Returns the dedicated same-frame line tolerance used by suspected streak grouping.
-     */
-    private static double getSuspectedStreakLineTolerance(DetectionConfig config) {
-        return Math.max(0.0, config.suspectedStreakLineTolerance);
-    }
-
-    /**
-     * Orders same-frame collinear anomalies along the candidate line so the exported track is stable.
-     */
-    private static void orderObjectsAlongLine(List<SourceExtractor.DetectedObject> objects,
-                                              SourceExtractor.DetectedObject start,
-                                              SourceExtractor.DetectedObject end) {
-        double dx = end.x - start.x;
-        double dy = end.y - start.y;
-        objects.sort((left, right) -> Double.compare(
-                projectionAlongLine(left, start.x, start.y, dx, dy),
-                projectionAlongLine(right, start.x, start.y, dx, dy)
-        ));
-    }
-
-    /**
-     * Runs one final reconciliation pass over confirmed streaks, promoted single streaks, and
-     * suspected same-frame groupings so nearby fragments collapse into one streak history.
+     * Runs one final reconciliation pass over confirmed streaks, promoted single streaks and the groups of
+     * same-frame anomalies, so nearby fragments collapse into one streak history.
      */
     private static List<Track> consolidateStreakTracks(List<Track> confirmedStreakTracks,
-                                                       List<Track> suspectedStreakTracks,
+                                                       List<Track> anomalyGroups,
                                                        DetectionConfig config) {
         List<Track> orderedTracks = new ArrayList<>();
 
@@ -1349,15 +1255,15 @@ public class TrackLinker {
             orderedTracks.addAll(orderedConfirmedTracks);
         }
 
-        if (suspectedStreakTracks != null) {
-            List<Track> orderedSuspectedTracks = new ArrayList<>();
-            for (Track track : suspectedStreakTracks) {
+        if (anomalyGroups != null) {
+            List<Track> orderedGroups = new ArrayList<>();
+            for (Track track : anomalyGroups) {
                 if (isStreakLike(track)) {
-                    orderedSuspectedTracks.add(copyTrack(track));
+                    orderedGroups.add(copyTrack(track));
                 }
             }
-            orderedSuspectedTracks.sort(TrackLinker::compareStreakConsolidationPriority);
-            orderedTracks.addAll(orderedSuspectedTracks);
+            orderedGroups.sort(TrackLinker::compareStreakConsolidationPriority);
+            orderedTracks.addAll(orderedGroups);
         }
 
         if (orderedTracks.isEmpty()) {
@@ -1396,7 +1302,7 @@ public class TrackLinker {
         return track != null
                 && track.points != null
                 && !track.points.isEmpty()
-                && (track.isStreakTrack || track.isSuspectedStreakTrack);
+                && (track.isStreakTrack || track.anomalyGroup);
     }
 
     /**
@@ -1405,8 +1311,8 @@ public class TrackLinker {
     private static Track copyTrack(Track source) {
         Track copy = new Track();
         copy.isStreakTrack = source.isStreakTrack;
-        copy.isSuspectedStreakTrack = source.isSuspectedStreakTrack;
         copy.isTimeBasedTrack = source.isTimeBasedTrack;
+        copy.anomalyGroup = source.anomalyGroup;
         copy.points.addAll(source.points);
         return copy;
     }
@@ -1439,7 +1345,8 @@ public class TrackLinker {
     }
 
     /**
-     * Ranks sturdier confirmed streaks ahead of weaker suspected fragments so they absorb later inputs.
+     * Ranks confirmed streaks ahead of anomaly groups, then streaks seen in more frames, then with more points, then
+     * brighter ones first, so they absorb later inputs.
      */
     private static int compareStreakConsolidationPriority(Track left, Track right) {
         int byConfirmed = Boolean.compare(right.isStreakTrack, left.isStreakTrack);
@@ -1546,8 +1453,7 @@ public class TrackLinker {
         Track mergedTrack = new Track();
         boolean spansMultipleFrames = countUniqueFrames(combinedPoints) > 1;
         mergedTrack.isStreakTrack = left.isStreakTrack || right.isStreakTrack || spansMultipleFrames;
-        mergedTrack.isSuspectedStreakTrack = !mergedTrack.isStreakTrack
-                && (left.isSuspectedStreakTrack || right.isSuspectedStreakTrack);
+        mergedTrack.anomalyGroup = left.anomalyGroup && right.anomalyGroup;
         mergedTrack.points.addAll(combinedPoints);
         normalizeStreakTrackOrder(mergedTrack);
         return mergedTrack;
@@ -1722,10 +1628,11 @@ public class TrackLinker {
     }
 
     /**
-     * Keeps final streak consolidation aligned with the more permissive same-frame suspected-streak geometry.
+     * Line tolerance of the final streak consolidation: twice the prediction tolerance, and at least the tolerance of
+     * the anomaly groups.
      */
     private static double getStreakConsolidationLineTolerance(DetectionConfig config) {
-        return Math.max(getSuspectedStreakLineTolerance(config), config.predictionTolerance * 2.0);
+        return Math.max(ANOMALY_GROUP_LINE_TOLERANCE, config.predictionTolerance * 2.0);
     }
 
     /**

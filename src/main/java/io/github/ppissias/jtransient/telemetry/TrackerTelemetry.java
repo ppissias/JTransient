@@ -21,7 +21,7 @@ public class TrackerTelemetry {
     public long countTrackTooShort, countTrackErraticRhythm, countTrackDuplicate;
     public int rejectedBinaryStarStreakShape;
     public int streakTracksFound, pointTracksFound;
-    public int anomaliesFound, integratedSigmaAnomaliesFound, suspectedStreakTracksFound;
+    public int anomaliesFound, integratedSigmaAnomaliesFound;
 
     /** Faint-fragment assembly wall-clock time; included in tracking, -1 when the pass did not run. */
     public long faintStreakFragmentTimeMs = -1L;

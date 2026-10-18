@@ -882,7 +882,6 @@ public class JTransientEngine implements AutoCloseable {
         telemetry.totalMasterStarsIdentified = masterStars.size();
         telemetry.totalTracksFound = trackResult.tracks.size();
         telemetry.totalAnomaliesFound = trackResult.anomalies.size();
-        telemetry.totalSuspectedStreakTracksFound = trackResult.telemetry.suspectedStreakTracksFound;
         telemetry.trackerTelemetry = trackResult.telemetry;
         telemetry.slowMoverTelemetry = smTelemetry;
 

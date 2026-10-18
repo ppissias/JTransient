@@ -152,7 +152,7 @@ public final class FaintStreakFragmentGrouper {
             return false;
         }
         for (TrackLinker.Track track : streakTracks) {
-            if (track == null || !track.isStreakTrack || track.isSuspectedStreakTrack || track.points == null) {
+            if (track == null || !track.isStreakTrack || track.points == null) {
                 continue;
             }
             List<SourceExtractor.DetectedObject> parts = new ArrayList<>();

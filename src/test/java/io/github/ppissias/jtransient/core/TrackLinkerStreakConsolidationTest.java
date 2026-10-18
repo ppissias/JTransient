@@ -40,11 +40,9 @@ public class TrackLinkerStreakConsolidationTest {
 
         assertEquals(1, result.tracks.size());
         assertEquals(1, result.telemetry.streakTracksFound);
-        assertEquals(0, result.telemetry.suspectedStreakTracksFound);
 
         TrackLinker.Track track = result.tracks.get(0);
         assertTrue(track.isStreakTrack);
-        assertFalse(track.isSuspectedStreakTrack);
         assertEquals(3, track.points.size());
         assertTrue(track.points.contains(start));
         assertTrue(track.points.contains(end));
@@ -52,7 +50,7 @@ public class TrackLinkerStreakConsolidationTest {
     }
 
     @Test
-    public void findMovingObjectsAbsorbsSameFrameSuspectedStreakIntoConfirmedTrack() {
+    public void findMovingObjectsAbsorbsSameFrameFragmentsOnTheStreakIntoTheTrack() {
         DetectionConfig config = new DetectionConfig();
 
         SourceExtractor.DetectedObject start = createStreak(10.0, 10.0, 0, 0.0, 12.0, 0L);
@@ -79,12 +77,10 @@ public class TrackLinkerStreakConsolidationTest {
 
         assertEquals(1, result.tracks.size());
         assertEquals(1, result.telemetry.streakTracksFound);
-        assertEquals(0, result.telemetry.suspectedStreakTracksFound);
         assertTrue(result.anomalies.isEmpty());
 
         TrackLinker.Track track = result.tracks.get(0);
         assertTrue(track.isStreakTrack);
-        assertFalse(track.isSuspectedStreakTrack);
         assertEquals(5, track.points.size());
         assertTrue(track.points.contains(start));
         assertTrue(track.points.contains(end));
@@ -118,7 +114,6 @@ public class TrackLinkerStreakConsolidationTest {
 
         assertEquals(2, result.tracks.size());
         assertEquals(2, result.telemetry.streakTracksFound);
-        assertEquals(0, result.telemetry.suspectedStreakTracksFound);
         assertTrue(result.tracks.stream().anyMatch(track -> track.isStreakTrack && track.points.size() == 2));
         assertTrue(result.tracks.stream().anyMatch(track -> track.isStreakTrack && track.points.size() == 1));
     }
@@ -147,7 +142,6 @@ public class TrackLinkerStreakConsolidationTest {
 
         assertEquals(2, result.tracks.size());
         assertEquals(2, result.telemetry.streakTracksFound);
-        assertEquals(0, result.telemetry.suspectedStreakTracksFound);
         assertTrue(result.tracks.stream().anyMatch(track -> track.isStreakTrack && track.points.size() == 2));
         assertTrue(result.tracks.stream().anyMatch(track -> track.isStreakTrack && track.points.size() == 1));
     }
@@ -178,8 +172,50 @@ public class TrackLinkerStreakConsolidationTest {
 
         assertEquals(1, result.tracks.size());
         assertEquals(1, result.telemetry.streakTracksFound);
-        assertEquals(0, result.telemetry.suspectedStreakTracksFound);
         assertEquals(4, result.tracks.get(0).points.size());
+    }
+
+    /**
+     * A streak that broke into anomalies in the frames between its ends gets those pieces back; collinear anomalies
+     * that join no streak stay anomalies.
+     */
+    @Test
+    public void findMovingObjectsJoinsAnomalyGroupsToAStreakAndKeepsOtherGroupsAsAnomalies() {
+        DetectionConfig config = new DetectionConfig();
+
+        SourceExtractor.DetectedObject start = createStreak(10.0, 10.0, 0, 0.0, 12.0, 0L);
+        SourceExtractor.DetectedObject end = createStreak(70.0, 10.0, 3, 0.0, 12.0, 360_000L);
+        List<SourceExtractor.DetectedObject> frame1Pieces = List.of(
+                createIntegratedAnomaly(22.0, 10.0, 1, 120_000L),
+                createIntegratedAnomaly(30.0, 10.1, 1, 120_000L),
+                createIntegratedAnomaly(38.0, 10.0, 1, 120_000L));
+        List<SourceExtractor.DetectedObject> frame2Pieces = List.of(
+                createIntegratedAnomaly(42.0, 10.1, 2, 240_000L),
+                createIntegratedAnomaly(50.0, 10.0, 2, 240_000L),
+                createIntegratedAnomaly(58.0, 10.1, 2, 240_000L));
+        List<SourceExtractor.DetectedObject> chanceLine = List.of(
+                createIntegratedAnomaly(20.0, 100.0, 1, 120_000L),
+                createIntegratedAnomaly(40.0, 120.0, 1, 120_000L),
+                createIntegratedAnomaly(60.0, 140.0, 1, 120_000L));
+
+        List<SourceExtractor.DetectedObject> frame1 = new ArrayList<>(frame1Pieces);
+        frame1.addAll(chanceLine);
+        List<List<SourceExtractor.DetectedObject>> frames = List.of(
+                List.of(start), frame1, frame2Pieces, List.of(end));
+
+        TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
+                frames, new ArrayList<>(), config, null, 160, 160);
+
+        assertEquals(1, result.tracks.size());
+        TrackLinker.Track track = result.tracks.get(0);
+        assertTrue(track.isStreakTrack);
+        assertEquals(8, track.points.size());
+        assertTrue(track.points.containsAll(frame1Pieces));
+        assertTrue(track.points.containsAll(frame2Pieces));
+        assertEquals(3, result.anomalies.size());
+        for (TrackLinker.AnomalyDetection anomaly : result.anomalies) {
+            assertTrue(chanceLine.contains(anomaly.object));
+        }
     }
 
     private static SourceExtractor.DetectedObject createStreak(double x,

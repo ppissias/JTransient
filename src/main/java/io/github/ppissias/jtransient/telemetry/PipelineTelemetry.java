@@ -148,12 +148,10 @@ public class PipelineTelemetry {
     // --- PHASE 4: Tracking ---
     /** Number of stationary master-stack stars extracted for the veto mask. */
     public int totalMasterStarsIdentified = 0;
-    /** Number of returned track-like detections, including suspected streak groupings. */
+    /** Number of returned tracks. */
     public int totalTracksFound = 0;
     /** Number of rescued standalone anomalies returned outside the track list. */
     public int totalAnomaliesFound = 0;
-    /** Number of returned tracks flagged as suspected same-frame streak groupings. */
-    public int totalSuspectedStreakTracksFound = 0;
 
     /**
      * Detailed diagnostics emitted by the track-linking stages.
@@ -461,8 +459,7 @@ public class PipelineTelemetry {
         sb.append(String.format("Master Stars          : %d\n", totalMasterStarsIdentified));
 
         sb.append(String.format("Tracks Returned       : %d\n", totalTracksFound));
-        sb.append(String.format("Anomalies Found       : %d\n", totalAnomaliesFound));
-        sb.append(String.format("Suspected Streak Tracks: %d\n\n", totalSuspectedStreakTracksFound));
+        sb.append(String.format("Anomalies Found       : %d\n\n", totalAnomaliesFound));
 
         if (!rejectedFrames.isEmpty()) {
             sb.append("--- QUALITY CONTROL: REJECTED FRAMES ---\n");

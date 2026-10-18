@@ -23,12 +23,12 @@ import java.util.List;
  *
  * <p>This is the primary return type of {@link JTransientEngine#runPipeline(List,
  * io.github.ppissias.jtransient.config.DetectionConfig, TransientEngineProgressListener)}.
- * Confirmed tracks, suspected same-frame streak groupings, rescued anomalies, leftover
+ * Confirmed tracks, rescued anomalies, leftover
  * transients, and diagnostic products all live here so callers can decide how much of the
  * pipeline output they want to keep.</p>
  */
 public class PipelineResult {
-    /** Returned track-like detections, including confirmed tracks and suspected same-frame streak groupings. */
+    /** Returned tracks: streak tracks, single streaks and point tracks. */
     public final List<TrackLinker.Track> tracks;
     /** Per-phase counters and diagnostics collected during processing. */
     public final PipelineTelemetry telemetry;
@@ -78,7 +78,7 @@ public class PipelineResult {
     /**
      * Creates the unified pipeline result payload using the legacy slow-mover export fields.
      *
-     * @param tracks returned tracks and suspected streak groupings
+     * @param tracks returned tracks
      * @param telemetry pipeline counters and diagnostics
      * @param masterStackData median master stack used for vetoing
      * @param masterStars stationary objects extracted from the master stack
@@ -116,7 +116,7 @@ public class PipelineResult {
     /**
      * Creates the unified pipeline result payload.
      *
-     * @param tracks returned tracks and suspected streak groupings
+     * @param tracks returned tracks
      * @param telemetry pipeline counters and diagnostics
      * @param masterStackData median master stack used for vetoing
      * @param masterStars stationary objects extracted from the master stack
