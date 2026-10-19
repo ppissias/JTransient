@@ -489,6 +489,14 @@ Minimum footprint size required for anomaly rescue.
 
 ## 7. Common Motion And Residual Transient Analysis
 
+### `enableCameraFixedRejection` (default `true`)
+
+Sets aside the point detections that stay at one camera position while the sky moves between frames: hot pixels, warm pixels and dust that the calibration left, which registration moves with the dither and the drift. Runs after the star mask and before tracking, so they become no tracks, anomalies, common-motion groups or residual candidates; the groups are exported as `PipelineResult.cameraFixedGroups`.
+
+- each frame's shift and rotation are measured from its registration fill (`FrameRegistration`); frames without usable fill are not checked
+- a group is at least 3 frames, within 2 px of one camera position, whose positions in the frames spread over at least 4 px
+- frames of the two sides of a meridian flip only match frames of their own side
+
 ### `enableCommonMotionRejection` (default `true`)
 
 Sets aside compact, separated sources sharing a displacement before local rescue and activity clustering. This switch is independent of `enableResidualTransientAnalysis`.

@@ -94,6 +94,8 @@ The analyzer also records each usable frame's coverage (`FrameCoverage`): the fi
 - the **quality area**, over every usable frame. A frame that alone shrinks it by 5 % of the frame or more is left out and rejected ("Shifted away from the other frames"), one at a time and at most a tenth of the frames. The sky and the quality metrics are measured here.
 - the **data area**, over the frames kept by quality control (section 5). Detection, slow movers and photometry keep to it, and it is exported as `PipelineResult.dataArea` with the frames that limit it most (`PipelineTelemetry.dataAreaLimitingFrames`).
 
+From the same coverage, `FrameRegistration.fit` measures how registration moved each usable frame: a shift and a rotation. Registration moves the camera's rectangle of pixels and the fill marks where it no longer reaches, so the first and last data pixel of each row and column (away from the corners) lie on the rectangle's sides. A least-squares fit of the turned rectangle to these points, with points more than 2 px off dropped, gives `tx`, `ty` and `theta` (DriftAnalysisResult.frameRegistrations). Sides without fill leave their shift at 0 (the frame moved less than a pixel that way); a frame without fill keeps the camera's position; a fit worse than 2 px rms marks the frame as not usable. On the reference datasets the fits are within 0.3-1.1 px. A frame turned by 180 degrees (a meridian flip) leaves the same fill as one that is not turned, so its camera positions come out mirrored and it only matches frames of its own pier side.
+
 The engine never changes the caller's configuration.
 
 ## 2. Parallel Extraction And Quality Measurement
@@ -339,7 +341,7 @@ Then each point-like or streak-like object is checked:
 2. compute `overlapFraction = overlapCount / rawPixels.size()`
 3. purge the object if `overlapFraction > maxMaskOverlapFraction`
 
-The surviving point detections are the inputs to point-track linking. The surviving streak detections are the inputs to fast streak linking and are also preserved in the merged transient export. The exported `allTransients` list contains the full post-veto transient population carried through tracking, while `unclassifiedTransients` contains only the detections that remain after tracks and anomalies are assigned.
+The surviving point detections go through the camera-fixed check (section 9.4) and are then the inputs to point-track linking. The surviving streak detections are the inputs to fast streak linking and are also preserved in the merged transient export. The exported `allTransients` list contains the full post-veto transient population carried through tracking, while `unclassifiedTransients` contains only the detections that remain after tracks and anomalies are assigned.
 
 ### 9.3 Fast streak linking
 
@@ -367,6 +369,14 @@ After multi-point streak linking finishes, the unmatched single streaks are eval
 Rejected binary-star-like streaks still increment `TrackerTelemetry.rejectedBinaryStarStreakShape`, but they are rejected only from single-streak track promotion, not from standalone export.
 
 Streak time/motion consistency is evaluated using one centroid sample per frame. When timestamps are available, projected speeds must stay within `streakTimeConsistencyTolerance`. Without timestamps, multi-frame streak candidates use the same steady-rhythm logic as geometric point tracks.
+
+### 9.4 Camera-fixed sources
+
+When `enableCameraFixedRejection` is on, `CameraFixedRejector` sets aside the surviving point detections that stay at one camera position while the sky moves: hot pixels, warm pixels and dust that the calibration left. Registration moves them with the dither and the drift, so in the registered frames they look like faint movers (a hot pixel moving with a steady drift forms a perfectly straight track), repeats at one spot or common motion.
+
+Each detection is mapped back to camera coordinates with its frame's registration (section 1). A group is the detections of at least 3 frames, one per frame, within 2 px of the group's median camera position, whose positions in the frames spread over at least 4 px; with less, the frames did not move enough to tell a camera position from a position on the sky. Frames whose registration is not usable are left out, and a dataset without registration fill is left as it is.
+
+The group's detections are removed from the point detections and from `allTransients`, so they become no tracks, anomalies, common-motion groups or residual candidates. The groups are exported as `PipelineResult.cameraFixedGroups` (tracker telemetry: `cameraFixedGroups`, `cameraFixedDetections`). On the reference data: both whynot tracks were hot pixels moving with the drift (0.7-1.8 px apart on the camera, while every real track spreads 21 px or more); Eagle-noisy keeps 7 of its 74 tracks (each of the 67 others contained camera-fixed detections, 55 nothing else); on M81-kumar the local rescue candidates fall from 84 to 10, the others being hot pixels that followed the dither between sets of frames. The other reference datasets are unchanged.
 
 ## 10. Time-Based Point Linking
 
@@ -585,6 +595,7 @@ At the end of the run, the engine assembles:
 - master-star detections
 - maximum-stack slow-mover candidates and median-source mask
 - merged per-frame transients
+- camera-fixed groups (hot pixels, dust)
 - common-motion groups and residual-transient analysis
 - stationary-star photometry and its telemetry
 - master veto mask
