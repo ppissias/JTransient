@@ -1,6 +1,6 @@
-# JTransient Pipeline Guide
+# JTransient API And Pipeline Guide
 
-This document explains what each public entrypoint does in the library and which parts of the pipeline it executes.
+This is the API contract reference: signatures, input rules, entrypoint scope, result fields, ownership and progress. Algorithm details live in [ALGORITHM.md](ALGORITHM.md); `DetectionConfig` defaults live in [CONFIG.md](CONFIG.md).
 
 The public surface is split into three layers:
 
@@ -8,27 +8,9 @@ The public surface is split into three layers:
 - sequence-level utilities and tracking via `JTransientEngine`
 - configuration search via `CalibratedAutoTuner` (and the legacy `JTransientAutoTuner`)
 
-## Pipeline Building Blocks
+## Pipeline Scope
 
-The full engine is assembled from these stages:
-
-1. border drift diagnostics (blank and failed-registration frames are left out, then rejected)
-2. per-frame source extraction
-3. per-frame quality analysis
-4. session-level frame rejection
-5. median master-stack generation or reuse
-6. master-star extraction
-7. maximum-stack generation and optional slow-mover candidate analysis
-8. stationary-star veto masking
-9. fast streak linking
-10. time-based point linking when timestamps exist
-11. geometric point linking when timestamps are missing or explicitly enabled
-12. anomaly rescue and streak consolidation
-13. residual transient analysis
-14. optional stationary-star photometry and variable-star detection
-15. maximum-stack result export
-
-Different entrypoints execute different subsets of that sequence.
+`runPipeline(...)` executes the complete analysis. `generateMasterStack(...)` shares registration/quality selection but returns only a median stack. `detectTransients(...)` adds extraction and stationary-star/streak filtering, then stops before point linking. Tuners search configurations on sampled crops; `SourceExtractor` works on one image. The [algorithm flow](ALGORITHM.md#high-level-flow) defines stage ordering.
 
 ## Input Rules
 
@@ -75,7 +57,7 @@ What it does:
 2. computes the seed and grow thresholds
 3. scans the image with an 8-connected BFS blob grower
 4. computes shape metrics for each surviving blob
-5. rejects edge and alignment-void artifacts
+5. keeps point-source footprints and streak centroids inside the search area (the default is the image minus a 3 px margin)
 
 What it returns:
 
@@ -92,6 +74,8 @@ What it does not do:
 - no track linking
 
 Use this when you only need object detection on one image or you want to build your own higher-level tracker.
+
+The four-argument overload measures the sky over the whole image; it does not infer registration padding. The overloads taking `backgroundArea` and `searchArea` let callers supply coverage-derived areas. Use `DataArea.ofFrame(image)` for a standalone registered-frame area, or the engine for session-wide intersections. There are no darkness/void probes.
 
 ## `CalibratedAutoTuner.tune(...)`
 
@@ -112,21 +96,18 @@ CalibratedAutoTuner.Calibration CalibratedAutoTuner.calibrate(
 )
 ```
 
-What it does:
+`tune(...)` measures all profile choices and returns the requested optimized config plus `success`, `summary`, `telemetryReport` and the complete `calibration`. On early failure it returns a fallback/base configuration; inspect `success` before treating the result as tuned.
 
-1. leaves out blank and failed-registration frames
-2. cuts crops from the frames (centre and corners, or a grid on large sensors) and builds cropped median master stacks
-3. measures the star FWHM and the residual jitter
-4. builds, for every crop-frame, a negative image (noise only) and a copy with injected synthetic stars, and runs a streak pass to recognise satellite trails
-5. evaluates every combination of detection sigma, grow sigma, minimum pixels, master sigma, master grow sigma, master minimum pixels and veto overlap: noise, star leakage, real-frame excess, recovery of the synthetic stars and mask coverage
-6. picks, for each profile, the most sensitive combination within its false-positive budget (0.05, 0.4, 1.5 and 3.5 per megapixel per frame for low, medium, high and maximum)
+`calibrate(...)` returns the measured candidates, FWHM, jitter, measured area and the per-profile `chosen`, `withinBudget` and `budgetVerifiable` arrays. Reuse it without repeating the measurement:
 
-What it returns:
+```java
+DetectionConfig CalibratedAutoTuner.configFor(
+        CalibratedAutoTuner.Calibration calibration,
+        DetectionConfig baseConfig,
+        JTransientAutoTuner.AutoTuneProfile profile)
+```
 
-- `AutoTunerResult.success`, `optimizedConfig`, `summary` and `telemetryReport`
-- with `calibrate(...)`: every measured combination and the choice for every profile
-
-See `AUTOTUNER.md`.
+The result is a base-config clone with the selected values applied. The [calibrated algorithm](ALGORITHM.md#calibrated-auto-tuning) defines measurements, grids and profile budgets.
 
 ## `JTransientAutoTuner.tune(...)` (legacy)
 
@@ -147,33 +128,9 @@ JTransientAutoTuner.AutoTunerResult tune(
 )
 ```
 
-What it does:
+The no-profile overload uses MEDIUM. Successful tuning returns an optimized clone; fallback paths may return the base config. Inspect `AutoTunerResult.success`, `optimizedConfig`, `telemetryReport`, `bestStarCount` and `bestTransientRatio`.
 
-1. evaluates frame quality across the sequence
-2. selects a representative sample of frames
-3. builds several interior crops from those frames
-4. calibrates `maxStarJitter` from sampled crop stars
-5. sweeps detection sigma, grow sigma, minimum pixels, and mask overlap
-6. scores each combination against cropped master-stack behavior
-7. validates the winning combination against the frozen tuning crops
-8. returns an optimized config on success, or falls back to the base config
-
-What it returns:
-
-- `AutoTunerResult.success`
-- `AutoTunerResult.optimizedConfig`
-- `AutoTunerResult.telemetryReport`
-- `AutoTunerResult.bestStarCount`
-- `AutoTunerResult.bestTransientRatio`
-- `AutoTunerResult.finalValidationTelemetry`
-
-What it does not do:
-
-- no full `PipelineResult`
-- no slow-mover export
-- no final track linking
-
-Use this when you want to derive a better starting configuration before running the engine.
+`finalValidationTelemetry` records the winner's replay on frozen crops, or is null before a winner exists. It distinguishes execution, crop completion and hard-gate validity; reports object/stable/transient counts, coverage and variability metrics; and carries a status message and failed-crop label. A winning score alone does not guarantee every replay gate passed. This method does not return a full pipeline result. See the [legacy algorithm](ALGORITHM.md#legacy-auto-tuning).
 
 ## `JTransientEngine.generateMasterStack(...)`
 
@@ -187,27 +144,12 @@ short[][] generateMasterStack(
 )
 ```
 
-What it does (the same frame selection as `runPipeline(...)`, so the stack is identical to the pipeline's):
-
-1. sorts frames by `sequenceIndex`
-2. runs the drift analysis, which finds blank or failed-registration frames and builds the quality area
-3. runs `FrameQualityAnalyzer.evaluateFrame(...)` on every frame, inside the quality area
-4. rejects outlier frames with `SessionEvaluator`, the blank or failed-registration frames and the frames shifted far from the others, in the same shared step as the pipeline
-5. builds a median master stack from the retained frames
+The method uses the same registration/coverage and quality selection as `runPipeline(...)`, then constructs a median stack of retained frames. It does not perform the main transient pass, extract master stars or link tracks.
 
 What it returns:
 
 - the median `short[][]` master stack
 - `generateMasterStackWithDetails(...)` also returns the kept frames and the rejected frames with their reasons (`MasterStackResult`)
-
-What it does not do:
-
-- no main transient `SourceExtractor` pass; the quality analyzer still extracts quality-reference stars
-- no master-star extraction
-- no transients export
-- no track linking
-
-The stationary-star veto mask is built by `MasterVetoMask.build(...)`: the master-star footprints, each widened by half the star jitter radius (at least one pixel). The pipeline uses it, and tools that preview the mask can use the same method with `MasterReferenceAnalyzer.analyzeFromMasterStack(...)`.
 
 Use this when you want to reuse the same master stack across repeated `detectTransients(...)` or `runPipeline(...)` calls.
 
@@ -232,20 +174,7 @@ List<FrameTransients> detectTransients(
 
 This is the transient-only path of the engine. Internally it runs the same shared setup used by `runPipeline(...)`, then stops before point-track linking.
 
-What it does:
-
-1. runs border drift diagnostics and records where each frame holds image data; frames where less than half of the pixels hold image data (blank frames, failed registrations) are left out and rejected with the outlier frames, as is a frame that alone shrinks the common area by 5 % of the frame or more
-2. extracts sources from every frame, measuring the sky inside the quality area
-3. computes frame quality metrics inside the quality area
-4. rejects outlier frames for the session, then keeps only the objects inside the data area of the kept frames
-5. generates a median master stack, or uses `providedMasterStack`
-6. extracts `masterStars` from that stack
-7. calls `TrackLinker.filterTransients(...)`
-   - separates streaks from point detections
-   - builds the stationary-star veto mask
-   - removes masked point sources and masked streaks
-   - links surviving fast streaks
-   - merges surviving point transients and preserved streak detections
+It shares the full pipeline's registration, per-frame extraction/quality, rejection, kept-frame data area and median/master-star preparation. `TrackLinker.filterTransients(...)` applies the stationary-star veto, separates point/streak populations and links surviving fast streaks. It stops before camera-fixed point rejection, point linking, anomaly rescue, common-motion/residual analysis and photometry. A provided stack skips only median construction.
 
 What it returns:
 
@@ -255,17 +184,7 @@ What it returns:
   - `transients`
   - `extractionResult`
 
-What it does not do:
-
-- no maximum-stack slow-mover analysis
-- no time-based point tracking
-- no geometric point tracking
-- no anomaly rescue
-- no maximum-stack export
-- no variable-star photometry
-- no `PipelineResult`
-
-Use this when you want JTransient to do extraction plus stationary-star filtering, but you intend to do your own track assembly.
+It returns neither a maximum stack nor a `PipelineResult`. Use this when you want JTransient to do extraction plus stationary-star filtering, but you intend to do your own track assembly.
 
 ## `JTransientEngine.runPipeline(...)`
 
@@ -286,33 +205,9 @@ PipelineResult runPipeline(
 )
 ```
 
-This is the full engine entrypoint.
+This is the full engine entrypoint. It executes the [complete algorithm](ALGORITHM.md#high-level-flow), including camera-fixed rejection, common-motion filtering and the enabled slow-mover/residual/photometry branches.
 
-What it does:
-
-1. runs the same shared setup as `detectTransients(...)`
-2. generates or reuses the median master stack
-3. extracts the master-star map
-4. builds the maximum stack once and, when enabled, finds slow-mover candidates from its geometric footprints, an exact median-stack object mask, and original-frame support measurements
-5. calls `TrackLinker.findMovingObjects(...)`
-   - stationary-star veto masking
-   - fast streak linking
-   - time-based point linking when timestamps are available
-   - geometric point linking when timestamps are missing or `enableGeometricTrackLinking` is enabled
-   - faint same-frame streak-fragment assembly
-   - anomaly rescue
-   - streak consolidation
-6. filters compact common-motion groups from unclassified observations, when `enableCommonMotionRejection` is on
-7. runs optional local rescue and activity clustering on the filtered leftovers, when `enableResidualTransientAnalysis` is on
-8. when `enableVariableStarDetection` is on, runs stationary-star photometry and variable-star detection on the retained frames
-9. records the complete engine wall-clock total and non-overlapping phase timings
-10. exports the maximum stack, reusing the same array for slow-mover analysis when enabled
-
-The slow-mover branch keeps maximum-stack `DetectedObject` instances whose geometric axis ratio lies within the configured window and whose fill factor passes the optional minimum. It measures each candidate's raw-pixel overlap with an undilated mask of median-stack objects. The optional lower overlap bound and the upper stationary-source veto use that fraction; the two stacks are never subtracted. It also measures frame-support and stationary-likelihood percentages from the original retained frames. Their default thresholds (`40` and `60`) reject low-support and stationary-looking candidates when evidence is available; `0` and `100` disable the respective gates. Its output remains a candidate, not a temporally confirmed mover.
-
-The variable-star stage measures forced aperture photometry of isolated master stars in every retained frame. Moving detections, tracks and slow-mover footprints flag the measurements they contaminate. Readiness checks test whether the frames respond linearly to light and give a `READY`, `LIMITED` or `NOT_READY` verdict. An ensemble solve removes per-frame zero points and gradients. When the verdict allows it, each star is scored against stars of similar brightness, and candidates must then pass a set of gates. See `VariableStarAlgorithm.md`.
-
-Common-motion filtering is independent of the residual-analysis switch. Its source input contains only unclassified observations, with chronological, uniquely reciprocal associations and exclusive observation ownership. Grouped observations are removed before rescues or clusters are built. The groups remain available as `PipelineResult.residualTransientAnalysis.commonMotionGroups` even when residual analysis is disabled. They are reviewable instrumental candidates, not proof that a source is physically false. The deprecated `CommonMotionRejector.apply(...)` compatibility entry point recomputes residuals when it removes observations; new callers should use `reject(...)` before `ResidualTransientAnalyzer.analyze(...)`.
+Common-motion filtering has its own switch and removes groups before optional residual rescue/clustering; groups remain available even when residual analysis is disabled. Camera-fixed groups are removed from `allTransients`; common-motion groups remain in it for review. Slow-mover outputs are morphology candidates, not temporally confirmed movers. These category meanings are independent of application report-inclusion choices.
 
 What it returns:
 
@@ -330,12 +225,31 @@ What it returns:
 - `PipelineResult.residualTransientAnalysis`
 - `PipelineResult.masterVetoMask`
 - `PipelineResult.driftPoints`
+- `PipelineResult.dataArea` (kept-frame coverage intersection with the search margin)
+- `PipelineResult.cameraFixedGroups` (detections removed from `allTransients` before point linking)
 - `PipelineResult.telemetry.slowMoverTelemetry`
 - `PipelineResult.maximumStackData`
 - `PipelineResult.variableStarAnalysis` (empty, verdict `NOT_RUN`, when disabled)
 - `PipelineResult.telemetry.photometryTelemetry`
 
 When slow-mover detection is enabled, `slowMoverStackData` is the same array as `maximumStackData`, and `slowMoverMedianVetoMask` is the same array as `slowMoverAnalysis.medianMask`.
+
+Result image/mask arrays are shared data, not defensive deep copies. In particular, slow-mover compatibility aliases refer to the same arrays. Treat engine outputs as read-only when passing them between viewers or analysis stages.
+
+### Photometry outputs and indexing
+
+`VariableStarAnalysis`:
+
+- `readiness`: verdict, status of each check, the measurements behind them, and `messages`
+- `frames`: one `PhotometryFrameStat` per clean frame, holding FWHM, aperture radius, sky, registration offset and spread, floor-clipped share, CI profile and linear limit, response slope, zero point and plane terms, star counts, flag counts, and the exclusion reason. Every light-curve array is aligned with this list.
+- `stars`: one `StarLightCurve` per selected star, holding position, master flux, `meanMag`, per-frame `deltaMag`, `magError` and `flags`, the scores, gate diagnostics, tier and `notScoredReason`
+- `candidates`, `highConfidenceCandidates()`
+- `telemetry`: selection and exclusion counters, measurement-flag counts, gate failure counts, the noise model (scatter against magnitude per scored star, with tier), session FWHM, saturation level, and processing time
+
+`telemetry.framesExcludedSpatial` records spatial exclusions; the aggregate text report includes it alongside other frame-exclusion counts. `telemetry.processingTimeMs` is the elapsed photometry duration. The full engine also records this phase in `PipelineTelemetry.stageTimeMs`; it is part of the engine total, not an additional cost to add to it.
+
+Frame times are mid-exposure Julian dates (`timestamp + exposure / 2`). They are `NaN` without timestamps.
+
 
 Use this when you want the library to go end-to-end and return all track-like detections.
 
@@ -370,39 +284,7 @@ So `providedMasterStack` is a performance shortcut, not a full cached pipeline s
 
 ## Typical Workflows
 
-### 1. Tune, then run the full pipeline
-
-Use:
-
-1. `CalibratedAutoTuner.tune(...)`
-2. `JTransientEngine.runPipeline(...)`
-
-Best for one-off scientific runs or production processing.
-
-### 2. Precompute the master stack for repeated runs
-
-Use:
-
-1. `JTransientEngine.generateMasterStack(...)`
-2. `JTransientEngine.runPipeline(..., providedMasterStack)` or `detectTransients(..., providedMasterStack)`
-
-Best for UIs or parameter iteration where stacking would otherwise be repeated.
-
-### 3. Use JTransient only for candidate extraction
-
-Use:
-
-1. `JTransientEngine.detectTransients(...)`
-
-Best when you want the stationary-star veto and streak handling but will run your own higher-level tracker afterward.
-
-### 4. Use the extractor directly
-
-Use:
-
-1. `SourceExtractor.extractSources(...)`
-
-Best when you only need single-frame objects and do not want any sequence-level logic.
+Tune once and pass `optimizedConfig` to `runPipeline(...)` for a complete run. Precompute a median stack and use a `providedMasterStack` overload for repeated threshold experiments. Choose `detectTransients(...)` only for per-frame post-veto candidates, or `SourceExtractor` for raw single-frame detections. [README.md](README.md#basic-usage) contains runnable usage examples.
 
 ## Progress Reporting
 
@@ -414,7 +296,7 @@ Best when you only need single-frame objects and do not want any sequence-level 
 | 42% | session-level frame rejection |
 | 45-49% | master stack, master stars, slow-mover analysis |
 | 50-90% | stationary-star veto and track linking |
-| 92% | residual transient analysis |
+| 92% | common-motion filtering and optional residual transient analysis |
 | 93-99% | variable-star photometry (when enabled) |
 | 100% | complete |
 
@@ -422,9 +304,7 @@ Best when you only need single-frame objects and do not want any sequence-level 
 
 ## Related Documents
 
-- `AUTOTUNER.md`: calibrated and legacy auto-tuners
-
-- `ALGORITHM.md`: internal `runPipeline(...)` detection phases
-- `VariableStarAlgorithm.md`: variable-star photometry stage
-- `CONFIG.md`: `DetectionConfig` field-by-field reference
-- `README.md`: basic usage examples
+- [README.md](README.md): setup and usage examples
+- [ALGORITHM.md](ALGORITHM.md): detection, slow movers, variable stars and Auto-Tune
+- [CONFIG.md](CONFIG.md): `DetectionConfig` fields/defaults
+- [DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md): proposals, decisions and deferred findings

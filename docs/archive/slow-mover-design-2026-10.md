@@ -1,3 +1,5 @@
+> Historical record, archived 2026-10-19. This preserves the review and evidence from its original dates, including superseded statements and decisions. It is not the current specification or work queue. See [the current slow-mover method](../../ALGORITHM.md#slow-movers) for current guidance. Source line numbers and temporary harness paths below refer to the original session and may no longer exist.
+
 # Slow Mover Detection Algorithm
 
 This document records the maximum-stack detector design and possible future enhancements. The current implementation and defaults are described in `CONFIG.md` and `ALGORITHM.md`; proposal values and future-tense steps below are not active settings.

@@ -19,12 +19,13 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 
 ## Documentation
 
-- [PIPELINE.md](PIPELINE.md): what each public entrypoint runs and returns
-- [ALGORITHM.md](ALGORITHM.md): internal phases of `JTransientEngine.runPipeline(...)`
-- [VariableStarAlgorithm.md](VariableStarAlgorithm.md): stationary-star photometry and variable-star detection
-- [CONFIG.md](CONFIG.md): `DetectionConfig` field-by-field reference
-- [AUTOTUNER.md](AUTOTUNER.md): how the calibrated and the legacy auto-tuners work
-- [PUBLISHING.md](PUBLISHING.md): Maven Central staging and release bundle workflow
+| Document | Purpose |
+|---|---|
+| [ALGORITHM.md](ALGORITHM.md) | Detection, slow movers, variable-star photometry and both auto-tuners in one reference |
+| [PIPELINE.md](PIPELINE.md) | Public entry points, result contracts and progress |
+| [CONFIG.md](CONFIG.md) | `DetectionConfig` fields and engine defaults |
+| [DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md) | Proposed work, maintainer decisions and known limitations |
+| [PUBLISHING.md](PUBLISHING.md) | Maven Central staging and release bundles |
 
 ## Build
 
@@ -151,7 +152,7 @@ Runtime diagnostics include every completed major phase from extraction through 
 
 ### 2. Detect variable stars
 
-Variable-star detection is an optional stage of `runPipeline(...)`. It is off by default. When enabled, it measures forced aperture photometry of isolated master stars in every retained frame. It then checks whether the frames respond linearly to light, removes per-frame transparency and gradients with an ensemble solve, and scores each star against stars of similar brightness in the same session. See [VariableStarAlgorithm.md](VariableStarAlgorithm.md) for the details.
+Variable-star detection is an optional stage of `runPipeline(...)`. It is off by default. When enabled, it measures forced aperture photometry of isolated master stars in every retained frame. It then checks whether the frames respond linearly to light, removes per-frame transparency and gradients with an ensemble solve, and scores each star against stars of similar brightness in the same session. See [Variable-star photometry](ALGORITHM.md#variable-star-photometry) for the details.
 
 ```java
 import io.github.ppissias.jtransient.config.DetectionConfig;
@@ -243,7 +244,7 @@ public final class AutoTuneExample {
 
 Profiles: `LOW` (fewest false detections), `MEDIUM`, `HIGH` (close to the noise level) and `MAXIMUM` (as sensitive as possible; on large sensors it leaves many candidates to review, so it is meant for small sensors or targeted searches for a faint object).
 
-The legacy tuner has the same signature: `JTransientAutoTuner.tune(frames, baseConfig, profile, listener)`; its three-argument overload defaults to `MEDIUM`. It treats `MAXIMUM` like `HIGH`. See [AUTOTUNER.md](AUTOTUNER.md) for both.
+The legacy tuner has the same signature: `JTransientAutoTuner.tune(frames, baseConfig, profile, listener)`; its three-argument overload defaults to `MEDIUM`. It treats `MAXIMUM` like `HIGH`. See [Auto-tuning](ALGORITHM.md#auto-tuning) for both.
 
 ### 4. Reuse a precomputed master stack
 
@@ -380,14 +381,6 @@ The extractor returns:
 - use `detectTransients(...)` when you want frame-by-frame candidates after stationary-star masking
 - use `generateMasterStack(...)` plus the overloads with `providedMasterStack` when repeated runs would otherwise spend too much time stacking
 - use `SourceExtractor.extractSources(...)` when you only need single-frame object detection
-
-## Detailed Documentation
-
-- [PIPELINE.md](PIPELINE.md): what each public entrypoint runs and returns
-- [ALGORITHM.md](ALGORITHM.md): internal phases of `JTransientEngine.runPipeline(...)`
-- [VariableStarAlgorithm.md](VariableStarAlgorithm.md): stationary-star photometry and variable-star detection
-- [CONFIG.md](CONFIG.md): `DetectionConfig` field-by-field reference
-- [AUTOTUNER.md](AUTOTUNER.md): how the calibrated and the legacy auto-tuners work
 
 ## License
 

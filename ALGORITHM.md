@@ -1,8 +1,14 @@
-# JTransient Detection Algorithm
+# JTransient Algorithms
 
-This document describes the internal phases of `JTransientEngine.runPipeline(...)`.
+This is the current algorithm reference for detection, slow movers, variable-star photometry and both auto-tuners. Reviewed against the implementation on 2026-10-19. [PIPELINE.md](PIPELINE.md) owns API signatures/result contracts, [CONFIG.md](CONFIG.md) owns `DetectionConfig` fields/defaults, and [DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md) owns proposed work and decisions.
 
-It does not document the public API surface in general. For that, see `PIPELINE.md`. This file is specifically about how the full detection run works once you choose the full pipeline entrypoint.
+| Topic | Sections |
+|---|---|
+| Inputs, registration, extraction and reference images | [Input assumptions](#input-assumptions), [pipeline flow](#high-level-flow), [coverage](#1-border-drift-diagnostics), [extraction](#3-single-frame-extraction-internals), [quality](#5-session-level-frame-rejection), [master stars](#7-master-star-extraction) |
+| Slow-mover candidates | [Maximum-stack method, geometry and frame evidence](#slow-movers) |
+| Tracks, instrumental patterns and residuals | [Veto/streaks/camera-fixed sources](#9-stationary-star-veto-filtering-and-streak-linking), [timed linking](#10-time-based-point-linking), [geometric linking](#11-geometric-point-linking), [anomalies](#13-faint-fragments-and-anomaly-rescue), [common motion](#14-common-motion-filtering), [residual analysis](#15-residual-transient-analysis) |
+| Variable stars | [Photometry](#variable-star-photometry), [readiness](#photometry-8), [ensemble](#photometry-9), [scores and gates](#photometry-11), [limitations](#photometry-14) |
+| Auto-Tune | [Calibrated tuner](#calibrated-auto-tuning), [legacy tuner](#legacy-auto-tuning) |
 
 ## Input Assumptions
 
@@ -30,7 +36,7 @@ The full run is organized into these major phases:
 4. median master-stack generation
 5. master-star extraction
 6. maximum-stack generation and optional slow-mover candidate analysis
-7. stationary-star veto filtering and streak linking
+7. stationary-star veto filtering, streak linking and camera-fixed point filtering
 8. time-based point linking
 9. optional geometric point linking
 10. same-frame faint-streak fragment assembly
@@ -39,37 +45,6 @@ The full run is organized into these major phases:
 13. optional residual analysis: local rescue, then activity clustering
 14. optional stationary-star photometry and variable-star scoring
 15. output assembly and maximum-stack export
-
-## Filtering Overview
-
-The pipeline applies different filters at different stages so bad pixels, bad frames, stationary stars, weak tracks, and leftover anomalies are handled by the stage best suited to them.
-
-Filtering happens at several different levels of the pipeline, and not all of it is shape-based.
-
-- extraction-level object filtering:
-  - blobs below `minPixels` never reach shape analysis
-  - surviving blobs get per-object measurements such as `peakSigma`, `integratedSigma`, elongation, angle, and `fwhm`
-  - shape is first used here to classify an object as streak-like or point-like
-  - non-streaks are filtered against physical sensor edges
-  - all surviving objects are filtered against registration voids
-- frame-level filtering:
-  - `FrameQualityAnalyzer` computes shape-derived frame statistics such as median eccentricity and median `fwhm`
-  - `SessionEvaluator` uses those statistics to reject bad frames from the run
-- slow-mover candidate filtering:
-  - maximum-stack footprints are filtered by geometric axis ratio, optional fill factor, exact median-stack mask overlap bounds, and optional frame-support/stationarity gates
-- streak filtering:
-  - streak detections are first filtered by the stationary-star veto mask
-  - fast streak discovery then filters by angle consistency, directional consistency, streak time consistency, `singleStreakMinPeakSigma`, and the binary-star-like streak-shape veto for one-point track promotion
-- point-track filtering:
-  - point detections are first filtered by the stationary-star veto mask
-  - both time-based and geometric point linking require morphology consistency
-  - time-based linking can additionally reject a pair through `strictExposureKinematics`
-- anomaly filtering:
-  - peak-sigma and integrated-sigma rescue filter by object area and significance
-- common-motion filtering:
-  - separated compact sources with matching displacement on at least three shared frames are set aside before local rescue and clustering; ambiguous associations are kept
-- residual-transient analysis:
-  - remaining unclassified non-streak point detections can be mined for weak local rescue candidates and optional broader local activity clusters
 
 ## 1. Border Drift Diagnostics
 
@@ -268,10 +243,10 @@ In plain English, this stage finds the stationary objects in the median stack so
 
 The engine next extracts stationary objects from the median master stack using a stage-local extraction config:
 
-- `growSigmaMultiplier = masterSigmaMultiplier`
+- `growSigmaMultiplier = MasterReferenceAnalyzer.effectiveMasterGrowSigma(config)`: positive `masterGrowSigmaMultiplier` capped to the master seed, otherwise the master seed
 - no position limit: master stars are kept up to the image edge, so the star mask also covers stars cut by the frame edge
 
-`MasterReferenceAnalyzer.extractStars` then finds the stars in two passes with the same thresholds:
+`MasterReferenceAnalyzer.extractStars` then finds the stars in two passes with the same grow threshold and minimum footprint:
 
 1. on the stack with one sky level for the whole stack, as the frames are searched;
 2. on a copy with the smooth sky subtracted (`SkyBackground.flatten`), seeded at 5 sigma (or the master sigma if higher) and grown as the first. An object of this pass is added when it shares no pixel with one of the first pass, so no object is listed twice and the mask covers at least what the first pass covers.
@@ -289,26 +264,80 @@ The stack itself is not changed: the report, slow movers and photometry measure 
 
 The resulting `masterStars` are the stationary reference objects used for veto masking. The caller's live `DetectionConfig` is left unchanged by this stage.
 
+<a id="slow-movers"></a>
 ## 8. Optional Slow-Mover Analysis
 
-The engine builds one per-pixel maximum stack from the quality-filtered, aligned frames with `MasterMapGenerator.createMaximumMasterStack(...)`. It uses that stack for candidate extraction and exports the same stack as `PipelineResult.maximumStackData`. The median master stack supplies a separate mask of persistent sources. A maximum-stack footprint is a shape candidate, not a measured track or confirmation of motion.
+### Purpose and inputs
 
-The engine then:
+This branch finds footprints that may belong to sources moving too slowly for normal frame-to-frame linking. It returns candidates, not confirmed motion. Seeing changes, elongated stars, merged neighbors, hot pixels and one-frame artifacts can mimic a suitable maximum-stack footprint.
 
-Both stacks measure their sky inside the data area. Maximum-stack candidates must lie inside it; median-stack stars are kept up to the image edge so the mask also covers stars that straddle the area's edge.
+`JTransientEngine.runPipeline(...)` supplies aligned, quality-filtered frames, their median stack and the session data area. `SlowMoverAnalyzer` also has overloads accepting maximum/median stacks directly, with optional original frames and an optional data area. Both stacks use the same signed-short representation and dimensions. Disabled or unavailable-input paths return `SlowMoverAnalysis.empty()`.
 
-1. extracts connected objects from the maximum stack using:
-   - `masterSlowMoverSigmaMultiplier`
-   - `masterSlowMoverMinPixels`
-   - stage-local `growSigmaMultiplier = masterSlowMoverGrowSigmaMultiplier`
-2. extracts comparison objects from the median master stack with the same slow-mover thresholds and paints their raw pixels into an undilated boolean mask
-3. rejects maximum-stack objects below `masterSlowMoverMinPixels`, outside the `slowMoverMinAxisRatio` to `slowMoverMaxAxisRatio` geometric window, or below `slowMoverMinFillFactor` when that filter is enabled
-4. measures the fraction of each remaining object's raw pixels inside the median mask, rejecting values below `slowMoverMedianSupportOverlapFraction` or above `slowMoverMedianSupportMaxOverlapFraction`
-5. when the original quality-filtered frames are available, searches a compact aperture inside each surviving maximum-stack footprint in every usable frame. It records the percentage of frames with significant localized signal, then the percentage of supported frame positions clustered at one location. `slowMoverMinFrameSupport` (default `40`) rejects low frame support and `slowMoverMaxStationaryLikelihood` (default `60`) rejects stationary-looking sources when their measurements are available. Values `0` and `100` disable the respective vetoes while keeping their measurements.
+### Two stacks with different roles
 
-The geometric axis ratio uses oriented raw-pixel extents; it is distinct from intensity-weighted moment elongation. The default minimum fill factor is `0.5`; `0.0` disables that veto. The default lower mask-overlap bound is also `0.0`, so a single-frame artifact can pass it. The upper bound defaults to `0.80` and rejects footprints mostly explained by persistent sources. The stacks are not subtracted.
+- The per-pixel **maximum stack** preserves a source's swept footprint and supplies candidate connected components.
+- The **median stack** supplies exact raw-pixel footprints of persistent objects. These form a separate boolean mask.
 
-The survivors are exported as `PipelineResult.slowMoverAnalysis.candidates`, with footprint-based motion estimates, per-candidate diagnostics, and aggregate telemetry. Frame support and stationary likelihood are heuristics, not temporal confirmation or calibrated probabilities; unavailable measurements do not veto candidates. The stack-only analyzer overload does not have frame evidence. `slowMoverStackData`, `slowMoverMedianVetoMask`, and `slowMoverCandidates` remain compatibility exports. The former percentile-stack and residual-footprint settings have been removed.
+The stacks are not subtracted. Maximum-minus-median would change the footprint and introduce sensitivity to brightness/seeing differences. The slow-mover median mask is not the dilated stationary-star veto used by ordinary tracking, and does not use the two-pass `MasterReferenceAnalyzer` star list.
+
+### Extraction and data areas
+
+`SlowMoverAnalyzer` clones the supplied config and sets its grow threshold to `masterSlowMoverGrowSigmaMultiplier`. It extracts both stacks with `masterSlowMoverSigmaMultiplier` and `masterSlowMoverMinPixels`.
+
+When an area is supplied, both stacks measure the sky there and maximum-stack candidates must fit inside it. Median-mask objects can extend to the image's normal 3 px search margin so objects crossing the session area's edge still contribute mask pixels. The mask paints their detected raw pixels without dilation. Stack-only calls without an explicit area use the extractor's default image-edge search area; they do not infer the pipeline's kept-frame intersection.
+
+### Geometry and motion estimates
+
+`SourceExtractor` computes intensity-weighted centroid, orientation and moment elongation. It separately projects every connected raw pixel parallel/perpendicular to that orientation. Each extent is the range of pixel-center projections plus one pixel.
+
+```text
+majorExtent = max(parallelExtent, perpendicularExtent)
+minorExtent = min(parallelExtent, perpendicularExtent)
+axisRatio = majorExtent / max(1, minorExtent)
+fillFactor = rawPixelCount / (parallelExtent * perpendicularExtent)
+
+estimatedMotionPixels = max(0, majorExtent - minorExtent)
+estimatedMotionDiameters = estimatedMotionPixels / minorExtent  # 0 if minorExtent is not positive
+```
+
+Geometric `axisRatio` and intensity-weighted moment `elongation` describe different quantities. For an ideal capsule-shaped footprint, axis ratio minus one approximates the displacement in source diameters. These are morphology estimates; the algorithm does not fit a timed path or infer an angular velocity.
+
+### Candidate gates
+
+The analyzer applies these gates in order:
+
+1. A nonempty raw footprint must meet `masterSlowMoverMinPixels`.
+2. Geometric axis ratio must lie between the effective minimum and maximum.
+3. Fill factor must meet the minimum.
+4. The fraction of candidate raw pixels covered by the exact median mask must lie within both overlap bounds.
+5. When frame evidence is available, frame support must meet its minimum and stationary likelihood must not exceed its maximum.
+
+Effective thresholds are clamped by the analyzer and reported in telemetry: axis minimum at least 1, axis maximum at least the minimum, overlap bounds within 0–1 with upper at least lower, nonnegative fill-factor minimum, and percentages within 0–100. Passing a gate is not a physical identification.
+
+### Frame evidence
+
+When original retained frames are available, `SlowMoverFrameEvidence` searches for localized signal inside the candidate's maximum-stack footprint in each usable frame. The aperture radius is half the minor extent, limited to 1.5–4 px. It subtracts a local sky estimate and requires integrated SNR at least 5 for a supported position.
+
+- **Frame support** is `100 * supported / usable` frames. It is available only with at least two usable frames.
+- **Stationary likelihood** is the percentage of supported centroids in the largest cluster around one observed position. Its radius follows star jitter, limited by half the minor extent with a 0.75 px floor. It is available only when at least three supported frames span half the retained sequence.
+
+Callers must check availability flags. Unavailable scores do not veto a candidate; numeric zero does not prove absence of signal or stationarity. A persistent star inside the footprint can dominate the position search. These are screening heuristics, not calibrated probabilities. There are no three-bin temporal stacks and no measured-motion validation.
+
+### Settings and interpretation
+
+The extraction, morphology, overlap and frame-evidence controls and their engine defaults are listed once in [CONFIG.md](CONFIG.md#2-master-stack-and-slow-mover-extraction). `slowMoverMinFillFactor = 0` disables the fill veto; overlap bounds are fractions, while frame support/stationarity are percentages with availability flags. The maximum-stack sigma is not interchangeable with a per-frame sigma. Neither tuner currently tunes slow-mover extraction thresholds (SM-2 in the improvement plan).
+
+### Outputs and ownership
+
+`SlowMoverAnalysis` exports the maximum stack, exact `medianMask`, accepted `SlowMoverCandidateResult` values and `SlowMoverSummaryTelemetry`. Each candidate holds its `DetectedObject` and `SlowMoverCandidateDiagnostics`: geometry, mask overlap, estimated motion, measured frame evidence, availability flags and effective thresholds.
+
+Telemetry includes extraction counts, per-gate rejection counters, shape/overlap distributions, frame-evidence availability and accepted-candidate summaries. Shape distributions cover size-qualified maximum objects; accepted motion summaries describe survivors. Do not interpret every telemetry list as the same population.
+
+`PipelineResult.slowMoverAnalysis`, `slowMoverCandidates` and `telemetry.slowMoverTelemetry` expose these products. `slowMoverStackData` and `slowMoverMedianVetoMask` are compatibility aliases for the same maximum-stack/mask arrays. The candidate list is copied and unmodifiable; image/mask arrays are shared.
+
+Slow-mover candidates are separate from point/streak tracks and rescued anomalies. Their footprints can flag nearby variable-star measurements across frames. The camera-fixed point-detection filter does not run on these stack candidates.
+
+There are no three-bin temporal stacks or fitted slow-mover motion paths. Proposed/Deferred/Declined changes are tracked in [DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md). Existing geometry/branch coverage is in `SourceExtractorBlobGeometryTest` and `JTransientEngineSlowMoverTest`.
 
 ## 9. Stationary-Star Veto Filtering And Streak Linking
 
@@ -341,7 +370,7 @@ Then each point-like or streak-like object is checked:
 2. compute `overlapFraction = overlapCount / rawPixels.size()`
 3. purge the object if `overlapFraction > maxMaskOverlapFraction`
 
-The surviving point detections go through the camera-fixed check (section 9.4) and are then the inputs to point-track linking. The surviving streak detections are the inputs to fast streak linking and are also preserved in the merged transient export. The exported `allTransients` list contains the full post-veto transient population carried through tracking, while `unclassifiedTransients` contains only the detections that remain after tracks and anomalies are assigned.
+The surviving point detections go through the camera-fixed check (section 9.4) and are then the inputs to point-track linking. The surviving streak detections are the inputs to fast streak linking and are also preserved in the merged transient export. The exported `allTransients` list contains the post-veto population carried through tracking after camera-fixed groups are removed, while `unclassifiedTransients` contains only the detections that remain after tracks and anomalies are assigned.
 
 ### 9.3 Fast streak linking
 
@@ -376,7 +405,7 @@ When `enableCameraFixedRejection` is on, `CameraFixedRejector` sets aside the su
 
 Each detection is mapped back to camera coordinates with its frame's registration (section 1). A group is the detections of at least 3 frames, one per frame, within 2 px of the group's median camera position, whose positions in the frames spread over at least 4 px; with less, the frames did not move enough to tell a camera position from a position on the sky. Frames whose registration is not usable are left out, and a dataset without registration fill is left as it is.
 
-The group's detections are removed from the point detections and from `allTransients`, so they become no tracks, anomalies, common-motion groups or residual candidates. The groups are exported as `PipelineResult.cameraFixedGroups` (tracker telemetry: `cameraFixedGroups`, `cameraFixedDetections`). On the reference data: both whynot tracks were hot pixels moving with the drift (0.7-1.8 px apart on the camera, while every real track spreads 21 px or more); Eagle-noisy keeps 7 of its 74 tracks (each of the 67 others contained camera-fixed detections, 55 nothing else); on M81-kumar the local rescue candidates fall from 84 to 10, the others being hot pixels that followed the dither between sets of frames. The other reference datasets are unchanged.
+The group's detections are removed from the point detections and from `allTransients`, so they become no tracks, anomalies, common-motion groups or residual candidates. The groups are exported as `PipelineResult.cameraFixedGroups` (tracker telemetry: `cameraFixedGroups`, `cameraFixedDetections`). On the reference data: both whynot tracks were hot pixels moving with the drift (0.7-1.8 px apart on the camera, while every real track spreads 21 px or more); Eagle-noisy keeps 7 of its 74 tracks (each of the 67 others contained camera-fixed detections, 55 nothing else); on M81-kumar the local rescue candidates fall from 84 to 10, the others being hot pixels that followed the dither between sets of frames. The recorded regression also added two camera-fixed groups on klangwolke-2 without changing its other findings; 16 of the 19 datasets were identical. These are historical measurements with the recorded profiles, not a new benchmark.
 
 ## 10. Time-Based Point Linking
 
@@ -496,7 +525,6 @@ A new line needs four pieces, a span of at least 80 pixels, no centroid gap larg
 
 An existing streak can grow through connected pieces with gaps up to 80 pixels. Growth stays in the same frame and checks the angles of stable elongated pieces. The ordinary streak gates are unchanged. This discovery search is intentionally unchanged by the timing instrumentation; long fragment chains can be expensive. Its elapsed cost is `TrackerTelemetry.faintStreakFragmentTimeMs`, included in the tracking phase.
 
-
 This stage gives strong untracked detections one more chance as standalone flashes.
 
 If `enableAnomalyRescue` is enabled, the tracker scans merged transient detections that were not consumed by any accepted track.
@@ -577,60 +605,606 @@ Accepted local rescue candidates consume their detections before optional local 
 
 The result is exported as `PipelineResult.residualTransientAnalysis`; it does not add entries to `PipelineResult.tracks` or `PipelineResult.anomalies`.
 
+<a id="variable-star-photometry"></a>
 ## 16. Variable-Star Photometry
 
-When `enableVariableStarDetection` is true, stationary master stars are measured on the quality-filtered frames. This uses the master mask, frame detections, accepted tracks and slow-mover candidates for contamination flags; it does not mine the residual common-motion lists. After the initial ensemble solve, spatially uneven frames are excluded and the ensemble is recomputed before response check D. Readiness then determines whether variability can be scored. See [VariableStarAlgorithm.md](VariableStarAlgorithm.md).
+The optional branch measures stationary stars in retained frames, checks whether they support photometry, and looks for excess variability relative to similarly bright stars. It does not mine residual common-motion lists. The implementation lives in `io.github.ppissias.jtransient.photometry`: `VariableStarAnalyzer`, `PhotometryStarSelector`, `ApertureMeasurer`, `PhotometricReadinessChecker`, `EnsembleSolver`, `SpatialFrameFilter`, `VariabilityScorer` and `PhotometryMath`. Configuration fields/defaults are in [CONFIG.md](CONFIG.md#8-variable-star-photometry).
+
+<a id="photometry-1"></a>
+### 16.1 Design Principles
+
+- **A missed variable is better than a false one.** Every stage tends to exclude data or reject candidates rather than keep them. A candidate must pass two independent scores and then eight gates to be reported as high confidence.
+- **Compare stars with stars of similar brightness in the same session.** The noise model is measured from the session's own stars, not taken from formal errors. A star is variable only if it scatters much more than stars of the same magnitude, measured the same way.
+- **Check the data before trusting it.** Stretched, 8-bit, clipped or non-linear frames make constant stars look variable. The readiness checks look for these problems first, and when they find them nothing is scored.
+- **Flag measurements instead of dropping them.** Every star keeps a value for every frame, and problems are recorded as per-measurement flags, so callers can display the full light curve and see why points were excluded.
+- **Magnitudes are instrumental and differential.** No catalogue calibration, colour terms or filter transformations are applied. `deltaMag` is the change against the star's own session mean, positive when fainter.
+
+<a id="photometry-2"></a>
+### 16.2 Position In The Pipeline
+
+The stage runs only when `enableVariableStarDetection` is `true`, after track linking and residual transient analysis. `detectTransients(...)`, `generateMasterStack(...)` and the auto-tuner never run it.
+
+It uses outputs of the earlier phases:
+
+| Input | Source | Used for |
+| --- | --- | --- |
+| Clean frames | Frames that passed session rejection, chronological | Measurements |
+| Frame metrics | `FrameQualityAnalyzer` | Extraction FWHM and background per frame |
+| Frame detections | All extracted objects of each frame, before the stationary-star veto | Crossing flags |
+| Median master stack | Median-stack stage or `providedMasterStack` | Independent photometry star extraction, selection and positions |
+| Detection master stars | `MasterReferenceAnalyzer` | Stationary-source context for crossing flags |
+| Photometry sky mask | Its own star footprints, grown one pixel | Remove star pixels from sky annuli |
+| Tracks | `TrackLinker` | Crossing flags |
+| Slow-mover candidates | Slow-mover analysis, when enabled | Crossing flags |
+
+The result is `PipelineResult.variableStarAnalysis`. It is `VariableStarAnalysis.empty()` (verdict `NOT_RUN`) when the stage is disabled. The same telemetry object is attached as `PipelineResult.telemetry.photometryTelemetry`.
+
+The stage reports its progress through `VariableStarAnalyzer.Input.progress` (0 to 100: measuring the frames up to 80, then the readiness checks, the ensemble solve and the scoring). `runPipeline(...)` shows it as 93-99% of the pipeline.
+
+<a id="photometry-3"></a>
+### 16.3 Stage Overview
+
+The stage checks quantisation, derives its star list and saturation estimate, measures all frames, flags crossings, excludes registration/shape failures, solves the ensemble, excludes spatially uneven frames, runs response check D and recomputes the ensemble if necessary. It then creates light curves and, only for READY/LIMITED data, applies variability scores and gates. The detailed order and conditions are explained below.
+
+The stage returns early with `NOT_READY` and no light curves when:
+
+- fewer than `max(3, variableMinFrames)` clean frames exist, or the master stack or master stars are missing
+- no frame has a usable FWHM (finite, above 0.5 px and below `errorFallbackValue`)
+- fewer than `linearityMinStars` stars survive selection
+
+<a id="photometry-4"></a>
+### 16.4 Session FWHM And Saturation Level
+
+**Session FWHM.** The session FWHM is the median of the per-frame `medianFWHM` values from the quality analysis. A frame without a valid value uses the session median. This extraction FWHM is computed as `sqrt(lambda1 + lambda2)`, which reads about 1.4 times too large for round stars. It is therefore only used for star selection, to size the moment window, and as a fallback. Apertures are sized from the FWHM that `ApertureMeasurer` measures ([registration offset and measured FWHM](#photometry-6-1)).
+
+**Saturation level.** `PhotometryStarSelector.estimateSaturationLevel` looks for a pile-up of clipped pixels at the top of each frame's histogram. It counts the pixels within 0.1% of the frame maximum, and five or more count as a pile-up. The frame maximum is then that frame's saturation level. The session level is the median over the frames with a pile-up. When no frame has one, it is 95% of 65535 (all pixel values are in the shifted non-negative domain). Check B still guards against roll-off below full well in that case.
+
+The working threshold is `photometrySaturationFraction x saturationLevel`.
+
+<a id="photometry-5"></a>
+### 16.5 Star Selection
+
+Photometry does not reuse the detection profile's master star list. It extracts its own from the median master stack, at a fixed seed of 3 sigma, grow of 2 sigma and at least 3 pixels (sigmas in units of the stack's measured noise, with one sky level for the whole stack, unlike the detection's master stars, which add a pass against the local sky), so its star list, its crowding test and its sky mask do not change with the moving-object settings. The footprints of these stars, grown by one pixel, are the sky mask ([apertures and sky](#photometry-6-2)).
+
+`PhotometryStarSelector.select` goes through these stars and drops, in this order:
+
+1. streaks (`isStreak`)
+2. stars more elongated than `photometryMaxElongation`
+3. stars whose aperture and sky ring do not lie entirely inside the session data area (where every kept frame has image data), using an outer radius of `photometryAnnulusOuterFwhmFactor x FWHM + 2 px` (the extra 2 px allows for residual registration offsets). Every measured star therefore has data in every kept frame.
+4. crowded stars, judged by contamination: the neighbours' light falling inside the star's main aperture, from a Gaussian profile at the session FWHM, exceeds 2% of the star's own aperture light; or a neighbour lies within 1 FWHM (centroids and apertures merge); or a neighbour with at least 10% of the star's flux lies within `photometryAnnulusInnerFwhmFactor x FWHM` (its wings reach the sky ring). A faint neighbour that adds no measurable light no longer makes a star crowded.
+5. stars whose master-stack peak (3 x 3 around the centre) is already at or above the saturation threshold
+
+Bright stars below saturation are kept on purpose: check B needs them to find where linearity ends. Their measurements in frames where they are too bright are flagged later.
+
+When `photometryMaxStars > 0` and more stars survive, the cap is spread across an 8 x 8 grid of field regions. Each region contributes the same fraction of its stars, taken at evenly spaced brightness ranks. Taking the brightest stars would fill a rich field with near-saturated stars and leave too few in the linear range.
+
+The selected stars are sorted brightest first. Their master-stack positions are the forced photometry positions.
+
+<a id="photometry-6"></a>
+### 16.6 Forced Aperture Photometry
+
+`ApertureMeasurer.measure` runs once per frame. When the engine has an executor, frames run in parallel.
+
+<a id="photometry-6-1"></a>
+#### 16.6.1 Registration offset and measured FWHM
+
+Before measuring fluxes, the frame's FWHM and residual registration offset are measured from up to 50 bright stars. The brightest tenth of the selection is skipped because those stars may be saturated. For each star:
+
+- the sky is the clipped median of an annulus (from the extraction FWHM)
+- centroid and second moments are computed within a circular window of radius `max(3, 1.5 x extraction FWHM)`
+- `FWHM = 2.355 x sqrt((Mxx + Myy) / 2)`
+
+The frame offset is the median centroid offset from the master positions. `registrationSpread` is the robust sigma (1.4826 x MAD) of the offset distances around that median. The measured FWHM is the median over those stars. With fewer than five usable stars, the offset is zero, the spread is undefined, and the extraction FWHM is kept.
+
+<a id="photometry-6-2"></a>
+#### 16.6.2 Apertures and sky
+
+Each star is measured at its master position plus the frame offset, in five concentric apertures:
+
+| Index | Radius | Used for |
+| --- | --- | --- |
+| `R_CI_INNER` | 0.7 x FWHM | Concentration index (check B) |
+| `R_SMALL` | 1.0 x FWHM | APERTURE gate |
+| `R_MAIN` | `photometryApertureFwhmFactor` x FWHM | Photometry (main aperture; see [variability scoring](#photometry-11) for the per-brightness choice) |
+| `R_LARGE` | 2.0 x FWHM | APERTURE gate |
+| `R_CI_OUTER` | 2.5 x FWHM | Concentration index (check B) |
+
+Every radius is at least 1 px. Pixels near an aperture edge (within 0.75 px) get fractional weights from 5 x 5 sub-pixel sampling.
+
+The sky annulus runs from `max(largest aperture + 1, photometryAnnulusInnerFwhmFactor x FWHM)` to `max(inner + 2, photometryAnnulusOuterFwhmFactor x FWHM)`. Pixels of photometry's own star mask ([star selection](#photometry-5)) are excluded. The sky level and noise are a three-pass, 3-sigma clipped median and MAD sigma, and at least 10 pixels are required. The share of annulus pixels at exactly zero is also recorded, for check A.
+
+All five apertures are summed in one pass over the pixels, so the concentration index, the photometry flux and the aperture-consistency gate all come from the same data.
+
+<a id="photometry-6-3"></a>
+#### 16.6.3 Errors and flags
+
+The main-aperture magnitude is `-2.5 log10(flux)`. Its error includes only the sky noise:
+
+```text
+sigma_F = sigma_sky * sqrt(N_ap * (1 + N_ap / N_sky))
+magError = 1.0857 * sigma_F / flux
+```
+
+It ignores the star's own photon noise and gain, so it is a lower bound. Scoring uses the empirical noise model instead ([variability scoring](#photometry-11)).
+
+Flags set here:
+
+| Flag | Condition |
+| --- | --- |
+| `EDGE_OR_VOID` | Annulus leaves the image, fewer than 10 sky pixels, more than 50% of annulus pixels at zero, or a main-aperture pixel at the fill level (8 ADU or less: a dead pixel) |
+| `SATURATED` | Main-aperture peak at or above the saturation threshold |
+| `BAD_FLUX` | Main-aperture flux not positive (no magnitude) |
+
+<a id="photometry-7"></a>
+### 16.7 Crossing Flags
+
+A moving object passing through a star's aperture or sky annulus changes its measured brightness for a few frames. This is the classic false variable. `VariableStarAnalyzer.flagCrossings` sets `CROSSING` on stars near the following. For frame detections the reach is the sky annulus's inner radius (`photometryAnnulusInnerFwhmFactor x` frame FWHM): the aperture and the gap before the sky ring, since the clipped sky median already ignores faint blobs in the ring itself. Tracks and slow-mover footprints reach the outer annulus radius (`photometryAnnulusOuterFwhmFactor x` frame FWHM).
+
+Frame positions (detections, their pixels and track points) are first moved into the master system with the frame's measured registration offset, the same correction the apertures use ([forced aperture photometry](#photometry-6)), so a residual shift does not make stationary stars look like moving objects.
+
+1. **Moving detections.** A detection in a frame that peaks at 5 sigma or more (or is a streak) and is not within `max(maxStarJitter, 0.5 x FWHM)` of any master star (of the detection or the photometry star list) is not stationary. Each of its pixels flags the stars around it in that frame. Fainter detections are left to the per-measurement checks (contaminated shape, isolated outliers), so a sensitive detection profile no longer floods the light curves with flags.
+2. **Tracks.** For every frame in a track's time span: where the track was observed, every observed point of that frame is used (a streak can be extracted as several fragments); elsewhere the position is interpolated linearly between the surrounding track points, by capture time when the frame and both points have timestamps (pauses make the cadence uneven) and by sequence index otherwise. This covers frames where the object merged with a star and was not detected. Each point is treated as a segment along its footprint (centre, angle, half of `majorExtent - minorExtent`); a star is flagged when its distance to the segment is within the outer annulus radius plus the point's width (its minor extent for a streak, otherwise the larger of FWHM and minor extent). A point source is a segment of length zero, so it flags a disc; a satellite streak flags a band along its line instead of every star within its length. Interpolated frames use the shape of the nearest track point.
+3. **Slow-mover candidates.** The maximum-stack footprint covers the whole session, so its pixels flag nearby stars in every frame.
+
+<a id="photometry-7-1"></a>
+#### 16.7.1 Contaminated shape
+
+A hot pixel, cosmic ray or faint passing object inside an aperture changes the star's light by a large factor, sometimes in several frames in a row, so the isolated-outlier rule ([light-curve cleaning](#photometry-11-1)) cannot always remove it. It does change the star's shape, which real variability does not.
+
+`VariableStarAnalyzer.flagContaminatedShapes` runs after check B:
+
+1. Per frame, the median concentration index (flux within 0.7 FWHM over flux within 2.5 FWHM) of the clean measurements is the frame's seeing reference.
+2. Each measurement's concentration is divided by that reference, and by the star's own median over frames, giving its fractional departure.
+3. Stars are grouped by brightness (about ten groups, at least 30 stars each). The tolerance of a group is the robust sigma of the departures of all its measurements, at least 2%. Taking it from the group rather than from the star keeps a star contaminated in many frames from widening its own tolerance.
+4. A measurement departing by more than 5 tolerances is flagged `CONTAMINATED` and left out of the solve and the scoring.
+
+For faint stars the concentration index is noisy, so a hot pixel a few pixels off-centre can still pass; the aperture gate ([gates](#photometry-11-4)) then usually rejects the star.
+
+<a id="photometry-8"></a>
+### 16.8 Readiness Checks
+
+There are three checks, labelled A, B and D. There is no check C in the current implementation.
+
+<a id="photometry-8-1"></a>
+#### 16.8.1 Check A: quantisation and floor clipping
+
+- **Quantisation.** If the middle frame has fewer than `linearityMinDistinctLevels` distinct pixel values, the data is 8-bit or heavily quantised. The check is `FAIL`.
+- **Floor clipping.** If the median (over frames) share of sky-annulus pixels at zero exceeds `linearityMaxFloorClippedFraction`, negative sky noise was clipped. This happens, for example, when calibrated float data is converted to unsigned 16-bit. Faint-star fluxes are then biased high, and the check is `LIMITED`.
+
+<a id="photometry-8-2"></a>
+#### 16.8.2 Registration exclusion
+
+Frames whose `registrationSpread` exceeds `photometryMaxRegistrationSpreadPixels` are excluded. A large spread means the frame is not registered consistently across the field (for example, field rotation or distortion), so forced positions are wrong for some stars.
+
+<a id="photometry-8-3"></a>
+#### 16.8.3 Check B: star shape against brightness
+
+**Idea.** In linear data every unsaturated star has the same profile shape whatever its brightness, so the fraction of its flux in a small central aperture does not depend on magnitude. A non-linear stretch, or saturation and roll-off near full well, flattens the cores of bright stars, which then look broader than faint ones.
+
+The concentration index (CI) is `flux(0.7 x FWHM) / flux(2.5 x FWHM)`. An inner radius of 0.7 FWHM is used because at 1.0 FWHM a Gaussian already has 94% of its flux inside and the index barely changes.
+
+Per frame (`PhotometricReadinessChecker.analyzeShape`):
+
+1. Use stars without `EDGE_OR_VOID`, `CROSSING` or `BAD_FLUX` and with `magError <= 0.05` (SNR of about 20 or more). The cut is wide enough that background-limited data, where stars saturate soon above the sky noise, still spans a usable magnitude range; the per-bin noise allowance absorbs the extra scatter of the fainter stars. If fewer than `linearityMinStars` remain, the frame is `INCONCLUSIVE` and is excluded.
+2. Sort by magnitude. The **reference CI** is the median CI of the stars ranked between 50% and 90% of the brightness order (the faint half, without the faintest and noisiest tenth). The **faint bound** is the magnitude at the 90% rank.
+3. Divide the stars from the brightest down to the faint bound into bins of `max(15, count / 15)` stars. Each bin's tolerance is `linearityMaxConcentrationDrift + 2 x` the standard error of the bin's median CI.
+4. Walk towards brighter bins, starting at the faintest bin that still holds stars brighter than the reference ranks (bins wholly inside the reference scatter around it by definition, so they cannot end the walk). The first bin whose median CI departs from the reference by more than its tolerance marks the end of linearity. The **linear limit** is the brightest magnitude of the next fainter bin. If no bin departs, the limit is the brightest star.
+5. **Linear range** = faint bound − linear limit. The frame passes when the range is at least `linearityMinRangeMag` and at least `linearityMinStars` stars lie inside it. A failing frame with no departing bin is linear over everything it can measure but too short to verify; its exclusion reason and the session message say so instead of calling it non-linear.
+
+In every evaluated frame, including failing ones, all measurements brighter than the frame's linear limit are flagged `NONLINEAR`. Failing frames are excluded.
+
+Session status:
+
+- `INCONCLUSIVE` if no frame could be evaluated
+- `FAIL` if more than `linearityMaxFailingFrameFraction` of the evaluated frames failed
+- `LIMITED` if the median linear range is below `linearityMinRangeMag + 1` mag
+- `PASS` otherwise
+
+The binned profile of each frame is exported as `PhotometryFrameStat.concentrationProfile`.
+
+<a id="photometry-8-4"></a>
+#### 16.8.4 Check D: response against magnitude
+
+Check D runs on the ensemble solution ([star exclusion and the ensemble solve](#photometry-9)). In linear data, a change of transparency scales every star's flux by the same factor, so every star's magnitude shifts by the same amount. The ensemble residuals of a frame therefore do not depend on magnitude. A non-linear response compresses bright and faint stars differently, so the residuals slope against magnitude, and the slope changes as the zero point or sky changes.
+
+Per solved frame, a weighted line (weights `1 / sigma_i^2`) is fitted to residual against `M(i) − median(M)` over the usable measurements. A frame whose slope cannot be fitted (too little magnitude leverage) is `INCONCLUSIVE`, neither passing nor failing. The frame fails when `|slope| > linearityMaxFrameSlope` and `|slope| > 3` standard errors.
+
+Across the session (at least 3 solved frames with a measured slope are needed, otherwise `INCONCLUSIVE`; failing fractions count measured frames):
+
+- The **zero-point range** is the 5th to 95th percentile spread of `Z(j)`. Below `linearityMinZeroPointRangeMag` there is no lever arm, and the zero-point test cannot conclude anything.
+- **Slope tracking.** The per-frame slopes are correlated with the zero point and with the frame sky median. A driver "tracks" when `|r| >= linearityMaxSlopeTrackingCorrelation` and the fitted change of slope over the driver's 5–95% range is at least `linearityMaxFrameSlope`. Sky tracking is tested whatever the zero-point range.
+
+The status is `FAIL` if the slopes track the zero point or the sky, or if more than `linearityMaxFailingFrameFraction` of frames fail. Otherwise it is `INCONCLUSIVE` when the zero-point range is too small, and `PASS` when it is not.
+
+Frames that failed are then excluded and the ensemble is solved once more without them. Check D is not repeated on the second solution.
+
+<a id="photometry-8-5"></a>
+#### 16.8.5 What the checks cannot see
+
+A pure power-law stretch applied from zero, `f -> f^gamma`, passes all checks. Every star's profile is changed in the same way, so CI does not depend on brightness. Magnitudes become `gamma x m`, which the ensemble model fits exactly. Amplitudes in such data are scaled by `gamma`. `READY` means no non-linearity was detected, not that linearity is proven. Use original, unstretched frames.
+
+<a id="photometry-9"></a>
+### 16.9 Star Exclusion And The Ensemble Solve
+
+<a id="photometry-9-1"></a>
+#### 16.9.1 Star exclusion
+
+Before the solve, a star is kept out of the ensemble and the scoring when:
+
+- more than half of its measured frames are flagged `SATURATED` or `NONLINEAR`, or
+- its median per-frame SNR (`1.0857 / magError`) is below `photometryMinSnr` (when that is above 0)
+
+Excluded stars stay in `VariableStarAnalysis.stars` with their flags, magnitude errors and `notScoredReason`. They never constrain the solve, so they have no `meanMag`, and their `deltaMag` values are `NaN`.
+
+A measurement is **usable** for the solve when its star is not excluded, its frame is active, it has a finite magnitude, and none of `SATURATED`, `NONLINEAR`, `EDGE_OR_VOID`, `CROSSING`, `BAD_FLUX`, `CONTAMINATED` or `FRAME_EXCLUDED` is set.
+
+<a id="photometry-9-2"></a>
+#### 16.9.2 Model
+
+`EnsembleSolver` implements inhomogeneous ensemble photometry (Honeycutt 1992):
+
+```text
+m(i,j) = M(i) + Z(j) + a(j) * x(i) + b(j) * y(i)
+```
+
+- `M(i)`: mean instrumental magnitude of star `i`
+- `Z(j)`: zero point of frame `j` (transparency, airmass, exposure)
+- `a(j), b(j)`: per-frame plane over normalised positions `x, y` in [-1, 1] from the frame centre. This absorbs gradients that change between frames, such as passing thin cloud or a moving gradient. It is fitted only with `photometryFitPlane` and at least 30 usable stars in the frame; otherwise only `Z(j)` is fitted.
+
+Static spatial patterns such as vignetting or missing flats are constant per star, so `M(i)` absorbs them either way.
+
+Every star in the field serves as a comparison star, not a hand-picked few. The solution remains well defined when individual stars are missing from some frames.
+
+<a id="photometry-9-3"></a>
+#### 16.9.3 Iteratively reweighted least squares
+
+Initial values: `M(i)` is the median of the star's usable magnitudes, and `sigma_i` is their robust sigma. Then, for up to 15 iterations:
+
+1. **Frame solve.** For each active frame with at least 10 usable stars, solve the 3 x 3 weighted normal equations for `Z, a, b` (or `Z` alone), with weights `w_ij / sigma_i^2`.
+2. **Gauge fix.** Subtract the median `Z` and the mean `a`, `b` over solved frames. Without this, `M` and `Z` can trade a constant.
+3. **Star solve.** `M(i)` is the `w_ij`-weighted mean of `m(i,j) − Z(j) − a(j)x(i) − b(j)y(i)`.
+4. **Reweight.** Each star's own robust residual sigma is compared with the expected sigma, which is the median own sigma of the 50 stars nearest in magnitude. Then `sigma_i = max(own, expected)`, with a floor of 0.001 mag. Point weights are Cauchy weights, `w_ij = 1 / (1 + (r_ij / (3 sigma_i))^2)`.
+
+The loop stops when no zero point moves by more than 1e-5 mag. It does not test plane-coefficient convergence; this remains deferred finding VS-2 in the [improvement plan](DESIGN-IMPROVEMENTS.md).
+
+A variable star has a large own sigma, so `1 / sigma_i^2` lowers its weight in the frame solve. The variables remove themselves from the reference without having to be identified first. The Cauchy weights also limit the effect of individual bad points that no flag caught. Using `max(own, expected)` stops an unusually quiet star from getting too much weight.
+
+Residuals `m − model` are returned for every finite measurement on a solved frame, flagged or not, so callers can still plot flagged points. Frames that cannot be solved are excluded ("Too few usable stars for the ensemble").
+
+<a id="photometry-9-4"></a>
+#### 16.9.4 Spatial frame exclusion
+
+After the initial ensemble solve and exclusion of unsolved frames, `SpatialFrameFilter` divides the normalised field into a 3 × 3 grid. It compares each populated cell's median usable residual with the centre cell. Both cells must contain at least 30 usable stars; an absolute offset of 0.10 mag or more excludes that frame from photometry.
+
+The exclusion happens before response check D. If any frame is dropped, the usable matrix and ensemble are recomputed; check D then runs once on that solution. Readiness, all alternative-aperture solves and final scoring use the filtered frame set. A session with no spatial exclusion keeps its original ensemble solution. The decision uses the main aperture and fixed constants, not a new profile setting.
+
+Frames retain `FRAME_EXCLUDED` flags and per-frame reasons such as `Spatial residual 0.13 mag`. `PhotometryTelemetry.framesExcludedSpatial` counts them separately from other exclusions. This does not remove frames from the main moving-object or slow-mover analysis. A sparse centre or comparison cell cannot be judged by this check, and a fitted plane can absorb smooth gradients; it targets residual spatial differences rather than every possible photometric fault.
+
+<a id="photometry-10"></a>
+### 16.10 Verdict
+
+| Verdict | Condition |
+| --- | --- |
+| `NOT_READY` | Check A `FAIL`, check B `FAIL` or `INCONCLUSIVE`, check D `FAIL`, or fewer than `variableMinFrames` frames still active |
+| `LIMITED` | Not `NOT_READY`, and check A `LIMITED`, check B `LIMITED`, or check D `INCONCLUSIVE` |
+| `READY` | Otherwise |
+
+`PhotometricReadiness.messages` explains each finding in plain language.
+
+Light curves are built for every star whatever the verdict. `deltaMag` is the main-aperture ensemble residual, and the flags include `FRAME_EXCLUDED` for inactive frames. Scoring runs only for `READY` and `LIMITED`. In a `NOT_READY` session every star is `NOT_SCORED`.
+
+<a id="photometry-11"></a>
+### 16.11 Variability Scoring
+
+`VariabilityScorer.score` works on the usable residuals of each star. Before scoring, the ensemble is solved three more times, with the 0.7, 1.0 and 2.0 x FWHM apertures, using the same rules. The 1.0 and 2.0 x FWHM solutions are also used by the APERTURE gate.
+
+**Measuring aperture per brightness.** The scored stars are split into 8 brightness ranges of equal size. In each range the aperture whose solution gives the stars (nearly all constant) the smallest median robust scatter is chosen, and the stars of that range are scored on its residuals. The main aperture stays unless another lowers the scatter by more than 3%, and apertures smaller than 2 px in radius are not used (they turn the centring errors of undersampled stars into noise). Faint stars are limited by sky noise and do best in a small aperture; bright stars keep a larger one. The choice is exported as `apertureChoices` and shown in the report.
+
+<a id="photometry-11-1"></a>
+#### 16.11.1 Light-curve cleaning
+
+- A star with fewer than `variableMinFrames` usable measurements is `NOT_SCORED`.
+- **Isolated outliers.** A point more than 4 robust sigmas from the median is removed and flagged `OUTLIER`, unless a neighbouring usable point deviates by more than 2 sigmas on the same side. Single-frame events (cosmic rays, hot pixels, satellite glints that were not detected) are dropped. Real dips or flares that span several frames are kept.
+- From the cleaned curve: `scatter` (sample standard deviation), `amplitude` (95th minus 5th percentile), and `timeSpanMinutes` (first to last usable mid-exposure Julian date; `NaN` if any usable frame has no timestamp).
+
+<a id="photometry-11-2"></a>
+#### 16.11.2 Noise model and scores
+
+The **noise model** is empirical. For each star, `expectedScatter` is the median scatter of the `variableNoiseModelNeighbors` stars nearest in mean magnitude (excluding the star itself). Their robust sigma is the spread. A star with no positive expected scatter is `NOT_SCORED`.
+
+Two scores measure different things:
+
+- **Excess scatter.** `scatterZ = (scatter − expectedScatter) / spread`, with the spread floored at 5% of the expected scatter. This measures how much more the star varies than its peers. `excessScatter = scatter / expectedScatter` is also reported.
+- **Stetson J** (Stetson 1996). It is computed over consecutive usable points, using `expectedScatter` as the error of every point. It is large when consecutive measurements deviate in the same direction, which is the signature of a change spread over time rather than random noise. `stetsonJZ` is its robust z-score against the same neighbours, with the spread floored at 0.02.
+
+A star is a **candidate** when both `scatterZ` and `stetsonJZ` are at least `variableScoreSigma`. Otherwise it is `CONSTANT`. Requiring both scores rejects noisy stars with uncorrelated scatter (high scatter, low J) and also slow drifts that are too small to matter (high J, low scatter).
+
+<a id="photometry-11-3"></a>
+#### 16.11.3 Systematic responses
+
+Before the gates run, `SystematicsContext` measures how every scored star responds to five per-frame **drivers**:
+
+| Driver | Series |
+| --- | --- |
+| zero point | `Z(j)` |
+| FWHM | measured frame FWHM |
+| sky | the star's own local sky level |
+| x offset, y offset | registration offset |
+
+A star's response to a driver is `|slope of its light curve against the driver| x` the driver's 5th–95th percentile range. This is the magnitude change that the driver accounts for over the session. For each candidate magnitude, the typical maximum response is the 99th percentile among the 200 `CONSTANT` stars nearest in magnitude.
+
+<a id="photometry-11-4"></a>
+#### 16.11.4 Gates
+
+Each candidate is tested against eight gates:
+
+| Gate | Fails when | Guards against |
+| --- | --- | --- |
+| `DATA` | Fewer than `variableMinFrames` usable points after outlier removal, or (with timestamps) a time span under `variableMinSpanMinutes` | Too little data to see a change |
+| `AMPLITUDE` | Amplitude below `variableMinAmplitudeMag` (`variableLimitedMinAmplitudeMag` in a `LIMITED` session), or below `variableAmplitudeNoiseFactor x expectedScatter` | Statistically significant but tiny changes |
+| `PERSISTENCE` | The longest run of consecutive points deviating on the same side by more than 1.5 x expected scatter is shorter than `variableMinPersistenceFrames` | Short events, a few bad frames |
+| `SPLIT_HALF` | The correlation between the first and second points of consecutive non-overlapping pairs is below `variableMinSplitHalfCorrelation` | Noise; white noise gives about zero |
+| `APERTURE` | The 1.0 x and 2.0 x FWHM percentile ranges, selected through the main curve's usable mask, differ by more than `variableMaxApertureAmplitudeDifference x amplitude` | Light from a neighbour leaking in, or a wrong position. Real variability is the same in every aperture |
+| `SYSTEMATICS` | See below | Changes caused by seeing, transparency, sky or registration |
+| `LOCAL` | Fewer than 3 sufficiently precise comparison stars (including other candidates) are found within `variableLocalRadiusPixels`, or, in a sparse field, within 3 times that radius; or the median absolute correlation with the nearest 10 of them exceeds `variableMaxLocalCorrelation` and they also carry at least 30% of the candidate's pattern (median regression slope of their residuals on the candidate's, `localSharedFraction`). References are selected by their expected scatter, no larger than the greater of the candidate's expected scatter and its amplitude divided by `max(1, variableAmplitudeNoiseFactor)`. Selecting only quiet stars would remove the strongest evidence when a local fault makes neighbouring stars candidates too. A systematic shifts neighbours by about the same amount; a faint copy (light from a bright variable leaking into a neighbour's aperture) or a slight common trend correlates without sharing the amplitude | A local pattern the plane term cannot model (a dew patch, a local gradient) |
+| `LINEARITY` | Any measurement of the star is flagged `SATURATED` or `NONLINEAR` | Stars that come near the linear limit, for example when they brighten |
+
+**SYSTEMATICS** runs two tests for each driver. The gate fails if either test fails for any driver:
+
+1. **Frame to frame.** The correlation between consecutive differences of the light curve and of the driver exceeds `variableMaxSystematicsCorrelation`. A blend that leaks with seeing jumps whenever the FWHM jumps and fails here, whatever the size of the change. A smooth real variable barely changes between consecutive frames, so it does not correlate here.
+2. **Trend.** The raw correlation exceeds `variableMaxSystematicsCorrelation` and the star's amplitude is at most `variableSystematicsResponseFactor` times the typical maximum response of constant stars. Raw correlation alone is not enough to fail a star. Any variable that brightens or fades steadily correlates with any steady drift in the session, such as airmass changing the zero point. The star fails only when such a drift could plausibly have produced its change.
+
+`maxSystematicsSource`, `maxSystematicsCorrelation`, `maxFrameToFrameSystematicsCorrelation` and `systematicsLimitMag` record the details.
+
+<a id="photometry-11-5"></a>
+#### 16.11.5 Tiers
+
+| Tier | Meaning |
+| --- | --- |
+| `HIGH_CONFIDENCE` | Candidate, every gate passed |
+| `POSSIBLE` | Candidate, exactly one gate failed |
+| `REJECTED` | Candidate, two or more gates failed |
+| `CONSTANT` | Did not reach `variableScoreSigma` on both scores |
+| `NOT_SCORED` | Excluded star, too few measurements, no noise model, or session not ready |
+
+`VariableStarAnalysis.candidates` holds the `HIGH_CONFIDENCE`, `POSSIBLE` and `REJECTED` stars, best tier first, then by descending `scatterZ`. `highConfidenceCandidates()` returns the first tier only. `failedGates` lists the gates each candidate failed, in the order of `VariableStarAnalysis.GATE_NAMES`.
+
+<a id="photometry-12"></a>
+### 16.12 Outputs
+
+Frame/light-curve indexing, result fields, candidate ordering and telemetry ownership are documented in [PIPELINE.md](PIPELINE.md#photometry-outputs-and-indexing). `deltaMag` is positive when fainter; timestamps are mid-exposure Julian dates. Disabling the stage returns verdict `NOT_RUN`.
+
+<a id="photometry-13"></a>
+### 16.13 Fixed Constants
+
+These values are in the code and are not configurable:
+
+| Constant | Value | Where |
+| --- | --- | --- |
+| Saturation pile-up tolerance / minimum pixels | 0.1% of frame max / 5 | `PhotometryStarSelector` |
+| Saturation level without pile-up | 0.95 x 65535 | `PhotometryStarSelector` |
+| Registration allowance in selection margin | 2 px | `PhotometryStarSelector` |
+| Bright-neighbour flux ratio | 0.1 | `PhotometryStarSelector` |
+| Photometry star list: seed / grow sigma / minimum pixels | 3 / 2 / 3 | `VariableStarAnalyzer` |
+| Largest aperture contamination by neighbours | 2% | `PhotometryStarSelector` |
+| Crossing detection minimum peak | 5 sigma | `VariableStarAnalyzer` |
+| Aperture choice: ranges / minimum gain / minimum radius | 8 / 3% / 2 px | `VariableStarAnalyzer` |
+| Local gate: minimum shared share / widest radius | 30% / 3 x `variableLocalRadiusPixels` | `VariabilityScorer` |
+| Selection grid | 8 x 8 | `PhotometryStarSelector` |
+| Stars for FWHM and offset | 50, skipping the brightest 10%; minimum 5 | `ApertureMeasurer` |
+| Moment window | max(3, 1.5 x extraction FWHM) | `ApertureMeasurer` |
+| CI radii | 0.7 and 2.5 x FWHM | `ApertureMeasurer` |
+| Gate apertures | 1.0 and 2.0 x FWHM | `ApertureMeasurer` |
+| Sky clipping | 3 passes, 3 sigma, minimum 10 pixels | `ApertureMeasurer` |
+| Floor share treated as void | 50% of annulus | `ApertureMeasurer` |
+| Check B star error limit | 0.05 mag | `PhotometricReadinessChecker` |
+| Check B reference ranks | 50%–90% | `PhotometricReadinessChecker` |
+| Check B bins | max(15 stars, count / 15) | `PhotometricReadinessChecker` |
+| Check B bin noise allowance | 2 standard errors | `PhotometricReadinessChecker` |
+| Check D slope significance | 3 standard errors | `PhotometricReadinessChecker` |
+| `LIMITED` linear-range margin | 1 mag | `VariableStarAnalyzer` |
+| Mostly non-linear star | more than 50% of measurements | `VariableStarAnalyzer` |
+| Shape check threshold / spread floor | 5 tolerances / 2% | `VariableStarAnalyzer` |
+| Shape check groups / minimum stars per group / minimum measurements per star | 10 / 30 / 5 | `VariableStarAnalyzer` |
+| Ensemble minimum stars per frame / for plane | 10 / 30 | `EnsembleSolver` |
+| Spatial grid / minimum stars per compared cell / offset limit | 3 × 3 / 30 / 0.10 mag | `SpatialFrameFilter` |
+| Ensemble iterations / convergence | 15 / 1e-5 mag | `EnsembleSolver` |
+| Ensemble sigma floor / noise neighbours / Cauchy scale | 0.001 mag / 50 / 3 sigma | `EnsembleSolver` |
+| Outlier / support threshold | 4 / 2 robust sigma | `VariabilityScorer` |
+| Persistence threshold | 1.5 x expected scatter | `VariabilityScorer` |
+| Scatter / J spread floors | 5% of expected / 0.02 | `VariabilityScorer` |
+| Systematics neighbours / percentile | 200 constant stars / 99th | `VariabilityScorer` |
+| Local gate stars / minimum | 10 / 3 | `VariabilityScorer` |
+
+<a id="photometry-14"></a>
+### 16.14 Limitations
+
+- **Single session, instrumental magnitudes.** There is no catalogue cross-match, no colour or extinction terms, and no transformation to a standard system. Amplitudes are differential within the session.
+- **Variability must show within the session.** A star that changes on timescales much longer than the session looks constant. A star that changes only during the gap between sessions is not visible at all.
+- **Crowded, bright and edge stars are not measured.** A variable whose neighbours add more than 2% light to its aperture, one saturated in the master stack, or one whose sky ring reaches outside the session data area is never selected.
+- **Power-law stretches are not detected** ([what the checks cannot see](#photometry-8-5)).
+- **`magError` is a lower bound** (sky noise only). Scoring uses the empirical `expectedScatter`; it is not a calibrated uncertainty on the measured amplitude.
+- **Candidates are not confirmed variables.** Even `HIGH_CONFIDENCE` candidates should be checked against the images and a variable-star catalogue.
+- **Aperture agreement is amplitude-only.** The APERTURE gate compares percentile ranges, not whether aperture light curves brighten/fade together. Non-finite alternative-aperture values can also leave different effective subsets (VS-5).
+- **Usable-point adjacency can bridge gaps.** Persistence and serial statistics do not prove a state continued through missing observations (VS-6).
+- **Saturation is estimated heuristically.** Similar unsaturated maxima can resemble a clipping pile-up; there is no caller-supplied saturation limit (VS-8).
+- **Reference counts have different meanings.** Check B's default 50 references are counted inside its retained brightness range. An ideal selected sample needs at least 55 before further exclusions; selecting exactly 50 cannot satisfy that default check (VS-9).
+
+These limitations remain deferred by the maintainer. The [improvement plan](DESIGN-IMPROVEMENTS.md) records decisions and links the historical component evidence. Earlier crossing-coordinate, timestamp/fragment interpolation and undefined-response findings are implemented fixes, not open proposals.
 
 ## 17. Output Assembly
 
-This stage gathers every accepted product of the run into `PipelineResult` for callers and UIs.
-
-At the end of the run, the engine assembles:
-
-- confirmed tracks
-- standalone anomalies
-- pipeline telemetry
-- tracker telemetry
-- median master stack
-- master-star detections
-- maximum-stack slow-mover candidates and median-source mask
-- merged per-frame transients
-- camera-fixed groups (hot pixels, dust)
-- common-motion groups and residual-transient analysis
-- stationary-star photometry and its telemetry
-- master veto mask
-- drift vectors
-
-The main UI-facing tracking outputs are therefore:
-
-- `PipelineResult.tracks`
-- `PipelineResult.anomalies`
-- `PipelineResult.residualTransientAnalysis`
-
-The engine exports `maximumStackData` for visualization or downstream analysis. When slow-mover detection is enabled, the detector reuses this same array.
+The engine assembles stacks, masks, the data area, retained-frame detections, tracks, anomalies, camera-fixed/common-motion groups, residual candidates and optional photometry into `PipelineResult`. The maximum stack is shared with the slow-mover analysis. The field inventory, aliases, light-curve indexing and ownership are in [PIPELINE.md](PIPELINE.md#jtransientenginerunpipeline).
 
 ## 18. Runtime Diagnostics
 
-`PipelineTelemetry.stageTimeMs` is an insertion-ordered map from `PipelineTelemetry.Stage` to elapsed wall-clock milliseconds. The major phases are drift/padding, parallel extraction and frame measurements, quality filtering, the median master/star map, maximum stacking, optional slow movers, tracking, optional common-motion filtering, optional residual analysis, and optional photometry. Disabled phases are absent; a completed short phase may record zero milliseconds.
+The engine records non-overlapping elapsed wall time for major phases, plus tracking substep timing. Parallel worker CPU time is not summed. Engine time excludes application loading, Auto-Tune and report export. [PIPELINE.md](PIPELINE.md#timing-and-frame-exclusion-telemetry) defines timing fields and exclusions; its [progress contract](PIPELINE.md#progress-reporting) defines listener ranges. Diagnostics remain behind the debug switches.
 
-`processingTimeMs` covers the entire engine run, including residual analysis and photometry. Durations use `System.nanoTime()`. Parallel phases measure elapsed time, not the sum of worker CPU time. The total excludes application image loading, Auto-Tune and report generation, and includes small orchestration overhead beyond the recorded phases. With a provided median stack, master-reference timing covers its reuse and star extraction, not construction.
+<a id="auto-tuning"></a>
+## 19. Auto-Tuning
 
-`trackerTelemetry.faintStreakFragmentTimeMs` measures faint-fragment assembly within tracking; it is already included in the tracking time and must not be added to the total. It is -1 when the pass did not run. `generateReport()` prints the timing breakdown and this substep.
+JTransient supplies a measured/calibrated tuner (`CalibratedAutoTuner`) and a legacy score-based tuner (`JTransientAutoTuner`). SpacePixels defaults to calibrated tuning. Both take a base config and a profile, and return an `AutoTunerResult`; signatures, reusable calibration and fallback contracts are in [PIPELINE.md](PIPELINE.md#calibratedautotunertune).
 
-## Resulting Behavior
+Profiles are `LOW`, `MEDIUM`, `HIGH` and `MAXIMUM`. `AutoTuneProfile.parse(...)` also accepts conservative, balanced and aggressive as aliases for the first three. The current methods are described here; the configurable detection fields/defaults are documented once in [CONFIG.md](CONFIG.md).
 
-In plain English, the algorithm starts with stricter evidence, then progressively rescues weaker but still explainable moving signals.
+<a id="calibrated-auto-tuning"></a>
+### 19.1 Calibrated tuning
 
-The full algorithm is intentionally layered:
+#### Idea
 
-1. detect as many plausible objects as possible
-2. remove bad frames
-3. learn the stationary sky from the median master stack
-4. veto stationary objects
-5. try the strictest track linker first
-6. optionally fall back to looser geometry when timestamps are available, and require it when timestamps are missing
-7. rescue strong one-frame events at the end as either peak-sigma or integrated-sigma anomalies
-8. set aside reliable compact common-motion groups before optional residual analysis
-9. mine the remaining unclassified points for weaker local rescue and activity patterns
+Instead of scoring proxies, the calibrated tuner tries a grid of settings on crops of the session's own frames and measures, for each combination:
 
-That layering is what lets `runPipeline(...)` handle slow point-like movers, fast streaks, faint same-frame streak fragments, and one-frame flashes within the same overall engine.
+- **false positives**: detections that a setting would report although nothing is there
+- **sensitivity**: how many faint objects of known brightness it would find
+- **mask coverage**: how much sky the star mask hides
+
+Each profile is a false-positive budget per megapixel per frame. The budget counts false single-frame detections, not what a user finally sees (tracks, anomalies and residual candidates); a run within budget can still show a few false tracks. Among the combinations within budget, the tuner takes the one that recovers the most synthetic sources (near-ties go to the one that keeps more bright sources). A more permissive profile can therefore never be less sensitive.
+
+| Profile | Budget (false positives per MPix per frame) |
+| --- | --- |
+| `LOW` | 0.05 |
+| `MEDIUM` | 0.4 |
+| `HIGH` | 1.5 |
+| `MAXIMUM` | 3.5 |
+
+Because the budget is per megapixel per frame, the number of false detections a profile allows grows with the sensor size and the number of frames. On a 61-megapixel sensor with 33 frames, `MAXIMUM` allows several thousand; it is meant for small sensors and targeted searches.
+
+#### Tuned values
+
+One calibration measures all profiles. `configFor(...)` applies a chosen profile to a base-config clone without repeating the measurement. The calibrated tuner supplies per-frame sigma/grow/minimum pixels, master sigma/grow/minimum pixels, mask overlap and measured jitter; other fields retain their base values. The API/result contract is in [PIPELINE.md](PIPELINE.md#calibratedautotunertune).
+
+#### Preparation
+
+1. **Unusable frames are left out.** Frames where less than half of the pixels hold image data (blank frames, failed registrations) are dropped. At least 5 usable frames are needed.
+2. **Crops.** The frames are cut into square crops of up to 1024 px: the centre and four corners on ordinary frames, an even grid of up to 4 x 4 on large ones. The border kept clear of the frame edges is the measured drift padding plus 50 px (between 50 and 200 px). Crops outside the intersection of usable-frame coverages are dropped. Where crops overlap, each searchable pixel is counted in one crop only, excluding the 3 px crop search margin.
+3. **Measurement frames.** Ten frames, evenly spaced; small sensors use more (up to 40) so that about 30 megapixel-frames are measured.
+4. **Star size and jitter.** The star FWHM is measured from the area above half the peak of bright, isolated stars (the core width; second moments would include the wings). The residual registration jitter is measured from master-to-frame star distances.
+5. **Three images per crop-frame:** the real frame; a negative image `2 x master - frame`, which has the noise of a frame but no real objects; and a copy with synthetic stars injected (see below).
+6. **Streak pass.** A more sensitive extraction (2.5 / 1.5 sigma) of each real crop joins the fragments of faint satellite or meteor trails into elongated objects. Detections within one FWHM of such a streak (lying mostly outside the star mask) are treated as real objects, not false positives.
+
+#### The settings grid
+
+- Detection sigma 2.5 to 6.0; grow sigma = detection sigma minus 0.75 or 1.25.
+- Minimum pixels: 0.3, 0.5, 0.75, 1, 1.5, 2 and 3 times the star core area (pi x (FWHM/2)^2), at least 3 and at most 15 pixels (`MAX_MIN_PIXELS`). Without the upper limit, wide stars would lead to sizes of 25 pixels and more, which reject small faint movers.
+- Master sigma 1.5 to 5.0; master grow = master sigma minus 0, 0.5 or 1.0; master minimum pixels 3 or 0.25, 0.5 and 1 times the core area. The star mask is grown by max(1, round(jitter / 2)) px, and its stars are found in the pipeline's two passes (one sky level, then the local sky), both as in the pipeline.
+- Veto overlap 0.5, 0.65, 0.75, 0.85 and 0.95.
+
+Settings that already drown in noise before any veto are skipped. Crop evaluation uses the pipeline's extraction, master-star and star-mask routines. It does not execute the downstream linkers, anomaly/residual stages, slow-mover branch or photometry.
+
+#### What is measured
+
+**False positives**, per megapixel per frame:
+
+- **noise**: detections in the negative image that survive the veto
+- **star leakage**: real-frame survivors that touch the star mask; or reappear within the recurrence radius (max(1.5 px, jitter)) in another frame, on the sky or on the sensor (hot pixels move with the drift across registered frames; the sensor test only applies between frames whose drift differs); or lie within one FWHM of a star and reappear beside it in another frame
+- **real-frame excess**: real-frame survivors above the lowest rate any setting reaches (faint stars visible only in better frames, seeing residuals and similar artefacts)
+
+The false-positive figure is the larger of noise + leakage and the real-frame excess. A cautious estimate, (count + 1) / measured area, is compared with the budget. A budget smaller than one event over the measured area cannot be confirmed; it is relaxed to "no events".
+
+**Sensitivity (the artificial star test).** On in-memory copies of the crops, the tuner injects Gaussian stars shaped like the session's measured stars, 12 per brightness level per crop-frame, at known positions at least 30 px inside the crop and peak SNR 2, 3, 4, 5, 6, 8, 10 and 15. For each combination it counts the injected stars that are detected near their position and survive the veto. This gives the completeness per level, the recovered fraction (mean over levels), the bright recovery (SNR 8 and above) and SNR50, the peak SNR at which half are found. The injected stars never reach the input files or the pipeline run.
+
+#### Reading the report
+
+The telemetry report lists the measurement area, the star FWHM and jitter, skipped settings and crops, the choice for every profile with its measurements, the best setting per detection sigma, the completeness curve of the chosen setting, and the final configuration.
+
+#### Known limitations
+
+- The injected stars are static point sources. A slow mover whose path crosses faint stars included only in a deep mask can be vetoed in many consecutive frames; the tuner cannot foresee that for a particular path. (Example: Apophis, which the deep 1.5-sigma mask removes while a 2.0-sigma mask keeps it; `MAXIMUM` finds it.)
+- Diffuse objects such as comets are not represented by the injected stars, so the cost of a deep mask for them is underestimated.
+- Runtime depends on image dimensions, crop/frame counts, the search grid and hardware; old session timings are not a performance guarantee.
+
+<a id="legacy-auto-tuning"></a>
+### 19.2 Legacy score-based tuning
+
+The legacy tuner searches proxy scores on fixed crops rather than measuring final false-track probabilities. It sweeps per-frame sigma/grow/minimum pixels and mask overlap, measures jitter, and preserves the base master settings. `MAXIMUM` uses the same legacy limits/weights as `HIGH`. The [API guide](PIPELINE.md#jtransientautotunertune-legacy) defines fallback and final-validation fields.
+
+#### Sampling and crops
+
+At least `AUTO_TUNE_SAMPLE_SIZE` frames (default 5) are needed. Frames are ranked by `backgroundNoise * medianFWHM`, lower first, using the dedicated quality sigma/grow/minimum-pixel and shape thresholds plus background-clipping/streak-classification settings. The sample combines up to three best frames with median-quality/fill-in frames, then sorts by sequence index. Detection-side sigma, grow, minimum pixels, overlap and incoming jitter do not control this quality pass.
+
+The sample is cropped once and cached: three interior regions (upper-left, centre, lower-right), a target border margin of 200 px, preferred sizes 1024 or 768 px and a minimum of 384 px. Extraction keeps the crop search margin; the sweep reuses the same arrays rather than selecting a different sample for every combination.
+
+#### Jitter before the sweep
+
+Each crop's median stars are matched to stars extracted from its sampled frames at sigma 4, grow 3 and minimum 5 pixels. Usable stars have at least 5 pixels and elongation no greater than 2.5. Matches must be reciprocal nearest neighbours within 4 px. At least eight matches are required; the estimate is `max(1, 2 * P90(distances))` px, with a 1.5 px fallback. The measured jitter is used consistently in sweep and replay, not inherited from the input guess.
+
+#### Search and crop evaluation
+
+| Parameter | Legacy grid |
+|---|---|
+| Detection sigma | 3.5, 4, 5, 6, 7 |
+| Minimum pixels | 3, 5, 7, 9, 12 |
+| Grow delta | 0.75, 1.25, 1.75 |
+| Mask overlap | 0.65, 0.70, 0.75 |
+
+Grow is `max(1, sigma - growDelta, masterSigmaMultiplier + 0.5)`; combinations with grow at or above seed are skipped. For every combination:
+
+1. Clone the base config and apply the grid values and measured jitter.
+2. Build each crop's median stack and extract master stars through the global/local-sky passes. Legacy evaluation temporarily grows at `masterSigmaMultiplier`; it does not apply the calibrated tuner's configurable master hysteresis. Keep master stars to the crop edge.
+3. Build the raw-pixel veto mask and grow it by `max(1, round(jitter / 2))`. Reject a crop with no master stars or more than 25% mask coverage.
+4. Extract every crop-frame. Ignore streaks for stable/transient scoring; a point is stable when its mask overlap is at least the tested overlap, otherwise transient.
+5. Reject combinations with fewer than 10 or more than 500,000 total objects, fewer than 15 stable stars, or a transient ratio above the profile limit.
+
+#### Proxy score
+
+Let `cropFrameCount = selectedFrames * cropRegions`. Stable/transient yields are divided by this count, `transientRatio = totalTransients / totalObjects`, and `stableCv`/`transientCv` are the coefficients of variation of their crop-frame counts. The score maximizes:
+
+```text
+  stableWeight * stableYieldScore
+- overflowWeight * transientOverflowPenalty
+- sweetSpotWeight * transientSweetSpotPenalty
+- varianceWeight * variancePenalty
+- maskWeight * maskCoveragePenalty
+- harshnessWeight * harshnessPenalty
+- guardWeight * lowSigmaMinPixGuardPenalty
+```
+
+| Term | Definition or effect |
+|---|---|
+| Stable yield | `clamp01(avgStableStars / 100)`; saturates at the optimal-star anchor |
+| Transient overflow | `clamp01(transientRatio / profile.maxTransientRatio)` |
+| Sweet spot | Penalizes yields outside the profile band and favours its target; zero leakage is not the only objective |
+| Variance | `0.6 * clamp01(stableCv / 0.25) + 0.4 * clamp01(transientCv / 0.75)` |
+| Mask | Linear soft penalty above 8% coverage; rejection at 25% |
+| Harshness | Normalized sigma, minimum-pixel and grow-delta harshness with profile weights |
+| Low-sigma guard | Below sigma 4, penalizes minimum-pixel choices that are too small for the sigma |
+
+##### Legacy profile limits
+
+| Profile | Max transient ratio | Target transients per crop-frame | Sweet-spot band | Main bias |
+| --- | --- | --- | --- | --- |
+| `LOW` | `0.05` | `0.20` | `0.05` to `0.50` | Strongly suppress leakage |
+| `MEDIUM` | `0.05` | `0.35` | `0.15` to `0.80` | Middle ground |
+| `HIGH` | `0.12` | `1.00` | `0.40` to `2.00` | Allows more leakage to preserve sensitivity |
+
+##### Legacy score weights
+
+| Profile | Stable | Overflow | Sweet spot | Variance | Mask | Harshness | Low-sigma guard |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `LOW` | `100` | `120` | `20` | `60` | `50` | `22` | `10` |
+| `MEDIUM` | `100` | `120` | `25` | `60` | `50` | `20` | `18` |
+| `HIGH` | `100` | `70` | `35` | `50` | `50` | `34` | `22` |
+
+##### Legacy harshness weights
+
+| Profile | Sigma weight | Min-pixel weight | Grow-delta weight |
+| --- | --- | --- | --- |
+| `LOW` | `0.40` | `0.35` | `0.25` |
+| `MEDIUM` | `0.55` | `0.20` | `0.25` |
+| `HIGH` | `0.90` | `0.00` | `0.15` |
+
+Near-tie selection may favour lower sigma, particularly for HIGH/MAXIMUM. These tables describe the current proxy objective, not a false-positive budget interchangeable with calibrated tuning.
+
+#### Final replay, telemetry and repeatability
+
+The winner is replayed on the same frozen crops: rebuild stacks/stars/masks and recompute counts, ratios, coverage and CVs with the returned config. Validation can pass, complete with a hard-gate warning, or abort on a crop such as one with no stars or excessive mask coverage. Inspect `finalValidationTelemetry` as well as `success`.
+
+The text report records the input-config snapshot, frame order, effective sampling thresholds, selected frames/crops, jitter matches, sweep entries/skips, winning config and replay result. These explain changes caused by quality/background/streak settings, image order in quality ties, or new input frames. Removed edge/void settings are not repeatability inputs. A previous detection-grow result does not feed back into quality sampling. Repeatedly tuning a tuned config is not an instruction to keep improving indefinitely.
+
+#### Limits and intended use
+
+Both tuners provide a starting extraction configuration for a subsequent full pipeline run. They do not link tracks, run slow movers or photometry, export `PipelineResult`, or guarantee an optimum for every frame/downstream stage. Review telemetry and downstream results. AT-3/AT-4 and proposed slow-mover tuning remain in [DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md).
+
+## 20. Design Decisions And Future Work
+
+[DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md) records proposals, deferred limitations and maintainer decisions. Historical reviews in `docs/archive/` preserve their original evidence, not current specifications. This reference combines the former detection, slow-mover, variable-star and auto-tuner guides; public entry points remain in [PIPELINE.md](PIPELINE.md) and field defaults in [CONFIG.md](CONFIG.md).

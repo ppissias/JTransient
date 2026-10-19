@@ -35,7 +35,7 @@ Secondary hysteresis threshold used while the BFS expands a blob.
 - lower than the seed threshold by design
 - controls how much faint edge structure is retained
 - too low can leak into noise
-- master-star extraction uses a stage-local `growSigmaMultiplier = masterSigmaMultiplier`
+- pipeline master-star extraction uses `MasterReferenceAnalyzer.effectiveMasterGrowSigma(config)`: a positive master-grow value capped to the master seed, otherwise the master seed
 - slow-mover extraction uses a stage-local `growSigmaMultiplier = masterSlowMoverGrowSigmaMultiplier`
 - both auto-tuners search this field
 
@@ -691,40 +691,20 @@ SYSTEMATICS gate: for each correlated systematic, the response of every constant
 
 ### `variableLocalRadiusPixels` / `variableMaxLocalCorrelation` (defaults `100.0` / `0.3`)
 
-LOCAL gate: compare with up to 10 sufficiently precise nearby stars, including other candidates; at least 3 are required. The gate fails when the median absolute correlation exceeds this limit and the neighbours share at least 30% of the candidate's change. See `VariableStarAlgorithm.md` for reference selection.
+LOCAL gate: compare with up to 10 sufficiently precise nearby stars, including other candidates; at least 3 are required. The gate fails when the median absolute correlation exceeds this limit and the neighbours share at least 30% of the candidate's change. See [algorithm reference](ALGORITHM.md#variable-star-photometry) for reference selection.
 
 Candidates that pass every gate are `HIGH_CONFIDENCE`, one failure gives `POSSIBLE`, more give `REJECTED`. A LINEARITY gate also fails when the star was flagged saturated or non-linear in any frame.
 
-## 9. Interaction With The Auto-Tuner
+## 9. Auto-Tuners
 
-There are two auto-tuners. Both take an `AutoTuneProfile` (`LOW`, `MEDIUM`, `HIGH` or `MAXIMUM` = as sensitive as possible; the legacy tuner treats maximum like high) and return a `JTransientAutoTuner.AutoTunerResult`. Neither reads extra fields from `DetectionConfig`; their settings are static fields of the tuner classes.
+The tuners return settings for a subsequent pipeline run; neither changes the base configuration while searching. [ALGORITHM.md](ALGORITHM.md#auto-tuning) defines both methods and their objectives, and [PIPELINE.md](PIPELINE.md#calibratedautotunertune) defines result/fallback contracts.
 
-### `CalibratedAutoTuner` (measured)
+| Tuner | Fields supplied by the result |
+|---|---|
+| Calibrated | `detectionSigmaMultiplier`, `growSigmaMultiplier`, `minDetectionPixels`, `masterSigmaMultiplier`, `masterGrowSigmaMultiplier`, `masterMinDetectionPixels`, `maxMaskOverlapFraction`, `maxStarJitter` |
+| Legacy | The three per-frame fields, `maxMaskOverlapFraction` and `maxStarJitter`; master settings are preserved |
 
-Blank or failed-registration frames are left out first. It then measures, on crops of the session frames (the centre and four corners; an even grid of up to 4 x 4 crops on large frames; the border kept clear is the measured drift padding plus 50 px, between 50 and 200 px; overlapping crops count each pixel once; small sensors use more frames, up to 40, to cover about 30 megapixel-frames), for every combination of per-frame settings, master-mask settings and veto overlap:
-
-- noise false positives, from a negative image `2 x master - frame` (the noise of a frame, no real objects)
-- star leakage: real-frame detections that survive the veto and touch the star mask, recur at the same place on the sky or on the sensor (hot pixels follow the drift across registered frames), or lie within one FWHM of a star and reappear beside it in another frame
-- other real-frame detections above the lowest rate any setting reaches (faint stars visible only in better frames, seeing residuals and similar artefacts that depend on the settings)
-- satellite and meteor trails, which are not charged: a more sensitive extraction of every frame (2.5 / 1.5 sigma) joins trail fragments into one object, and detections within one FWHM of a streak found that way (mostly outside the star mask) are left out
-- sensitivity: the fraction of synthetic point sources, shaped like the session's measured stars (FWHM from the area above half maximum) and injected over peak SNR 2 to 15, that are detected and survive the veto
-- mask coverage
-
-A profile is a budget of false positives per megapixel per frame (noise plus star leakage, or the real-frame excess if larger) (`FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME`, default 0.05 / 0.2 / 0.6 / 3.5; maximum is meant for small sensors or targeted searches, since a per-megapixel budget leaves many candidates on a large sensor). Within the budget it picks the settings that recover the most synthetic sources, so a more permissive profile is never less sensitive; near-ties go to the setting that keeps more bright sources. Budgets smaller than one event over the measured area cannot be confirmed and are relaxed to "no events". `CalibratedAutoTuner.calibrate(...)` returns every measurement and the choice for all three profiles.
-
-It sets `detectionSigmaMultiplier`, `growSigmaMultiplier`, `minDetectionPixels`, `masterSigmaMultiplier`, `masterGrowSigmaMultiplier`, `masterMinDetectionPixels`, `maxMaskOverlapFraction` and `maxStarJitter`. Minimum-pixel candidates for frames and master are derived from the measured star FWHM. Master settings are tried both deeper and shallower than the per-frame grow threshold: a shallower mask hides less sky but lets star wings leak, and the measured leakage counts against the budget.
-
-### `JTransientAutoTuner` (legacy, score-based)
-
-Kept for comparison. It optimizes or measures:
-
-- `detectionSigmaMultiplier`
-- `growSigmaMultiplier`
-- `minDetectionPixels`
-- `maxMaskOverlapFraction`
-- `maxStarJitter`
-
-Everything else in the returned config comes from the base config you provided.
+Fields outside the tuned set retain their base values. Auto-Tune does not set the slow-mover thresholds or photometry controls. Sampling-side quality/background/streak settings can affect recommendations. Profile budgets and search grids are algorithm parameters, not additional `DetectionConfig` fields.
 
 ## 10. Practical Starting Point
 

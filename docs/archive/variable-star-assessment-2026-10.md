@@ -1,3 +1,5 @@
+> Historical record, archived 2026-10-19. This preserves the review and evidence from its original dates, including superseded statements and decisions. It is not the current specification or work queue. See [DESIGN-IMPROVEMENTS.md](../../DESIGN-IMPROVEMENTS.md) for current guidance. Source line numbers and temporary harness paths below refer to the original session and may no longer exist.
+
 # Variable-star detection algorithm assessment
 
 Reviewed on 2026-10-09 against the current workspace implementation, including
@@ -460,15 +462,15 @@ These are not additional confirmed image-level defects:
   the same 15/11 outcome reproduced. Its expected exit code is 1 until the proposed assertions
   are satisfied. It uses the existing test fixture reflectively for its full-image scenarios.
 
-Artifacts are under `build/review/variable-star-assessment-20261009/`:
+The original artifacts were generated under `build/review/variable-star-assessment-20261009/`. That directory is no longer present in this checkout. The paths below are retained as historical provenance, not runnable or available validation artifacts:
 
-- [VariableStarAlgorithmReviewProbe.java](build/review/variable-star-assessment-20261009/VariableStarAlgorithmReviewProbe.java): exact inputs, component checks and full-pipeline scenarios.
-- [RunProbes.ps1](build/review/variable-star-assessment-20261009/RunProbes.ps1): rebuild with `gradlew.bat testClasses` and run this script from the repository, using the local Java setup from `setpaths.bat`.
-- [probe-output.txt](build/review/variable-star-assessment-20261009/probe-output.txt): independently rerun outcomes and measured values.
-- [debugger-events.json](build/review/variable-star-assessment-20261009/debugger-events.json): final captured values and exact source locations.
-- [baseline test report](build/review/variable-star-assessment-20261009/baseline/html/index.html): original photometry tests.
-- [existing-suite test report](build/review/variable-star-assessment-20261009/existing-suite/html/index.html): all 99 existing tests.
-- [assessed-probes test report](build/review/variable-star-assessment-20261009/assessed-probes/html/index.html): the final 15 review checks, including passing controls.
+- `build/review/variable-star-assessment-20261009/VariableStarAlgorithmReviewProbe.java` (VariableStarAlgorithmReviewProbe.java): exact inputs, component checks and full-pipeline scenarios.
+- `build/review/variable-star-assessment-20261009/RunProbes.ps1` (RunProbes.ps1): rebuild with `gradlew.bat testClasses` and run this script from the repository, using the local Java setup from `setpaths.bat`.
+- `build/review/variable-star-assessment-20261009/probe-output.txt` (probe-output.txt): independently rerun outcomes and measured values.
+- `build/review/variable-star-assessment-20261009/debugger-events.json` (debugger-events.json): final captured values and exact source locations.
+- `build/review/variable-star-assessment-20261009/baseline/html/index.html` (baseline test report): original photometry tests.
+- `build/review/variable-star-assessment-20261009/existing-suite/html/index.html` (existing-suite test report): all 99 existing tests.
+- `build/review/variable-star-assessment-20261009/assessed-probes/html/index.html` (assessed-probes test report): the final 15 review checks, including passing controls.
 
 These tests establish specific behavior, not completeness or false-positive rates over real
 astronomical populations. Those require multiple noise seeds, realistic PSFs/blends/masks,

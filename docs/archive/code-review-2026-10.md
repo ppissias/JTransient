@@ -1,3 +1,5 @@
+> Historical record, archived 2026-10-19. This preserves the review and evidence from its original dates, including superseded statements and decisions. It is not the current specification or work queue. See [DESIGN-IMPROVEMENTS.md](../../DESIGN-IMPROVEMENTS.md) for current guidance. Source line numbers and temporary harness paths below refer to the original session and may no longer exist.
+
 # JTransient code review
 
 Reviewed on 2026-10-17 against commit `2f58ccf` (release 1.0.3). Re-assessed on the same day against
