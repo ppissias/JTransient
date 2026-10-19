@@ -441,6 +441,13 @@ public class DetectionConfig implements Cloneable {
     /** * Minimum number of unique frames required before a broad local activity cluster is exported. */
     public int localActivityClusterMinFrames = 3;
 
+    /** * Removes detections that stay at one camera position while the sky moves between frames: hot pixels, warm
+     * pixels and dust that the calibration left, which registration moves with the dither and the drift. Each frame's
+     * shift and rotation are measured from its registration fill, so frames without fill are left as they are. Runs
+     * after the star mask and before tracking; removed detections are reported as camera-fixed groups.
+     */
+    public boolean enableCameraFixedRejection = true;
+
     /** * Removes compact sources that share one displacement on at least three frames and sit well apart.
      * This is the pattern of hot pixels or a registration residual. A pair seen in only two frames is kept.
      * Removed sources are reported as one common-motion group. This stage runs before local rescue and

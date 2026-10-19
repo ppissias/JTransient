@@ -15,8 +15,10 @@ import io.github.ppissias.jtransient.engine.TransientEngineProgressListener;
 import io.github.ppissias.jtransient.telemetry.TrackerTelemetry;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -139,6 +141,8 @@ public class TrackLinker {
         public List<List<SourceExtractor.DetectedObject>> unclassifiedTransients;
         /** Pixel veto mask generated from the master star map. */
         public boolean[][] masterVetoMask;
+        /** Detections removed before tracking because they stay at one camera position (hot pixels, dust). */
+        public List<CameraFixedRejector.Group> cameraFixedGroups = List.of();
 
         /**
          * Creates a tracking result bundle.
@@ -483,6 +487,24 @@ public class TrackLinker {
             TransientEngineProgressListener listener,
             int sensorWidth,
             int sensorHeight) {
+        return findMovingObjects(allFrames, masterStars, config, listener, sensorWidth, sensorHeight, null);
+    }
+
+    /**
+     * {@link #findMovingObjects(List, List, DetectionConfig, TransientEngineProgressListener, int, int)} that also
+     * removes camera-fixed detections (hot pixels, dust) after the star mask when
+     * {@code enableCameraFixedRejection} is on ({@link CameraFixedRejector}).
+     *
+     * @param registrations how registration moved each frame, by sequence index; null or empty to skip the step
+     */
+    public static TrackingResult findMovingObjects(
+            List<List<SourceExtractor.DetectedObject>> allFrames,
+            List<SourceExtractor.DetectedObject> masterStars,
+            DetectionConfig config,
+            TransientEngineProgressListener listener,
+            int sensorWidth,
+            int sensorHeight,
+            Map<Integer, FrameRegistration> registrations) {
 
         checkUniformTimestamps(allFrames);
         int numFrames = allFrames.size();
@@ -509,6 +531,23 @@ public class TrackLinker {
         List<Track> confirmedTracks = new ArrayList<>(filterResult.streakTracks);
         TrackerTelemetry telemetry = filterResult.telemetry;
         List<List<SourceExtractor.DetectedObject>> transients = filterResult.pointTransients;
+
+        // PHASE 2C: detections fixed on the camera (hot pixels, dust) leave every later stage.
+        List<CameraFixedRejector.Group> cameraFixedGroups = List.of();
+        if (config.enableCameraFixedRejection && registrations != null && !registrations.isEmpty()) {
+            cameraFixedGroups = CameraFixedRejector.reject(transients, registrations);
+            if (!cameraFixedGroups.isEmpty()) {
+                Set<SourceExtractor.DetectedObject> removed = Collections.newSetFromMap(new IdentityHashMap<>());
+                for (CameraFixedRejector.Group group : cameraFixedGroups) {
+                    removed.addAll(group.points);
+                }
+                for (List<SourceExtractor.DetectedObject> frame : filterResult.allTransients) {
+                    frame.removeIf(removed::contains);
+                }
+                telemetry.cameraFixedGroups = cameraFixedGroups.size();
+                telemetry.cameraFixedDetections = removed.size();
+            }
+        }
         double angleToleranceRad = Math.toRadians(config.angleToleranceDegrees);
 
         // =================================================================
@@ -1097,7 +1136,7 @@ public class TrackLinker {
                 confirmedTracks,
                 anomalies
         );
-        return new TrackingResult(
+        TrackingResult result = new TrackingResult(
                 confirmedTracks,
                 anomalies,
                 telemetry,
@@ -1105,6 +1144,8 @@ public class TrackLinker {
                 unclassifiedTransients,
                 filterResult.masterVetoMask
         );
+        result.cameraFixedGroups = cameraFixedGroups;
+        return result;
     }
 
     /**

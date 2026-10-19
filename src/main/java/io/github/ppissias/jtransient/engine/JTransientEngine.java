@@ -14,6 +14,7 @@ import io.github.ppissias.jtransient.core.CommonMotionRejector;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.FrameCoverage;
 import io.github.ppissias.jtransient.core.FrameDriftAnalyzer;
+import io.github.ppissias.jtransient.core.FrameRegistration;
 import io.github.ppissias.jtransient.core.MasterReferenceAnalyzer;
 import io.github.ppissias.jtransient.core.MasterMapGenerator;
 import io.github.ppissias.jtransient.core.ResidualTransientAnalysis;
@@ -537,8 +538,17 @@ public class JTransientEngine implements AutoCloseable {
                 telemetry,
                 startNanos,
                 driftPoints,
-                dataArea
+                dataArea,
+                registrationsBySequence(driftAnalysis)
         );
+    }
+
+    private static Map<Integer, FrameRegistration> registrationsBySequence(FrameDriftAnalyzer.DriftAnalysisResult drift) {
+        Map<Integer, FrameRegistration> bySequence = new HashMap<>();
+        for (FrameRegistration registration : drift.frameRegistrations) {
+            bySequence.put(registration.sequenceIndex, registration);
+        }
+        return bySequence;
     }
 
     /**
@@ -873,7 +883,8 @@ public class JTransientEngine implements AutoCloseable {
                 config,
                 trackingProxyListener,
                 sensorWidth,
-                sensorHeight
+                sensorHeight,
+                context.frameRegistrations
         );
 
         telemetry.recordStage(PipelineTelemetry.Stage.TRACKING, stageStartedNanos);
@@ -950,7 +961,7 @@ public class JTransientEngine implements AutoCloseable {
                 slowMoverAnalysis, slowMoverStackData, slowMoverMedianVetoMask, slowMoverCandidates, trackResult.anomalies,
                 trackResult.allTransients, trackResult.unclassifiedTransients,
                 residualTransientAnalysis, trackResult.masterVetoMask, context.driftPoints,
-                maximumStackData, variableStarAnalysis, context.dataArea);
+                maximumStackData, variableStarAnalysis, context.dataArea, trackResult.cameraFixedGroups);
     }
 
     /**

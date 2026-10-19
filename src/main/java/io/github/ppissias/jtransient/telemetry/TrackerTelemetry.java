@@ -29,6 +29,9 @@ public class TrackerTelemetry {
     // --- Phase 3 Star Map Stats ---
     public List<FrameStarMapStat> frameStarMapStats = new ArrayList<>();
     public int totalStationaryStarsPurged = 0;
+    /** Camera-fixed groups found after the star mask (hot pixels, dust), and the detections they removed. */
+    public int cameraFixedGroups = 0;
+    public int cameraFixedDetections = 0;
     public int totalStationaryStreaksPurged = 0;
 
     /**

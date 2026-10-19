@@ -10,11 +10,13 @@
 package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.core.DataArea;
+import io.github.ppissias.jtransient.core.FrameRegistration;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Internal engine context shared between extraction and the downstream orchestration stages.
@@ -34,6 +36,8 @@ final class ExtractedFramesContext {
     final List<SourceExtractor.Pixel> driftPoints;
     /** Where every clean frame has image data, or null when no frame was kept. */
     final DataArea dataArea;
+    /** How registration moved each frame, measured from its fill, by sequence index. */
+    final Map<Integer, FrameRegistration> frameRegistrations;
 
     ExtractedFramesContext(List<SourceExtractor.ExtractionResult> cleanFramesData,
                            List<ImageFrame> cleanFrames,
@@ -41,7 +45,8 @@ final class ExtractedFramesContext {
                            PipelineTelemetry telemetry,
                            long startNanos,
                            List<SourceExtractor.Pixel> driftPoints,
-                           DataArea dataArea) {
+                           DataArea dataArea,
+                           Map<Integer, FrameRegistration> frameRegistrations) {
         this.cleanFramesData = cleanFramesData;
         this.cleanFrames = cleanFrames;
         this.cleanFrameMetrics = cleanFrameMetrics;
@@ -49,5 +54,6 @@ final class ExtractedFramesContext {
         this.startNanos = startNanos;
         this.driftPoints = driftPoints;
         this.dataArea = dataArea;
+        this.frameRegistrations = frameRegistrations;
     }
 }

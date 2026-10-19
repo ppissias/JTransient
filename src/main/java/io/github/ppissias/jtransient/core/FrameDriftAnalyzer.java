@@ -53,6 +53,8 @@ public final class FrameDriftAnalyzer {
         public final List<Integer> failedRegistrationFrames;
         /** Where each usable frame holds image data, in sequence order (failed registrations are left out). */
         public final List<FrameCoverage> frameCoverages;
+        /** How registration moved each usable frame, measured from its fill; same order as {@link #frameCoverages}. */
+        public final List<FrameRegistration> frameRegistrations;
 
         public DriftAnalysisResult(List<SourceExtractor.Pixel> driftPoints,
                                    int maxPaddingPixels,
@@ -62,6 +64,11 @@ public final class FrameDriftAnalyzer {
             this.maxPaddingPixels = maxPaddingPixels;
             this.failedRegistrationFrames = Collections.unmodifiableList(new ArrayList<>(failedRegistrationFrames));
             this.frameCoverages = Collections.unmodifiableList(new ArrayList<>(frameCoverages));
+            List<FrameRegistration> registrations = new ArrayList<>(frameCoverages.size());
+            for (FrameCoverage coverage : frameCoverages) {
+                registrations.add(FrameRegistration.fit(coverage));
+            }
+            this.frameRegistrations = Collections.unmodifiableList(registrations);
         }
     }
 
