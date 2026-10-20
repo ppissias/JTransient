@@ -6,6 +6,7 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -172,7 +173,7 @@ public class FaintStreakFragmentGrouperTest {
     }
 
     @Test
-    public void marksAnAnomalyOnAStreakAndLeavesAFarFlashAlone() {
+    public void anAnomalyOnAStreakJoinsItAndAFarFlashStaysAnAnomaly() {
         List<SourceExtractor.DetectedObject> line = new ArrayList<>();
         for (int i = 0; i < 5; i++) {
             line.add(fragment(100 + i * 80, 100, 0.0));
@@ -190,11 +191,108 @@ public class FaintStreakFragmentGrouperTest {
         TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
                 frames, new ArrayList<>(), new DetectionConfig(), null, 800, 800);
 
-        TrackLinker.AnomalyDetection onPathAnomaly = anomalyFor(result, onPath);
-        TrackLinker.AnomalyDetection farAnomaly = anomalyFor(result, farAway);
-        assertTrue(onPathAnomaly.lowConfidence);
-        assertFalse(farAnomaly.lowConfidence);
-        assertFalse(result.tracks.get(0).points.contains(onPath));
+        assertTrue(result.tracks.get(0).points.contains(onPath));
+        assertEquals(1, result.anomalies.size());
+        assertTrue(result.anomalies.get(0).object == farAway);
+    }
+
+    @Test
+    public void anAnomalyJoinsAStreakInAFrameItSkipped() {
+        // A streak moving +x by 100 px per minute, seen in frames 0, 1 and 3; each frame's trail is 60 px long.
+        TrackLinker.Track streak = streak(trail(0, 100, 160), trail(1, 200, 260), trail(3, 400, 460));
+        SourceExtractor.DetectedObject inTheGap = anomaly(2, 330, 101);
+        SourceExtractor.DetectedObject offTheLine = anomaly(2, 320, 115);
+        SourceExtractor.DetectedObject pastTheNextFrame = anomaly(2, 560, 100);
+
+        Set<SourceExtractor.DetectedObject> joined = FaintStreakFragmentGrouper.joinAnomaliesOnStreakPaths(
+                List.of(streak), List.of(inTheGap, offTheLine, pastTheNextFrame));
+
+        assertEquals(Set.of(inTheGap), joined);
+        assertTrue(streak.points.contains(inTheGap));
+    }
+
+    @Test
+    public void aStreakThroughAStarJoinsAlthoughTheStarPullsItsCentreOffTheLine() {
+        TrackLinker.Track streak = streak(trail(0, 100, 160), trail(1, 200, 260), trail(3, 400, 460));
+        SourceExtractor.DetectedObject star = anomaly(2, 330, 109);
+        star.rawPixels = new ArrayList<>();
+        for (int y = 101; y <= 117; y++) {
+            star.rawPixels.add(new SourceExtractor.Pixel(330, y, 500));
+        }
+        SourceExtractor.DetectedObject nearbyStar = anomaly(2, 340, 112);
+        nearbyStar.rawPixels = new ArrayList<>();
+        for (int y = 105; y <= 119; y++) {
+            nearbyStar.rawPixels.add(new SourceExtractor.Pixel(340, y, 500));
+        }
+
+        Set<SourceExtractor.DetectedObject> joined = FaintStreakFragmentGrouper.joinAnomaliesOnStreakPaths(
+                List.of(streak), List.of(star, nearbyStar));
+
+        assertEquals("only the star the line passes through", Set.of(star), joined);
+    }
+
+    @Test
+    public void aStreakTakesTheFrameAfterItsLastAndThenTheNextOne() {
+        TrackLinker.Track streak = streak(trail(0, 100, 160), trail(1, 200, 260));
+        SourceExtractor.DetectedObject frameTwo = anomaly(2, 330, 100);
+        SourceExtractor.DetectedObject frameThree = anomaly(3, 420, 100);
+        SourceExtractor.DetectedObject tooFarAhead = anomaly(2, 700, 100);
+        SourceExtractor.DetectedObject behindTheMotion = anomaly(2, 120, 100);
+        SourceExtractor.DetectedObject twoFramesOn = anomaly(5, 630, 100);
+
+        Set<SourceExtractor.DetectedObject> joined = FaintStreakFragmentGrouper.joinAnomaliesOnStreakPaths(
+                List.of(streak), List.of(frameThree, frameTwo, tooFarAhead, behindTheMotion, twoFramesOn));
+
+        assertEquals(Set.of(frameTwo, frameThree), joined);
+    }
+
+    @Test
+    public void withoutTimestampsTheFrameOrderGivesTheMotion() {
+        SourceExtractor.DetectedObject[] parts = {trail(0, 100, 160), trail(1, 200, 260), trail(3, 400, 460)};
+        for (SourceExtractor.DetectedObject part : parts) {
+            part.timestamp = -1L;
+        }
+        TrackLinker.Track streak = streak(parts);
+        SourceExtractor.DetectedObject inTheGap = anomaly(2, 330, 100);
+        inTheGap.timestamp = -1L;
+        SourceExtractor.DetectedObject frameFour = anomaly(4, 530, 100);
+        frameFour.timestamp = -1L;
+
+        Set<SourceExtractor.DetectedObject> joined = FaintStreakFragmentGrouper.joinAnomaliesOnStreakPaths(
+                List.of(streak), List.of(inTheGap, frameFour));
+
+        assertEquals(Set.of(inTheGap, frameFour), joined);
+    }
+
+    @Test
+    public void aSingleFrameStreakTakesOnlyItsOwnFrame() {
+        TrackLinker.Track streak = streak(trail(1, 200, 260));
+        SourceExtractor.DetectedObject sameFrame = anomaly(1, 300, 100);
+        SourceExtractor.DetectedObject nextFrame = anomaly(2, 330, 100);
+
+        Set<SourceExtractor.DetectedObject> joined = FaintStreakFragmentGrouper.joinAnomaliesOnStreakPaths(
+                List.of(streak), List.of(sameFrame, nextFrame));
+
+        assertEquals(Set.of(sameFrame), joined);
+    }
+
+    /** A streak piece in {@code frame} along y = 100 from {@code x0} to {@code x1}, taken a minute per frame. */
+    private static SourceExtractor.DetectedObject trail(int frame, int x0, int x1) {
+        SourceExtractor.DetectedObject part = piece((x0 + x1) / 2.0, 100, 0);
+        part.sourceFrameIndex = frame;
+        part.timestamp = frame * 60_000L;
+        part.rawPixels = new ArrayList<>();
+        for (int x = x0; x <= x1; x++) {
+            part.rawPixels.add(new SourceExtractor.Pixel(x, 100, 100));
+        }
+        return part;
+    }
+
+    private static SourceExtractor.DetectedObject anomaly(int frame, double x, double y) {
+        SourceExtractor.DetectedObject object = bright(x, y);
+        object.sourceFrameIndex = frame;
+        object.timestamp = frame * 60_000L;
+        return object;
     }
 
     @Test

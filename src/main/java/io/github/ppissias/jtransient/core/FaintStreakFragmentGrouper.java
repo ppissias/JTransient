@@ -18,6 +18,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * Joins faint same-frame streak pieces that never reach the normal streak gates.
@@ -30,6 +31,9 @@ import java.util.Set;
  * angles agree, over a long span with no large gap. Rounder pieces may fill the gaps between
  * those anchors. A line of round pieces alone is not a streak. The normal streak elongation,
  * size and peak gates are left unchanged.</p>
+ *
+ * <p>Rescued anomalies on a confirmed streak's path, such as a streak crossing a star or a satellite's
+ * flash, join that streak ({@link #joinAnomaliesOnStreakPaths}).</p>
  */
 public final class FaintStreakFragmentGrouper {
 
@@ -45,8 +49,10 @@ public final class FaintStreakFragmentGrouper {
      * and an isolated point beyond it is not.
      */
     static final double EXTENSION_GAP_PX = 80.0;
-    /** Perpendicular distance at which an anomaly still counts as lying on a streak. */
+    /** Perpendicular distance at which an anomaly's centre still counts as lying on a streak. */
     static final double ANOMALY_PATH_TOLERANCE_PX = 6.0;
+    /** Perpendicular distance at which one of an anomaly's pixels puts it on a streak, for a streak through a star. */
+    static final double ANOMALY_FOOTPRINT_TOLERANCE_PX = 2.0;
     /** How far past a streak an anomaly may sit and still count as on its path. */
     static final double ANOMALY_PATH_MARGIN_PX = 80.0;
     static final double SEED_MIN_ELONGATION = 2.0;
@@ -143,38 +149,232 @@ public final class FaintStreakFragmentGrouper {
     }
 
     /**
-     * Whether {@code object} lies on a confirmed streak in its own frame.
-     * The corridor is wider than the fragment tolerance because a streak through a star
-     * pulls the measured centre off the line. The object is not absorbed.
+     * Joins rescued anomalies that lie on the path of a confirmed streak to that streak and returns them. A faint
+     * streak through a star changes the star's shape, and a tumbling satellite flashes along its path; both are
+     * rescued as anomalies although they are pieces of the streak.
+     * <ul>
+     * <li>In a frame with parts of the streak, an anomaly joins when it lies on that frame's line, at most
+     * {@link #ANOMALY_PATH_MARGIN_PX} past the parts.</li>
+     * <li>A streak seen in several frames also takes an anomaly that lies on its line, measured on the nearest frames,
+     * where its motion puts it in the anomaly's frame: between its trails in the frames before and after, or one
+     * frame's motion past its first or last frame. That frame may be one the streak skipped or the frame just before
+     * or after it.</li>
+     * </ul>
+     * An anomaly is on a line when its centre is within {@link #ANOMALY_PATH_TOLERANCE_PX} of it, or one of its pixels
+     * within {@link #ANOMALY_FOOTPRINT_TOLERANCE_PX}: a streak through a star pulls the centre off the line. Joining
+     * repeats until nothing more joins, so a frame filled in helps place the next one.
      */
-    static boolean liesOnKnownStreak(SourceExtractor.DetectedObject object, List<TrackLinker.Track> streakTracks) {
-        if (object == null || streakTracks == null) {
-            return false;
+    static Set<SourceExtractor.DetectedObject> joinAnomaliesOnStreakPaths(List<TrackLinker.Track> streakTracks,
+                                                                         List<SourceExtractor.DetectedObject> anomalies) {
+        Set<SourceExtractor.DetectedObject> joined = new HashSet<>();
+        if (streakTracks == null || anomalies == null) {
+            return joined;
         }
-        for (TrackLinker.Track track : streakTracks) {
-            if (track == null || !track.isStreakTrack || track.points == null) {
-                continue;
-            }
-            List<SourceExtractor.DetectedObject> parts = new ArrayList<>();
-            for (SourceExtractor.DetectedObject part : track.points) {
-                if (part != null && part.sourceFrameIndex == object.sourceFrameIndex) {
-                    parts.add(part);
+        boolean grew = true;
+        while (grew) {
+            grew = false;
+            for (SourceExtractor.DetectedObject anomaly : anomalies) {
+                if (anomaly == null || joined.contains(anomaly)) {
+                    continue;
+                }
+                TrackLinker.Track best = null;
+                double bestDistance = Double.POSITIVE_INFINITY;
+                for (TrackLinker.Track track : streakTracks) {
+                    if (track == null || !track.isStreakTrack || track.points == null || track.points.isEmpty()) {
+                        continue;
+                    }
+                    double distance = pathDistance(track, anomaly, joined);
+                    if (distance < bestDistance) {
+                        bestDistance = distance;
+                        best = track;
+                    }
+                }
+                if (best != null) {
+                    best.addPoint(anomaly);
+                    joined.add(anomaly);
+                    grew = true;
                 }
             }
-            if (parts.isEmpty()) {
-                continue;
-            }
-            double[] axis = lineAxis(parts);
-            double[] range = projectionRange(parts, axis[0], axis[1], axis[2], axis[3]);
-            double along = projection(object.x, object.y, axis[0], axis[1], axis[2], axis[3]);
-            double perp = Math.abs(projection(object.x, object.y, axis[0], axis[1], axis[4], axis[5]));
-            if (perp <= ANOMALY_PATH_TOLERANCE_PX
-                    && along >= range[0] - ANOMALY_PATH_MARGIN_PX
-                    && along <= range[1] + ANOMALY_PATH_MARGIN_PX) {
-                return true;
+        }
+        return joined;
+    }
+
+    /**
+     * How far the anomaly's centre is from the streak's line where it lies on the streak's path; infinite otherwise.
+     * Anomalies already joined count where the streak was in their frame, but a round anomaly has no reliable
+     * direction, so they never draw a frame's line on their own.
+     */
+    private static double pathDistance(TrackLinker.Track track, SourceExtractor.DetectedObject anomaly,
+                                       Set<SourceExtractor.DetectedObject> joined) {
+        Map<Integer, List<SourceExtractor.DetectedObject>> byFrame = new TreeMap<>();
+        for (SourceExtractor.DetectedObject part : track.points) {
+            if (part != null) {
+                byFrame.computeIfAbsent(part.sourceFrameIndex, key -> new ArrayList<>()).add(part);
             }
         }
-        return false;
+        int frame = anomaly.sourceFrameIndex;
+        List<SourceExtractor.DetectedObject> own = streakParts(byFrame.getOrDefault(frame, List.of()), joined);
+        double best = Double.POSITIVE_INFINITY;
+        if (!own.isEmpty()) {
+            double[] axis = lineAxis(own);
+            double[] range = projectionRange(own, axis[0], axis[1], axis[2], axis[3]);
+            double along = projection(anomaly.x, anomaly.y, axis[0], axis[1], axis[2], axis[3]);
+            if (along >= range[0] - ANOMALY_PATH_MARGIN_PX && along <= range[1] + ANOMALY_PATH_MARGIN_PX) {
+                best = lineDistance(anomaly, axis);
+            }
+        }
+        if (byFrame.size() >= 2) {
+            best = Math.min(best, motionPathDistance(byFrame, anomaly, joined));
+        }
+        return best;
+    }
+
+    /**
+     * For a streak seen in several frames: the distance from its line near the anomaly's frame when the anomaly lies
+     * where the streak's motion puts it in that frame; infinite otherwise.
+     */
+    private static double motionPathDistance(Map<Integer, List<SourceExtractor.DetectedObject>> byFrame,
+                                             SourceExtractor.DetectedObject anomaly,
+                                             Set<SourceExtractor.DetectedObject> joined) {
+        TreeMap<Integer, List<SourceExtractor.DetectedObject>> frames = new TreeMap<>(byFrame);
+        int frame = anomaly.sourceFrameIndex;
+        Integer previous = frames.lowerKey(frame);
+        Integer next = frames.higherKey(frame);
+        boolean own = frames.containsKey(frame);
+        if (!own && (previous == null || next == null)
+                && frame != frames.firstKey() - 1 && frame != frames.lastKey() + 1) {
+            return Double.POSITIVE_INFINITY;
+        }
+
+        List<SourceExtractor.DetectedObject> all = new ArrayList<>();
+        for (List<SourceExtractor.DetectedObject> parts : frames.values()) {
+            all.addAll(parts);
+        }
+        double[] axis = lineAxis(all);
+        boolean timed = anomaly.timestamp != -1L;
+        Map<Integer, double[]> ranges = new HashMap<>();
+        Map<Integer, Double> times = new HashMap<>();
+        for (Map.Entry<Integer, List<SourceExtractor.DetectedObject>> entry : frames.entrySet()) {
+            ranges.put(entry.getKey(), projectionRange(entry.getValue(), axis[0], axis[1], axis[2], axis[3]));
+            long timestamp = entry.getValue().get(0).timestamp;
+            timed &= timestamp != -1L;
+            times.put(entry.getKey(), (double) timestamp);
+        }
+        // Time is the frames' timestamps when every frame has one, otherwise the frame index.
+        if (!timed) {
+            for (Integer key : frames.keySet()) {
+                times.put(key, (double) key);
+            }
+        }
+        double time = timed ? anomaly.timestamp : frame;
+
+        // Positions along the line, oriented so that the streak moves towards larger values.
+        double[] first = ranges.get(frames.firstKey());
+        double[] last = ranges.get(frames.lastKey());
+        double sign = Math.signum((last[0] + last[1]) - (first[0] + first[1]));
+        if (sign == 0.0) {
+            return Double.POSITIVE_INFINITY;
+        }
+        List<Double> speeds = new ArrayList<>();
+        Integer before = null;
+        for (Integer key : frames.keySet()) {
+            if (before != null && times.get(key) > times.get(before)) {
+                double step = sign * ((ranges.get(key)[0] + ranges.get(key)[1]) - (ranges.get(before)[0] + ranges.get(before)[1])) / 2.0;
+                speeds.add(step / (times.get(key) - times.get(before)));
+            }
+            before = key;
+        }
+        if (speeds.isEmpty()) {
+            return Double.POSITIVE_INFINITY;
+        }
+        speeds.sort(Comparator.naturalOrder());
+        double speed = speeds.get(speeds.size() / 2);
+        if (!(speed > 0.0)) {
+            return Double.POSITIVE_INFINITY;
+        }
+
+        double lower;
+        double upper;
+        if (previous != null) {
+            lower = orientedEnd(ranges.get(previous), sign);
+        } else {
+            lower = orientedStart(ranges.get(next), sign) - speed * (times.get(next) - time);
+        }
+        if (next != null) {
+            upper = orientedStart(ranges.get(next), sign);
+        } else {
+            upper = orientedEnd(ranges.get(previous), sign) + speed * (time - times.get(previous));
+        }
+        if (own) {
+            lower = Math.min(lower, orientedStart(ranges.get(frame), sign));
+            upper = Math.max(upper, orientedEnd(ranges.get(frame), sign));
+        }
+        double position = sign * projection(anomaly.x, anomaly.y, axis[0], axis[1], axis[2], axis[3]);
+        if (position < lower - ANOMALY_PATH_MARGIN_PX || position > upper + ANOMALY_PATH_MARGIN_PX) {
+            return Double.POSITIVE_INFINITY;
+        }
+
+        // The line near the anomaly: the streak's own parts in the two nearest other frames that have them, and in the
+        // anomaly's frame. A long path bends a little across the image, so the whole streak's line can miss a piece by
+        // several pixels; joined anomalies are left out because a star pulls their centres off the line.
+        List<Integer> nearest = new ArrayList<>();
+        for (Map.Entry<Integer, List<SourceExtractor.DetectedObject>> entry : frames.entrySet()) {
+            if (entry.getKey() != frame && !streakParts(entry.getValue(), joined).isEmpty()) {
+                nearest.add(entry.getKey());
+            }
+        }
+        nearest.sort(Comparator.comparingInt(key -> Math.abs(key - frame)));
+        List<SourceExtractor.DetectedObject> local = new ArrayList<>();
+        for (int i = 0; i < Math.min(2, nearest.size()); i++) {
+            local.addAll(streakParts(frames.get(nearest.get(i)), joined));
+        }
+        if (own) {
+            local.addAll(streakParts(frames.get(frame), joined));
+        }
+        if (local.isEmpty()) {
+            return Double.POSITIVE_INFINITY;
+        }
+        return lineDistance(anomaly, lineAxis(local));
+    }
+
+    /** The parts of a frame that belong to the streak itself, not anomalies joined to it. */
+    private static List<SourceExtractor.DetectedObject> streakParts(List<SourceExtractor.DetectedObject> parts,
+                                                                    Set<SourceExtractor.DetectedObject> joined) {
+        List<SourceExtractor.DetectedObject> own = new ArrayList<>();
+        for (SourceExtractor.DetectedObject part : parts) {
+            if (!joined.contains(part)) {
+                own.add(part);
+            }
+        }
+        return own;
+    }
+
+    private static double orientedStart(double[] range, double sign) {
+        return sign > 0 ? range[0] : -range[1];
+    }
+
+    private static double orientedEnd(double[] range, double sign) {
+        return sign > 0 ? range[1] : -range[0];
+    }
+
+    /**
+     * The distance of the anomaly's centre from the line when it lies on the line: its centre within
+     * {@link #ANOMALY_PATH_TOLERANCE_PX}, or one of its pixels within {@link #ANOMALY_FOOTPRINT_TOLERANCE_PX}.
+     * Infinite otherwise.
+     */
+    private static double lineDistance(SourceExtractor.DetectedObject anomaly, double[] axis) {
+        double centre = Math.abs(projection(anomaly.x, anomaly.y, axis[0], axis[1], axis[4], axis[5]));
+        if (centre <= ANOMALY_PATH_TOLERANCE_PX) {
+            return centre;
+        }
+        if (anomaly.rawPixels != null) {
+            for (SourceExtractor.Pixel pixel : anomaly.rawPixels) {
+                if (Math.abs(projection(pixel.x, pixel.y, axis[0], axis[1], axis[4], axis[5])) <= ANOMALY_FOOTPRINT_TOLERANCE_PX) {
+                    return centre;
+                }
+            }
+        }
+        return Double.POSITIVE_INFINITY;
     }
 
     private static void collectCandidates(List<List<SourceExtractor.DetectedObject>> frames,

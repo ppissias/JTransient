@@ -91,17 +91,10 @@ public class TrackLinker {
         public final SourceExtractor.DetectedObject object;
         /** The rescue path that accepted this anomaly. */
         public final AnomalyType type;
-        /**
-         * True when this detection lies on a confirmed streak in the same frame.
-         * A faint streak through a star can change the star's shape and produce a bright anomaly,
-         * so the detection is kept and marked rather than reclassified as a streak part.
-         */
-        public final boolean lowConfidence;
 
-        private AnomalyDetection(SourceExtractor.DetectedObject object, AnomalyType type, boolean lowConfidence) {
+        private AnomalyDetection(SourceExtractor.DetectedObject object, AnomalyType type) {
             this.object = object;
             this.type = type;
-            this.lowConfidence = lowConfidence;
         }
     }
 
@@ -1027,8 +1020,7 @@ public class TrackLinker {
                         // Rescue either a sharp glint or a broader high-energy flash.
                         AnomalyType anomalyType = classifyAnomalyRescue(orphan, config);
                         if (anomalyType != null) {
-                            boolean onStreak = FaintStreakFragmentGrouper.liesOnKnownStreak(orphan, confirmedTracks);
-                            anomalies.add(new AnomalyDetection(orphan, anomalyType, onStreak));
+                            anomalies.add(new AnomalyDetection(orphan, anomalyType));
                             usedPoints.add(orphan);
                         }
                     }
@@ -1047,6 +1039,20 @@ public class TrackLinker {
                 joinedStreaks.addAll(track.points);
             }
             anomalies.removeIf(anomaly -> joinedStreaks.contains(anomaly.object));
+        }
+
+        // A streak through a star, or a satellite's flash, is rescued as an anomaly. On the path of a confirmed streak,
+        // in its own frame or where the streak's motion puts it in another frame, it is a piece of that streak.
+        List<SourceExtractor.DetectedObject> rescued = new ArrayList<>();
+        for (AnomalyDetection anomaly : anomalies) {
+            rescued.add(anomaly.object);
+        }
+        Set<SourceExtractor.DetectedObject> onStreakPaths = FaintStreakFragmentGrouper.joinAnomaliesOnStreakPaths(confirmedTracks, rescued);
+        if (!onStreakPaths.isEmpty()) {
+            anomalies.removeIf(anomaly -> onStreakPaths.contains(anomaly.object));
+            for (Track track : confirmedTracks) {
+                normalizeStreakTrackOrder(track);
+            }
         }
 
         int integratedSigmaAnomaliesRescued = 0;
