@@ -40,7 +40,7 @@ The full run is organized into these major phases:
 8. time-based point linking
 9. optional geometric point linking
 10. same-frame faint-streak fragment assembly
-11. anomaly rescue and streak consolidation
+11. anomaly rescue, streak consolidation, and joining anomalies on streak paths to their streaks
 12. common-motion filtering of unclassified observations
 13. optional residual analysis: local rescue, then activity clustering
 14. optional stationary-star photometry and variable-star scoring
@@ -548,7 +548,7 @@ A single detection is rescued as an `INTEGRATED_SIGMA` anomaly when:
 
 These rescued anomalies are exported as standalone anomaly results through `TrackingResult.anomalies` and `PipelineResult.anomalies`, rather than as one-point tracks.
 
-The `PEAK_SIGMA` and `INTEGRATED_SIGMA` rescue checks are energy- and size-based. They do not apply a dedicated shape veto at this stage. An anomaly within six pixels of a confirmed same-frame streak axis, allowing 80 pixels past its ends, is retained with `AnomalyDetection.lowConfidence = true`. It is not automatically reclassified as a streak fragment.
+The `PEAK_SIGMA` and `INTEGRATED_SIGMA` rescue checks are energy- and size-based. They do not apply a dedicated shape veto at this stage. Anomalies on the path of a confirmed streak are joined to that streak after the consolidation ([13.4](#134-anomalies-on-a-streaks-path)).
 
 A streak can break into pieces that are rescued as anomalies, for example in the frames between the two ends of a satellite trail. After anomaly rescue, the tracker therefore groups the rescued anomalies of each frame that lie on a line (at least three within 6 px) and offers each group to the final streak consolidation. A group that the consolidation merges into a confirmed streak track becomes part of that track. Every other group is dropped and its anomalies stay standalone anomalies: a group is never returned on its own. (Until October 2026 such groups were returned as "suspected streak" tracks; on noisy frames random anomalies formed them too easily.) Pieces of a faint streak next to a known streak in the same frame are absorbed earlier, by the faint-fragment assembly (start of this section).
 
@@ -567,6 +567,19 @@ This pass:
 2. normalizes same-frame streak-fragment ordering along the best-fit streak axis
 3. merges tracks when they pass frame-gap, angle, line-error (twice `predictionTolerance`, at least 6 px), and motion-consistency checks
 4. promotes a merged track to `isStreakTrack` if it contains a confirmed streak or spans multiple frames, and drops a track made only of anomaly groups
+
+### 13.4 Anomalies on a streak's path
+
+A faint streak crossing a star changes the star's shape, and a tumbling satellite flashes along its path. Both are rescued as anomalies, although they are pieces of a streak. After the consolidation, `FaintStreakFragmentGrouper.joinAnomaliesOnStreakPaths(...)` therefore joins each remaining anomaly that lies on a confirmed streak's path to that streak. It is then no longer an anomaly.
+
+- **In a frame with parts of the streak**, the anomaly lies on that frame's line, at most 80 px past the parts.
+- **A streak seen in several frames** also takes an anomaly where the streak's motion puts it in the anomaly's frame. Positions are measured along the streak's line, oriented by its direction of motion. The anomaly must lie between the trails of the nearest frames before and after it, within 80 px. Without a frame on one side, the bound is one frame's motion past the other side's trail, from the median speed between the streak's frames. The frame may be one the streak skipped, or the frame just before or after it. The line is drawn through the streak's own parts in the two nearest other frames and in the anomaly's frame, because a path across the whole image bends a little.
+- **On a line** means the anomaly's centre is within 6 px of it, or one of its pixels within 2 px. A streak through a star pulls the centre off the line.
+- **Repeated joining.** Joining repeats until nothing more joins, so a filled frame can place the next one. Joined anomalies count where the streak was in their frame. They never draw a frame's line, because a round anomaly has no reliable direction.
+
+Time is the frames' timestamps when every frame has one, otherwise the frame index. Until October 2026 an anomaly on a same-frame streak stayed an anomaly, marked low confidence; anomalies in frames the streak skipped were not recognised.
+
+On the reference data the joining took 17 of the 39 anomalies of klangwolke-2 (24 of 40 with a second profile) and one of the six of klangwolke-1; the other datasets were unchanged, and no track was added or lost. The joined pieces were mostly a satellite's flashes, in frames where its trail was otherwise missing, and a trail crossing stars. Photometry flags the stars a track crosses, so a few stars lose their measurement in those frames. These are measurements with the recorded profiles, not a benchmark.
 
 ## 14. Common-Motion Filtering
 
