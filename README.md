@@ -26,6 +26,7 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 | [CONFIG.md](CONFIG.md) | `DetectionConfig` fields and engine defaults |
 | [DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md) | Proposed work, maintainer decisions and known limitations |
 | [PUBLISHING.md](PUBLISHING.md) | Maven Central staging and release bundles |
+| [RELEASE_NOTES.md](RELEASE_NOTES.md) | Changes in each library version |
 
 ## Build
 
@@ -35,7 +36,7 @@ This repository is a Gradle Java library project. Install a local JDK first and 
 .\gradlew.bat build
 ```
 
-The project name is `JTransient` and the current library version in `build.gradle` is `1.0.3`.
+The project name is `JTransient` and the current library version in `build.gradle` is `1.0.5`.
 
 To prepare a Maven Central release bundle locally:
 
