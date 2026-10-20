@@ -4,7 +4,7 @@ Consolidated and checked against the source tree on 2026-10-19, at engine commit
 
 Original evidence and maintainer comments are preserved in the [October engine review](docs/archive/code-review-2026-10.md), [variable-star assessment](docs/archive/variable-star-assessment-2026-10.md), [slow-mover design](docs/archive/slow-mover-design-2026-10.md), and [maintenance/regression notes](docs/archive/maintenance-notes-2026-10-19.md). Original line numbers, suggested orders and statements about missing features describe those earlier checkouts.
 
-The separate [design and architecture review](#design-and-architecture-review-2026-10-20) below was added on 2026-10-20. Its `JA-` findings concern library structure and engineering contracts; the existing algorithm findings and decisions retain their status.
+The separate [design and architecture review](#design-and-architecture-review-2026-10-20) below was added on 2026-10-20. Its `JA-` findings concern library structure and engineering contracts; the existing algorithm findings and decisions retain their status. The [structural blueprint](#structural-blueprint-packages-classes-and-dependencies) makes the proposed package boundaries, class separations and dependency rules concrete.
 
 ## Status and scope
 
@@ -39,7 +39,7 @@ All findings are **Proposed**. High priority means to resolve the contract befor
 
 | ID | Priority | Status | Design improvement | First useful result |
 |---|---|---|---|---|
-| JA-01 | High | Proposed | Capture and validate run configuration | One operation uses one coherent settings snapshot and reports invalid settings before expensive work. |
+| JA-01 | High | Proposed | Capture run configuration and centralize validation/alignment | One operation uses one coherent settings snapshot; GUI and engine use the same rule definitions. |
 | JA-02 | High | Proposed | Define execution, concurrency and resource ownership | Callers know whether an engine can overlap runs and which work its resource limit controls. |
 | JA-03 | High | Proposed | Give cancellation and failures an explicit contract | Cancellation stays distinct from fallback and failure; completion means the run's work has ended. |
 | JA-04 | High | Proposed | Replace mutable global tuning options with operation options | Two tunings can use independent options without changing each other's settings. |
@@ -59,7 +59,18 @@ All findings are **Proposed**. High priority means to resolve the contract befor
 
 Define field and cross-field validation centrally, scoped to the operation and enabled stages. Preserve documented sentinels, automatic modes and existing intentional fallback rules; a refactor must not silently turn accepted profiles into errors or reinterpret their values. Engine validation must work for callers outside SpacePixels. GUI editor validation remains an application responsibility.
 
-**Acceptance.** Use a controlled pause after capture, change the caller's config, and verify the active run still uses its captured values. Verify local overrides and tuning success/fallback leave the base untouched. Check representative persisted profiles, hidden fields, sentinels and invalid numeric values through engine and tuner entry points. Compare unchanged valid runs on reference data before adopting new validation behavior.
+**Rules ownership clarification (agreed with the maintainer, 2026-10-20).** JTransient owns engine-setting meanings, defaults, valid values, cross-field relationships and alignment rules. Migrate the existing finite-number checks and six paired-setting rules from SpacePixels [DetectionSettingsRules](../SpacePixels/src/main/java/eu/startales/spacepixels/config/DetectionSettingsRules.java) into a shared JTransient rules service, and remove their application-side definitions. SpacePixels must consume that service instead of maintaining a second set of rules or comparing paired values in its widget code. This records the agreed ownership direction; the concrete implementation remains Proposed.
+
+The shared service should expose two operations backed by the same rule definitions:
+
+- **Validate:** inspect a configuration without modifying it and return structured issues identifying the affected fields and violated rule.
+- **Align:** return an adjusted configuration copy, plus structured changes with old/new values and reasons. Preserve each existing pair's adjustment direction and report the changes to the caller.
+
+SpacePixels owns parsing editor text, focusing invalid fields, formatting/displaying issues and adjustments, updating widgets, layout, step sizes, basic/expert/hidden classification, persistence and migration. Its GUI captures values, calls shared alignment, applies returned changes to the widgets, and validates before saving or starting work. The engine validates its captured snapshot with the same service before execution. Calling the shared validator at both boundaries is deliberate; there is only one definition of each rule. Prefer rejecting inconsistent execution input with structured issues, with alignment requested explicitly by callers, rather than silently changing submitted scientific settings. Reconcile this with existing engine fallback behavior before enforcing new rejection rules.
+
+Genuine numeric validity limits should be exposed as JTransient metadata that GUI bindings can consume. Distinguish them from convenient spinner ranges before making existing widget bounds engine restrictions. Preserve special values such as master-grow `0`, hidden fields and accepted profile semantics; do not expand an automatic setting into a fixed persisted value during alignment. Keep shared rule tests in JTransient and GUI parsing, binding and feedback tests in SpacePixels.
+
+**Acceptance.** Use a controlled pause after capture, change the caller's config, and verify the active run still uses its captured values. Verify local overrides and tuning success/fallback leave the base untouched. Check representative persisted profiles, hidden fields, sentinels and invalid numeric values through engine and tuner entry points. Verify GUI and direct callers obtain the same issues from the shared validator, and that GUI alignment preserves current pair behavior without retaining separate rule definitions. Compare unchanged valid runs on reference data before adopting new validation behavior.
 
 ### JA-02. Define execution and resource ownership for a whole operation
 
@@ -163,30 +174,130 @@ Define source and binary compatibility expectations for published releases, incl
 
 **Acceptance.** Compile, test and build the jar on the declared Java target; compile representative existing API consumers and run SpacePixels tests with the intended engine. For structural engine changes, complete the reference-data comparison below. Do not add brittle tests for class length or private method names, or mirror every implementation branch merely to increase coverage.
 
+### Structural blueprint: packages, classes and dependencies
+
+**Proposed structural design, added 2026-10-20.** This elaborates JA-01–11 rather than creating another work queue or authorizing their implementation. The maintainer agreed the JA-01 rules-ownership direction separately. Names below specify a reviewable target; an individual change can refine a name with its rationale recorded here. Keep one Gradle project and published jar. Introduce a package when its boundary is implemented, without creating empty directories or moving every public class in one release.
+
+#### Current dependency assessment
+
+The current package graph is not layered: `engine` calls `core`, `quality` and `photometry`, while those packages refer back to `engine`. Examples are `SourceExtractor`, `MasterMapGenerator`, `TrackLinker`, `SessionEvaluator` and `VariableStarAnalyzer` reading `JTransientEngine.DEBUG`; shared frames and progress callbacks also reside in `engine`. These source dependencies were checked again when preparing this blueprint. The cycles mix access to data/diagnostics with orchestration; they do not demonstrate incorrect calculations.
+
+`core` contains extraction, image geometry, stacks, tracking, slow movers and residual analysis. Its classes often have useful responsibilities, but the package does not express those boundaries. Conversely, `photometry` already gives its helpers a coherent home and uses package-private implementation classes. Keep that pattern. `PipelineTelemetry` has no imports of the science packages today, but placing their frame records inside it makes those packages depend on a pipeline-level container; moving diagnostics must reverse that ownership carefully.
+
+There are also dependencies hidden by today's shared package: `TrackLinker` calls the streak-shape predicate on `SourceExtractor`, and deprecated `CommonMotionRejector.apply` recomputes residual analysis. The blueprint assigns the shape predicate to tracking with shared footprint geometry below it; the deprecated cross-stage operation remains a compatibility adapter. These are specific dependency changes to verify, not imports to rename mechanically.
+
+#### Target package layout and allowed dependencies
+
+All names are beneath `io.github.ppissias.jtransient`. The dependencies column names permitted **direct project-package dependencies**, in addition to the JDK and existing justified external dependencies. It describes new canonical implementations; the explicitly retained compatibility facades are covered separately below. Packages do not become separate artifacts.
+
+| Package | Owns | Allowed project dependencies |
+|---|---|---|
+| `model` | Shared frame/detection/track contracts: top-level `ImageFrame`, `DetectedObject`, `Pixel`, `Track`, `AnomalyDetection` and `AnomalyType`. Only data used across stages belongs here. | None. |
+| `config` | Existing `DetectionConfig` schema, shared `DetectionConfigRules`, field/range metadata, validation issues, alignment results and captured settings. | None; preserve the existing Gson annotation dependency. |
+| `execution` | `ExecutionPolicy`, `OperationContext`, cancellation/progress/diagnostic contracts, stage identity/outcomes and `ExecutionSession` for owned or borrowed resources. | None. |
+| `image` | Pixel encoding, coverage, registration, data areas, drift analysis, shared spatial lookup, `BlobGeometry`/`FootprintGeometry` and `FrameSequenceValidator`. `SkyBackground` remains an image transformation here. | `model`, `execution` (optional operation control for computations). |
+| `extraction` | Standalone `SourceExtractor`, extraction/background results and private component-growth/morphology helpers when needed. | `model`, `image`, `config`, `execution`. |
+| `quality` | `FrameQualityAnalyzer`, `SessionEvaluator`, top-level `FrameMetrics` and `SessionThresholds`; quality measurements and rejection decisions. | `model`, `image`, `config`, `execution`, `extraction`. |
+| `reference` | `MasterMapGenerator`, `MasterReferenceAnalyzer`, `MasterVetoMask`, reference results and `PreparedMasterReference` provenance. | `model`, `image`, `config`, `execution`, `extraction`. |
+| `tracking` | `TrackLinker` stage facade, vetoing, streak/point association, assignment/rescue, camera/common-motion filtering and their results/diagnostics. | `model`, `image`, `config`, `execution`, `reference`. |
+| `residual` | `ResidualTransientAnalyzer` and local-rescue/activity-cluster results over final leftovers. | `model`, `image`, `config`, `execution`. |
+| `slowmover` | Maximum-stack morphology/evidence analysis, candidates, diagnostics and its result bundle. | `model`, `image`, `config`, `execution`, `extraction`, `reference`. |
+| `photometry` | Existing photometry stage/helpers/results plus its own input and frame/diagnostic contracts. | `model`, `image`, `config`, `execution`, `extraction`, `quality` (measurement contracts only). |
+| `tuning` | Calibrated and legacy tuner facades, options, sampling, measurements, selection policies, summaries and text formatters. | `model`, `image`, `config`, `execution`, `extraction`, `quality`, `reference`. |
+| `telemetry` | Pipeline diagnostic aggregation and text formatting, including compatibility projections of feature diagnostics. | `model`, `image`, `config`, `execution`; diagnostic/result contracts from `extraction`, `quality`, `reference`, `tracking`, `residual`, `slowmover`, `photometry`, `tuning`. |
+| `engine` | Public pipeline facade/results, private preparation and pipeline orchestration, and adapters for existing engine entry points. | All listed packages as needed; no canonical stage depends on `engine`. |
+
+`core` remains a compatibility location for existing public names during migration. Add new computational code to the package owning its responsibility. No new `util`, `common`, `manager` or `service` catch-all package is proposed. Keep the existing `engine` entry-point package rather than introducing a second `api` package solely to rename the facade location.
+
+The dependency rules have practical consequences:
+
+- Foundation contracts do not import analyzers, pipeline results or aggregate telemetry. `model` does not acquire settings, executor ownership or reporting behavior.
+- Quality and reference construction use extraction independently. Neither calls the full engine, and neither depends on the other to perform QC orchestration. The engine selects frames, then requests references from that selection.
+- Tracking consumes extracted observations and a reference mask; it does not run extraction, slow movers or photometry. Put mask construction/overlap mechanics in `reference` when genuinely shared; preserve the distinct masks' scientific semantics.
+- Camera-fixed filtering stays inside tracking before point association. Common-motion filtering stays a separately invoked tracking operation after tracking and before residual analysis. The engine owns this order. Moving a class into `tracking` does not move its execution earlier.
+- The canonical common-motion rejector does not recompute residual analysis. Keep deprecated `CommonMotionRejector.apply` at the legacy boundary with its existing behavior, routing its two operations through the appropriate public component facades.
+- Photometry receives canonical tracks and slow-mover detection footprints as data. It does not call either detector or depend on their implementation classes. Its own star extraction, selection and mask retain their current purpose.
+- Tuning calls lower-level image/extraction/quality/reference components, never `JTransientEngine.runPipeline`. Preserve its separate sample/measurement policies. Neither scientific stages nor shared profile validation depend on tuning.
+- Each stage owns its diagnostic types. `telemetry` aggregates them; it does not supply the types a stage must instantiate. Stages receive a narrow execution context instead of importing `PipelineTelemetry` or reading engine statics.
+- No canonical package cycle is allowed. Calls between features must follow the table; when an apparent reverse dependency appears, pass the required data or extract a genuinely shared lower-level contract before adding the import.
+
+#### Class separations and ownership
+
+These are concrete destinations for responsibilities, not a requirement to create one class for every method. Keep each stage's coordinator and helpers in the **same Java package** so helpers can be package-private; subpackages do not share package-private access. Existing cohesive static computations may remain static.
+
+| Current responsibility | Proposed classes and boundary | State/visibility rule |
+|---|---|---|
+| Engine entry points, executor sizing, stage order, result assembly | `engine.JTransientEngine` delegates to package-private `PipelineRunner`, `FramePreparationService` and `PipelineResultBuilder`. Shared scheduling/resource policy lives in `execution`. | Facade owns engine lifetime; an operation owns its context and work. Helpers do not retain a caller's live config. |
+| Parallel lists in `ExtractedFramesContext` and repeated master-only preparation | Package-private `engine.PreparedFrame` pairs frame, metrics, detections and registration; `PreparedSequence` groups selection/data-area facts. `FramePreparationService` shares selection policy and supports quality-only versus full extraction. | Keep explicit original sequence identity and retained position. Pass feature-specific inputs to stages; never export `PreparedSequence` into lower-level packages. |
+| Input sequence rules currently in engine-only `InputRules` | `image.FrameSequenceValidator` owns dimensions, metadata availability, exposures, sequence identity and optional master-dimension checks. | Public reusable validation component; entry points still decide their own minimum frame counts and fallback outcomes. File-format validation remains in SpacePixels. |
+| Profile values and GUI pair alignment | `config.DetectionConfigRules` with typed field identifiers, `ValidationIssue`, `AlignmentResult` and `ConfigAdjustment`; numeric validity metadata is shared with GUI bindings. | One definition of each rule, as agreed in JA-01. Keep `DetectionConfig` serialization unchanged and UI widget behavior outside the library. |
+| Extraction computation and algorithm-nested data models | `extraction.SourceExtractor` retains its standalone service; `ExtractionResult` and `BackgroundMetrics` belong to `extraction`. Shared detections/pixels belong to `model`; reusable `BlobGeometry` and its measurement belong to `image.FootprintGeometry`. | Extract region-growth or morphology helpers only when they have an independent responsibility. Preserve footprint identity and numeric conventions. |
+| Tracking's binary-star streak-shape test currently on `SourceExtractor` | Package-private `tracking.StreakShapeFilter` owns `isBinaryStarLikeStreakShape`, using shared `image.FootprintGeometry`; the old public extractor helper delegates through a tracking facade. | Tracking no longer imports the extractor implementation to judge an existing footprint. Retain the old public helper's signature and numerical behavior. |
+| Star veto and population separation mixed with streak assembly | Package-private `tracking.TransientVeto` produces explicit point/streak populations and the veto diagnostics. `StreakAssembler` owns streak linking and delegates to `FaintStreakFragmentGrouper`; `StreakConsolidator` owns merging. | Vetoing does not quietly run point linking or anomaly rescue. Preserve the current transient-only entry point's included streak work through orchestration in `TrackLinker`. |
+| Timed and geometric loops, conflict resolution and used-point sets | Package-private `TimedPointLinker` and `GeometricPointLinker` own their existing proposal/continuation logic. `DetectionAssignments` owns accepted membership, and `TrackLinker` preserves the current invocation/claim order. | No new global optimization, changed greediness, equality rule or tie order. `DetectionAssignments` is run-local and is not a global detection registry. |
+| Anomaly rescue, private same-frame groups and final review exports | Package-private `AnomalyRescuer`, private/package-private `AnomalyGroup`, and `TrackingExports`; reuse `StreakConsolidator` and the existing faint-fragment helper. | A group is an internal consolidation input. Final exports preserve the current categories, shared detection graph and empty-frame positions. |
+| Camera/common-motion results nested under unrelated stage models | `tracking.CameraFixedGroup`, `CommonMotionGroup`, `TrackingResult`, `TransientFilterResult` and `TrackingDiagnostics`; rejectors remain separate components. | Keep removed groups available for review. A common-motion result is available independently of enabling residual analysis. |
+| Calibrated tuning from sample preparation through formatted explanation | `tuning.CalibratedAutoTuner` coordinates package-private `CalibrationSamplePreparer`, `CalibrationMeasurer`, `CalibratedSelectionPolicy` and `CalibratedTuningReportFormatter`. `Calibration` and `CalibrationSummary` distinguish full measurements from compact retained output. | Measurements are immutable after publication. Choosing settings or formatting a report does not mutate the measured sweep. Keep `calibrate`/`configFor` reuse. |
+| Legacy tuning sweep, selection and report construction | `tuning.LegacyAutoTuner` coordinates package-private `LegacySampleSelector`, `LegacySweepEvaluator`, `LegacySelectionPolicy` and `LegacyTuningReportFormatter`. A top-level `AutoTuneProfile` and tuner-specific results replace ownership by a legacy implementation class. | Preserve legacy scoring separately from calibrated budgets. Share only proven equivalent crop/mask mechanics; retain explicit units in each result. |
+| Photometry orchestration with crossing geometry and pipeline-owned records | Keep `photometry.VariableStarAnalyzer` as stage coordinator. Add `PhotometryInput`, `PhotometryFrameStat` and `PhotometryDiagnostics` in the same package. Extract package-private `TrackCrossingFlagger` around `flagCrossings`/`flagTrack` and related interpolation/segment code. | Its input has validated frame associations and shared model tracks. Keep existing selection/measurement/readiness/ensemble/scoring helpers; no automatic split of every remaining private method. |
+| Stage counters converted into pipeline containers and text | Stage-owned diagnostic builders are private/package-private. `telemetry.PipelineTelemetry` holds completed stage summaries; package-private `PipelineTelemetryFormatter` builds the text. Tuner formatters stay with their own package-private measurement details. | Stages never call formatters to determine results. Legacy conversion belongs to aggregation/adapters, including `SlowMoverSummaryTelemetry.toLegacyTelemetry`. |
+
+`ResidualTransientAnalyzer`, the slow-mover stage and the existing photometry numerical helpers do not need further class division merely because they contain several hundred lines. Revisit a split when a new independently testable responsibility or ownership boundary emerges. Preserve local statistical helpers such as `PhotometryMath` until another subsystem actually needs the same semantics; do not create a general maths abstraction by combining superficially similar formulas.
+
+#### Public surface and encapsulation
+
+The supported public surface should consist of pipeline entry points/results in `engine`, settings and rules in `config`, shared data in `model`, explicit image and execution contracts, and the standalone stage/tuner facades and their inputs/results. Publish a `package-info.java` description for each introduced boundary with its purpose, ownership, units/index spaces and thread-safety expectations. Public result fields do not make every referenced helper a supported extension point.
+
+Use package-private top-level helpers and private nested temporary types by default. Keep existing package-private photometry helpers and `SlowMoverFrameEvidence` private to their stage package. Java visibility must match actual calls: if `engine`, `tuning` or a legacy facade must call a component in another package, expose a deliberate public component method or a small public facade in that component's package; do not mark it package-private and assume a parent or sibling package can reach it. Such public contracts need documentation and compatibility tests too.
+
+New shared `DetectedObject`, `Track` and related models are top-level contracts, independent of their producer. Publish stable membership views when compatible, and keep mutable builders inside the owner package. Preserve object identity and shared buffers explicitly. Do not implement value equality during migration or equate unmodifiable containers with immutable elements. Each reusable component should have explicit inputs and outputs, without global settings, implicit engine callbacks or application-specific state.
+
+Do not expose the executor field, the whole mutable `PipelineTelemetry`, Swing components, file paths for app workflows or every field of `PreparedSequence` merely to connect components. `OperationContext` carries cancellation, progress and diagnostics; `ExecutionSession` exposes the agreed resource operations and ownership policy without transferring executor shutdown rights to a stage. Neither is a service locator for arbitrary pipeline products. Add interfaces for real substitution boundaries, such as cancellation/progress sinks or a controllable scheduler, while retaining concrete stateless analyzers elsewhere.
+
+#### Compatibility and package migration
+
+A package move changes a Java class's binary name, including nested classes such as `SourceExtractor$DetectedObject` and `TrackLinker$Track`. SpacePixels imports many existing public helper and result types directly. Treat all existing public classes/methods/constructors as compatibility obligations until a release decision says otherwise; no current helper becomes inaccessible merely because its target design would prefer package-private visibility.
+
+Keep the old `core` entry points, engine tuner entry points, nested models, telemetry records and constructor signatures available while new implementations are adopted. Compatibility code can delegate to a new public component facade, but must not maintain a second implementation of detection or configuration rules. Retain existing public fields and their declared generic types. Renaming imports, inheritance alone, or an unchecked cast from `List<OldDetectedObject>` to `List<NewDetectedObject>` does not provide a sound migration.
+
+Use one of two explicit steps for a model boundary: first extract responsibilities while retaining the existing public model types under a temporary dependency exception; then add canonical contracts and adapters when that boundary can preserve the full object graph. If converting a completed result graph, use one identity map per conversion so a detection shared between a track, anomaly/group and transient view remains shared. Preserve image/mask aliases and measure any metadata-copy cost. Mutable input/output APIs may need more than a one-way adapter; verify their existing mutation contract before claiming source or binary compatibility.
+
+During migration, legacy facade files may still reference old engine callbacks or nested model names. Track each such exception by source file, dependency and removal condition in the relevant JA item's implementation record. Canonical computational classes must not import compatibility facades. Distinguish these temporary exceptions from the acyclic target graph; do not claim the entire existing package graph is acyclic while the legacy API still creates cycles. Do not invent a generic `compat` package for old names: wrappers must remain at the original fully qualified names to preserve callers.
+
+Migrate a vertical slice at a time: introduce its lower-level contracts, extract its private collaborators, add facade/adapters, switch engine and direct consumers, verify behavior, then retire the duplicate implementation. Deprecation and eventual removal of old names require an explicit release/version decision. Keep constructor/field compatibility, Java target support, silent defaults and the Gson profile schema visible in release checks. No Java module descriptor, new runtime dependency or multi-artifact publication is needed for this plan.
+
 ### Responsibility map and refactor scope
 
-Paths below are relative to `src/main/java/io/github/ppissias/jtransient/`. This map covers all 50 production files, including package-private helpers. Inclusion is an ownership assessment, not an instruction to split every class.
+Paths below are relative to `src/main/java/io/github/ppissias/jtransient/`. This map accounts for all 50 current production files, including package-private helpers. Destinations are canonical implementation homes under the blueprint; existing public names remain through the compatibility process above. It is a migration inventory, not an instruction to split every class.
 
-| Current files | Assessment and destination of responsibility | Findings |
+| Current files | Canonical destination and action | Findings |
 |---|---|---|
-| `config/DetectionConfig` | Preserve the serialized profile DTO; derive validated, isolated operation settings. | JA-01 |
-| `engine/JTransientEngine` | Retain public facade and top-level stage order; delegate preparation and execution/lifecycle policy. | JA-01/02/03/05/09 |
-| `engine/InputRules`, `ExtractedFramesContext` | Retain shared validation/preparation seams; make frame associations explicit and reuse selection policy. | JA-01/05 |
-| `engine/ImageFrame`, `FrameTransients`, `TransientEngineProgressListener` | Shared input/export/callback contracts; document buffer ownership and identity before any package/API move. | JA-05/07/09 |
-| `engine/PipelineResult` | Compatibility result facade; assemble through internal builders and coherent grouped products. | JA-07/10 |
-| `engine/JTransientAutoTuner`, `CalibratedAutoTuner` | Preserve both entry points and objectives; isolate options, measurement, selection and formatting. | JA-02/03/04/08 |
-| `core/PixelEncoding`, `FrameCoverage`, `FrameRegistration`, `DataArea` | Cohesive shared image/geometry contracts; retain their distinct purposes and existing margin/coverage rules. | JA-05/07; no numerical redesign |
-| `core/FrameDriftAnalyzer` | Retain drift/coverage analysis; consume shared frame contracts and execution context as needed. | JA-05/07 |
-| `core/SkyBackground`, `SourceExtractor`, `SpatialGrid` | Keep stateless numerical helpers and standalone extraction; separate shared detection models/diagnostics only during compatible API work. No general index rewrite. | JA-01/03/07 |
-| `quality/FrameQualityAnalyzer`, `SessionEvaluator` | Keep measurement and rejection policy distinct; share selection orchestration and remove facade debug dependency when that seam changes. | JA-04/05/07 |
-| `core/MasterMapGenerator`, `MasterReferenceAnalyzer`, `MasterVetoMask` | Preserve stack, master-star and veto-mask responsibilities; make scheduling, provenance and reuse dependencies explicit. | JA-02/03/10 |
-| `core/TrackLinker`, `FaintStreakFragmentGrouper`, `CameraFixedRejector` | Keep established rejector/grouper seams; extract tracker responsibilities and document mutation/assignment. | JA-03/06/07 |
-| `core/CommonMotionRejector`, `ResidualTransientAnalyzer`, `ResidualTransientAnalysis` | Keep filtering before residual rescue/clustering. Make removal ownership explicit; common-motion result placement can evolve with compatibility adapters. No change to grouping/rescue rules. | JA-06/07/09 |
-| `core/SlowMoverAnalyzer`, `SlowMoverFrameEvidence`, `SlowMoverAnalysis`, `SlowMoverCandidateResult`, `SlowMoverCandidateDiagnostics`, `SlowMoverSummaryTelemetry` | Already a useful stage/result grouping. Preserve evidence versus confirmed-motion semantics; consolidate legacy projections at a boundary instead of duplicating state. | JA-07/09 |
-| `photometry/VariableStarAnalyzer` | Retain photometry orchestration; strengthen input associations, stage outcomes and cancellation. Extract another helper only when it owns a clear stage/product. | JA-03/05/07/09 |
-| `photometry/PhotometryStarSelector`, `ApertureMeasurer`, `PhotometricReadinessChecker`, `EnsembleSolver`, `SpatialFrameFilter`, `VariabilityScorer`, `PhotometryMath` | Existing cohesive computational seams, mostly package-private. Keep them; narrow settings and diagnostic dependencies when touched. No numerical rewrite or blanket interface conversion. | JA-01/03/07 |
-| `photometry/VariableStarAnalysis`, `StarLightCurve`, `PhotometricReadiness`, `PhotometryFlags`, `VariabilityTier` | Preserve public scientific meanings, flags and frame alignment; separate mutable assembly from finished views gradually. | JA-05/07/09 |
-| `telemetry/PipelineTelemetry`, `TrackerTelemetry` | Structured diagnostic contracts with small formatting adapters; clarify index spaces and stage status. Avoid making telemetry the owner of unrelated domain models. | JA-05/07/09 |
+| `config/DetectionConfig` | Keep in `config`; add shared rules/metadata and captured settings without changing profile fields. | JA-01 |
+| `engine/JTransientEngine` | Keep in `engine`; extract private runner, preparation and result builder; delegate resource policy to `execution`. | JA-01/02/03/05/09 |
+| `engine/InputRules`, `ExtractedFramesContext` | Sequence validation goes to `image.FrameSequenceValidator`; engine context becomes private `PreparedFrame`/`PreparedSequence` associations. | JA-01/05 |
+| `engine/ImageFrame`, `FrameTransients`, `TransientEngineProgressListener` | Canonical frame data goes to `model`; keep pipeline frame export in `engine`; new progress contract goes to `execution`, with the old callback adapted. | JA-05/07/09 |
+| `engine/PipelineResult` | Keep pipeline result in `engine`; build coherent groups from stage-owned results and retain legacy constructors/fields. | JA-07/10 |
+| `engine/JTransientAutoTuner`, `CalibratedAutoTuner` | Canonical implementation in `tuning.LegacyAutoTuner` and `tuning.CalibratedAutoTuner`; keep old facades and adapt profiles/results. | JA-02/03/04/08 |
+| `core/PixelEncoding`, `FrameCoverage`, `FrameRegistration`, `DataArea` | Canonical home `image`; retain their distinct purposes, numerical behavior and compatibility names. | JA-05/07 |
+| `core/FrameDriftAnalyzer` | Canonical home `image`; consume `model.ImageFrame` without an engine dependency. | JA-05/07 |
+| `core/SkyBackground`, `SourceExtractor`, `SpatialGrid` | Sky transformation and shared spatial lookup go to `image`; extraction service/results go to `extraction`; shared detection/pixel data goes to `model`. | JA-01/03/07 |
+| `quality/FrameQualityAnalyzer`, `SessionEvaluator` | Keep in `quality`; promote shared metric/threshold data out of analyzer nesting and remove facade debug dependencies. | JA-04/05/07 |
+| `core/MasterMapGenerator`, `MasterReferenceAnalyzer`, `MasterVetoMask` | Canonical home `reference`; retain three responsibilities and add provenance independently of caching. | JA-02/03/10 |
+| `core/TrackLinker`, `FaintStreakFragmentGrouper`, `CameraFixedRejector` | Canonical home `tracking`; separate responsibilities as above, retaining track/anomaly data in `model` and groups/diagnostics in `tracking`. | JA-03/06/07 |
+| `core/CommonMotionRejector`, `ResidualTransientAnalyzer`, `ResidualTransientAnalysis` | Common-motion component/group goes to `tracking`; residual miner/results go to `residual`. Legacy aggregate group placement remains an adapter concern. | JA-06/07/09 |
+| `core/SlowMoverAnalyzer`, `SlowMoverFrameEvidence`, `SlowMoverAnalysis`, `SlowMoverCandidateResult`, `SlowMoverCandidateDiagnostics`, `SlowMoverSummaryTelemetry` | Canonical home `slowmover`; keep stage grouping and package-private frame evidence. Move legacy telemetry projection into the adapter/aggregation boundary. | JA-07/09 |
+| `photometry/VariableStarAnalyzer` | Keep in `photometry`; strengthen input associations, extract crossing geometry and consume local diagnostic contracts. | JA-03/05/07/09 |
+| `photometry/PhotometryStarSelector`, `ApertureMeasurer`, `PhotometricReadinessChecker`, `EnsembleSolver`, `SpatialFrameFilter`, `VariabilityScorer`, `PhotometryMath` | Keep existing package-private helpers in `photometry`; update shared contracts without rewriting their computations. | JA-01/03/07 |
+| `photometry/VariableStarAnalysis`, `StarLightCurve`, `PhotometricReadiness`, `PhotometryFlags`, `VariabilityTier` | Keep scientific results in `photometry`; own photometry frame/diagnostic records here and preserve meanings, flags and frame alignment. | JA-05/07/09 |
+| `telemetry/PipelineTelemetry`, `TrackerTelemetry` | Keep pipeline aggregation/formatter in `telemetry`; canonical tracking diagnostics go to `tracking`, photometry diagnostics to `photometry`, with old nested/public records retained as adapters. | JA-05/07/09 |
+
+#### Structural acceptance checks
+
+Before adopting a slice, identify its current methods/types, target package, public signatures retained, mutable state owner and any temporary dependency exception. Verify all 50 files remain accounted for as the inventory changes. Prefer package/import and visibility checks for agreed boundaries, supplemented by source review for same-package calls and fully qualified references; a raw import count alone does not prove separation.
+
+Check that canonical dependencies follow the table, feature helpers stay inaccessible to external callers, and lower-level stages do not import `engine`, legacy `core` facades or aggregate `PipelineTelemetry`. Check actual public method/field signatures, not just imports: a supposedly independent input/result can still expose an implementation-nested type. Compile a small external consumer using the existing API and representative standalone components, in addition to compiling SpacePixels. Binary compatibility needs its own check against the previous jar; recompiling consumers alone does not establish it.
+
+Run focused component/contract tests and the engine/SpacePixels regression procedure for every code slice. Compare classification membership, identity/alias relationships, frame indexing, ordering where contractual and numerical outputs, as well as counts and timings. For this blueprint update only the source/dependency inventory and documentation were checked; no structural code change, architecture test, build or real-data run was performed.
 
 ### Proposed architecture and delivery order
 
@@ -207,11 +318,11 @@ flowchart TD
     Views --> Model
 ```
 
-This is a dependency direction, not a new general-purpose pipeline engine. Concrete stage collaborators and plain data objects are sufficient. An interface is useful where there is a real execution/testing boundary, not for every existing static helper. Package names and exact new types should follow a concrete change, with public compatibility assessed first.
+This diagram summarizes the [structural blueprint](#structural-blueprint-packages-classes-and-dependencies); its package dependency table and migration inventory provide the concrete target. Concrete stage collaborators and plain data objects are sufficient. An interface is useful where there is a real execution/testing boundary, not for every existing static helper. Adopt the proposed names and boundaries one reviewed slice at a time, with public compatibility assessed before moving a type.
 
 | Order | Scope | Reason and dependency |
 |---|---|---|
-| 1 | JA-01 configuration capture; JA-04 per-operation tuner options | Establish repeatable inputs and remove the existing reason for process-wide tuning coordination. Discuss validation behavior separately from mechanically copying settings. |
+| 1 | JA-01 shared validation/alignment rules and configuration capture; JA-04 per-operation tuner options | Establish one rules authority and repeatable inputs; remove the existing reason for process-wide tuning coordination. Discuss validation behavior separately from mechanically copying settings. |
 | 2 | JA-02 execution ownership, then JA-03 cancellation/failure; JA-09 adapters alongside them | Know who owns workers and when they stop before the application relies on cancellation or admits concurrent work. |
 | 3 | JA-05 prepared-frame associations and shared selection orchestration | Stabilize identity and stage inputs before moving tracker internals. |
 | 4 | JA-06 one tracking responsibility at a time | Use membership-level controls to preserve the established classification/assignment order. |
@@ -295,6 +406,114 @@ For VS-2/5/6/8/9 the assessment contains component reproductions and their cavea
 | Anomalies on streak paths | Implemented: an anomaly on a confirmed streak's line in the same frame, or where the streak's motion puts it in a skipped, preceding or following frame, joins that streak; `AnomalyDetection.lowConfidence` is removed (`de1dc48`). On klangwolke-2, 17 of 39 anomalies joined (24 of 40 with a second profile), on klangwolke-1 one of six; the other 16 reference runs were identical. Joined pieces now flag the stars they cross in photometry: one borderline POSSIBLE star became CONSTANT, and with the second profile one constant star fell below the usable-frame minimum. |
 
 The [archived engine review](docs/archive/code-review-2026-10.md#implementation-status-2026-10-18) retains full commit/decision provenance. The [maintenance notes](docs/archive/maintenance-notes-2026-10-19.md) retain the 19-dataset per-step results, tuner differences and M81-kumar experiments. In particular, the recorded HIGH-profile M81 sequence is LR 274 → 84 → 10 and CM 52 → 5 → 3 after master-star and camera-fixed changes, respectively; these are historical measurements with the recorded profiles, not new benchmarks from this cleanup.
+
+## Review
+
+Comments from a review of this document on 2026-10-20, checked against the production tree at `bfafd64`. That commit does not change `src/main/java` relative to the architecture review's `b424a6e`, and the library version is still `1.0.5`. The blueprint's inventory matches this tree: 50 production Java files, 36 test files, and six paired rules in SpacePixels `DetectionSettingsRules.Pair`. Sampled evidence also matches the source: mutable `DetectionConfig` with stage-local clones, static tuner grids, in-place frame sorting, one frame pool reused by photometry after extraction, `IntStream.range(...).parallel()` in `MasterMapGenerator`, fallback results that keep the caller's `baseConfig` reference, `bestTransientRatio` assigned from `noisePerMpixFrame` in the calibrated tuner, `shutdown()` without waiting, and the iterative pipeline's full-session `short[][]` master. These comments do not change the status of any item above and do not authorize implementation.
+
+The decision list is in good shape. Algorithm findings stay separate from the JA items, statuses mean what the legend says, and the blueprint keeps one jar, the current public names, and the scientific stage order. The next useful edit is to close the four questions that change the dependency table and the acceptance tests for steps 1 and 2.
+
+> **Remark (2026-10-20):** The responses below distinguish factual corrections, clarifications and design preferences. There are seven questions below; each has a response. These remarks leave proposal statuses and implementation authorization unchanged.
+
+### Comments
+
+**The streak-shape move conflicts with the dependency table.** `SourceExtractor.isBinaryStarLikeStreakShape` is public, and `TrackLinker` calls it. The class table puts the predicate in package-private `tracking.StreakShapeFilter` and has the old extractor helper delegate through a tracking facade. The canonical home of `SourceExtractor` is `extraction`, whose allowed dependencies are `model`, `image`, `config` and `execution`. A delegate on that class adds `extraction` → `tracking`. Once `DetectedObject` lives in `model`, tracking does not need the extractor to judge a footprint. The arrangement that preserves the table is: measurements live in `image.FootprintGeometry`, the decision lives in tracking, and the old public method stays on a compatibility facade at today's class name. That facade is the temporary exception allowed to call tracking. The canonical extractor then has no streak-shape method.
+
+> **Remark (2026-10-20):** Agree with the proposed arrangement, but this is an ambiguity to clarify rather than an unavoidable conflict. The old method stays on `io.github.ppissias.jtransient.core.SourceExtractor`, the compatibility facade. The new `io.github.ppissias.jtransient.extraction.SourceExtractor` has no tracking dependency or streak-shape method. Measurements belong in `image`; the decision belongs in tracking.
+
+**Some allowed package edges follow today's call sites rather than the data those stages need.** `TrackLinker.filterTransients` calls `MasterVetoMask.build`, so the table allows `tracking` → `reference`. The mask is a `boolean[][]` built from master stars, width, height and jitter, and `MasterVetoMask` exists so the pipeline and the preview tools share one builder. If the engine passes the built mask in, tracking does not need the reference package, and mask construction stays in `reference`. `slowmover` → `reference` is required by the convenience overload `SlowMoverAnalyzer.analyze(cleanFrames, medianStackData, config)`, which calls `MasterMapGenerator.createMaximumMasterStack`. The analyzing method already receives both stacks. Stack construction can stay with the engine. `ResidualTransientAnalyzer.analyze` already takes detections only. Its package-private `collectAlreadyClassifiedPoints` takes `TrackLinker.Track` and `TrackLinker.AnomalyDetection`, and photometry's `Input.tracks` does the same in production. Those signatures become `residual` → `tracking` and `photometry` → `tracking` as soon as the packages split, which the table forbids. The delivery order places shared model contracts at step 5, after the tracking split, so the first tracking slice needs those signatures named as a temporary exception.
+
+> **Remark (2026-10-20):** Prepared masks and stacks are a good boundary for the main analysis methods. Removing every `tracking`/`slowmover` dependency on `reference` is optional: standalone convenience facades may legitimately compose reference services. Distinguish those facades from the analysis methods before tightening the table. Agree that model migration needs explicit temporary exceptions. The cited residual helper is currently called only by a test, so it should not alone determine a production dependency.
+
+**An instance admission guard misses the entries that share a process.** SpacePixels builds a new `JTransientEngine` for each detection, master stack and iterative pass, and calls `shutdown()` after the synchronous call returns. Two GUI passes do not share an instance. The tuners are static and allocate their own pools; `CalibratedAutoTuner.calibrate` calls `shutdownNow()` in `finally` on every path. Heap sizing reads process-wide `Runtime` figures, and master stacking uses the common `ForkJoinPool`. One active operation per engine is a sound instance contract. The runs that can still compete are two engines, a static tune beside an engine, and two tunes sharing the static grids. JA-02 and JA-04 need the same operation context, entered by the engine and by both tuners. A process-wide single-flight lock belongs with SpacePixels D02, which owns the GUI job slot. The library contract should say what a second direct caller may do, and leave job identity in the application.
+
+> **Remark (2026-10-20):** The cross-instance concern is valid, but only `CalibratedAutoTuner` creates its own worker pool; the legacy tuner runs synchronously on its caller thread. Both expose mutable static settings. Common operation-control contracts do not themselves impose a process-wide resource bound: that requires application admission or explicitly shared scheduling/budget resources. Keep one-operation-per-engine behavior separate from that policy, with application job identity in SpacePixels.
+
+**Step 1 changes observable behavior if rejection or fallback identity arrives with the snapshot.** Unsuccessful legacy `tune` paths set `optimizedConfig` to the supplied `baseConfig`. Calibrated `tune` does the same until `configFor` replaces it on success. An independent fallback copy is a contract change when a caller distinguishes fallback by reference identity. Rejecting a profile the engine currently accepts is the other contract change. The blueprint already asks to reconcile fallback before new rejection rules; the acceptance test for step 1 should name which paths stay same-reference fallback, which return an equal copy, and which become structured rejection.
+
+> **Remark (2026-10-20):** Agree that fallback aliasing and new rejection are observable changes. Proposed compatibility policy: existing entry points preserve their documented same-reference fallback behavior; a new snapshot-based API returns independent configurations consistently. Callers should use `success` to distinguish fallback. Decide and test these paths explicitly rather than changing them as an incidental consequence of cloning settings.
+
+SpacePixels currently checks finite `double` and `float` fields by reflection and checks the six pairs. Its own comment says profiles and the API are not checked yet. `DetectionConfigurationPanel` maps `DetectionSettingsRules.Pair` to spinners and shows `problems()` and `Pair.adjustment` sentences. Structured issues should carry field and rule identifiers, and the panel should keep those sentences, so display wording stays in the application. A test that every non-static `double` and `float` field has validity metadata keeps today's reflective coverage when a field is added. Master grow `0` still satisfies the current pair inequality whenever master sigma is non-negative. Alignment loses the sentinel only by writing the effective grow, which the blueprint already leaves unchanged.
+
+> **Remark (2026-10-20):** Agree with structured field/rule identifiers and application-owned presentation. GUI message templates must not duplicate comparisons, ranges or adjustment decisions. Shared rule/metadata coverage tests should include newly added fields and preserve sentinels. Operation-scoped enforcement must distinguish genuine global invariants from settings used only by an inactive branch.
+
+**Cancellation is the gap a caller can hit, and SpacePixels D04 is already in progress.** The long entry points throw `Exception`. Extraction invokes the progress listener on a pool thread while holding the monitor used as `synchronized (framesCompleted)`. A listener that throws fails that worker. `CalibratedAutoTuner.calibrate` catches `Exception`, appends `e` to `failureReason`, and does not restore the interrupt status. `JTransientEngine.shutdown` calls `executor.shutdown()` and returns. The current happy path closes an idle engine after `runPipeline` returns. A caller that stops waiting, or whose thread is interrupted in `Future.get`, leaves the pool tasks running. D04 should keep saying that JTransient does not yet stop cooperatively, until JA-03 names the checkpoints. The listener rules in JA-09 belong in that same contract.
+
+> **Remark (2026-10-20):** The risk is real, but the waiting point needs correction: engine extraction calls `invokeAll` before reading the returned futures, so the later `Future.get` is not normally waiting for running extraction tasks. Interrupted `invokeAll` cancels unfinished tasks; cancellation still does not guarantee that computations ignoring interruption have stopped. See the [ExecutorService contract](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/ExecutorService.html). D04 should say that cancellation does not yet guarantee JTransient computation has stopped, and retain resource ownership until execution actually ends. Avoid saying workers always remain running after a stop request.
+
+**Prepared-frame identity matches the code, with one ordering detail worth recording.** `extractSourcesFromFrames` sorts the caller's list after drift analysis and before creating extraction tasks. `generateMasterStackWithDetails` sorts before drift analysis. `FrameDriftAnalyzer.analyze` sorts a copy, and registrations are kept by sequence index, so both orders zip metrics back to frames by sequence index today. `VariableStarAnalyzer.analyze` reads `input.frameMetrics.get(j)` in lockstep with `input.frames` and does not check the list lengths; the matching-order rule is that indexing plus the field comments. `TrackLinker` records veto `frameIndex = i` in the retained-list position. The engine's `FrameExtractionResult.frameIndex` stores `sequenceIndex`. The two names in JA-05 match that split. `ImageFrame`'s class comment calls the payload immutable; the fields are final, and `pixelData` remains a caller-owned mutable matrix, as JA-07 says. The class comment should be brought into line with that contract when the boundary is written.
+
+> **Remark (2026-10-20):** Agree. Preserve original sequence identity separately from retained position, and verify associations after sorting, rejection and subsetting. The `ImageFrame` comment should describe borrowed mutable pixel storage rather than imply deep immutability when that contract is implemented.
+
+**The blueprint can be built one slice at a time.** The class table is a vocabulary. The delivery table is a dependency order. Each JA item still needs its own discussion, and a long analyzer stays whole until it has a new ownership boundary. `DetectionConfigRules` becomes supported API as soon as SpacePixels imports it, so the JA-11 note for that change needs the Java baseline, what is public, and source compatibility. The build declares no toolchain or release target, and the README asks for a local JDK without a minimum version. The flowchart is an ownership sketch; the package table is the rule. Both tuners stop at extraction, quality, drift and master construction. They do not call `TrackLinker` or `runPipeline`. That cut matches the code and matches AT-4, whose budgets count single-frame survivors.
+
+> **Remark (2026-10-20):** Agree with incremental implementation and compatibility checks for the shared rules API. The proposed class names are design candidates, not a requirement to instantiate every listed helper. Preserve standalone services and introduce a collaborator when its responsibility and ownership are clear.
+
+**Two Proposed algorithm items sit only in the deferred table.** PT-5 and SM-F1 are Proposed. The JA summary is the table a reader scans first. One line under Status and scope, listing the non-JA Proposed ids, would make that scan complete. The deferred and declined scientific wording was not re-checked against the datasets for this review. It already limits those rows to source concerns and named examples, and it points measurement at the SpacePixels regression method.
+
+> **Remark (2026-10-20):** A navigation note or link is reasonable; keep PT-5 and SM-F1 in their existing scientific work list without changing their status or making them prerequisites for architectural refactoring.
+
+### Questions
+
+1. For the streak predicate, does the compatibility facade own the old public method, with measurements in `image` and the decision in tracking?
+
+   **Remark:** Yes: retain the old public method on `core.SourceExtractor`; the canonical extractor stays independent of tracking.
+
+2. Should tracking receive a built mask, and slow movers receive built stacks, so those packages do not depend on `reference`?
+
+   **Remark:** Prefer prepared inputs for the main analysis path; retain justified reference-service dependencies on standalone convenience facades.
+
+3. Is the first execution contract one operation per engine instance, with static tuners and parallel stacking entering the same operation context, while a process-wide GUI slot stays in D02?
+
+   **Remark:** Yes to the instance contract and common operation-control conventions. Process-wide resource limits need actual admission or shared execution resources, beyond a context object.
+
+4. Which JA-01 paths keep the same `baseConfig` instance, which return an equal copy, and which reject with structured issues?
+
+   **Remark:** Proposed: existing compatibility entry points retain fallback aliases; new snapshot-based APIs return independent copies. Preserve accepted-profile behavior until the validation/rejection policy is explicitly agreed.
+
+5. Should alignment results carry rule identifiers, with the settings tab keeping the current sentences?
+
+   **Remark:** Yes. Return field/rule identifiers and structured adjustments; SpacePixels formats the messages while JTransient defines the rules.
+
+6. Should validation be scoped as `validate(config, operation)`, so master-stack, transient-only and full-pipeline entry points check the settings that operation reads?
+
+   **Remark:** Yes, covering shared preparation and enabled branches. Inactive-stage settings should not block unrelated operations unless they violate a genuine global invariant.
+
+7. Until JA-03, should D04 state that stopping a detection job leaves JTransient workers running until the library checkpoints exist?
+
+   **Remark:** Use qualified wording: cancellation does not guarantee that JTransient computation has stopped. Retain resources until actual termination rather than assuming every stop request leaves workers running.
+
+### Review notes from the SpacePixels side (Claude, 2026-10-20)
+
+These notes add measurements made while implementing SpacePixels D04 (Cancel). They change no status here. Measured on klangwolke-2 (33 frames of 61 MPix, the maintainer's profile) through SpacePixels' job coordinator. A cancel there is a `JobCancelledException`, a `java.util.concurrent.CancellationException`, thrown by the progress listener at its next call.
+
+**Evidence for JA-03 and JA-09.**
+- **A listener exception does not stop sibling tasks.** Cancelled at "Extracting features from frame 5 of 33", the run ended 26 s later. Each extraction task does its frame's work before it reports, and `invokeAll` waits for every task, so the other frames are still extracted before `Future.get` rethrows. The remark under question 7 is right that an *interrupted* `invokeAll` cancels unfinished tasks. But SpacePixels' cancel is a listener exception in a worker, not an interrupt, so that path does not apply. A checkpoint at the start of each frame task would bound the wait to about one frame.
+- **Longest gaps between progress calls,** which bound a listener-driven cancel today:
+  - photometry's ensemble solution: 5–29 s;
+  - dither and corner-drift analysis: 2–14 s (14 s on a cold file cache);
+  - master star map to the maximum stack: about 6 s;
+  - calibrated tuning, preparing noise and injection images: 12.6 s (MEDIUM profile).
+
+  Everything else stayed under about 5 s.
+- **The calibrated tuner turns a cancel into a failed calibration.** All its progress calls run on the calling thread inside the `try` that catches `Exception`. A listener exception therefore comes back as `success = false`, with the exception in `failureReason`. SpacePixels now reports a tune as cancelled whenever a cancel was requested before the tuner returned. JA-03 should let a cancel leave the tuner as a cancel.
+- **A suggestion for the contract's type:** use `java.util.concurrent.CancellationException`, or a subclass, as the cancellation signal across the library. SpacePixels already recognises it through wrapping exceptions without depending on application classes. A JDK type keeps the JA-03 contract usable by other callers and needs no new public exception class.
+- **A listener that throws inside `synchronized (framesCompleted)`** releases the monitor normally. A slow listener serialises the workers there, as JA-09 notes. SpacePixels' listener only posts to the Swing thread, so it is cheap.
+
+**On JA-01 rules ownership.** Agree with the direction and with the remarks on questions 5 and 6.
+- **What SpacePixels uses today.** The six pairs drive three places:
+  - the settings tab's auto-apply (`normalizeDependentSpinners`), which moves one spinner of a crossed pair and words the change in the footer;
+  - `checkedSettings`, which refuses a save or run;
+  - since 2026-10-20, Preview Frame, whose threshold spinners share the tab's models, so its edits go through the same alignment.
+- **What a shared service must return** to replace this without changing behaviour:
+  - the direction of each adjustment (which field moves);
+  - a stable rule identifier, to which SpacePixels attaches its own titles and sentences;
+  - the field identifiers, so the tab can focus the field.
+
+**On JA-11 and releases.** SpacePixels builds against the published JTransient from Maven Central by default; the composite build is opt-in. A cancellation or rules API is usable in a SpacePixels release only after a JTransient release that contains it. The JA-03 and JA-01 slices should each name the JTransient version they need, and SpacePixels should keep working, with today's behaviour, against the version before.
+
+**On the document itself.** The blueprint is thorough, and its slices are the right size. With the review's questions now answered, consider moving this Review section to `docs/archive/` once its answers are folded into the JA items, as was done for the October reviews. This list then stays the single current plan.
+
 
 ## Verification for future changes
 
