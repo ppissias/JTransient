@@ -12,6 +12,25 @@ The public surface is split into three layers:
 
 `runPipeline(...)` executes the complete analysis. `generateMasterStack(...)` shares registration/quality selection but returns only a median stack. `detectTransients(...)` adds extraction and stationary-star/streak filtering, then stops before point linking. Tuners search configurations on sampled crops; `SourceExtractor` works on one image. The [algorithm flow](ALGORITHM.md#high-level-flow) defines stage ordering.
 
+## Cancellation and worker lifetime
+
+The cancellation types live in `io.github.ppissias.jtransient.execution`. An operation can take a thread-safe `CancellationToken` through the final parameter of `runPipeline(..., providedMasterStack, cancellation)`, `detectTransients(..., providedMasterStack, cancellation)`, `generateMasterStackWithDetails(..., cancellation)` or either tuner's profile-based `tune(..., cancellation)` overload. Existing signatures remain available and inherit an enclosing cancellation scope, or use no requested cancellation when there is none.
+
+```java
+AtomicBoolean cancelled = new AtomicBoolean();
+try (JTransientEngine engine = new JTransientEngine()) {
+    PipelineResult result = engine.runPipeline(frames, config, listener, null, cancelled::get);
+}
+```
+
+Another thread can set the flag. For standalone extraction, tracking, stacking or a sequence of library calls, wrap the operation in `try (CancellationScope scope = CancellationScope.open(cancelled::get)) { ... }`. Scopes belong to their opening thread, restore the previous token when closed, and are propagated explicitly into JTransient's worker batches. They do not change another operation's cancellation.
+
+Cancellation throws `java.util.concurrent.CancellationException` and discards the partial scientific result. Extraction and image scans check between rows or bounded groups of pixels; tracking, tuning and photometry check their work loops. Waiting batches also poll cancellation. Interruption is treated as cancellation and the interrupt status is preserved. A blocking caller-supplied listener or an individual uninterruptible operation can still delay return; cancellation is cooperative, not a hard real-time guarantee.
+
+When cancellation or a worker/listener failure occurs, a batch stops queued work, requests that running siblings stop, and waits for their task bodies and cleanup to end before returning. Worker exceptions retain their original cause. Calibrated tuning propagates cancellation instead of translating it to unsuccessful calibration. Other calibration failures still return the existing unsuccessful result, with the original exception available as `Calibration.failureCause`; this runtime-only field is excluded from saved JSON. Insufficient evidence keeps its ordinary unsuccessful-calibration outcome.
+
+An engine admits one operation at a time. An overlapping operation, or `shutdown()`/`close()` during an active operation, throws `IllegalStateException`. Request cancellation and wait for the operation to return before closing it. The engine may be reused sequentially after cancellation or ordinary failure. Closing an idle engine waits for its owned worker pool to terminate and preserves interruption. Calibrated tuning likewise waits for its own pool to terminate. A reported percentage, including 100%, is progress rather than a terminal outcome.
+
 ## Input Rules
 
 Every `JTransientEngine` entry point and both auto-tuners check their frames first and throw `IllegalArgumentException`, naming the frames, when:

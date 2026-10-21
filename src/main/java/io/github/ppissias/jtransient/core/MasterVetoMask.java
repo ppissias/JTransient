@@ -9,6 +9,8 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.execution.CancellationScope;
+
 import java.util.List;
 
 /**
@@ -40,6 +42,7 @@ public final class MasterVetoMask {
         boolean[][] mask = new boolean[sensorHeight][sensorWidth];
         int radius = dilationRadius(maxStarJitter);
         for (SourceExtractor.DetectedObject star : masterStars) {
+            CancellationScope.check();
             if (star.rawPixels == null) {
                 continue;
             }

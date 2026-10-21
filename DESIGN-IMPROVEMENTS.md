@@ -28,13 +28,13 @@ Existing issue IDs are retained. Variable-star assessment numbers use a `VS-` pr
 
 ### Findings and priorities
 
-All findings are **Proposed**. High priority means to resolve the contract before expanding the affected use case; it does not authorize implementation or claim an observed production failure.
+Statuses distinguish proposals from work already started. High priority means to resolve the contract before expanding the affected use case; it does not authorize implementation or claim an observed production failure.
 
 | ID | Priority | Status | Design improvement | First useful result |
 |---|---|---|---|---|
 | JA-01 | High | Proposed | Capture run configuration and centralize validation/alignment | One operation uses one coherent settings snapshot; GUI and engine use the same rule definitions. |
-| JA-02 | High | Proposed | Define execution, concurrency and resource ownership | Callers know whether an engine can overlap runs and which work its resource limit controls. |
-| JA-03 | High | Proposed | Give cancellation and failures an explicit contract | Cancellation stays distinct from fallback and failure; completion means the run's work has ended. |
+| JA-02 | High | In progress; shared execution policy remains | Define execution, concurrency and resource ownership | Callers know whether an engine can overlap runs and which work its resource limit controls. |
+| JA-03 | High | In progress; structured failure context remains | Give cancellation and failures an explicit contract | Cancellation stays distinct from fallback and failure; completion means the run's work has ended. |
 | JA-04 | High | Proposed | Replace mutable global tuning options with operation options | Two tunings can use independent options without changing each other's settings. |
 | JA-05 | Medium | Proposed | Make prepared-frame context and identity coherent | Frames, metrics, detections and registrations remain associated through QC and subset runs. |
 | JA-06 | Medium | Proposed | Separate tracking responsibilities while retaining its facade | Vetoing, point linking, streak assembly and classification have explicit inputs and ownership. |
@@ -74,11 +74,11 @@ Genuine numeric validity limits should be exposed as JTransient metadata that GU
 
 ### JA-02. Define execution and resource ownership for a whole operation
 
-**Evidence.** [JTransientEngine.configureFrameExecutor](src/main/java/io/github/ppissias/jtransient/engine/JTransientEngine.java) resizes an owned `ThreadPoolExecutor` using frame size and heap headroom. The same pool later serves photometry. [MasterMapGenerator](src/main/java/io/github/ppissias/jtransient/core/MasterMapGenerator.java) uses parallel streams, outside that explicit pool. [CalibratedAutoTuner.calibrate](src/main/java/io/github/ppissias/jtransient/engine/CalibratedAutoTuner.java) creates another pool sized from processor count. Engine entry points have an open check but no run-admission guard; `shutdown()` requests orderly shutdown without waiting for termination. [JTransientEngineConcurrencyTest](src/test/java/io/github/ppissias/jtransient/engine/JTransientEngineConcurrencyTest.java) checks sizing and close/reuse rejection, not overlapping operations or close during a run.
+**Evidence.** [JTransientEngine.configureFrameExecutor](src/main/java/io/github/ppissias/jtransient/engine/JTransientEngine.java) resizes an owned `ThreadPoolExecutor` using frame size and heap headroom. The same pool later serves photometry. [MasterMapGenerator](src/main/java/io/github/ppissias/jtransient/core/MasterMapGenerator.java) uses cancellation-aware row batches on the common pool, outside the engine's frame-worker resource limit. [CalibratedAutoTuner.calibrate](src/main/java/io/github/ppissias/jtransient/engine/CalibratedAutoTuner.java) creates another pool sized from processor count. The engine now rejects overlapping operations and close during an active operation, and idle shutdown waits for pool termination. The completed admission/cancellation slice and its tests are [archived](docs/archive/design-improvements-closed-2026-10.md#ja-02ja-03-operation-cancellation-and-worker-lifetime-2026-10-21).
 
-**Risk and proposal.** The extraction memory bound is valuable, but it is not a whole-library resource bound. Concurrent engines, tunings and stacks can compete for heap and CPU, and same-instance overlap has no stated contract. First define whether one engine permits one active operation. Rejecting overlap clearly is a reasonable initial design; supporting it requires separate run state and resource accounting. Do not imply thread safety merely because per-frame tasks run concurrently.
+**Risk and proposal.** The extraction memory bound is valuable, but it is not a whole-library resource bound. Concurrent engines, tunings and stacks can still compete for heap and CPU despite the implemented one-operation-per-engine rule. Keep that admission rule while defining shared resource accounting. Do not imply process-wide resource bounds merely because individual engines reject overlap.
 
-Introduce a small execution policy shared by orchestration and tuning: worker limits, memory admission assumptions and owned versus borrowed executor lifetime. Account for row-stack work as well as extraction. Keep the default memory heuristic, and document that estimates cannot guarantee enough heap for arbitrary input/output populations. Define close during active work, sequential reuse after ordinary failure, and whether a completion operation waits. Avoid nested work that submits to and waits on an already occupied bounded pool.
+Introduce a small execution policy shared by orchestration and tuning: worker limits, memory admission assumptions and owned versus borrowed executor lifetime. Account for row-stack work as well as extraction. Keep the default memory heuristic, and document that estimates cannot guarantee enough heap for arbitrary input/output populations. Retain the implemented close/reuse/worker-join contract when introducing owned or borrowed execution policies. Avoid nested work that submits to and waits on an already occupied bounded pool.
 
 **Decided in the review of this plan (2026-10-20).** One active operation per engine instance is the instance contract. The engine and both tuners enter the same operation-control conventions. These conventions do not by themselves bound process-wide resources: that needs application admission (SpacePixels D02 holds the GUI's job slot) or explicitly shared scheduling. Only `CalibratedAutoTuner` creates its own pool; the legacy tuner runs on its caller's thread.
 
@@ -86,28 +86,11 @@ Introduce a small execution policy shared by orchestration and tuning: worker li
 
 ### JA-03. Distinguish cancellation, failure and tuning fallback
 
-**Evidence.** Engine and photometry operations expose broad `throws Exception` contracts and collect work with `invokeAll`/`Future.get`. There is no cancellation parameter or cooperative interruption check in the long extraction, stacking and tracking loops. [CalibratedAutoTuner.calibrate](src/main/java/io/github/ppissias/jtransient/engine/CalibratedAutoTuner.java) catches `Exception`, records a string failure reason and returns an unsuccessful calibration, then calls `shutdownNow()` in `finally`. That catch also covers an `InterruptedException` from waiting for tasks; it does not restore interruption or expose cancellation separately. Calling shutdown is not itself evidence that those compute loops have finished.
+**In progress: structured failure context remains.** The per-operation cancellation contract, interruption preservation, cooperative checkpoints, stop-and-join worker batches and direct propagation from calibrated tuning are implemented. The decision, tests and real-data evidence are [archived](docs/archive/design-improvements-closed-2026-10.md#ja-02ja-03-operation-cancellation-and-worker-lifetime-2026-10-21); the current contract is in [PIPELINE.md](PIPELINE.md#cancellation-and-worker-lifetime). SpacePixels already consumes this through the local composite build. Published-release validation remains JA-11.
 
-**Risk and proposal.** An application can stop waiting while computation still owns buffers and workers. An interrupted tuning can look like an ordinary inability to calibrate, and the original structured cause is lost to callers. Add a small per-operation cancellation contract, with checks at bounded chunks of expensive loops and before starting another stage. Specify that cancellation discards a partial scientific result unless a separate partial-result API is deliberately designed.
+**Open.** Complete consistent stage/frame context for runtime failures across orchestration, photometry and both tuners without losing their original cause. Calibrated tuning now exposes its cause as the runtime-only `Calibration.failureCause`; scientific readiness/insufficient-evidence outcomes retain their existing result shape. Other operations still expose broad exception contracts. Coordinate any structured stage model with JA-09, preserving existing entry points and saved tuning JSON.
 
-Preserve interruption, distinguish invalid input, insufficient evidence, cancellation and execution failure, and retain causes with stage/frame context. Keep scientific readiness outcomes separate from runtime errors. Define how sibling tasks are stopped and joined before a terminal outcome is delivered, including when a listener throws. Compatibility wrappers may translate a typed internal outcome to the existing exception/result shape. This is the engine counterpart to SpacePixels D04; UI job ownership remains in SpacePixels.
-
-**Evidence from SpacePixels (2026-10-20).** SpacePixels cancels a job by throwing `java.util.concurrent.CancellationException` (its `JobCancelledException`) from the progress listener. Measured on klangwolke-2 (33 frames of 61 MPix):
-- **Extraction:** a cancel at frame 5 of 33 ended the run 26 s later. Each extraction task does its frame's work before it reports, and `invokeAll` waits for every task, so the other frames are still extracted before `Future.get` rethrows. An interrupted `invokeAll` cancels unfinished tasks, but this cancel is a listener exception, not an interrupt. A checkpoint at the start of each frame task would bound the wait to about one frame.
-- **Gaps between progress calls,** which bound a listener-driven cancel today:
-  - photometry's ensemble solution: 5–29 s;
-  - dither analysis: 2–14 s;
-  - master star map to the maximum stack: about 6 s;
-  - calibrated tuning, preparing noise and injection images: 12.6 s.
-
-  The rest stayed under about 5 s.
-- **Calibrated tuning:** all its progress calls run inside the `try` that catches `Exception`, so a cancel comes back as `success = false` with the exception in `failureReason`. SpacePixels treats a tune as cancelled whenever a cancel was requested before the tuner returned.
-
-**Decided in the review of this plan (2026-10-20).** Until the checkpoints exist, SpacePixels says that a cancel does not guarantee JTransient computation has stopped, and keeps the resources until it has.
-
-**Open decision: the cancellation signal.** Use `java.util.concurrent.CancellationException`, or a subclass, across the library. SpacePixels already recognises it through wrapping exceptions without depending on application classes, and a JDK type needs no new public exception class.
-
-**Acceptance.** Cancel extraction, stacking, tracking, tuning and photometry at controlled checkpoints. Inject a worker and listener failure. Verify the terminal category and cause, no successful completion after cancellation, worker cleanup and the documented engine reuse behavior. Measure cancellation latency rather than promising immediate interruption of every calculation.
+**Acceptance.** Inject failures at extraction, stacking, tracking, tuning and photometry boundaries, including listeners. Each failure retains its original cause and identifies its operation/stage and frame where applicable. Keep invalid input, scientific readiness, cancellation and execution failure distinguishable; do not change detection verdicts merely to introduce a diagnostic model.
 
 ### JA-04. Make tuning options and diagnostics belong to an operation
 

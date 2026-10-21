@@ -9,6 +9,8 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.execution.CancellationScope;
+
 /**
  * Where one registered frame holds image data: the first and last data pixel of every row and of every column.
  *
@@ -53,9 +55,11 @@ public final class FrameCoverage {
         int[] rowStart = new int[height];
         int[] rowEnd = new int[height];
         for (int y = 0; y < height; y++) {
+            CancellationScope.check();
             short[] row = frame[y];
             int start = width;
             for (int x = 0, run = 0; x < width; x++) {
+                CancellationScope.check();
                 run = row[x] > DataArea.FILL_THRESHOLD ? run + 1 : 0;
                 if (run == DATA_RUN) {
                     start = x - DATA_RUN + 1;
@@ -78,8 +82,10 @@ public final class FrameCoverage {
         int[] columnStart = new int[width];
         int[] columnEnd = new int[width];
         for (int x = 0; x < width; x++) {
+            CancellationScope.check();
             int start = height;
             for (int y = 0, run = 0; y < height; y++) {
+                CancellationScope.check();
                 run = frame[y][x] > DataArea.FILL_THRESHOLD ? run + 1 : 0;
                 if (run == DATA_RUN) {
                     start = y - DATA_RUN + 1;

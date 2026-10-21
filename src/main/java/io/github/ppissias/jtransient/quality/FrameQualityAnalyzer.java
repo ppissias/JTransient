@@ -9,6 +9,7 @@
  */
 package io.github.ppissias.jtransient.quality;
 
+import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.SourceExtractor;
@@ -117,6 +118,7 @@ public class FrameQualityAnalyzer {
         );
 
         for (SourceExtractor.DetectedObject obj : objects) {
+            CancellationScope.check();
             // Only measure true point sources (ignore obvious noise and massive satellite streaks)
             if (!obj.isStreak && !obj.isNoise) {
                 usableShapeStarCount++;

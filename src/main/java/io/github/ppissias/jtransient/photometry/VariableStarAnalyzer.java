@@ -9,6 +9,8 @@
  */
 package io.github.ppissias.jtransient.photometry;
 
+import io.github.ppissias.jtransient.execution.CancellableTasks;
+import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.SourceExtractor;
@@ -117,6 +119,7 @@ public final class VariableStarAnalyzer {
 
         PipelineTelemetry.PhotometryFrameStat[] stats = new PipelineTelemetry.PhotometryFrameStat[nFrames];
         for (int j = 0; j < nFrames; j++) {
+            CancellationScope.check();
             ImageFrame frame = frames.get(j);
             PipelineTelemetry.PhotometryFrameStat stat = new PipelineTelemetry.PhotometryFrameStat();
             stat.frameIndex = frame.sequenceIndex;
@@ -142,6 +145,7 @@ public final class VariableStarAnalyzer {
         // --- Star selection and saturation level ---
         double[] frameFwhm = new double[nFrames];
         for (int j = 0; j < nFrames; j++) {
+            CancellationScope.check();
             FrameQualityAnalyzer.FrameMetrics metrics = input.frameMetrics.get(j);
             frameFwhm[j] = validFwhm(metrics.medianFWHM, config) ? metrics.medianFWHM : Double.NaN;
         }
@@ -152,6 +156,7 @@ public final class VariableStarAnalyzer {
             return finish(readiness, new ArrayList<>(), telemetry, start);
         }
         for (int j = 0; j < nFrames; j++) {
+            CancellationScope.check();
             if (!Double.isFinite(frameFwhm[j])) {
                 frameFwhm[j] = sessionFwhm;
             }
@@ -195,6 +200,7 @@ public final class VariableStarAnalyzer {
         // --- Registration check and frame telemetry ---
         double[] floorFractions = new double[nFrames];
         for (int j = 0; j < nFrames; j++) {
+            CancellationScope.check();
             ApertureMeasurer.FrameMeasurement m = measurements[j];
             PipelineTelemetry.PhotometryFrameStat stat = stats[j];
             stat.fwhm = m.fwhm;
@@ -238,6 +244,7 @@ public final class VariableStarAnalyzer {
         int shapeFewStars = 0;
         int shapeEvaluated = 0;
         for (int j = 0; j < nFrames; j++) {
+            CancellationScope.check();
             ApertureMeasurer.FrameMeasurement m = measurements[j];
             PhotometricReadinessChecker.ShapeResult shape = PhotometricReadinessChecker.analyzeShape(m, config, stats[j]);
             if (shape.status == PhotometricReadiness.CheckStatus.INCONCLUSIVE) {
@@ -251,6 +258,7 @@ public final class VariableStarAnalyzer {
             limits[j] = shape.linearLimitMag;
             ranges[j] = stats[j].linearRangeMag;
             for (int i = 0; i < nStars; i++) {
+                CancellationScope.check();
                 double mag = m.mag(ApertureMeasurer.R_MAIN, i);
                 if (Double.isFinite(mag) && mag < shape.linearLimitMag) {
                     m.flags[i] |= PhotometryFlags.NONLINEAR;
@@ -315,7 +323,9 @@ public final class VariableStarAnalyzer {
         int[][] flags = new int[nStars][nFrames];
         double[][] sky = new double[nStars][nFrames];
         for (int j = 0; j < nFrames; j++) {
+            CancellationScope.check();
             for (int i = 0; i < nStars; i++) {
+                CancellationScope.check();
                 mag[i][j] = measurements[j].mag(ApertureMeasurer.R_MAIN, i);
                 flags[i][j] = measurements[j].flags[i];
                 sky[i][j] = measurements[j].sky[i];
@@ -325,9 +335,11 @@ public final class VariableStarAnalyzer {
         String[] starExclusionReason = new String[nStars];
         double[] snr = new double[nFrames];
         for (int i = 0; i < nStars; i++) {
+            CancellationScope.check();
             int measured = 0;
             int nonlinear = 0;
             for (int j = 0; j < nFrames; j++) {
+                CancellationScope.check();
                 double error = measurements[j].magError[i];
                 snr[j] = (Double.isFinite(mag[i][j]) && error > 0) ? 1.0857 / error : Double.NaN;
                 if (Double.isFinite(mag[i][j])) {
@@ -356,6 +368,7 @@ public final class VariableStarAnalyzer {
         double halfWidth = input.masterStack[0].length / 2.0;
         double halfHeight = input.masterStack.length / 2.0;
         for (int i = 0; i < nStars; i++) {
+            CancellationScope.check();
             xNorm[i] = (selected.get(i).x - halfWidth) / halfWidth;
             yNorm[i] = (selected.get(i).y - halfHeight) / halfHeight;
         }
@@ -372,6 +385,7 @@ public final class VariableStarAnalyzer {
         int spatialDrops = 0;
         StringBuilder spatialFrames = new StringBuilder();
         for (int j = 0; j < nFrames; j++) {
+            CancellationScope.check();
             if (spatial[j].drop && frameActive[j]) {
                 exclude(j, stats[j], frameActive, String.format(Locale.US,
                         "Spatial residual %.2f mag", spatial[j].maxOffset));
@@ -395,6 +409,7 @@ public final class VariableStarAnalyzer {
         // --- Check D, then re-solve without failing frames ---
         double[] frameSky = new double[nFrames];
         for (int j = 0; j < nFrames; j++) {
+            CancellationScope.check();
             frameSky[j] = measurements[j].skyMedian;
         }
         PhotometricReadinessChecker.ResponseResult response =
@@ -402,6 +417,7 @@ public final class VariableStarAnalyzer {
         readiness.responseCheck = response.status;
         boolean anyResponseExclusion = false;
         for (int j = 0; j < nFrames; j++) {
+            CancellationScope.check();
             if (response.frameFails != null && response.frameFails[j] && frameActive[j]) {
                 exclude(j, stats[j], frameActive, "Magnitude-dependent response " + format(stats[j].responseSlope) + " mag/mag");
                 telemetry.framesExcludedResponse++;
@@ -414,6 +430,7 @@ public final class VariableStarAnalyzer {
             excludeUnsolvedFrames(solution, stats, frameActive, telemetry);
         }
         for (int j = 0; j < nFrames; j++) {
+            CancellationScope.check();
             if (solution.frameSolved[j]) {
                 stats[j].zeroPoint = solution.zeroPoint[j];
                 stats[j].planeX = solution.planeX[j];
@@ -428,10 +445,12 @@ public final class VariableStarAnalyzer {
         // --- Light curves ---
         List<StarLightCurve> curves = new ArrayList<>(nStars);
         for (int i = 0; i < nStars; i++) {
+            CancellationScope.check();
             PhotometryStarSelector.Star star = selected.get(i);
             StarLightCurve curve = new StarLightCurve(i, star.x, star.y, star.flux, nFrames);
             curve.meanMag = solution.starMag[i];
             for (int j = 0; j < nFrames; j++) {
+                CancellationScope.check();
                 curve.deltaMag[j] = solution.residual[i][j];
                 curve.magError[j] = measurements[j].magError[i];
                 curve.flags[j] = flags[i][j] | (frameActive[j] ? 0 : PhotometryFlags.FRAME_EXCLUDED);
@@ -456,6 +475,7 @@ public final class VariableStarAnalyzer {
             series.offsetY = new double[nFrames];
             series.julianDate = new double[nFrames];
             for (int j = 0; j < nFrames; j++) {
+                CancellationScope.check();
                 boolean on = frameActive[j] && solution.frameSolved[j];
                 series.zeroPoint[j] = on ? solution.zeroPoint[j] : Double.NaN;
                 series.fwhm[j] = on ? measurements[j].fwhm : Double.NaN;
@@ -473,6 +493,7 @@ public final class VariableStarAnalyzer {
                     readiness.verdict == PhotometricReadiness.Verdict.LIMITED, config, telemetry);
         } else {
             for (StarLightCurve curve : curves) {
+                CancellationScope.check();
                 if (curve.notScoredReason == null) {
                     curve.notScoredReason = "Session not ready for photometry";
                 }
@@ -482,7 +503,9 @@ public final class VariableStarAnalyzer {
 
         // --- Measurement counters ---
         for (StarLightCurve curve : curves) {
+            CancellationScope.check();
             for (int j = 0; j < nFrames; j++) {
+                CancellationScope.check();
                 int f = curve.flags[j];
                 PipelineTelemetry.PhotometryFrameStat stat = stats[j];
                 telemetry.measurementsTotal++;
@@ -499,6 +522,7 @@ public final class VariableStarAnalyzer {
             }
         }
         for (int j = 0; j < nFrames; j++) {
+            CancellationScope.check();
             if (frameActive[j]) {
                 telemetry.framesUsed++;
             }
@@ -527,9 +551,11 @@ public final class VariableStarAnalyzer {
         double[] frameConcentration = new double[nFrames];
         double[] buffer = new double[Math.max(nStars, nFrames)];
         for (int j = 0; j < nFrames; j++) {
+            CancellationScope.check();
             ApertureMeasurer.FrameMeasurement m = measurements[j];
             int n = 0;
             for (int i = 0; i < nStars; i++) {
+                CancellationScope.check();
                 double ci = m.concentration(i);
                 if (Double.isFinite(ci) && (m.flags[i] & SHAPE_REFERENCE_EXCLUDING_FLAGS) == 0) {
                     buffer[n++] = ci;
@@ -544,9 +570,11 @@ public final class VariableStarAnalyzer {
         double[] mags = new double[nFrames];
         List<Integer> scored = new ArrayList<>();
         for (int i = 0; i < nStars; i++) {
+            CancellationScope.check();
             Arrays.fill(departure[i], Double.NaN);
             int n = 0;
             for (int j = 0; j < nFrames; j++) {
+                CancellationScope.check();
                 ApertureMeasurer.FrameMeasurement m = measurements[j];
                 double ci = m.concentration(i);
                 boolean ok = Double.isFinite(ci) && frameConcentration[j] > 0
@@ -566,6 +594,7 @@ public final class VariableStarAnalyzer {
                 continue;
             }
             for (int j = 0; j < nFrames; j++) {
+                CancellationScope.check();
                 departure[i][j] = relative[j] / typical - 1.0;
             }
             scored.add(i);
@@ -579,12 +608,14 @@ public final class VariableStarAnalyzer {
         double[] pooled = new double[groupSize * 2 * nFrames];
         int start = 0;
         while (start < scored.size()) {
+            CancellationScope.check();
             int end = Math.min(scored.size(), start + groupSize);
             if (scored.size() - end < groupSize / 2) {
                 end = scored.size(); // fold a small remainder into the last group
             }
             int n = 0;
             for (int k = start; k < end; k++) {
+                CancellationScope.check();
                 for (double d : departure[scored.get(k)]) {
                     if (Double.isFinite(d)) {
                         if (n == pooled.length) {
@@ -596,6 +627,7 @@ public final class VariableStarAnalyzer {
             }
             double spread = Math.max(PhotometryMath.robustSigma(pooled, n), MIN_SHAPE_SPREAD);
             for (int k = start; k < end; k++) {
+                CancellationScope.check();
                 int i = scored.get(k);
                 for (int j = 0; j < nFrames; j++) {
                     if (Math.abs(departure[i][j]) > SHAPE_OUTLIER_SIGMA * spread) {
@@ -619,6 +651,7 @@ public final class VariableStarAnalyzer {
         List<Callable<ApertureMeasurer.FrameMeasurement>> tasks = new ArrayList<>(nFrames);
         AtomicInteger measured = new AtomicInteger();
         for (int j = 0; j < nFrames; j++) {
+            CancellationScope.check();
             final int frame = j;
             tasks.add(() -> {
                 ApertureMeasurer.FrameMeasurement m = ApertureMeasurer.measure(
@@ -638,11 +671,13 @@ public final class VariableStarAnalyzer {
         }
         if (executor == null) {
             for (int j = 0; j < nFrames; j++) {
+                CancellationScope.check();
                 out[j] = tasks.get(j).call();
             }
         } else {
-            List<Future<ApertureMeasurer.FrameMeasurement>> futures = executor.invokeAll(tasks);
+            List<Future<ApertureMeasurer.FrameMeasurement>> futures = CancellableTasks.invokeAll(executor, tasks);
             for (int j = 0; j < nFrames; j++) {
+                CancellationScope.check();
                 out[j] = futures.get(j).get();
             }
         }
@@ -663,19 +698,23 @@ public final class VariableStarAnalyzer {
         int nFrames = measurements.length;
         PointGrid starGrid = new PointGrid(16.0);
         for (int i = 0; i < stars.size(); i++) {
+            CancellationScope.check();
             starGrid.add(stars.get(i).x, stars.get(i).y, i);
         }
         PointGrid masterGrid = new PointGrid(16.0);
         for (int k = 0; k < input.masterStars.size(); k++) {
+            CancellationScope.check();
             masterGrid.add(input.masterStars.get(k).x, input.masterStars.get(k).y, k);
         }
         if (photometryStars != input.masterStars) {
             for (int k = 0; k < photometryStars.size(); k++) {
+                CancellationScope.check();
                 masterGrid.add(photometryStars.get(k).x, photometryStars.get(k).y, -1 - k);
             }
         }
 
         for (int j = 0; j < nFrames; j++) {
+            CancellationScope.check();
             ApertureMeasurer.FrameMeasurement m = measurements[j];
             // A detection flags a star only when it reaches the aperture or the gap before the sky ring; the clipped
             // sky median already ignores faint blobs in the ring itself.
@@ -715,12 +754,14 @@ public final class VariableStarAnalyzer {
 
         if (input.tracks != null) {
             for (TrackLinker.Track track : input.tracks) {
+                CancellationScope.check();
                 flagTrack(track, input.frames, stars, starGrid, measurements, config);
             }
         }
 
         if (input.slowMoverCandidates != null) {
             for (SourceExtractor.DetectedObject candidate : input.slowMoverCandidates) {
+                CancellationScope.check();
                 for (int j = 0; j < nFrames; j++) {
                     double radius = config.photometryAnnulusOuterFwhmFactor * measurements[j].fwhm;
                     if (candidate.rawPixels != null && !candidate.rawPixels.isEmpty()) {
@@ -758,11 +799,13 @@ public final class VariableStarAnalyzer {
         // Track points are in their own frame's coordinates; move each into the master system.
         Map<Integer, Integer> frameBySequence = new HashMap<>();
         for (int j = 0; j < frames.size(); j++) {
+            CancellationScope.check();
             frameBySequence.put(frames.get(j).sequenceIndex, j);
         }
         // {sequence, x, y, angle, half length along the angle, half width across it, capture time or NaN}
         List<double[]> points = new ArrayList<>(track.points.size());
         for (SourceExtractor.DetectedObject p : track.points) {
+            CancellationScope.check();
             Integer j = frameBySequence.get(p.sourceFrameIndex);
             double ox = j == null ? 0.0 : finiteOrZero(measurements[j].offsetX);
             double oy = j == null ? 0.0 : finiteOrZero(measurements[j].offsetY);
@@ -778,6 +821,7 @@ public final class VariableStarAnalyzer {
         int firstSequence = (int) points.get(0)[0];
         int lastSequence = (int) points.get(points.size() - 1)[0];
         for (int j = 0; j < frames.size(); j++) {
+            CancellationScope.check();
             int sequence = frames.get(j).sequenceIndex;
             if (sequence < firstSequence || sequence > lastSequence) {
                 continue;
@@ -785,6 +829,7 @@ public final class VariableStarAnalyzer {
             double annulus = config.photometryAnnulusOuterFwhmFactor * measurements[j].fwhm;
             boolean observed = false;
             for (double[] p : points) {
+                CancellationScope.check();
                 if (p[0] == sequence) {
                     observed = true;
                     flagSegment(p[1], p[2], p, annulus, stars, starGrid, measurements[j].flags);
@@ -805,6 +850,7 @@ public final class VariableStarAnalyzer {
         double ux = Math.cos(shape[3]);
         double uy = Math.sin(shape[3]);
         for (int i : starGrid.within(x, y, reach + shape[4])) {
+            CancellationScope.check();
             double dx = stars.get(i).x - x;
             double dy = stars.get(i).y - y;
             double along = Math.max(-shape[4], Math.min(shape[4], dx * ux + dy * uy));
@@ -823,6 +869,7 @@ public final class VariableStarAnalyzer {
     private static double[] nearestPoint(List<double[]> points, int sequence) {
         double[] best = points.get(0);
         for (double[] p : points) {
+            CancellationScope.check();
             if (Math.abs(p[0] - sequence) < Math.abs(best[0] - sequence)) {
                 best = p;
             }
@@ -839,6 +886,7 @@ public final class VariableStarAnalyzer {
         double[] before = points.get(0);
         double[] after = points.get(points.size() - 1);
         for (double[] p : points) {
+            CancellationScope.check();
             if (p[0] <= sequence) {
                 before = p;
             }
@@ -879,6 +927,7 @@ public final class VariableStarAnalyzer {
                                         double sessionFwhm, PipelineTelemetry.PhotometryTelemetry telemetry) {
         int mainIndex = -1;
         for (int a = 0; a < options.length; a++) {
+            CancellationScope.check();
             if (options[a] == main) {
                 mainIndex = a;
             }
@@ -888,11 +937,13 @@ public final class VariableStarAnalyzer {
         double[][] sigma = new double[nStars][options.length];
         double[] residuals = new double[usable.length > 0 ? usable[0].length : 0];
         for (int i = 0; i < nStars; i++) {
+            CancellationScope.check();
             if (starExcluded[i] || !Double.isFinite(main.starMag[i])) {
                 continue;
             }
             boolean ok = true;
             for (int a = 0; a < options.length && ok; a++) {
+                CancellationScope.check();
                 for (int j = 0; j < residuals.length; j++) {
                     residuals[j] = usable[i][j] ? options[a].residual[i][j] : Double.NaN;
                 }
@@ -910,12 +961,14 @@ public final class VariableStarAnalyzer {
         double[] binUpper = new double[APERTURE_BINS];
         int[] binChoice = new int[APERTURE_BINS];
         for (int b = 0; b < APERTURE_BINS; b++) {
+            CancellationScope.check();
             int from = b * rows.size() / APERTURE_BINS;
             int to = (b + 1) * rows.size() / APERTURE_BINS;
             binUpper[b] = rows.get(to - 1)[0];
             double[] median = new double[options.length];
             double[] column = new double[to - from];
             for (int a = 0; a < options.length; a++) {
+                CancellationScope.check();
                 for (int k = from; k < to; k++) {
                     column[k - from] = sigma[(int) rows.get(k)[1]][a];
                 }
@@ -923,6 +976,7 @@ public final class VariableStarAnalyzer {
             }
             int best = mainIndex;
             for (int a = 0; a < options.length; a++) {
+                CancellationScope.check();
                 if (fwhmFactors[a] * sessionFwhm >= APERTURE_MIN_RADIUS_PIXELS && median[a] < median[best]) {
                     best = a;
                 }
@@ -937,12 +991,14 @@ public final class VariableStarAnalyzer {
             telemetry.apertureChoices.add(choice);
         }
         for (int i = 0; i < nStars; i++) {
+            CancellationScope.check();
             double mag = main.starMag[i];
             if (!Double.isFinite(mag)) {
                 continue;
             }
             int b = 0;
             while (b < APERTURE_BINS - 1 && mag > binUpper[b]) {
+                CancellationScope.check();
                 b++;
             }
             EnsembleSolver.Solution chosen = options[binChoice[b]];
@@ -956,10 +1012,12 @@ public final class VariableStarAnalyzer {
     static boolean[][] footprintMask(List<SourceExtractor.DetectedObject> stars, int height, int width) {
         boolean[][] mask = new boolean[height][width];
         for (SourceExtractor.DetectedObject star : stars) {
+            CancellationScope.check();
             if (star.rawPixels == null) {
                 continue;
             }
             for (SourceExtractor.Pixel p : star.rawPixels) {
+                CancellationScope.check();
                 for (int y = Math.max(0, p.y - 1); y <= Math.min(height - 1, p.y + 1); y++) {
                     for (int x = Math.max(0, p.x - 1); x <= Math.min(width - 1, p.x + 1); x++) {
                         mask[y][x] = true;
@@ -986,7 +1044,9 @@ public final class VariableStarAnalyzer {
         int nFrames = frameActive.length;
         double[][] mag = new double[nStars][nFrames];
         for (int j = 0; j < nFrames; j++) {
+            CancellationScope.check();
             for (int i = 0; i < nStars; i++) {
+                CancellationScope.check();
                 mag[i][j] = measurements[j].mag(radiusIndex, i);
             }
         }
@@ -997,10 +1057,12 @@ public final class VariableStarAnalyzer {
     private static boolean[][] usableMatrix(double[][] mag, int[][] flags, boolean[] starExcluded, boolean[] frameActive) {
         boolean[][] usable = new boolean[mag.length][frameActive.length];
         for (int i = 0; i < mag.length; i++) {
+            CancellationScope.check();
             if (starExcluded[i]) {
                 continue;
             }
             for (int j = 0; j < frameActive.length; j++) {
+                CancellationScope.check();
                 usable[i][j] = frameActive[j] && (flags[i][j] & EXCLUDING_FLAGS) == 0 && Double.isFinite(mag[i][j]);
             }
         }
@@ -1012,6 +1074,7 @@ public final class VariableStarAnalyzer {
                                               boolean[] frameActive,
                                               PipelineTelemetry.PhotometryTelemetry telemetry) {
         for (int j = 0; j < frameActive.length; j++) {
+            CancellationScope.check();
             if (frameActive[j] && !solution.frameSolved[j]) {
                 exclude(j, stats[j], frameActive, "Too few usable stars for the ensemble");
                 telemetry.framesExcludedTooFewStars++;
@@ -1022,6 +1085,7 @@ public final class VariableStarAnalyzer {
     private static void decideVerdict(PhotometricReadiness readiness, boolean[] frameActive, DetectionConfig config) {
         int active = 0;
         for (boolean on : frameActive) {
+            CancellationScope.check();
             if (on) {
                 active++;
             }
@@ -1115,6 +1179,7 @@ public final class VariableStarAnalyzer {
             int cy = cell(y);
             double r2 = radius * radius;
             for (int gy = cy - span; gy <= cy + span; gy++) {
+                CancellationScope.check();
                 for (int gx = cx - span; gx <= cx + span; gx++) {
                     List<double[]> list = cells.get(key(gx, gy));
                     if (list == null) {
@@ -1139,6 +1204,7 @@ public final class VariableStarAnalyzer {
             int cy = cell(y);
             double r2 = radius * radius;
             for (int gy = cy - span; gy <= cy + span; gy++) {
+                CancellationScope.check();
                 for (int gx = cx - span; gx <= cx + span; gx++) {
                     List<double[]> list = cells.get(key(gx, gy));
                     if (list == null) {

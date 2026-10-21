@@ -9,6 +9,7 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.engine.JTransientEngine;
 
@@ -252,7 +253,9 @@ public class SourceExtractor {
 
         // 3. Scan the image
         for (int y = 0; y < height; y++) {
+            CancellationScope.check();
             for (int x = 0; x < width; x++) {
+                CancellationScope.check();
 
                 int pixelValue = PixelEncoding.toShiftedPositiveInt(image[y][x]);
 
@@ -268,6 +271,9 @@ public class SourceExtractor {
 
                     // --- FAST BFS LOOP ---
                     while (!queue.isEmpty()) {
+                        if ((currentBlob.size() & 1023) == 0) {
+                            CancellationScope.check();
+                        }
                         Pixel p = queue.poll();
                         currentBlob.add(p);
 
@@ -334,6 +340,7 @@ public class SourceExtractor {
             return area.contains(object.x, object.y);
         }
         for (Pixel pixel : object.rawPixels) {
+            CancellationScope.check();
             if (!area.contains(pixel.x, pixel.y)) {
                 return false;
             }
@@ -368,9 +375,11 @@ public class SourceExtractor {
 
         boolean inArea = area != null && area.getPixelCount() > 0 && area.getWidth() == width && area.getHeight() == height;
         for (int y = 0; y < height; y++) {
+            CancellationScope.check();
             int fromX = inArea ? area.getRowStart(y) : 0;
             int toX = inArea ? area.getRowEnd(y) : width - 1;
             for (int x = fromX; x <= toX; x++) {
+                CancellationScope.check();
                 int val = PixelEncoding.toShiftedPositiveInt(image[y][x]);
                 histogram[val]++;
             }
@@ -382,16 +391,19 @@ public class SourceExtractor {
         double currentSigma = 0;
 
         for (int iter = 0; iter < config.bgClippingIterations; iter++) {
+            CancellationScope.check();
             long count = 0;
             long validPixelCount = 0;
 
             for (int i = currentMinBin; i <= currentMaxBin; i++) {
+                CancellationScope.check();
                 validPixelCount += histogram[i];
             }
 
             if (validPixelCount == 0) break;
 
             for (int i = currentMinBin; i <= currentMaxBin; i++) {
+                CancellationScope.check();
                 count += histogram[i];
                 if (count >= validPixelCount / 2) {
                     currentMedian = i;
@@ -401,6 +413,7 @@ public class SourceExtractor {
 
             double sumSqDiff = 0;
             for (int i = currentMinBin; i <= currentMaxBin; i++) {
+                CancellationScope.check();
                 if (histogram[i] > 0) {
                     double diff = i - currentMedian;
                     sumSqDiff += (diff * diff) * histogram[i];
@@ -433,6 +446,7 @@ public class SourceExtractor {
         // Calculate Peak Sigma for Anomaly Rescue
         double maxPixelValue = 0;
         for (Pixel p : blob) {
+            CancellationScope.check();
             if (p.value > maxPixelValue) {
                 maxPixelValue = p.value;
             }
@@ -444,6 +458,7 @@ public class SourceExtractor {
         double m01 = 0;
 
         for (Pixel p : blob) {
+            CancellationScope.check();
             double intensity = p.value - bg.median;
             if (intensity <= 0) intensity = 1;
 
@@ -460,6 +475,7 @@ public class SourceExtractor {
 
         double mu20 = 0, mu02 = 0, mu11 = 0;
         for (Pixel p : blob) {
+            CancellationScope.check();
             double intensity = p.value - bg.median;
             if (intensity <= 0) intensity = 1;
 
@@ -532,6 +548,7 @@ public class SourceExtractor {
         double minPerpendicular = Double.POSITIVE_INFINITY;
         double maxPerpendicular = Double.NEGATIVE_INFINITY;
         for (Pixel pixel : pixels) {
+            CancellationScope.check();
             double offsetX = pixel.x - obj.x;
             double offsetY = pixel.y - obj.y;
             double parallel = offsetX * directionX + offsetY * directionY;
@@ -575,11 +592,13 @@ public class SourceExtractor {
         double[] binMinPerp = new double[bins];
         double[] binMaxPerp = new double[bins];
         for (int i = 0; i < bins; i++) {
+            CancellationScope.check();
             binMinPerp[i] = Double.MAX_VALUE;
             binMaxPerp[i] = -Double.MAX_VALUE;
         }
 
         for (SourceExtractor.Pixel p : obj.rawPixels) {
+            CancellationScope.check();
             double vx = p.x - obj.x;
             double vy = p.y - obj.y;
             double par = vx * dx + vy * dy;
@@ -597,6 +616,7 @@ public class SourceExtractor {
         int firstOccupied = -1;
         int lastOccupied = -1;
         for (int i = 0; i < bins; i++) {
+            CancellationScope.check();
             if (counts[i] > 0) {
                 if (firstOccupied == -1) {
                     firstOccupied = i;
@@ -626,6 +646,7 @@ public class SourceExtractor {
         double middleMinWidth = Double.MAX_VALUE;
 
         for (int i = firstOccupied; i <= leftEnd; i++) {
+            CancellationScope.check();
             if (counts[i] > leftPeakCount) {
                 leftPeakCount = counts[i];
             }
@@ -638,6 +659,7 @@ public class SourceExtractor {
         }
 
         for (int i = rightStart; i <= lastOccupied; i++) {
+            CancellationScope.check();
             if (counts[i] > rightPeakCount) {
                 rightPeakCount = counts[i];
             }
@@ -650,6 +672,7 @@ public class SourceExtractor {
         }
 
         for (int i = middleStart; i <= middleEnd; i++) {
+            CancellationScope.check();
             middleMinCount = Math.min(middleMinCount, counts[i]);
             if (counts[i] > 0) {
                 middleMinWidth = Math.min(middleMinWidth, binMaxPerp[i] - binMinPerp[i] + 1.0);

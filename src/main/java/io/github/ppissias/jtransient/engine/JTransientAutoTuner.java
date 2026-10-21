@@ -9,6 +9,7 @@
  */
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.MasterReferenceAnalyzer;
@@ -458,6 +459,17 @@ public class JTransientAutoTuner {
      * @param listener optional progress listener
      * @return tuning result using the medium profile
      */
+    public static AutoTunerResult tune(List<ImageFrame> allFrames, DetectionConfig baseConfig,
+                                         AutoTuneProfile profile, TransientEngineProgressListener listener,
+                                         io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
+        try (CancellationScope scope = CancellationScope.open(cancellation)) {
+            CancellationScope.check();
+            AutoTunerResult result = tune(allFrames, baseConfig, profile, listener);
+            CancellationScope.check();
+            return result;
+        }
+    }
+
     public static AutoTunerResult tune(List<ImageFrame> allFrames,
                                        DetectionConfig baseConfig,
                                        TransientEngineProgressListener listener) {
@@ -478,6 +490,7 @@ public class JTransientAutoTuner {
                                        DetectionConfig baseConfig,
                                        AutoTuneProfile profile,
                                        TransientEngineProgressListener listener) {
+        CancellationScope.check();
         InputRules.checkFrames(allFrames);
 
         if (DEBUG) {
@@ -540,6 +553,7 @@ public class JTransientAutoTuner {
         if (DEBUG) {
             System.out.println("\n[ROI] Using " + cropRegions.size() + " crops for tuning.");
             for (CropRegion r : cropRegions) {
+                CancellationScope.check();
                 System.out.println("   -> " + r.label + ": x=" + r.x + ", y=" + r.y + ", w=" + r.width + ", h=" + r.height);
             }
         }
@@ -547,6 +561,7 @@ public class JTransientAutoTuner {
         // Pre-crop the selected tuning frames once, so the sweep does not repeatedly crop.
         List<List<CroppedFrame>> croppedFramesByRegion = new ArrayList<>();
         for (CropRegion region : cropRegions) {
+            CancellationScope.check();
             croppedFramesByRegion.add(buildCroppedFramesForRegion(tuningFrames, region));
         }
 
@@ -583,7 +598,9 @@ public class JTransientAutoTuner {
         int currentCombination = 0;
 
         for (int minPix : MIN_PIXELS_TO_TEST) {
+            CancellationScope.check();
             for (double sigma : SIGMAS_TO_TEST) {
+                CancellationScope.check();
                 for (double growDelta : GROW_DELTAS_TO_TEST) {
                     for (double overlapFraction : MASK_OVERLAP_TO_TEST) {
 
@@ -1049,6 +1066,7 @@ public class JTransientAutoTuner {
                 "Using %d tuning crops of size %dx%d with border margin >= %d px where possible:%n",
                 regions.size(), cropSize, cropSize, AUTO_TUNE_BORDER_MARGIN));
         for (CropRegion r : regions) {
+            CancellationScope.check();
             report.append(String.format(" -> %s crop at x=%d, y=%d%n", r.label, r.x, r.y));
         }
 
@@ -1061,6 +1079,7 @@ public class JTransientAutoTuner {
     private static List<CroppedFrame> buildCroppedFramesForRegion(List<ImageFrame> frames, CropRegion region) {
         List<CroppedFrame> cropped = new ArrayList<>(frames.size());
         for (ImageFrame frame : frames) {
+            CancellationScope.check();
             cropped.add(new CroppedFrame(cropPixels(frame.pixelData, region), frame.sequenceIndex));
         }
         return cropped;
@@ -1072,6 +1091,7 @@ public class JTransientAutoTuner {
     private static short[][] cropPixels(short[][] source, CropRegion region) {
         short[][] out = new short[region.height][region.width];
         for (int y = 0; y < region.height; y++) {
+            CancellationScope.check();
             System.arraycopy(source[region.y + y], region.x, out[y], 0, region.width);
         }
         return out;
@@ -1090,7 +1110,9 @@ public class JTransientAutoTuner {
         int medianIndex = depth / 2;
 
         for (int y = 0; y < height; y++) {
+            CancellationScope.check();
             for (int x = 0; x < width; x++) {
+                CancellationScope.check();
                 for (int i = 0; i < depth; i++) {
                     buffer[i] = PixelEncoding.toShiftedPositiveInt(frames.get(i).pixelData[y][x]);
                 }
@@ -1108,9 +1130,11 @@ public class JTransientAutoTuner {
      */
     private static void insertionSort(int[] arr) {
         for (int i = 1; i < arr.length; i++) {
+            CancellationScope.check();
             int key = arr[i];
             int j = i - 1;
             while (j >= 0 && arr[j] > key) {
+                CancellationScope.check();
                 arr[j + 1] = arr[j];
                 j--;
             }
@@ -1137,6 +1161,7 @@ public class JTransientAutoTuner {
         appendSamplingConfigTrace(config, samplingConfig, report);
 
         for (int i = 0; i < totalFrames; i++) {
+            CancellationScope.check();
             ImageFrame frame = allFrames.get(i);
 
             if (DEBUG) {
@@ -1161,6 +1186,7 @@ public class JTransientAutoTuner {
         report.append(String.format("Selected %d tuning frames (best + representative median quality):%n", target));
 
         for (int i = 0; i < eliteCount; i++) {
+            CancellationScope.check();
             addSampleFrame(records, i, usedIndices, selected, report);
         }
 
@@ -1175,12 +1201,14 @@ public class JTransientAutoTuner {
             };
 
             for (int idx : candidateIndices) {
+                CancellationScope.check();
                 if (selected.size() >= target) break;
                 addSampleFrame(records, idx, usedIndices, selected, report);
             }
         }
 
         for (int i = 0; i < records.size() && selected.size() < target; i++) {
+            CancellationScope.check();
             addSampleFrame(records, i, usedIndices, selected, report);
         }
 
@@ -1281,6 +1309,7 @@ public class JTransientAutoTuner {
     private static void appendInputFrameOrderTrace(List<ImageFrame> allFrames, StringBuilder report) {
         boolean isSorted = true;
         for (int i = 1; i < allFrames.size(); i++) {
+            CancellationScope.check();
             if (allFrames.get(i - 1).sequenceIndex > allFrames.get(i).sequenceIndex) {
                 isSorted = false;
                 break;
@@ -1388,6 +1417,7 @@ public class JTransientAutoTuner {
         int limit = Math.min(5, acceptedCandidates.size());
 
         for (int i = 0; i < limit; i++) {
+            CancellationScope.check();
             SweepCandidateTelemetry c = acceptedCandidates.get(i);
             report.append(String.format(
                     " #%d | Score: %.2f | Sigma: %.1f | Grow: %.2f | MinPix: %d | Overlap: %.2f | Stable: %d | Transients: %d | Ratio: %.2f%% | AvgTrans/CropFrame: %.3f | Mask: %.2f%% | StableYield: %.3f | Overflow: %.3f | Sweet: %.3f | Variance: %.3f | MaskPenalty: %.3f | Harshness: %.3f | LowSigmaGuard: %.3f%n",
@@ -1416,6 +1446,7 @@ public class JTransientAutoTuner {
             double scoreGap = acceptedCandidates.get(0).score - acceptedCandidates.get(1).score;
             int nearTies = 0;
             for (int i = 1; i < acceptedCandidates.size(); i++) {
+                CancellationScope.check();
                 if ((acceptedCandidates.get(0).score - acceptedCandidates.get(i).score) <= 1.0) {
                     nearTies++;
                 }
@@ -1463,6 +1494,7 @@ public class JTransientAutoTuner {
         List<Integer> transientCountsPerCropFrame = new ArrayList<>();
 
         for (int cropIndex = 0; cropIndex < cropRegions.size(); cropIndex++) {
+            CancellationScope.check();
             CropRegion cropRegion = cropRegions.get(cropIndex);
             List<CroppedFrame> cropFrames = croppedFramesByRegion.get(cropIndex);
 
@@ -1494,6 +1526,7 @@ public class JTransientAutoTuner {
             int maskTrueCountThisCrop = 0;
 
             for (SourceExtractor.DetectedObject mStar : masterStars) {
+                CancellationScope.check();
                 if (mStar.rawPixels == null) continue;
 
                 for (SourceExtractor.Pixel p : mStar.rawPixels) {
@@ -1530,6 +1563,7 @@ public class JTransientAutoTuner {
             }
 
             for (CroppedFrame frame : cropFrames) {
+                CancellationScope.check();
                 List<SourceExtractor.DetectedObject> objects = extractInCrop(
                         frame.pixelData,
                         evalConfig.detectionSigmaMultiplier,
@@ -1610,6 +1644,7 @@ public class JTransientAutoTuner {
         int total = 0;
 
         for (SourceExtractor.Pixel p : obj.rawPixels) {
+            CancellationScope.check();
             if (p.x >= 0 && p.x < sensorWidth && p.y >= 0 && p.y < sensorHeight) {
                 total++;
                 if (mask[p.y][p.x]) {
@@ -1636,6 +1671,7 @@ public class JTransientAutoTuner {
 
         double variance = 0.0;
         for (int v : values) {
+            CancellationScope.check();
             double d = v - mean;
             variance += d * d;
         }
@@ -1662,16 +1698,19 @@ public class JTransientAutoTuner {
         StringBuilder out = new StringBuilder("[");
         if (allFrames.size() <= 12) {
             for (int i = 0; i < allFrames.size(); i++) {
+                CancellationScope.check();
                 if (i > 0) out.append(", ");
                 out.append(allFrames.get(i).sequenceIndex);
             }
         } else {
             for (int i = 0; i < 5; i++) {
+                CancellationScope.check();
                 if (i > 0) out.append(", ");
                 out.append(allFrames.get(i).sequenceIndex);
             }
             out.append(", ... ,");
             for (int i = allFrames.size() - 3; i < allFrames.size(); i++) {
+                CancellationScope.check();
                 out.append(' ').append(allFrames.get(i).sequenceIndex);
                 if (i < allFrames.size() - 1) {
                     out.append(',');
@@ -1883,6 +1922,7 @@ public class JTransientAutoTuner {
         probeConfig.minDetectionPixels = INITIAL_JITTER_PROBE_MIN_PIXELS;
 
         for (int cropIndex = 0; cropIndex < croppedFramesByRegion.size(); cropIndex++) {
+            CancellationScope.check();
             List<CroppedFrame> cropFrames = croppedFramesByRegion.get(cropIndex);
             if (cropFrames.isEmpty()) {
                 continue;
@@ -1905,6 +1945,7 @@ public class JTransientAutoTuner {
 
             List<List<SourceExtractor.DetectedObject>> frameObjectsByCrop = new ArrayList<>(cropFrames.size());
             for (CroppedFrame frame : cropFrames) {
+                CancellationScope.check();
                 frameObjectsByCrop.add(extractInCrop(
                         frame.pixelData,
                         probeConfig.detectionSigmaMultiplier,
@@ -1913,6 +1954,7 @@ public class JTransientAutoTuner {
             }
 
             for (SourceExtractor.DetectedObject masterStar : masterStars) {
+                CancellationScope.check();
                 if (!isUsableForJitterCalibration(masterStar)) {
                     continue;
                 }
@@ -2003,6 +2045,7 @@ public class JTransientAutoTuner {
         double bestDist = Double.MAX_VALUE;
 
         for (SourceExtractor.DetectedObject candidate : candidates) {
+            CancellationScope.check();
             if (!isUsableForJitterCalibration(candidate)) {
                 continue;
             }

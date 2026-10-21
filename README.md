@@ -78,6 +78,12 @@ This reduces concurrent allocation pressure; it does not guarantee that a large 
 memory. Reuse an engine sequentially, not for concurrent pipeline calls, and call `shutdown()`
 when finished, or use it in try-with-resources (`JTransientEngine` implements `AutoCloseable`).
 
+Operations support cooperative cancellation through a `CancellationToken` or an enclosing `CancellationScope`.
+Cancelled worker batches finish their cleanup before the operation throws `CancellationException`; calibrated tuning
+also propagates cancellation. See the [cancellation and worker-lifetime contract](PIPELINE.md#cancellation-and-worker-lifetime)
+for overloads, standalone operations, interruption and sequential engine reuse. Closing an engine during a run is rejected;
+cancel and await the run first.
+
 The following examples are written as standalone skeletons. Any `load...()` helper
 shown in an example is an application-specific placeholder that you should replace.
 

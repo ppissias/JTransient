@@ -1,5 +1,7 @@
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.execution.CancellationScope;
+
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.engine.ImageFrame;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
@@ -148,6 +150,7 @@ public final class SlowMoverAnalyzer {
         telemetry.minCandidateAxisRatio = Double.POSITIVE_INFINITY;
 
         for (SourceExtractor.DetectedObject object : maximumObjects) {
+            CancellationScope.check();
             if (object.rawPixels == null || object.rawPixels.size() < config.masterSlowMoverMinPixels) {
                 telemetry.rejectedBelowMinPixels++;
                 continue;
@@ -239,10 +242,12 @@ public final class SlowMoverAnalyzer {
                                                int height) {
         boolean[][] mask = new boolean[height][width];
         for (SourceExtractor.DetectedObject object : medianObjects) {
+            CancellationScope.check();
             if (object.rawPixels == null) {
                 continue;
             }
             for (SourceExtractor.Pixel pixel : object.rawPixels) {
+                CancellationScope.check();
                 mask[pixel.y][pixel.x] = true;
             }
         }
@@ -253,6 +258,7 @@ public final class SlowMoverAnalyzer {
     private static double computeMaskOverlapFraction(SourceExtractor.DetectedObject object, boolean[][] mask) {
         int overlapCount = 0;
         for (SourceExtractor.Pixel pixel : object.rawPixels) {
+            CancellationScope.check();
             if (mask[pixel.y][pixel.x]) {
                 overlapCount++;
             }

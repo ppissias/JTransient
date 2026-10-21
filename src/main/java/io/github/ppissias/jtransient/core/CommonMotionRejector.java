@@ -9,6 +9,8 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.execution.CancellationScope;
+
 import io.github.ppissias.jtransient.config.DetectionConfig;
 
 import java.util.ArrayList;
@@ -58,8 +60,10 @@ public final class CommonMotionRejector {
         Set<SourceExtractor.DetectedObject> removed = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         List<ResidualTransientAnalysis.CommonMotionGroup> exported = new ArrayList<>();
         for (List<Source> group : groups) {
+            CancellationScope.check();
             List<List<SourceExtractor.DetectedObject>> members = new ArrayList<>();
             for (Source source : group) {
+                CancellationScope.check();
                 List<SourceExtractor.DetectedObject> points = source.orderedPoints();
                 members.add(points);
                 removed.addAll(points);
@@ -68,6 +72,7 @@ public final class CommonMotionRejector {
         }
         if (unclassified != null && !removed.isEmpty()) {
             for (List<SourceExtractor.DetectedObject> frame : unclassified) {
+                CancellationScope.check();
                 if (frame != null) {
                     frame.removeIf(removed::contains);
                 }
@@ -107,11 +112,13 @@ public final class CommonMotionRejector {
         Map<Integer, List<SourceExtractor.DetectedObject>> byFrame = new HashMap<>();
         Set<SourceExtractor.DetectedObject> seen = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         for (int frameIndex = 0; frameIndex < unclassified.size(); frameIndex++) {
+            CancellationScope.check();
             List<SourceExtractor.DetectedObject> frame = unclassified.get(frameIndex);
             if (frame == null) {
                 continue;
             }
             for (SourceExtractor.DetectedObject point : frame) {
+                CancellationScope.check();
                 if (point == null || !seen.add(point)) {
                     continue;
                 }
@@ -125,8 +132,10 @@ public final class CommonMotionRejector {
         }
         Map<Integer, Grid> grids = new HashMap<>();
         for (Map.Entry<Integer, List<SourceExtractor.DetectedObject>> entry : byFrame.entrySet()) {
+            CancellationScope.check();
             Grid grid = new Grid(MAX_LINK_SHIFT_PX);
             for (SourceExtractor.DetectedObject point : entry.getValue()) {
+                CancellationScope.check();
                 grid.add(point);
             }
             grids.put(entry.getKey(), grid);
@@ -135,7 +144,9 @@ public final class CommonMotionRejector {
         List<Integer> frames = new ArrayList<>(byFrame.keySet());
         frames.sort(Comparator.naturalOrder());
         for (int frame : frames) {
+            CancellationScope.check();
             for (SourceExtractor.DetectedObject start : byFrame.get(frame)) {
+                CancellationScope.check();
                 if (assigned.contains(start)) {
                     continue;
                 }
@@ -159,6 +170,7 @@ public final class CommonMotionRejector {
                                                                  Map<Integer, Grid> grids,
                                                                  Set<SourceExtractor.DetectedObject> assigned) {
         for (int later = current.sourceFrameIndex + 1; later <= current.sourceFrameIndex + MAX_FRAME_GAP; later++) {
+            CancellationScope.check();
             Grid grid = grids.get(later);
             if (grid == null) {
                 continue;
@@ -185,6 +197,7 @@ public final class CommonMotionRejector {
         double bestDistance = Double.POSITIVE_INFINITY;
         double secondDistance = Double.POSITIVE_INFINITY;
         for (SourceExtractor.DetectedObject point : points) {
+            CancellationScope.check();
             double distance = Math.hypot(point.x - x, point.y - y);
             if (distance < bestDistance) {
                 secondDistance = bestDistance;
@@ -201,6 +214,7 @@ public final class CommonMotionRejector {
         boolean[] used = new boolean[sources.size()];
         List<List<Source>> groups = new ArrayList<>();
         for (int i = 0; i < sources.size(); i++) {
+            CancellationScope.check();
             if (used[i]) {
                 continue;
             }
@@ -208,6 +222,7 @@ public final class CommonMotionRejector {
             members.add(i);
             Set<Integer> commonFrames = new HashSet<>(sources.get(i).byFrame.keySet());
             for (int j = i + 1; j < sources.size(); j++) {
+                CancellationScope.check();
                 if (used[j]) {
                     continue;
                 }
@@ -233,6 +248,7 @@ public final class CommonMotionRejector {
             }
             List<Source> group = new ArrayList<>();
             for (int member : members) {
+                CancellationScope.check();
                 used[member] = true;
                 group.add(sources.get(member));
             }
@@ -248,6 +264,7 @@ public final class CommonMotionRejector {
         }
         List<Integer> shared = new ArrayList<>();
         for (int frame : left.byFrame.keySet()) {
+            CancellationScope.check();
             if (right.byFrame.containsKey(frame)) {
                 shared.add(frame);
             }
@@ -260,6 +277,7 @@ public final class CommonMotionRejector {
         SourceExtractor.DetectedObject leftReference = left.byFrame.get(reference);
         SourceExtractor.DetectedObject rightReference = right.byFrame.get(reference);
         for (int frame : shared) {
+            CancellationScope.check();
             SourceExtractor.DetectedObject leftPoint = left.byFrame.get(frame);
             SourceExtractor.DetectedObject rightPoint = right.byFrame.get(frame);
             double dx = (leftPoint.x - leftReference.x) - (rightPoint.x - rightReference.x);
@@ -274,6 +292,7 @@ public final class CommonMotionRejector {
     private static Set<Integer> sharedFrames(List<Source> group) {
         Set<Integer> shared = new HashSet<>(group.get(0).byFrame.keySet());
         for (int i = 1; i < group.size(); i++) {
+            CancellationScope.check();
             shared.retainAll(group.get(i).byFrame.keySet());
         }
         return shared;
@@ -318,6 +337,7 @@ public final class CommonMotionRejector {
             int reach = (int) Math.ceil(radius / cell);
             List<SourceExtractor.DetectedObject> found = new ArrayList<>();
             for (int ix = centerX - reach; ix <= centerX + reach; ix++) {
+                CancellationScope.check();
                 for (int iy = centerY - reach; iy <= centerY + reach; iy++) {
                     List<SourceExtractor.DetectedObject> bucket = cells.get(pack(ix, iy));
                     if (bucket == null) {

@@ -3,10 +3,21 @@
 > Historical record, archived 2026-10-21. These sections were moved out of [DESIGN-IMPROVEMENTS.md](../../DESIGN-IMPROVEMENTS.md) so that it holds only pending work and open decisions. They are kept as written, including statements that later changes superseded: the assessment of the 2026-10-20 architecture review, the decisions to keep current behaviour, the completed and retired findings, and the review of the plan with its answered questions. The decisions from that review were folded into the JA items when this was archived. Do not re-propose a declined item without new evidence.
 
 Contents:
+- [Operation cancellation and worker lifetime](#ja-02ja-03-operation-cancellation-and-worker-lifetime-2026-10-21)
 - [Assessment and scope of the architecture review](#assessment-and-scope-of-the-architecture-review-2026-10-20)
 - [Decisions to keep current behavior](#decisions-to-keep-current-behavior)
 - [Completed and retired findings](#completed-and-retired-findings)
 - [Review of the plan, with answered questions](#review)
+
+## JA-02/JA-03 operation cancellation and worker lifetime (2026-10-21)
+
+The maintainer authorized the cancellation slice together with SpacePixels, using the local sibling composite build. Operations accept a thread-safe `CancellationToken`, directly through overloads or an enclosing `CancellationScope`. Scoped state is restored after the operation and explicitly propagated into worker batches. Image, tracking, calibration and photometry loops check cancellation. A failed or cancelled batch stops queued tasks, requests running siblings to stop, and waits for their bodies and cleanup to finish. Interrupt status is preserved; worker errors, including out-of-memory, cannot be hidden by a simultaneous cancel.
+
+Calibrated tuning propagates `CancellationException` instead of returning a calibration fallback. Other runtime failures retain the existing unsuccessful result and expose the original cause as transient `Calibration.failureCause`, so existing saved tuning JSON remains readable and runtime exceptions do not enter its serialized shape. Scientific readiness outcomes are unchanged.
+
+One operation per engine is enforced. An overlapping operation or a close during active work is rejected. Cancel and await the operation before closing it; sequential reuse after cancellation or ordinary failure remains supported. Idle engine shutdown and calibrated tuning wait for their owned pools to terminate. Stack rows use cancellation-aware, joined common-pool batches; they remain outside the frame-worker memory budget, so JA-02's shared resource-policy work remains open. Consistent stage/frame failure context remains open under JA-03 and should coordinate with JA-09.
+
+Both projects' unit suites and focused cancellation tests pass, together with four viewer mechanics checks in SpacePixels. On klangwolke-2, baseline `6c3f34d` cancellation waits of 9.963 s (extraction), 6.039 s (photometry ensemble) and 11.374 s (tuning fallback) fall below 0.01 s with cooperative cancellation in the controlled comparison. Full scientific-output snapshots match byte for byte, including hashed stack/mask pixels and numerical telemetry, excluding execution timing. See the [SpacePixels D04 record](../../../SpacePixels/docs/archive/design-improvements-completed-2026-10.md#d04-engine-cancellation-and-viewer-lifecycle-2026-10-21) for configuration, triggers, dataset and snapshot hash. Current API behavior is in [PIPELINE.md](../../PIPELINE.md#cancellation-and-worker-lifetime). No published release or published-pair compatibility check is claimed.
 
 ## Assessment and scope of the architecture review (2026-10-20)
 

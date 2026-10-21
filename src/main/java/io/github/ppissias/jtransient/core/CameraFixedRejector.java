@@ -9,6 +9,8 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.execution.CancellationScope;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -82,10 +84,12 @@ public final class CameraFixedRejector {
         }
         List<Entry> entries = new ArrayList<>();
         for (List<SourceExtractor.DetectedObject> frame : frames) {
+            CancellationScope.check();
             if (frame == null) {
                 continue;
             }
             for (SourceExtractor.DetectedObject detection : frame) {
+                CancellationScope.check();
                 FrameRegistration registration = detection == null || detection.isStreak
                         ? null : registrations.get(detection.sourceFrameIndex);
                 if (registration != null && registration.usable) {
@@ -97,12 +101,14 @@ public final class CameraFixedRejector {
         double cell = 2 * CAMERA_TOLERANCE_PX;
         Map<Long, List<Entry>> grid = new HashMap<>();
         for (Entry entry : entries) {
+            CancellationScope.check();
             grid.computeIfAbsent(key(entry.u, entry.v, cell), k -> new ArrayList<>()).add(entry);
         }
 
         Set<Entry> assigned = Collections.newSetFromMap(new IdentityHashMap<>());
         List<Group> groups = new ArrayList<>();
         for (Entry seed : entries) {
+            CancellationScope.check();
             if (assigned.contains(seed)) {
                 continue;
             }
@@ -119,6 +125,7 @@ public final class CameraFixedRejector {
             members.sort(Comparator.comparingInt(e -> e.detection.sourceFrameIndex));
             List<SourceExtractor.DetectedObject> points = new ArrayList<>(members.size());
             for (Entry member : members) {
+                CancellationScope.check();
                 assigned.add(member);
                 points.add(member.detection);
             }
@@ -128,9 +135,11 @@ public final class CameraFixedRejector {
         if (!groups.isEmpty()) {
             Set<SourceExtractor.DetectedObject> removed = Collections.newSetFromMap(new IdentityHashMap<>());
             for (Group group : groups) {
+                CancellationScope.check();
                 removed.addAll(group.points);
             }
             for (List<SourceExtractor.DetectedObject> frame : frames) {
+                CancellationScope.check();
                 if (frame != null) {
                     frame.removeIf(removed::contains);
                 }
@@ -148,7 +157,9 @@ public final class CameraFixedRejector {
         long cu = (long) Math.floor(u / cell);
         long cv = (long) Math.floor(v / cell);
         for (long du = -reach; du <= reach; du++) {
+            CancellationScope.check();
             for (long dv = -reach; dv <= reach; dv++) {
+                CancellationScope.check();
                 List<Entry> bucket = grid.get(pack(cu + du, cv + dv));
                 if (bucket == null) {
                     continue;
@@ -172,6 +183,7 @@ public final class CameraFixedRejector {
     private static double median(List<Entry> entries, boolean u) {
         double[] values = new double[entries.size()];
         for (int i = 0; i < values.length; i++) {
+            CancellationScope.check();
             values[i] = u ? entries.get(i).u : entries.get(i).v;
         }
         java.util.Arrays.sort(values);
@@ -183,7 +195,9 @@ public final class CameraFixedRejector {
     private static double skySpread(List<Entry> entries) {
         double spread = 0;
         for (int i = 0; i < entries.size(); i++) {
+            CancellationScope.check();
             for (int j = i + 1; j < entries.size(); j++) {
+                CancellationScope.check();
                 SourceExtractor.DetectedObject a = entries.get(i).detection;
                 SourceExtractor.DetectedObject b = entries.get(j).detection;
                 spread = Math.max(spread, Math.hypot(a.x - b.x, a.y - b.y));

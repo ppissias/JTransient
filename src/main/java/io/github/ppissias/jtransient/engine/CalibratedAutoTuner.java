@@ -9,6 +9,8 @@
  */
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.execution.CancellableTasks;
+import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.FrameDriftAnalyzer;
@@ -274,6 +276,7 @@ public final class CalibratedAutoTuner {
         public boolean success;
         /** Human-readable explanation when {@link #success} is false. */
         public String failureReason;
+        public transient Throwable failureCause;
         public int poolFrames;
         public int measurementFrames;
         public int crops;
@@ -374,6 +377,17 @@ public final class CalibratedAutoTuner {
      * @param listener optional progress listener
      * @return result in the same shape as the legacy tuner, with {@code summary} filled in
      */
+    public static JTransientAutoTuner.AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+                                         JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener,
+                                         io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
+        try (CancellationScope scope = CancellationScope.open(cancellation)) {
+            CancellationScope.check();
+            JTransientAutoTuner.AutoTunerResult result = tune(poolFrames, baseConfig, profile, listener);
+            CancellationScope.check();
+            return result;
+        }
+    }
+
     public static JTransientAutoTuner.AutoTunerResult tune(List<ImageFrame> poolFrames,
                                                            DetectionConfig baseConfig,
                                                            JTransientAutoTuner.AutoTuneProfile profile,
@@ -431,6 +445,7 @@ public final class CalibratedAutoTuner {
     public static Calibration calibrate(List<ImageFrame> poolFrames,
                                         DetectionConfig baseConfig,
                                         TransientEngineProgressListener listener) {
+        CancellationScope.check();
         long start = System.currentTimeMillis();
         Calibration calibration = new Calibration();
         if (poolFrames == null || poolFrames.size() < 5) {
@@ -442,6 +457,7 @@ public final class CalibratedAutoTuner {
         try {
             List<ImageFrame> pool = new ArrayList<>();
             for (ImageFrame f : poolFrames) {
+                CancellationScope.check();
                 if (FrameDriftAnalyzer.isBlankOrFailedRegistration(f.pixelData)) {
                     calibration.excludedBlankFrames++;
                 } else {
@@ -461,6 +477,7 @@ public final class CalibratedAutoTuner {
             FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = FrameDriftAnalyzer.analyze(pool);
             Map<Integer, SourceExtractor.Pixel> driftBySequence = new HashMap<>();
             for (SourceExtractor.Pixel p : driftAnalysis.driftPoints) {
+                CancellationScope.check();
                 driftBySequence.put(p.value, p);
             }
             int margin = Math.min(CROP_BORDER_MARGIN,
@@ -486,6 +503,7 @@ public final class CalibratedAutoTuner {
             double[] ownedMpix = new double[crops.size()];
             double ownedMpixPerFrame = 0;
             for (int c = 0; c < crops.size(); c++) {
+                CancellationScope.check();
                 ownedMpix[c] = owned[c].cardinality() / 1_000_000.0;
                 ownedMpixPerFrame += ownedMpix[c];
             }
@@ -502,6 +520,7 @@ public final class CalibratedAutoTuner {
             // --- Master stacks per crop, from the whole pool, like production ---
             List<short[][]> masters = new ArrayList<>();
             for (int[] crop : crops) {
+                CancellationScope.check();
                 List<ImageFrame> cropped = new ArrayList<>();
                 for (ImageFrame f : pool) {
                     cropped.add(new ImageFrame(f.sequenceIndex, f.filename, crop(f.pixelData, crop), f.timestamp, f.exposureDuration));
@@ -514,6 +533,7 @@ public final class CalibratedAutoTuner {
             List<short[][]> measurementCrops = new ArrayList<>();
             List<Integer> measurementCropIndex = new ArrayList<>();
             for (int c = 0; c < crops.size(); c++) {
+                CancellationScope.check();
                 for (ImageFrame f : measurementFrames) {
                     measurementCrops.add(crop(f.pixelData, crops.get(c)));
                     measurementCropIndex.add(c);
@@ -531,6 +551,7 @@ public final class CalibratedAutoTuner {
             // move across the registered frames.
             List<CropFrame> cropFrames = new ArrayList<>();
             for (int i = 0; i < measurementCrops.size(); i++) {
+                CancellationScope.check();
                 int c = measurementCropIndex.get(i);
                 CropFrame prepared = prepareCropFrame(c, measurementCrops.get(i), masters.get(c), psfSigma, baseConfig, random);
                 SourceExtractor.Pixel drift = driftBySequence.get(measurementFrames.get(i % measurementFrames.size()).sequenceIndex);
@@ -559,6 +580,7 @@ public final class CalibratedAutoTuner {
             BitSet[][] masks = new BitSet[masterSettings.size()][crops.size()];
             double[] coverage = new double[masterSettings.size()];
             for (int m = 0; m < masterSettings.size(); m++) {
+                CancellationScope.check();
                 long masked = 0;
                 for (int c = 0; c < crops.size(); c++) {
                     masks[m][c] = buildMask(masters.get(c), masterSettings.get(m), dilation, baseConfig);
@@ -568,6 +590,7 @@ public final class CalibratedAutoTuner {
             }
             int deepestMask = 0;
             for (int m = 1; m < coverage.length; m++) {
+                CancellationScope.check();
                 if (coverage[m] > coverage[deepestMask]) deepestMask = m;
             }
             // Pixels next to any star (deepest mask grown by one FWHM): a survivor there that comes back beside
@@ -575,21 +598,25 @@ public final class CalibratedAutoTuner {
             int nearStarRadius = (int) Math.max(2, Math.round(calibration.fwhm));
             BitSet[] nearStar = new BitSet[crops.size()];
             for (int c = 0; c < crops.size(); c++) {
+                CancellationScope.check();
                 nearStar[c] = dilate(masks[deepestMask][c], cropSize, nearStarRadius);
             }
             // Satellite and meteor trails, found once per frame by a more sensitive streak pass.
             List<Callable<BitSet>> streakTasks = new ArrayList<>();
             for (CropFrame cf : cropFrames) {
+                CancellationScope.check();
                 BitSet starMask = masks[deepestMask][cf.crop];
                 streakTasks.add(() -> streakCorridor(cf.positive, starMask, nearStarRadius, baseConfig));
             }
-            List<Future<BitSet>> corridors = executor.invokeAll(streakTasks);
+            List<Future<BitSet>> corridors = CancellableTasks.invokeAll(executor, streakTasks);
             for (int i = 0; i < cropFrames.size(); i++) {
+                CancellationScope.check();
                 cropFrames.get(i).streakCorridor = corridors.get(i).get();
             }
 
             double measuredMpixFrames = 0;
             for (CropFrame cf : cropFrames) {
+                CancellationScope.check();
                 measuredMpixFrames += ownedMpix[cf.crop];
             }
             calibration.measuredMpixFrames = measuredMpixFrames;
@@ -599,6 +626,7 @@ public final class CalibratedAutoTuner {
 
             // --- Grid ---
             for (int s = 0; s < frameSettings.size(); s++) {
+                CancellationScope.check();
                 FrameSetting fs = frameSettings.get(s);
                 progress(listener, 20 + (int) (75.0 * s / frameSettings.size()),
                         String.format(Locale.US, "Measuring sigma %.2f, grow %.2f, minPix %d", fs.sigma, fs.grow, fs.minPixels));
@@ -653,7 +681,7 @@ public final class CalibratedAutoTuner {
                         return out;
                     });
                 }
-                for (Future<List<Candidate>> f : executor.invokeAll(masterTasks)) {
+                for (Future<List<Candidate>> f : CancellableTasks.invokeAll(executor, masterTasks)) {
                     calibration.candidates.addAll(f.get());
                 }
             }
@@ -665,10 +693,12 @@ public final class CalibratedAutoTuner {
             // the settings.
             double floor = Double.MAX_VALUE;
             for (Candidate c : calibration.candidates) {
+                CancellationScope.check();
                 floor = Math.min(floor, c.realSurvivorsPerMpixFrame);
             }
             calibration.singleFrameFloorPerMpixFrame = floor;
             for (Candidate c : calibration.candidates) {
+                CancellationScope.check();
                 double excess = Math.max(0.0, c.realSurvivorsPerMpixFrame - floor);
                 c.falsePositivesPerMpixFrame = Math.max(c.noisePerMpixFrame + c.leakagePerMpixFrame, excess);
                 c.falsePositiveUpperPerMpixFrame = (c.falsePositivesPerMpixFrame * calibration.measuredMpixFrames + 1.0)
@@ -678,6 +708,7 @@ public final class CalibratedAutoTuner {
             // --- Selection per profile ---
             progress(listener, 96, "Selecting settings per profile...");
             for (int p = 0; p < PROFILE_COUNT; p++) {
+                CancellationScope.check();
                 calibration.budgetVerifiable[p] = FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[p] * calibration.measuredMpixFrames >= 1.0;
                 Candidate chosen = select(calibration.candidates,
                         effectiveBudget(FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[p], calibration.measuredMpixFrames));
@@ -692,12 +723,26 @@ public final class CalibratedAutoTuner {
             buildTradeoff(calibration);
             progress(listener, 100, "Calibrated auto-tuning complete.");
             return calibration;
+        } catch (java.util.concurrent.CancellationException cancelled) {
+            throw cancelled;
         } catch (Exception e) {
+            calibration.failureCause = e instanceof java.util.concurrent.ExecutionException && e.getCause() != null ? e.getCause() : e;
             calibration.success = false;
             calibration.failureReason = "Calibrated auto-tuning failed: " + e;
             return calibration;
         } finally {
             executor.shutdownNow();
+            boolean interrupted = Thread.interrupted();
+            while (!executor.isTerminated()) {
+                try {
+                    executor.awaitTermination(1, java.util.concurrent.TimeUnit.SECONDS);
+                } catch (InterruptedException ignored) {
+                    interrupted = true;
+                }
+            }
+            if (interrupted) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
@@ -721,6 +766,7 @@ public final class CalibratedAutoTuner {
                 calibration.singleFrameFloorPerMpixFrame));
         report.append("--- CHOICE PER PROFILE (budget: noise detections per MPix per frame) ---\n");
         for (int p = 0; p < PROFILE_COUNT; p++) {
+            CancellationScope.check();
             Candidate c = calibration.chosen[p];
             report.append(String.format(Locale.US, "%s%s (budget %.2f)%s%n   %s%n   %s%n",
                     p == profileIndex ? "* " : "  ", names[p].displayName(), FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[p],
@@ -750,13 +796,16 @@ public final class CalibratedAutoTuner {
         cfg.growSigmaMultiplier = STREAK_PASS_GROW;
         BitSet streaks = new BitSet(size * size);
         for (SourceExtractor.DetectedObject obj : extractInCrop(image, STREAK_PASS_SIGMA, cfg.minDetectionPixels, cfg)) {
+            CancellationScope.check();
             if (!obj.isStreak || obj.rawPixels == null || obj.rawPixels.isEmpty()) continue;
             int inStars = 0;
             for (SourceExtractor.Pixel p : obj.rawPixels) {
+                CancellationScope.check();
                 if (starMask.get(p.y * size + p.x)) inStars++;
             }
             if (inStars > STREAK_MAX_STAR_OVERLAP * obj.rawPixels.size()) continue;
             for (SourceExtractor.Pixel p : obj.rawPixels) {
+                CancellationScope.check();
                 streaks.set(p.y * size + p.x);
             }
         }
@@ -766,6 +815,7 @@ public final class CalibratedAutoTuner {
     /** Whether a square crop {x, y, size} lies inside the area. */
     private static boolean insideArea(DataArea area, int[] crop) {
         for (int y = crop[1]; y < crop[1] + crop[2]; y++) {
+            CancellationScope.check();
             if (!area.contains(crop[0], y) || !area.contains(crop[0] + crop[2] - 1, y)) {
                 return false;
             }
@@ -781,9 +831,11 @@ public final class CalibratedAutoTuner {
         BitSet[] owned = new BitSet[crops.size()];
         int margin = DataArea.MARGIN;
         for (int c = 0; c < crops.size(); c++) {
+            CancellationScope.check();
             int[] crop = crops.get(c);
             owned[c] = new BitSet(cropSize * cropSize);
             for (int y = margin; y < cropSize - margin; y++) {
+                CancellationScope.check();
                 for (int x = margin; x < cropSize - margin; x++) {
                     int gx = crop[0] + x;
                     int gy = crop[1] + y;
@@ -823,10 +875,12 @@ public final class CalibratedAutoTuner {
         // Real-frame survivors per crop and frame, for the recurrence (leakage) test.
         List<List<double[]>>[] survivorsByCrop = new List[cropCount];
         for (int c = 0; c < cropCount; c++) {
+            CancellationScope.check();
             survivorsByCrop[c] = new ArrayList<>();
         }
 
         for (int i = 0; i < cropFrames.size(); i++) {
+            CancellationScope.check();
             CropFrame cf = cropFrames.get(i);
             Detection[][] d = detections.get(i);
             double[][] o = overlaps.get(i);
@@ -834,6 +888,7 @@ public final class CalibratedAutoTuner {
             BitSet own = owned[cf.crop];
             // Noise: negative-image detections that survive the veto.
             for (int k = 0; k < d[1].length; k++) {
+                CancellationScope.check();
                 if (!d[1][k].streak && o[1][k] <= ov && isOwned(d[1][k], own, cropSize)) noise++;
             }
             // Real-frame survivors. Pieces of satellite or meteor trails (found by the streak pass) are real
@@ -841,6 +896,7 @@ public final class CalibratedAutoTuner {
             // recurring leakage.
             List<double[]> survivors = new ArrayList<>();
             for (int k = 0; k < d[0].length; k++) {
+                CancellationScope.check();
                 if (d[0][k].streak || o[0][k] > ov || !isOwned(d[0][k], own, cropSize)) continue;
                 if (isOwned(d[0][k], cf.streakCorridor, cropSize)) {
                     trailFragments++;
@@ -855,6 +911,7 @@ public final class CalibratedAutoTuner {
             survivorsByCrop[cf.crop].add(survivors);
             // Injection recovery.
             for (int s = 0; s < cf.injectX.length; s++) {
+                CancellationScope.check();
                 injected[cf.injectLevel[s]]++;
                 double r2 = matchRadius * matchRadius;
                 for (int k = 0; k < d[2].length; k++) {
@@ -878,8 +935,10 @@ public final class CalibratedAutoTuner {
         double sensorRr = sensorRadius * sensorRadius;
         double nearRr = nearStarRecurrenceRadius * nearStarRecurrenceRadius;
         for (int c = 0; c < cropCount; c++) {
+            CancellationScope.check();
             List<List<double[]>> frames = survivorsByCrop[c];
             for (int a = 0; a < frames.size(); a++) {
+                CancellationScope.check();
                 for (double[] p : frames.get(a)) {
                     // Same place on the sky (star leakage) or on the sensor (hot pixels that follow the drift).
                     boolean repeats = false;
@@ -917,6 +976,7 @@ public final class CalibratedAutoTuner {
         cand.maskOverlap = ov;
         double frameMpix = 0;
         for (CropFrame cf : cropFrames) {
+            CancellationScope.check();
             frameMpix += ownedMpix[cf.crop];
         }
         cand.noisePerMpixFrame = noise / frameMpix;
@@ -930,6 +990,7 @@ public final class CalibratedAutoTuner {
         cand.completeness = new double[levels];
         double sum = 0;
         for (int l = 0; l < levels; l++) {
+            CancellationScope.check();
             cand.completeness[l] = injected[l] > 0 ? recovered[l] / (double) injected[l] : 0;
             sum += cand.completeness[l];
         }
@@ -937,6 +998,7 @@ public final class CalibratedAutoTuner {
         double bright = 0;
         int brightLevels = 0;
         for (int l = 0; l < levels; l++) {
+            CancellationScope.check();
             if (INJECTION_PEAK_SNR[l] >= BRIGHT_LEVEL_SNR) {
                 bright += cand.completeness[l];
                 brightLevels++;
@@ -955,13 +1017,15 @@ public final class CalibratedAutoTuner {
         cfg.minDetectionPixels = fs.minPixels;
         List<Callable<Detection[][]>> tasks = new ArrayList<>();
         for (CropFrame cf : cropFrames) {
+            CancellationScope.check();
             tasks.add(() -> new Detection[][]{
                     extract(cf.positive, fs, cfg, width),
                     extract(cf.negative, fs, cfg, width),
                     extract(cf.injected, fs, cfg, width)});
         }
         List<Detection[][]> out = new ArrayList<>();
-        for (Future<Detection[][]> f : executor.invokeAll(tasks)) {
+        for (Future<Detection[][]> f : CancellableTasks.invokeAll(executor, tasks)) {
+            CancellationScope.check();
             out.add(f.get());
         }
         return out;
@@ -971,6 +1035,7 @@ public final class CalibratedAutoTuner {
         List<SourceExtractor.DetectedObject> objects = extractInCrop(image, fs.sigma, fs.minPixels, cfg);
         Detection[] out = new Detection[objects.size()];
         for (int i = 0; i < out.length; i++) {
+            CancellationScope.check();
             out[i] = new Detection(objects.get(i), width);
         }
         return out;
@@ -998,6 +1063,7 @@ public final class CalibratedAutoTuner {
         }
         int inside = 0;
         for (int idx : d.pixels) {
+            CancellationScope.check();
             if (idx >= 0 && mask.get(idx)) inside++;
         }
         return inside / (double) d.pixels.length;
@@ -1012,8 +1078,10 @@ public final class CalibratedAutoTuner {
         BitSet mask = new BitSet(w * h);
         List<SourceExtractor.DetectedObject> stars = extractMasterStars(master, ms.seed, ms.minPixels, cfg);
         for (SourceExtractor.DetectedObject star : stars) {
+            CancellationScope.check();
             if (star.rawPixels == null) continue;
             for (SourceExtractor.Pixel p : star.rawPixels) {
+                CancellationScope.check();
                 for (int dy = -dilation; dy <= dilation; dy++) {
                     for (int dx = -dilation; dx <= dilation; dx++) {
                         if (dx * dx + dy * dy > dilation * dilation) continue;
@@ -1031,15 +1099,18 @@ public final class CalibratedAutoTuner {
     private static BitSet dilate(BitSet mask, int size, int radius) {
         BitSet rows = new BitSet(size * size);
         for (int i = mask.nextSetBit(0); i >= 0; i = mask.nextSetBit(i + 1)) {
+            CancellationScope.check();
             int y = i / size;
             int x = i % size;
             rows.set(y * size + Math.max(0, x - radius), y * size + Math.min(size - 1, x + radius) + 1);
         }
         BitSet out = new BitSet(size * size);
         for (int i = rows.nextSetBit(0); i >= 0; i = rows.nextSetBit(i + 1)) {
+            CancellationScope.check();
             int y = i / size;
             int x = i % size;
             for (int yy = Math.max(0, y - radius); yy <= Math.min(size - 1, y + radius); yy++) {
+                CancellationScope.check();
                 out.set(yy * size + x);
             }
         }
@@ -1057,7 +1128,9 @@ public final class CalibratedAutoTuner {
         short[][] negative = new short[h][w];
         short[][] injected = new short[h][w];
         for (int y = 0; y < h; y++) {
+            CancellationScope.check();
             for (int x = 0; x < w; x++) {
+                CancellationScope.check();
                 int f = PixelEncoding.toShiftedPositiveInt(positive[y][x]);
                 int m = PixelEncoding.toShiftedPositiveInt(master[y][x]);
                 negative[y][x] = PixelEncoding.fromShiftedPositiveInt(clamp(2 * m - f));
@@ -1078,6 +1151,7 @@ public final class CalibratedAutoTuner {
         int[] lv = new int[count];
         int radius = (int) Math.ceil(4 * psfSigma);
         for (int s = 0; s < count; s++) {
+            CancellationScope.check();
             int col = s % cols;
             int row = s / cols;
             xs[s] = margin + (col + 0.2 + 0.6 * random.nextDouble()) * cellW;
@@ -1087,6 +1161,7 @@ public final class CalibratedAutoTuner {
             int cx = (int) Math.round(xs[s]);
             int cy = (int) Math.round(ys[s]);
             for (int dy = -radius; dy <= radius; dy++) {
+                CancellationScope.check();
                 for (int dx = -radius; dx <= radius; dx++) {
                     int x = cx + dx;
                     int y = cy + dy;
@@ -1112,11 +1187,13 @@ public final class CalibratedAutoTuner {
         probe.growSigmaMultiplier = 3.0;
         List<Double> sigmas = new ArrayList<>();
         for (short[][] image : images) {
+            CancellationScope.check();
             int h = image.length;
             int w = image[0].length;
             double background = SourceExtractor.calculateBackgroundSigmaClipped(image, w, h, 3.0, base).median;
             List<SourceExtractor.DetectedObject> objects = extractInCrop(image, 5.0, 5, probe);
             for (SourceExtractor.DetectedObject obj : objects) {
+                CancellationScope.check();
                 if (obj.isStreak || obj.elongation > 1.3 || obj.peakSigma < 20 || obj.peakSigma > 150) continue;
                 double window = Math.max(4.0, 2.0 * obj.fwhm);
                 boolean isolated = true;
@@ -1170,15 +1247,18 @@ public final class CalibratedAutoTuner {
         probe.growSigmaMultiplier = 3.0;
         List<List<SourceExtractor.DetectedObject>> masterStars = new ArrayList<>();
         for (short[][] master : masters) {
+            CancellationScope.check();
             DetectionConfig mc = probe.clone();
             mc.growSigmaMultiplier = base.masterSigmaMultiplier;
             masterStars.add(usable(extractMasterStars(master, base.masterSigmaMultiplier, base.masterMinDetectionPixels, mc)));
         }
         List<Double> distances = new ArrayList<>();
         for (int i = 0; i < images.size(); i++) {
+            CancellationScope.check();
             List<SourceExtractor.DetectedObject> frameStars = usable(extractInCrop(images.get(i), 4.0, 5, probe));
             List<SourceExtractor.DetectedObject> reference = masterStars.get(cropOfImage.get(i));
             for (SourceExtractor.DetectedObject star : reference) {
+                CancellationScope.check();
                 SourceExtractor.DetectedObject match = nearest(star, frameStars);
                 if (match == null) continue;
                 double d = Math.hypot(match.x - star.x, match.y - star.y);
@@ -1197,6 +1277,7 @@ public final class CalibratedAutoTuner {
     private static List<SourceExtractor.DetectedObject> usable(List<SourceExtractor.DetectedObject> objects) {
         List<SourceExtractor.DetectedObject> out = new ArrayList<>();
         for (SourceExtractor.DetectedObject o : objects) {
+            CancellationScope.check();
             if (o.rawPixels != null && o.rawPixels.size() >= 5 && o.elongation <= 2.5) out.add(o);
         }
         // Sort by x so nearest() can scan a narrow band.
@@ -1210,13 +1291,16 @@ public final class CalibratedAutoTuner {
         int lo = 0;
         int hi = sortedByX.size();
         while (lo < hi) {
+            CancellationScope.check();
             int mid = (lo + hi) >>> 1;
             if (sortedByX.get(mid).x < source.x) lo = mid + 1; else hi = mid;
         }
         SourceExtractor.DetectedObject best = null;
         double bestDist = Double.MAX_VALUE;
         for (int dir = -1; dir <= 1; dir += 2) {
+            CancellationScope.check();
             for (int i = dir < 0 ? lo - 1 : lo; i >= 0 && i < sortedByX.size(); i += dir) {
+                CancellationScope.check();
                 SourceExtractor.DetectedObject c = sortedByX.get(i);
                 if (Math.abs(c.x - source.x) > Math.min(bestDist, 10.0)) break;
                 double d = Math.hypot(c.x - source.x, c.y - source.y);
@@ -1249,12 +1333,14 @@ public final class CalibratedAutoTuner {
         tradeoff.peakSnr = INJECTION_PEAK_SNR.clone();
         tradeoff.profiles = new ProfileTradeoff[PROFILE_COUNT];
         for (int p = 0; p < PROFILE_COUNT; p++) {
+            CancellationScope.check();
             ProfileTradeoff profile = new ProfileTradeoff();
             profile.nominalBudgetPerMpixFrame = FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[p];
             profile.effectiveBudgetPerMpixFrame = effectiveBudget(
                     FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[p], calibration.measuredMpixFrames);
             profile.bySigma = new SigmaChoice[tradeoff.sigmas.length];
             for (int s = 0; s < tradeoff.sigmas.length; s++) {
+                CancellationScope.check();
                 List<Candidate> atSigma = new ArrayList<>();
                 for (Candidate candidate : calibration.candidates) {
                     if (candidate.sigma == tradeoff.sigmas[s]) {
@@ -1303,6 +1389,7 @@ public final class CalibratedAutoTuner {
     private static Candidate select(List<Candidate> candidates, double budget) {
         double bestRecovery = -1;
         for (Candidate c : candidates) {
+            CancellationScope.check();
             if (withinBudget(c, budget)) {
                 bestRecovery = Math.max(bestRecovery, c.recoveredFraction);
             }
@@ -1312,6 +1399,7 @@ public final class CalibratedAutoTuner {
         }
         Candidate best = null;
         for (Candidate c : candidates) {
+            CancellationScope.check();
             if (!withinBudget(c, budget) || c.recoveredFraction < bestRecovery - TIE_EPSILON) {
                 continue;
             }
@@ -1352,6 +1440,7 @@ public final class CalibratedAutoTuner {
     private static Candidate cleanest(List<Candidate> candidates) {
         Candidate best = null;
         for (Candidate c : candidates) {
+            CancellationScope.check();
             if (best == null || c.falsePositivesPerMpixFrame < best.falsePositivesPerMpixFrame) best = c;
         }
         return best;
@@ -1362,8 +1451,10 @@ public final class CalibratedAutoTuner {
                                                 StringBuilder report) {
         report.append("\n--- BEST SETTING PER DETECTION SIGMA (within the selected profile's budget) ---\n");
         for (double sigma : SIGMAS_TO_TEST) {
+            CancellationScope.check();
             List<Candidate> atSigma = new ArrayList<>();
             for (Candidate c : candidates) {
+                CancellationScope.check();
                 if (c.sigma == sigma) atSigma.add(c);
             }
             Candidate best = select(atSigma, budget);
@@ -1380,12 +1471,14 @@ public final class CalibratedAutoTuner {
     private static void appendCompletenessCurve(Candidate best, StringBuilder report) {
         report.append("\n--- RECOVERY OF SYNTHETIC SOURCES (chosen setting) ---\n");
         for (int l = 0; l < INJECTION_PEAK_SNR.length; l++) {
+            CancellationScope.check();
             report.append(String.format(Locale.US, "peak SNR %5.1f: %5.1f%%%n", INJECTION_PEAK_SNR[l], 100 * best.completeness[l]));
         }
     }
 
     private static double halfRecoveryLevel(double[] completeness) {
         for (int l = 0; l < completeness.length; l++) {
+            CancellationScope.check();
             if (completeness[l] >= 0.5) {
                 if (l == 0) return INJECTION_PEAK_SNR[0];
                 double c0 = completeness[l - 1];
@@ -1404,12 +1497,15 @@ public final class CalibratedAutoTuner {
     static List<FrameSetting> frameSettings(double psfCoreArea) {
         List<Integer> minPixels = new ArrayList<>();
         for (double f : MIN_PIXEL_AREA_FACTORS) {
+            CancellationScope.check();
             int mp = Math.min(MAX_MIN_PIXELS, Math.max(3, (int) Math.round(f * psfCoreArea)));
             if (!minPixels.contains(mp)) minPixels.add(mp);
         }
         List<FrameSetting> out = new ArrayList<>();
         for (double sigma : SIGMAS_TO_TEST) {
+            CancellationScope.check();
             for (double delta : GROW_DELTAS_TO_TEST) {
+                CancellationScope.check();
                 double grow = Math.max(1.0, sigma - delta);
                 for (int mp : minPixels) {
                     out.add(new FrameSetting(sigma, grow, mp));
@@ -1423,12 +1519,15 @@ public final class CalibratedAutoTuner {
         List<Integer> minPixels = new ArrayList<>();
         minPixels.add(3);
         for (double f : MASTER_MIN_PIXEL_AREA_FACTORS) {
+            CancellationScope.check();
             int mp = Math.max(3, (int) Math.round(f * psfCoreArea));
             if (!minPixels.contains(mp)) minPixels.add(mp);
         }
         List<MasterSetting> out = new ArrayList<>();
         for (double seed : MASTER_SIGMAS_TO_TEST) {
+            CancellationScope.check();
             for (double offset : MASTER_GROW_OFFSETS_TO_TEST) {
+                CancellationScope.check();
                 double grow = Math.max(1.0, seed - offset);
                 for (int mp : minPixels) {
                     out.add(new MasterSetting(seed, grow, mp));
@@ -1464,6 +1563,7 @@ public final class CalibratedAutoTuner {
         int rows = Math.max(1, Math.min(MAX_CROPS_PER_SIDE, (int) Math.ceil(usableH / (2.0 * size))));
         if (cols >= 2 && rows >= 2 && cols * rows > CROP_COUNT) {
             for (int r = 0; r < rows; r++) {
+                CancellationScope.check();
                 for (int c = 0; c < cols; c++) {
                     out.add(new int[]{minX + (int) Math.round(c * (maxX - minX) / (double) (cols - 1)),
                             minY + (int) Math.round(r * (maxY - minY) / (double) (rows - 1)), size});
@@ -1486,6 +1586,7 @@ public final class CalibratedAutoTuner {
         int size = region[2];
         short[][] out = new short[size][size];
         for (int y = 0; y < size; y++) {
+            CancellationScope.check();
             System.arraycopy(image[region[1] + y], region[0], out[y], 0, size);
         }
         return out;
@@ -1494,6 +1595,7 @@ public final class CalibratedAutoTuner {
     private static List<ImageFrame> evenlySpaced(List<ImageFrame> frames, int count) {
         List<ImageFrame> out = new ArrayList<>();
         for (int i = 0; i < count; i++) {
+            CancellationScope.check();
             int index = (int) Math.round(i * (frames.size() - 1) / (double) Math.max(1, count - 1));
             ImageFrame f = frames.get(index);
             if (!out.contains(f)) out.add(f);
@@ -1506,6 +1608,7 @@ public final class CalibratedAutoTuner {
     }
 
     private static void progress(TransientEngineProgressListener listener, int percent, String message) {
+        CancellationScope.check();
         if (listener != null) {
             listener.onProgressUpdate(percent, message);
         }

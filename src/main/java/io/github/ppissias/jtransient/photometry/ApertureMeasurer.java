@@ -9,6 +9,7 @@
  */
 package io.github.ppissias.jtransient.photometry;
 
+import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.PixelEncoding;
@@ -76,6 +77,7 @@ final class ApertureMeasurer {
             this.magError = new double[starCount];
             this.flags = new int[starCount];
             for (double[] f : flux) {
+                CancellationScope.check();
                 Arrays.fill(f, Double.NaN);
             }
             Arrays.fill(sky, Double.NaN);
@@ -136,6 +138,7 @@ final class ApertureMeasurer {
         double[] skyBuffer = new double[(int) (Math.PI * outerRadius * outerRadius) + 64];
 
         for (int i = 0; i < n; i++) {
+            CancellationScope.check();
             PhotometryStarSelector.Star star = stars.get(i);
             double cx = star.x + m.offsetX;
             double cy = star.y + m.offsetY;
@@ -153,6 +156,7 @@ final class ApertureMeasurer {
             int x0 = (int) Math.round(cx);
             int y0 = (int) Math.round(cy);
             for (int y = y0 - ro; y <= y0 + ro; y++) {
+                CancellationScope.check();
                 for (int x = x0 - ro; x <= x0 + ro; x++) {
                     double d = Math.hypot(x - cx, y - cy);
                     if (d < innerRadius || d > outerRadius) {
@@ -188,6 +192,7 @@ final class ApertureMeasurer {
             boolean voidPixel = false;
             int ra = (int) Math.ceil(maxApertureRadius + 1);
             for (int y = y0 - ra; y <= y0 + ra; y++) {
+                CancellationScope.check();
                 for (int x = x0 - ra; x <= x0 + ra; x++) {
                     double d = Math.hypot(x - cx, y - cy);
                     if (d > maxApertureRadius + 1) {
@@ -213,6 +218,7 @@ final class ApertureMeasurer {
                 }
             }
             for (int r = 0; r < RADIUS_COUNT; r++) {
+                CancellationScope.check();
                 m.flux[r][i] = sums[r];
             }
             if (voidPixel) {
@@ -258,6 +264,7 @@ final class ApertureMeasurer {
         double window = Math.max(3.0, MOMENT_WINDOW_FACTOR * extractionFwhm);
         double[] skyBuffer = new double[(int) (Math.PI * outerRadius * outerRadius) + 64];
         for (int k = first; k < last; k++) {
+            CancellationScope.check();
             PhotometryStarSelector.Star star = stars.get(k);
             if (!insideImage(pixels, star.x, star.y, outerRadius)) {
                 continue;
@@ -267,6 +274,7 @@ final class ApertureMeasurer {
             int ro = (int) Math.ceil(outerRadius);
             int skyCount = 0;
             for (int y = y0 - ro; y <= y0 + ro; y++) {
+                CancellationScope.check();
                 for (int x = x0 - ro; x <= x0 + ro; x++) {
                     double d = Math.hypot(x - star.x, y - star.y);
                     if (d >= innerRadius && d <= outerRadius
@@ -287,6 +295,7 @@ final class ApertureMeasurer {
             double sxx = 0;
             double syy = 0;
             for (int y = y0 - rw; y <= y0 + rw; y++) {
+                CancellationScope.check();
                 for (int x = x0 - rw; x <= x0 + rw; x++) {
                     if (Math.hypot(x - star.x, y - star.y) > window) {
                         continue;
@@ -319,6 +328,7 @@ final class ApertureMeasurer {
         double mdy = PhotometryMath.median(dys, found);
         double[] distances = new double[found];
         for (int i = 0; i < found; i++) {
+            CancellationScope.check();
             distances[i] = Math.hypot(dxs[i] - mdx, dys[i] - mdy);
         }
         m.offsetX = mdx;
@@ -343,8 +353,10 @@ final class ApertureMeasurer {
         int inside = 0;
         double r2 = r * r;
         for (int sy = 0; sy < SUPERSAMPLE; sy++) {
+            CancellationScope.check();
             double py = dy - 0.5 + (sy + 0.5) / SUPERSAMPLE;
             for (int sx = 0; sx < SUPERSAMPLE; sx++) {
+                CancellationScope.check();
                 double px = dx - 0.5 + (sx + 0.5) / SUPERSAMPLE;
                 if (px * px + py * py <= r2) {
                     inside++;
@@ -369,10 +381,12 @@ final class ApertureMeasurer {
         double median = Double.NaN;
         double sigma = Double.NaN;
         for (int iter = 0; iter < 3; iter++) {
+            CancellationScope.check();
             // Linear-time selection; this runs once per star and frame, so sorting would dominate.
             System.arraycopy(work, 0, scratch, 0, n);
             median = PhotometryMath.medianInPlace(scratch, n);
             for (int i = 0; i < n; i++) {
+                CancellationScope.check();
                 scratch[i] = Math.abs(work[i] - median);
             }
             sigma = PhotometryMath.MAD_TO_SIGMA * PhotometryMath.medianInPlace(scratch, n);
@@ -381,6 +395,7 @@ final class ApertureMeasurer {
             }
             int kept = 0;
             for (int i = 0; i < n; i++) {
+                CancellationScope.check();
                 if (Math.abs(work[i] - median) <= 3.0 * sigma) {
                     work[kept++] = work[i];
                 }

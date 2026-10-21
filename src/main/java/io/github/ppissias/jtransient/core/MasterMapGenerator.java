@@ -14,7 +14,14 @@ import io.github.ppissias.jtransient.engine.JTransientEngine;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.IntStream;
+import io.github.ppissias.jtransient.execution.CancellableTasks;
+import io.github.ppissias.jtransient.execution.CancellationScope;
+
+import java.util.ArrayList;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ForkJoinPool;
+import java.util.function.IntConsumer;
 
 /**
  * Builds stacked reference images from a sequence of aligned frames.
@@ -39,7 +46,7 @@ public class MasterMapGenerator {
         }
 
         // Multi-thread the row processing for maximum speed!
-        IntStream.range(0, height).parallel().forEach(y -> {
+        forEachRow(height, y -> {
             int[] pixelValues = new int[numFrames];
             for (int x = 0; x < width; x++) {
                 // Collect this specific pixel's value from every frame
@@ -82,7 +89,7 @@ public class MasterMapGenerator {
             System.out.println("\n[POST-PROCESS] Generating Maximum Master Stack across " + numFrames + " frames...");
         }
 
-        IntStream.range(0, height).parallel().forEach(y -> {
+        forEachRow(height, y -> {
             for (int x = 0; x < width; x++) {
                 int maxPixelValue = 0;
                 for (int i = 0; i < numFrames; i++) {
@@ -100,5 +107,35 @@ public class MasterMapGenerator {
         }
 
         return masterMap;
+    }
+
+    private static void forEachRow(int height, IntConsumer operation) {
+        CancellationScope.check();
+        if (java.util.concurrent.ForkJoinTask.inForkJoinPool()) {
+            for (int row = 0; row < height; row++) {
+                CancellationScope.check();
+                operation.accept(row);
+            }
+            return;
+        }
+        int rowsPerTask = Math.max(1, (height + Runtime.getRuntime().availableProcessors() - 1)
+                / Runtime.getRuntime().availableProcessors());
+        List<Callable<Void>> tasks = new ArrayList<>();
+        for (int start = 0; start < height; start += rowsPerTask) {
+            int firstRow = start;
+            int lastRow = Math.min(height, start + rowsPerTask);
+            tasks.add(() -> {
+                for (int row = firstRow; row < lastRow; row++) {
+                    CancellationScope.check();
+                    operation.accept(row);
+                }
+                return null;
+            });
+        }
+        try {
+            CancellableTasks.invokeAll(ForkJoinPool.commonPool(), tasks);
+        } catch (ExecutionException failure) {
+            throw new IllegalStateException("Master-stack row processing failed.", failure.getCause());
+        }
     }
 }

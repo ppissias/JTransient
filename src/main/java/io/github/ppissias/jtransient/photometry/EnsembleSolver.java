@@ -9,6 +9,7 @@
  */
 package io.github.ppissias.jtransient.photometry;
 
+import io.github.ppissias.jtransient.execution.CancellationScope;
 import java.util.Arrays;
 
 /**
@@ -77,8 +78,10 @@ final class EnsembleSolver {
         double[][] pointWeight = new double[nStars][nFrames];
 
         for (int i = 0; i < nStars; i++) {
+            CancellationScope.check();
             double[] row = new double[nFrames];
             for (int j = 0; j < nFrames; j++) {
+                CancellationScope.check();
                 row[j] = (usable[i][j] && frameActive[j]) ? mag[i][j] : Double.NaN;
                 pointWeight[i][j] = 1.0;
             }
@@ -89,6 +92,7 @@ final class EnsembleSolver {
 
         double[] previousZ = new double[nFrames];
         for (int iter = 0; iter < MAX_ITERATIONS; iter++) {
+            CancellationScope.check();
             solveFrames(mag, usable, x, y, frameActive, fitPlane, s, pointWeight);
             fixGauge(s);
             solveStars(mag, usable, x, y, s, pointWeight);
@@ -96,6 +100,7 @@ final class EnsembleSolver {
 
             double maxChange = 0;
             for (int j = 0; j < nFrames; j++) {
+                CancellationScope.check();
                 if (s.frameSolved[j]) {
                     maxChange = Math.max(maxChange, Math.abs(s.zeroPoint[j] - previousZ[j]));
                 }
@@ -108,8 +113,10 @@ final class EnsembleSolver {
 
         s.residual = new double[nStars][nFrames];
         for (int i = 0; i < nStars; i++) {
+            CancellationScope.check();
             Arrays.fill(s.residual[i], Double.NaN);
             for (int j = 0; j < nFrames; j++) {
+                CancellationScope.check();
                 if (s.frameSolved[j] && Double.isFinite(mag[i][j]) && Double.isFinite(s.starMag[i])) {
                     s.residual[i][j] = mag[i][j] - model(s, i, j, x, y);
                 }
@@ -126,6 +133,7 @@ final class EnsembleSolver {
                                     boolean[] frameActive, boolean fitPlane, Solution s, double[][] pointWeight) {
         int nStars = mag.length;
         for (int j = 0; j < frameActive.length; j++) {
+            CancellationScope.check();
             s.frameSolved[j] = false;
             s.starsPerFrame[j] = 0;
             if (!frameActive[j]) {
@@ -135,6 +143,7 @@ final class EnsembleSolver {
             double[] b = new double[3];
             int count = 0;
             for (int i = 0; i < nStars; i++) {
+                CancellationScope.check();
                 if (!usable[i][j] || !Double.isFinite(mag[i][j]) || !Double.isFinite(s.starMag[i])
                         || !Double.isFinite(s.starSigma[i])) {
                     continue;
@@ -178,6 +187,7 @@ final class EnsembleSolver {
         double sumA = 0;
         double sumB = 0;
         for (int j = 0; j < s.zeroPoint.length; j++) {
+            CancellationScope.check();
             if (s.frameSolved[j]) {
                 zs[n++] = s.zeroPoint[j];
                 sumA += s.planeX[j];
@@ -191,6 +201,7 @@ final class EnsembleSolver {
         double meanA = sumA / n;
         double meanB = sumB / n;
         for (int j = 0; j < s.zeroPoint.length; j++) {
+            CancellationScope.check();
             if (s.frameSolved[j]) {
                 s.zeroPoint[j] -= zMedian;
                 s.planeX[j] -= meanA;
@@ -202,9 +213,11 @@ final class EnsembleSolver {
     private static void solveStars(double[][] mag, boolean[][] usable, double[] x, double[] y,
                                    Solution s, double[][] pointWeight) {
         for (int i = 0; i < mag.length; i++) {
+            CancellationScope.check();
             double sw = 0;
             double sum = 0;
             for (int j = 0; j < s.zeroPoint.length; j++) {
+                CancellationScope.check();
                 if (s.frameSolved[j] && usable[i][j] && Double.isFinite(mag[i][j])) {
                     double w = pointWeight[i][j];
                     sum += w * (mag[i][j] - s.zeroPoint[j] - s.planeX[j] * x[i] - s.planeY[j] * y[i]);
@@ -222,7 +235,9 @@ final class EnsembleSolver {
         double[] ownSigma = new double[nStars];
         double[][] residuals = new double[nStars][nFrames];
         for (int i = 0; i < nStars; i++) {
+            CancellationScope.check();
             for (int j = 0; j < nFrames; j++) {
+                CancellationScope.check();
                 residuals[i][j] = (s.frameSolved[j] && usable[i][j] && Double.isFinite(mag[i][j])
                         && Double.isFinite(s.starMag[i]))
                         ? mag[i][j] - model(s, i, j, x, y)
@@ -232,6 +247,7 @@ final class EnsembleSolver {
         }
         double[] expected = PhotometryMath.neighbourStats(s.starMag, ownSigma, NOISE_NEIGHBOURS)[0];
         for (int i = 0; i < nStars; i++) {
+            CancellationScope.check();
             double own = ownSigma[i];
             double exp = expected[i];
             double sigma = Double.isFinite(own) ? own : exp;
@@ -240,6 +256,7 @@ final class EnsembleSolver {
             }
             s.starSigma[i] = Double.isFinite(sigma) ? Math.max(SIGMA_FLOOR, sigma) : Double.NaN;
             for (int j = 0; j < nFrames; j++) {
+                CancellationScope.check();
                 double r = residuals[i][j];
                 if (Double.isFinite(r) && Double.isFinite(s.starSigma[i])) {
                     double u = r / (CAUCHY_SCALE * s.starSigma[i]);

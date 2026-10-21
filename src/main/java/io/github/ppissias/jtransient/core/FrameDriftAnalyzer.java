@@ -9,6 +9,7 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.engine.ImageFrame;
 
 import java.util.ArrayList;
@@ -66,6 +67,7 @@ public final class FrameDriftAnalyzer {
             this.frameCoverages = Collections.unmodifiableList(new ArrayList<>(frameCoverages));
             List<FrameRegistration> registrations = new ArrayList<>(frameCoverages.size());
             for (FrameCoverage coverage : frameCoverages) {
+                CancellationScope.check();
                 registrations.add(FrameRegistration.fit(coverage));
             }
             this.frameRegistrations = Collections.unmodifiableList(registrations);
@@ -88,6 +90,7 @@ public final class FrameDriftAnalyzer {
         sortedFrames.sort(Comparator.comparingInt(frame -> frame.sequenceIndex));
 
         for (ImageFrame frame : sortedFrames) {
+            CancellationScope.check();
             FrameDriftMeasurement measurement = measureFrameDrift(frame.pixelData);
             if (measurement.validAreaFraction < MIN_VALID_AREA_FRACTION) {
                 failedRegistrationFrames.add(frame.sequenceIndex);
@@ -109,7 +112,9 @@ public final class FrameDriftAnalyzer {
     public static boolean isBlankOrFailedRegistration(short[][] frame) {
         long valid = 0;
         for (short[] row : frame) {
+            CancellationScope.check();
             for (short value : row) {
+                CancellationScope.check();
                 if (value > DRIFT_VALID_PIXEL_THRESHOLD) {
                     valid++;
                 }
@@ -129,9 +134,11 @@ public final class FrameDriftAnalyzer {
         int[] right = new int[height];
         int rows = 0;
         for (int y = 0; y < height; y++) {
+            CancellationScope.check();
             short[] row = frame[y];
             int rowValid = 0;
             for (int x = 0; x < width; x++) {
+                CancellationScope.check();
                 if (row[x] > DRIFT_VALID_PIXEL_THRESHOLD) {
                     rowValid++;
                 }
@@ -142,10 +149,12 @@ public final class FrameDriftAnalyzer {
             }
             int l = 0;
             while (row[l] <= DRIFT_VALID_PIXEL_THRESHOLD) {
+                CancellationScope.check();
                 l++;
             }
             int r = 0;
             while (row[width - 1 - r] <= DRIFT_VALID_PIXEL_THRESHOLD) {
+                CancellationScope.check();
                 r++;
             }
             left[rows] = l;
@@ -157,8 +166,10 @@ public final class FrameDriftAnalyzer {
         int[] bottom = new int[width];
         int columns = 0;
         for (int x = width / 4; x < width - width / 4; x++) {
+            CancellationScope.check();
             int t = 0;
             while (t < height && frame[t][x] <= DRIFT_VALID_PIXEL_THRESHOLD) {
+                CancellationScope.check();
                 t++;
             }
             if (t == height) {
@@ -166,6 +177,7 @@ public final class FrameDriftAnalyzer {
             }
             int b = 0;
             while (frame[height - 1 - b][x] <= DRIFT_VALID_PIXEL_THRESHOLD) {
+                CancellationScope.check();
                 b++;
             }
             top[columns] = t;

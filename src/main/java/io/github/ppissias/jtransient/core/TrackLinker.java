@@ -9,6 +9,7 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.engine.JTransientEngine;
 import io.github.ppissias.jtransient.engine.TransientEngineProgressListener;
@@ -252,8 +253,10 @@ public class TrackLinker {
         List<List<SourceExtractor.DetectedObject>> pointSourcesOnly = new ArrayList<>();
 
         for (int i = 0; i < allFrames.size(); i++) {
+            CancellationScope.check();
             pointSourcesOnly.add(new ArrayList<>());
             for (SourceExtractor.DetectedObject obj : allFrames.get(i)) {
+                CancellationScope.check();
                 if (obj.isStreak) allStreaks.add(obj);
                 else pointSourcesOnly.get(i).add(obj);
             }
@@ -275,6 +278,7 @@ public class TrackLinker {
         int totalTransientsFound = 0;
 
         for (int i = 0; i < numFrames; i++) {
+            CancellationScope.check();
             if (listener != null) {
                 int progress = 15 + (int) (((double) i / numFrames) * 10.0);
                 listener.onProgressUpdate(progress, "Vetoing stationary sources: Frame " + (i + 1) + " of " + numFrames);
@@ -285,6 +289,7 @@ public class TrackLinker {
             int purgedCount = 0;
 
             for (SourceExtractor.DetectedObject candidateObj : currentFrame) {
+                CancellationScope.check();
                 double overlapFraction = computeMaskOverlapFraction(candidateObj, masterVetoMask);
                 if (overlapFraction > config.maxMaskOverlapFraction) {
                     purgedCount++;
@@ -309,6 +314,7 @@ public class TrackLinker {
         List<SourceExtractor.DetectedObject> validMovingStreaks = new ArrayList<>();
         int purgedStreakCount = 0;
         for (SourceExtractor.DetectedObject streak : allStreaks) {
+            CancellationScope.check();
             double overlapFraction = computeMaskOverlapFraction(streak, masterVetoMask);
             if (overlapFraction > config.maxMaskOverlapFraction) {
                 purgedStreakCount++;
@@ -336,6 +342,7 @@ public class TrackLinker {
         int streakTracksFound = 0;
 
         for (int i = 0; i < validMovingStreaks.size(); i++) {
+            CancellationScope.check();
             if (streakMatched[i]) continue;
 
             SourceExtractor.DetectedObject baseStreak = validMovingStreaks.get(i);
@@ -349,6 +356,7 @@ public class TrackLinker {
             double forwardAngle = 0;
 
             while (true) {
+                CancellationScope.check();
                 SourceExtractor.DetectedObject bestMatch = null;
                 int bestMatchIndex = -1;
                 int bestFrameGap = Integer.MAX_VALUE;
@@ -426,6 +434,7 @@ public class TrackLinker {
         }
 
         for (SourceExtractor.DetectedObject singleStreak : unmatchedSingleStreaks) {
+            CancellationScope.check();
             boolean rejectedByBinaryStarVeto = config.enableBinaryStarLikeStreakShapeVeto
                     && SourceExtractor.isBinaryStarLikeStreakShape(singleStreak);
 
@@ -558,6 +567,7 @@ public class TrackLinker {
         // =================================================================
         boolean hasTimestamps = false;
         for (List<SourceExtractor.DetectedObject> frame : allFrames) {
+            CancellationScope.check();
             if (!frame.isEmpty() && frame.get(0).timestamp != -1) {
                 hasTimestamps = true;
                 break;
@@ -567,6 +577,7 @@ public class TrackLinker {
         if (JTransientEngine.DEBUG) {
             System.out.println("DEBUG: [PHASE 3.5] Timestamp probe per frame:");
             for (int i = 0; i < allFrames.size(); i++) {
+                CancellationScope.check();
                 List<SourceExtractor.DetectedObject> frame = allFrames.get(i);
                 if (frame.isEmpty()) {
                     System.out.printf("   Frame %d -> empty%n", i);
@@ -597,12 +608,15 @@ public class TrackLinker {
             // Calculate total points to process for accurate progress reporting
             int totalP1Candidates = 0;
             for (int i = 0; i < loopMax; i++) {
+                CancellationScope.check();
                 totalP1Candidates += transients.get(i).size();
             }
             int p1Processed = 0;
 
             for (int f1 = 0; f1 < loopMax; f1++) {
+                CancellationScope.check();
                 for (SourceExtractor.DetectedObject p1 : transients.get(f1)) {
+                    CancellationScope.check();
                     
                     p1Processed++;
                     if (listener != null && (p1Processed % 50 == 0 || p1Processed == totalP1Candidates)) {
@@ -615,6 +629,7 @@ public class TrackLinker {
                     for (int f2 = f1 + 1; f2 < numFrames - 1; f2++) {
                         if (usedPoints.contains(p1)) break;
                         for (SourceExtractor.DetectedObject p2 : transients.get(f2)) {
+                            CancellationScope.check();
                             if (usedPoints.contains(p1)) break;
                             if (usedPoints.contains(p2)) continue;
 
@@ -759,6 +774,7 @@ public class TrackLinker {
 
             int timeTracksFound = 0;
             for (RankedTrackCandidate candidate : timeTrackCandidates) {
+                CancellationScope.check();
                 if (conflictsWithUsedPoints(usedPoints, candidate.track)) {
                     telemetry.countTrackDuplicate++;
                     continue;
@@ -806,6 +822,7 @@ public class TrackLinker {
             }
 
             for (int f1 = 0; f1 < loopMax; f1++) {
+                CancellationScope.check();
 
                 // --- SMOOTH PROGRESS TRACKING FOR PHASE 4 (50% to 90%) ---
                 if (listener != null) {
@@ -814,6 +831,7 @@ public class TrackLinker {
                 }
 
                 for (SourceExtractor.DetectedObject p1 : transients.get(f1)) {
+                    CancellationScope.check();
                     if (usedPoints.contains(p1)) continue;
 
                     for (int f2 = f1 + 1; f2 < numFrames - 1; f2++) {
@@ -821,6 +839,7 @@ public class TrackLinker {
                         if (usedPoints.contains(p1)) break;
 
                         for (SourceExtractor.DetectedObject p2 : transients.get(f2)) {
+                            CancellationScope.check();
 
                             if (usedPoints.contains(p1)) break;
                             if (usedPoints.contains(p2)) continue;
@@ -1014,6 +1033,7 @@ public class TrackLinker {
             }
 
             for (int i = 0; i < numFrames; i++) {
+                CancellationScope.check();
                 for (SourceExtractor.DetectedObject orphan : anomalyCandidates.get(i)) {
                     if (!usedPoints.contains(orphan)) {
 
@@ -1036,6 +1056,7 @@ public class TrackLinker {
         if (!anomalyGroups.isEmpty()) {
             Set<SourceExtractor.DetectedObject> joinedStreaks = new HashSet<>();
             for (Track track : confirmedTracks) {
+                CancellationScope.check();
                 joinedStreaks.addAll(track.points);
             }
             anomalies.removeIf(anomaly -> joinedStreaks.contains(anomaly.object));
@@ -1045,18 +1066,21 @@ public class TrackLinker {
         // in its own frame or where the streak's motion puts it in another frame, it is a piece of that streak.
         List<SourceExtractor.DetectedObject> rescued = new ArrayList<>();
         for (AnomalyDetection anomaly : anomalies) {
+            CancellationScope.check();
             rescued.add(anomaly.object);
         }
         Set<SourceExtractor.DetectedObject> onStreakPaths = FaintStreakFragmentGrouper.joinAnomaliesOnStreakPaths(confirmedTracks, rescued);
         if (!onStreakPaths.isEmpty()) {
             anomalies.removeIf(anomaly -> onStreakPaths.contains(anomaly.object));
             for (Track track : confirmedTracks) {
+                CancellationScope.check();
                 normalizeStreakTrackOrder(track);
             }
         }
 
         int integratedSigmaAnomaliesRescued = 0;
         for (AnomalyDetection anomaly : anomalies) {
+            CancellationScope.check();
             if (anomaly.type == AnomalyType.INTEGRATED_SIGMA) {
                 integratedSigmaAnomaliesRescued++;
             }
@@ -1064,6 +1088,7 @@ public class TrackLinker {
 
         int consolidatedStreakTracksFound = 0;
         for (Track track : confirmedTracks) {
+            CancellationScope.check();
             if (track.isStreakTrack) {
                 consolidatedStreakTracksFound++;
             }
@@ -1120,6 +1145,7 @@ public class TrackLinker {
             int finalGeometricPointTracks = 0;
 
             for (Track track : confirmedTracks) {
+                CancellationScope.check();
                 if (track.isStreakTrack) {
                     finalStreakTracks++;
                 } else if (track.isTimeBasedTrack) {
@@ -1162,7 +1188,9 @@ public class TrackLinker {
         Set<Integer> timedFrames = new TreeSet<>();
         Set<Integer> untimedFrames = new TreeSet<>();
         for (int i = 0; i < allFrames.size(); i++) {
+            CancellationScope.check();
             for (SourceExtractor.DetectedObject object : allFrames.get(i)) {
+                CancellationScope.check();
                 (object.timestamp == -1L ? untimedFrames : timedFrames).add(i);
             }
         }
@@ -1220,14 +1248,17 @@ public class TrackLinker {
     private static List<Track> groupSameFrameAnomalies(List<AnomalyDetection> anomalies) {
         Map<Integer, List<SourceExtractor.DetectedObject>> byFrame = new java.util.TreeMap<>();
         for (AnomalyDetection anomaly : anomalies) {
+            CancellationScope.check();
             if (anomaly.object.sourceFrameIndex >= 0) {
                 byFrame.computeIfAbsent(anomaly.object.sourceFrameIndex, frame -> new ArrayList<>()).add(anomaly.object);
             }
         }
         List<Track> groups = new ArrayList<>();
         for (List<SourceExtractor.DetectedObject> frameObjects : byFrame.values()) {
+            CancellationScope.check();
             List<SourceExtractor.DetectedObject> remainingObjects = new ArrayList<>(frameObjects);
             while (remainingObjects.size() >= 3) {
+                CancellationScope.check();
                 AnomalyLineCandidate bestLine = bestAnomalyLine(remainingObjects);
                 if (bestLine == null) {
                     break;
@@ -1248,7 +1279,9 @@ public class TrackLinker {
     private static AnomalyLineCandidate bestAnomalyLine(List<SourceExtractor.DetectedObject> frameObjects) {
         AnomalyLineCandidate bestLine = null;
         for (int i = 0; i < frameObjects.size() - 1; i++) {
+            CancellationScope.check();
             for (int j = i + 1; j < frameObjects.size(); j++) {
+                CancellationScope.check();
                 SourceExtractor.DetectedObject start = frameObjects.get(i);
                 SourceExtractor.DetectedObject end = frameObjects.get(j);
                 double baselineDistance = distance(start.x, start.y, end.x, end.y);
@@ -1294,6 +1327,7 @@ public class TrackLinker {
         if (confirmedStreakTracks != null) {
             List<Track> orderedConfirmedTracks = new ArrayList<>();
             for (Track track : confirmedStreakTracks) {
+                CancellationScope.check();
                 if (isStreakLike(track)) {
                     orderedConfirmedTracks.add(copyTrack(track));
                 }
@@ -1305,6 +1339,7 @@ public class TrackLinker {
         if (anomalyGroups != null) {
             List<Track> orderedGroups = new ArrayList<>();
             for (Track track : anomalyGroups) {
+                CancellationScope.check();
                 if (isStreakLike(track)) {
                     orderedGroups.add(copyTrack(track));
                 }
@@ -1319,11 +1354,13 @@ public class TrackLinker {
 
         List<Track> consolidatedTracks = new ArrayList<>();
         for (Track track : orderedTracks) {
+            CancellationScope.check();
             normalizeStreakTrackOrder(track);
 
             int bestIndex = -1;
             StreakMergeCandidate bestCandidate = null;
             for (int i = 0; i < consolidatedTracks.size(); i++) {
+                CancellationScope.check();
                 StreakMergeCandidate currentCandidate = evaluateStreakMerge(consolidatedTracks.get(i), track, config);
                 if (isBetterStreakMergeCandidate(currentCandidate, bestCandidate)) {
                     bestCandidate = currentCandidate;
@@ -1456,6 +1493,7 @@ public class TrackLinker {
         double maxLineError = 0.0;
         double maxAllowedLineError = getStreakConsolidationLineTolerance(config);
         for (SourceExtractor.DetectedObject point : combinedPoints) {
+            CancellationScope.check();
             double lineError = distanceToLineOptimized(endpoints[0], endpoints[1], point, baselineDistance);
             maxLineError = Math.max(maxLineError, lineError);
             if (lineError > maxAllowedLineError) {
@@ -1528,6 +1566,7 @@ public class TrackLinker {
         long timestamp = -1L;
 
         for (SourceExtractor.DetectedObject point : orderedPoints) {
+            CancellationScope.check();
             if (count > 0 && point.sourceFrameIndex != currentFrame) {
                 frameSamples.add(new StreakFrameSample(currentFrame, timestamp, sumX / count, sumY / count));
                 sumX = 0.0;
@@ -1586,6 +1625,7 @@ public class TrackLinker {
         );
 
         for (int i = 1; i < frameSamples.size(); i++) {
+            CancellationScope.check();
             StreakFrameSample previous = frameSamples.get(i - 1);
             StreakFrameSample current = frameSamples.get(i);
 
@@ -1625,6 +1665,7 @@ public class TrackLinker {
 
             int consistentSegments = 0;
             for (double speed : projectedSpeeds) {
+                CancellationScope.check();
                 if (Math.abs(speed - medianSpeed) <= (medianSpeed * getStreakTimeConsistencyTolerance(config))) {
                     consistentSegments++;
                 }
@@ -1636,6 +1677,7 @@ public class TrackLinker {
         if (!hasTimestamps && frameSamples.size() >= 3) {
             Track representativeTrack = new Track();
             for (StreakFrameSample sample : frameSamples) {
+                CancellationScope.check();
                 SourceExtractor.DetectedObject point = createSyntheticPoint(sample.x, sample.y);
                 point.sourceFrameIndex = sample.frameIndex;
                 representativeTrack.addPoint(point);
@@ -1788,7 +1830,9 @@ public class TrackLinker {
         SourceExtractor.DetectedObject bestEnd = null;
         double maxDistance = -1.0;
         for (int i = 0; i < points.size() - 1; i++) {
+            CancellationScope.check();
             for (int j = i + 1; j < points.size(); j++) {
+                CancellationScope.check();
                 SourceExtractor.DetectedObject left = points.get(i);
                 SourceExtractor.DetectedObject right = points.get(j);
                 double span = distance(left.x, left.y, right.x, right.y);
@@ -1813,11 +1857,13 @@ public class TrackLinker {
         List<SourceExtractor.DetectedObject> combinedPoints = new ArrayList<>();
         Set<SourceExtractor.DetectedObject> seenPoints = new HashSet<>();
         for (SourceExtractor.DetectedObject point : left.points) {
+            CancellationScope.check();
             if (seenPoints.add(point)) {
                 combinedPoints.add(point);
             }
         }
         for (SourceExtractor.DetectedObject point : right.points) {
+            CancellationScope.check();
             if (seenPoints.add(point)) {
                 combinedPoints.add(point);
             }
@@ -1831,9 +1877,11 @@ public class TrackLinker {
     private static boolean tracksShareFrame(Track left, Track right) {
         Set<Integer> frames = new HashSet<>();
         for (SourceExtractor.DetectedObject point : left.points) {
+            CancellationScope.check();
             frames.add(point.sourceFrameIndex);
         }
         for (SourceExtractor.DetectedObject point : right.points) {
+            CancellationScope.check();
             if (frames.contains(point.sourceFrameIndex)) {
                 return true;
             }
@@ -1854,6 +1902,7 @@ public class TrackLinker {
     private static int countUniqueFrames(List<SourceExtractor.DetectedObject> points) {
         Set<Integer> frames = new HashSet<>();
         for (SourceExtractor.DetectedObject point : points) {
+            CancellationScope.check();
             frames.add(point.sourceFrameIndex);
         }
         return frames.size();
@@ -1865,6 +1914,7 @@ public class TrackLinker {
     private static double maxTrackPeakSigma(Track track) {
         double maxPeakSigma = Double.NEGATIVE_INFINITY;
         for (SourceExtractor.DetectedObject point : track.points) {
+            CancellationScope.check();
             maxPeakSigma = Math.max(maxPeakSigma, point.peakSigma);
         }
         return maxPeakSigma;
@@ -1876,6 +1926,7 @@ public class TrackLinker {
     private static int getMinFrameIndex(List<SourceExtractor.DetectedObject> points) {
         int minFrameIndex = Integer.MAX_VALUE;
         for (SourceExtractor.DetectedObject point : points) {
+            CancellationScope.check();
             minFrameIndex = Math.min(minFrameIndex, point.sourceFrameIndex);
         }
         return minFrameIndex == Integer.MAX_VALUE ? -1 : minFrameIndex;
@@ -1887,6 +1938,7 @@ public class TrackLinker {
     private static int getMaxFrameIndex(List<SourceExtractor.DetectedObject> points) {
         int maxFrameIndex = Integer.MIN_VALUE;
         for (SourceExtractor.DetectedObject point : points) {
+            CancellationScope.check();
             maxFrameIndex = Math.max(maxFrameIndex, point.sourceFrameIndex);
         }
         return maxFrameIndex == Integer.MIN_VALUE ? -1 : maxFrameIndex;
@@ -1908,16 +1960,20 @@ public class TrackLinker {
             List<Track> pointTracks) {
         Set<SourceExtractor.DetectedObject> trackedObjects = new HashSet<>();
         for (Track track : streakTracks) {
+            CancellationScope.check();
             trackedObjects.addAll(track.points);
         }
         for (Track track : pointTracks) {
+            CancellationScope.check();
             trackedObjects.addAll(track.points);
         }
 
         List<List<SourceExtractor.DetectedObject>> anomalyCandidates = new ArrayList<>(allTransients.size());
         for (List<SourceExtractor.DetectedObject> frameObjects : allTransients) {
+            CancellationScope.check();
             List<SourceExtractor.DetectedObject> filteredFrame = new ArrayList<>();
             for (SourceExtractor.DetectedObject object : frameObjects) {
+                CancellationScope.check();
                 if (!trackedObjects.contains(object)) {
                     filteredFrame.add(object);
                 }
@@ -1938,7 +1994,9 @@ public class TrackLinker {
         Map<Integer, Integer> retainedPositions = new HashMap<>();
         List<List<SourceExtractor.DetectedObject>> allTransients = new ArrayList<>(numFrames);
         for (int i = 0; i < numFrames; i++) {
+            CancellationScope.check();
             for (SourceExtractor.DetectedObject object : retainedFrames.get(i)) {
+                CancellationScope.check();
                 retainedPositions.put(object.sourceFrameIndex, i);
             }
             List<SourceExtractor.DetectedObject> frameObjects = new ArrayList<>();
@@ -1950,6 +2008,7 @@ public class TrackLinker {
 
         if (validMovingStreaks != null) {
             for (SourceExtractor.DetectedObject streak : validMovingStreaks) {
+                CancellationScope.check();
                 Integer position = streak == null ? null : retainedPositions.get(streak.sourceFrameIndex);
                 if (position == null) {
                     continue;
@@ -1970,6 +2029,7 @@ public class TrackLinker {
         Set<SourceExtractor.DetectedObject> classifiedObjects = new HashSet<>();
         if (tracks != null) {
             for (Track track : tracks) {
+                CancellationScope.check();
                 if (track != null && track.points != null) {
                     classifiedObjects.addAll(track.points);
                 }
@@ -1977,6 +2037,7 @@ public class TrackLinker {
         }
         if (anomalies != null) {
             for (AnomalyDetection anomaly : anomalies) {
+                CancellationScope.check();
                 if (anomaly != null && anomaly.object != null) {
                     classifiedObjects.add(anomaly.object);
                 }
@@ -1985,6 +2046,7 @@ public class TrackLinker {
 
         List<List<SourceExtractor.DetectedObject>> unclassifiedTransients = new ArrayList<>(allTransients.size());
         for (List<SourceExtractor.DetectedObject> frameObjects : allTransients) {
+            CancellationScope.check();
             List<SourceExtractor.DetectedObject> frameUnclassified = new ArrayList<>();
             if (frameObjects != null) {
                 for (SourceExtractor.DetectedObject object : frameObjects) {
@@ -2014,6 +2076,7 @@ public class TrackLinker {
         int sensorHeight = mask.length;
         int sensorWidth = sensorHeight > 0 ? mask[0].length : 0;
         for (SourceExtractor.Pixel p : obj.rawPixels) {
+            CancellationScope.check();
             if (p.x >= 0 && p.x < sensorWidth && p.y >= 0 && p.y < sensorHeight && mask[p.y][p.x]) {
                 overlapCount++;
             }
@@ -2043,6 +2106,7 @@ public class TrackLinker {
         double totalLineError = 0.0;
         int lineSamples = 0;
         for (int i = 1; i < track.points.size() - 1; i++) {
+            CancellationScope.check();
             totalLineError += distanceToLineOptimized(start, end, track.points.get(i), baselineDistance);
             lineSamples++;
         }
@@ -2051,6 +2115,7 @@ public class TrackLinker {
         double totalSpeedError = 0.0;
         int segmentSamples = 0;
         for (int i = 0; i < track.points.size() - 1; i++) {
+            CancellationScope.check();
             SourceExtractor.DetectedObject p1 = track.points.get(i);
             SourceExtractor.DetectedObject p2 = track.points.get(i + 1);
 
@@ -2107,6 +2172,7 @@ public class TrackLinker {
      */
     private static boolean conflictsWithUsedPoints(Set<SourceExtractor.DetectedObject> usedPoints, Track track) {
         for (SourceExtractor.DetectedObject point : track.points) {
+            CancellationScope.check();
             if (usedPoints.contains(point)) {
                 return true;
             }
@@ -2228,8 +2294,10 @@ public class TrackLinker {
      */
     private static boolean isTrackAlreadyFound(List<Track> existingTracks, Track newTrack) {
         for (Track existing : existingTracks) {
+            CancellationScope.check();
             int sharedPoints = 0;
             for (SourceExtractor.DetectedObject pt : newTrack.points) {
+                CancellationScope.check();
                 if (existing.points.contains(pt)) {
                     sharedPoints++;
                 }
@@ -2249,6 +2317,7 @@ public class TrackLinker {
 
         List<Double> jumps = new ArrayList<>();
         for (int i = 0; i < track.points.size() - 1; i++) {
+            CancellationScope.check();
             SourceExtractor.DetectedObject p1 = track.points.get(i);
             SourceExtractor.DetectedObject p2 = track.points.get(i + 1);
             jumps.add(distance(p1.x, p1.y, p2.x, p2.y));
@@ -2263,6 +2332,7 @@ public class TrackLinker {
         int consistentJumps = 0;
 
         for (double jump : jumps) {
+            CancellationScope.check();
             long multiplier = Math.round(jump / medianJump);
             if (multiplier == 0) continue;
 

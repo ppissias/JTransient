@@ -9,6 +9,8 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.execution.CancellationScope;
+
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.engine.ImageFrame;
 
@@ -130,6 +132,7 @@ public final class MasterReferenceAnalyzer {
         }
         BitSet covered = new BitSet(width * height);
         for (SourceExtractor.DetectedObject star : stars) {
+            CancellationScope.check();
             if (star.rawPixels != null) {
                 for (SourceExtractor.Pixel p : star.rawPixels) {
                     covered.set(p.y * width + p.x);
@@ -144,6 +147,7 @@ public final class MasterReferenceAnalyzer {
             }
             boolean overlaps = false;
             for (SourceExtractor.Pixel p : candidate.rawPixels) {
+                CancellationScope.check();
                 if (covered.get(p.y * width + p.x)) {
                     overlaps = true;
                     break;

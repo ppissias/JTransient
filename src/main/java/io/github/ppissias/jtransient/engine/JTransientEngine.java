@@ -10,6 +10,9 @@
 package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.execution.CancellableTasks;
+import io.github.ppissias.jtransient.execution.CancellationScope;
+import io.github.ppissias.jtransient.execution.CancellationToken;
 import io.github.ppissias.jtransient.core.CommonMotionRejector;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.FrameCoverage;
@@ -69,6 +72,27 @@ public class JTransientEngine implements AutoCloseable {
     static final double MAX_SINGLE_FRAME_AREA_LOSS = 0.05;
 
     private final ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(1);
+    private boolean running;
+
+    private <Result> Result executeOperation(CancellationToken cancellation, Callable<Result> operation) throws Exception {
+        synchronized (this) {
+            ensureOpen();
+            if (running) {
+                throw new IllegalStateException("JTransientEngine already has an operation in progress.");
+            }
+            running = true;
+        }
+        try (CancellationScope scope = CancellationScope.open(cancellation)) {
+            CancellationScope.check();
+            Result result = operation.call();
+            CancellationScope.check();
+            return result;
+        } finally {
+            synchronized (this) {
+                running = false;
+            }
+        }
+    }
 
     /**
      * Creates a new engine instance backed by its own worker pool.
@@ -167,6 +191,16 @@ public class JTransientEngine implements AutoCloseable {
      */
     public MasterStackResult generateMasterStackWithDetails(List<ImageFrame> inputFrames, DetectionConfig config,
                                                             TransientEngineProgressListener listener) throws Exception {
+        return generateMasterStackWithDetails(inputFrames, config, listener, CancellationScope.current());
+    }
+
+    public MasterStackResult generateMasterStackWithDetails(List<ImageFrame> inputFrames, DetectionConfig config,
+                                                            TransientEngineProgressListener listener, CancellationToken cancellation) throws Exception {
+        return executeOperation(cancellation, () -> generateMasterStackWithDetailsInternal(inputFrames, config, listener));
+    }
+
+    private MasterStackResult generateMasterStackWithDetailsInternal(List<ImageFrame> inputFrames, DetectionConfig config,
+                                                            TransientEngineProgressListener listener) throws Exception {
         ensureOpen();
         InputRules.checkPipelineInput(inputFrames, null);
         configureFrameExecutor(inputFrames);
@@ -207,7 +241,7 @@ public class JTransientEngine implements AutoCloseable {
         }
 
         List<FrameExtractionResult> completedResults = new ArrayList<>();
-        List<Future<FrameExtractionResult>> futures = executor.invokeAll(tasks);
+        List<Future<FrameExtractionResult>> futures = CancellableTasks.invokeAll(executor, tasks);
         for (Future<FrameExtractionResult> future : futures) {
             completedResults.add(future.get());
         }
@@ -300,6 +334,14 @@ public class JTransientEngine implements AutoCloseable {
      * @throws Exception if extraction or vetoing fails
      */
     public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
+        return detectTransients(inputFrames, config, listener, providedMasterStack, CancellationScope.current());
+    }
+
+    public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack, CancellationToken cancellation) throws Exception {
+        return executeOperation(cancellation, () -> detectTransientsInternal(inputFrames, config, listener, providedMasterStack));
+    }
+
+    private List<FrameTransients> detectTransientsInternal(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
         ensureOpen();
         InputRules.checkPipelineInput(inputFrames, providedMasterStack);
         ExtractedFramesContext context = extractSourcesFromFrames(inputFrames, config, listener);
@@ -432,7 +474,7 @@ public class JTransientEngine implements AutoCloseable {
 
         // Execute parallel extraction
         List<FrameExtractionResult> completedResults = new ArrayList<>();
-        List<Future<FrameExtractionResult>> futures = executor.invokeAll(tasks);
+        List<Future<FrameExtractionResult>> futures = CancellableTasks.invokeAll(executor, tasks);
         for (Future<FrameExtractionResult> future : futures) {
             completedResults.add(future.get());
         }
@@ -708,6 +750,14 @@ public class JTransientEngine implements AutoCloseable {
      * @throws Exception if extraction, tracking, or residual analysis fails
      */
     public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
+        return runPipeline(inputFrames, config, listener, providedMasterStack, CancellationScope.current());
+    }
+
+    public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack, CancellationToken cancellation) throws Exception {
+        return executeOperation(cancellation, () -> runPipelineInternal(inputFrames, config, listener, providedMasterStack));
+    }
+
+    private PipelineResult runPipelineInternal(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
         ensureOpen();
         InputRules.checkPipelineInput(inputFrames, providedMasterStack);
         ExtractedFramesContext context = extractSourcesFromFrames(inputFrames, config, listener);
@@ -969,7 +1019,23 @@ public class JTransientEngine implements AutoCloseable {
      * Call this when your application is closing to prevent memory leaks.
      */
     public void shutdown() {
-        executor.shutdown();
+        synchronized (this) {
+            if (running) {
+                throw new IllegalStateException("Cancel and await the active operation before closing JTransientEngine.");
+            }
+            executor.shutdown();
+        }
+        boolean interrupted = Thread.interrupted();
+        while (!executor.isTerminated()) {
+            try {
+                executor.awaitTermination(1, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (InterruptedException ignored) {
+                interrupted = true;
+            }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     @Override
