@@ -1,6 +1,6 @@
 # Design improvements and review decisions
 
-Consolidated and checked against the source tree on 2026-10-19, at engine commit `f084ab9`. This is the single active decision list for engine improvements and review limitations. Current implementation is described in [ALGORITHM.md](ALGORITHM.md) (detection, slow movers, photometry and tuning), [PIPELINE.md](PIPELINE.md) (API contracts), and [CONFIG.md](CONFIG.md) (fields/defaults).
+Consolidated and checked against the source tree on 2026-10-19, at engine commit `f084ab9`. This is the single active decision list for engine improvements and review limitations. It holds only **pending work and open decisions**; completed, retired and declined items, and the answered review of this plan, are in the [closed items archive](docs/archive/design-improvements-closed-2026-10.md). Current implementation is described in [ALGORITHM.md](ALGORITHM.md) (detection, slow movers, photometry and tuning), [PIPELINE.md](PIPELINE.md) (API contracts), and [CONFIG.md](CONFIG.md) (fields/defaults).
 
 Original evidence and maintainer comments are preserved in the [October engine review](docs/archive/code-review-2026-10.md), [variable-star assessment](docs/archive/variable-star-assessment-2026-10.md), [slow-mover design](docs/archive/slow-mover-design-2026-10.md), and [maintenance/regression notes](docs/archive/maintenance-notes-2026-10-19.md). Original line numbers, suggested orders and statements about missing features describe those earlier checkouts.
 
@@ -10,19 +10,12 @@ The separate [design and architecture review](#design-and-architecture-review-20
 
 **Proposed** is an idea without an implementation decision; **Accepted** requires an explicit decision; **In progress** means implementation has started; **Deferred** is postponed work; **Declined** preserves a decision to keep current behavior; **Implemented** records a completed change; **Retired** means an old finding no longer applies. A source concern or synthetic reproduction is not a measured real-data incidence. This documentation cleanup changes no algorithm or review authorization.
 
-Existing issue IDs are retained. Variable-star assessment numbers use a `VS-` prefix here to avoid ambiguity. No deferred or declined issue becomes Accepted by being listed in this plan. Discuss a concrete engine fix, implement one at a time, and report real-data differences under [AGENTS.md](AGENTS.md).
+Existing issue IDs are retained. Variable-star assessment numbers use a `VS-` prefix here to avoid ambiguity. No deferred issue becomes Accepted by being listed in this plan. Discuss a concrete engine fix, implement one at a time, and report real-data differences under [AGENTS.md](AGENTS.md).
+
+- **When an item is done, retired or declined,** describe current behaviour in the reference documents and move its record (decision and evidence) to the archive. The [decisions to keep current behavior](docs/archive/design-improvements-closed-2026-10.md#decisions-to-keep-current-behavior) stay binding: do not re-propose a declined item without new evidence.
+- **Besides the JA items,** two Proposed algorithm items are listed under [deferred work](#deferred-work-and-optional-ideas): PT-5 and SM-F1.
 
 ## Design and architecture review (2026-10-20)
-
-### Assessment and scope
-
-Reviewed against checkout `b424a6e` (library version `1.0.5`). JTransient has a sound application boundary: it processes in-memory images, exposes standalone extraction and tuning, and keeps file preparation, persistence, GUI work and report generation in SpacePixels. Its focused analyzers and existing regression tests are useful foundations. A replacement framework, plugin pipeline or multi-module rewrite is not justified by this review.
-
-The main architectural weakness is that **run ownership and public data contracts are less explicit than the scientific stages**. A run uses caller-owned mutable settings and images, several execution mechanisms, and shared mutable detection objects. Tracking owns several distinct stages; tuning combines measurement, selection and presentation. These arrangements make safe reuse, cancellation, concurrent callers and compatibility harder to reason about.
-
-The review inventoried all 50 production Java files, their declared types and internal dependencies, and examined the important entry points, stage boundaries, state mutations, execution and result construction in detail. It also inspected the 36-file test inventory, relevant contract tests, build/publication configuration, current library documentation, and selected SpacePixels consumers: standard/iterative pipelines, Auto-Tune integration and public API. The responsibility map below accounts for every production file. This is a broad architecture review, not an exhaustive correctness audit of every numerical method or a guarantee that every defect has been found.
-
-No code, settings or datasets were changed, and no tests, fault-injection experiments, performance benchmarks or real-data comparisons were run for this documentation review. Evidence describes source mechanisms; consequences described as risks are inferred, with no claimed incidence. Detection rules, thresholds, association choices and photometry statistics are outside this review. In particular, the proposals below do not approve any deferred or declined algorithm finding elsewhere in this document.
 
 ### What to preserve
 
@@ -70,6 +63,13 @@ SpacePixels owns parsing editor text, focusing invalid fields, formatting/displa
 
 Genuine numeric validity limits should be exposed as JTransient metadata that GUI bindings can consume. Distinguish them from convenient spinner ranges before making existing widget bounds engine restrictions. Preserve special values such as master-grow `0`, hidden fields and accepted profile semantics; do not expand an automatic setting into a fixed persisted value during alignment. Keep shared rule tests in JTransient and GUI parsing, binding and feedback tests in SpacePixels.
 
+**Decided in the review of this plan (2026-10-20).**
+- **Fallback identity.** Existing compatibility entry points keep their documented same-reference fallback (`baseConfig`). New snapshot-based APIs return independent copies. Callers use `success` to tell a fallback.
+- **Accepted profiles.** A profile accepted today stays accepted until a rejection policy is agreed.
+- **Scoped validation.** `validate(config, operation)` checks what that operation reads, including shared preparation and enabled branches. Settings of an inactive stage do not block it unless they break a global invariant.
+- **Identifiers, not sentences.** Issues and adjustments carry field and rule identifiers, and SpacePixels writes the messages. Its settings tab and Preview Frame need back the direction of each adjustment, a rule identifier and the field identifiers.
+- **Coverage.** Shared rule and metadata tests cover newly added fields and preserve sentinels.
+
 **Acceptance.** Use a controlled pause after capture, change the caller's config, and verify the active run still uses its captured values. Verify local overrides and tuning success/fallback leave the base untouched. Check representative persisted profiles, hidden fields, sentinels and invalid numeric values through engine and tuner entry points. Verify GUI and direct callers obtain the same issues from the shared validator, and that GUI alignment preserves current pair behavior without retaining separate rule definitions. Compare unchanged valid runs on reference data before adopting new validation behavior.
 
 ### JA-02. Define execution and resource ownership for a whole operation
@@ -80,6 +80,8 @@ Genuine numeric validity limits should be exposed as JTransient metadata that GU
 
 Introduce a small execution policy shared by orchestration and tuning: worker limits, memory admission assumptions and owned versus borrowed executor lifetime. Account for row-stack work as well as extraction. Keep the default memory heuristic, and document that estimates cannot guarantee enough heap for arbitrary input/output populations. Define close during active work, sequential reuse after ordinary failure, and whether a completion operation waits. Avoid nested work that submits to and waits on an already occupied bounded pool.
 
+**Decided in the review of this plan (2026-10-20).** One active operation per engine instance is the instance contract. The engine and both tuners enter the same operation-control conventions. These conventions do not by themselves bound process-wide resources: that needs application admission (SpacePixels D02 holds the GUI's job slot) or explicitly shared scheduling. Only `CalibratedAutoTuner` creates its own pool; the legacy tuner runs on its caller's thread.
+
 **Acceptance.** Exercise overlap, repeated use, close during work, task failure and borrowed-executor ownership with controlled workers. Check bounded active work and absence of retained workers after terminal completion. Benchmark representative large frames sequentially, including stacking and tuning, before changing scheduling defaults.
 
 ### JA-03. Distinguish cancellation, failure and tuning fallback
@@ -89,6 +91,21 @@ Introduce a small execution policy shared by orchestration and tuning: worker li
 **Risk and proposal.** An application can stop waiting while computation still owns buffers and workers. An interrupted tuning can look like an ordinary inability to calibrate, and the original structured cause is lost to callers. Add a small per-operation cancellation contract, with checks at bounded chunks of expensive loops and before starting another stage. Specify that cancellation discards a partial scientific result unless a separate partial-result API is deliberately designed.
 
 Preserve interruption, distinguish invalid input, insufficient evidence, cancellation and execution failure, and retain causes with stage/frame context. Keep scientific readiness outcomes separate from runtime errors. Define how sibling tasks are stopped and joined before a terminal outcome is delivered, including when a listener throws. Compatibility wrappers may translate a typed internal outcome to the existing exception/result shape. This is the engine counterpart to SpacePixels D04; UI job ownership remains in SpacePixels.
+
+**Evidence from SpacePixels (2026-10-20).** SpacePixels cancels a job by throwing `java.util.concurrent.CancellationException` (its `JobCancelledException`) from the progress listener. Measured on klangwolke-2 (33 frames of 61 MPix):
+- **Extraction:** a cancel at frame 5 of 33 ended the run 26 s later. Each extraction task does its frame's work before it reports, and `invokeAll` waits for every task, so the other frames are still extracted before `Future.get` rethrows. An interrupted `invokeAll` cancels unfinished tasks, but this cancel is a listener exception, not an interrupt. A checkpoint at the start of each frame task would bound the wait to about one frame.
+- **Gaps between progress calls,** which bound a listener-driven cancel today:
+  - photometry's ensemble solution: 5–29 s;
+  - dither analysis: 2–14 s;
+  - master star map to the maximum stack: about 6 s;
+  - calibrated tuning, preparing noise and injection images: 12.6 s.
+
+  The rest stayed under about 5 s.
+- **Calibrated tuning:** all its progress calls run inside the `try` that catches `Exception`, so a cancel comes back as `success = false` with the exception in `failureReason`. SpacePixels treats a tune as cancelled whenever a cancel was requested before the tuner returned.
+
+**Decided in the review of this plan (2026-10-20).** Until the checkpoints exist, SpacePixels says that a cancel does not guarantee JTransient computation has stopped, and keeps the resources until it has.
+
+**Open decision: the cancellation signal.** Use `java.util.concurrent.CancellationException`, or a subclass, across the library. SpacePixels already recognises it through wrapping exceptions without depending on application classes, and a JDK type needs no new public exception class.
 
 **Acceptance.** Cancel extraction, stacking, tracking, tuning and photometry at controlled checkpoints. Inject a worker and listener failure. Verify the terminal category and cause, no successful completion after cancellation, worker cleanup and the documented engine reuse behavior. Measure cancellation latency rather than promising immediate interruption of every calculation.
 
@@ -132,6 +149,8 @@ Dependencies also follow implementation locations: public results use `SourceExt
 
 As a touched boundary needs it, put shared frame/detection/track and diagnostic contracts below orchestration, with adapters for current nested public types. Keep domain measurements independent of their text formatter and aggregate telemetry attachment. Do not move public classes, remove constructors or make old mutable collections unmodifiable in one compatibility-breaking cleanup. Add an explicit opt-in output-retention policy only after identifying consumers: the engine currently builds the maximum stack even with slow movers disabled because it also exports that image. Any lighter mode must still compute products needed by enabled science stages and preserve today's default outputs.
 
+**Decided in the review of this plan (2026-10-20).** When the `ImageFrame` contract is written, its class comment should describe borrowed, mutable pixel storage rather than imply deep immutability.
+
 **Acceptance.** Test intended aliases, container ownership, repeat viewers reading one result, grouped/legacy consistency and preservation of detection identity. Compile existing SpacePixels consumers. Measure retained heap and runtime before adding copies or changing output retention; a read-only wrapper alone is not deep immutability.
 
 ### JA-08. Separate Auto-Tune measurement, policy and presentation
@@ -171,6 +190,12 @@ Before caching master stars, masks or full preparation, define invalidation sepa
 **Proposal.** Agree the supported Java baseline and encode it in the build and documentation. Add focused contract checks alongside each adopted seam: settings isolation, frame mapping, lifecycle, public result ownership and deterministic stage equivalence. Add lightweight dependency checks only for boundaries that have actually been introduced; a large architecture-testing framework is not required.
 
 Define source and binary compatibility expectations for published releases, including nested public classes, constructors and legacy exports. Verify an explicit supported SpacePixels/JTransient pair both with the local composite and with the dependency arrangement intended for distribution. A passing composite build alone cannot prove that a release using the published artifact includes the required engine contract.
+
+**Releases and SpacePixels.** SpacePixels builds against the published jar by default; the composite build is opt-in. A slice that adds API SpacePixels will use, such as the rules service (JA-01) or the cancellation contract (JA-03):
+- names the JTransient version that brings it;
+- keeps SpacePixels working, with today's behaviour, against the version before.
+
+`DetectionConfigRules` becomes supported API as soon as SpacePixels imports it.
 
 **Acceptance.** Compile, test and build the jar on the declared Java target; compile representative existing API consumers and run SpacePixels tests with the intended engine. For structural engine changes, complete the reference-data comparison below. Do not add brittle tests for class length or private method names, or mirror every implementation branch merely to increase coverage.
 
@@ -265,6 +290,13 @@ Use one of two explicit steps for a model boundary: first extract responsibiliti
 During migration, legacy facade files may still reference old engine callbacks or nested model names. Track each such exception by source file, dependency and removal condition in the relevant JA item's implementation record. Canonical computational classes must not import compatibility facades. Distinguish these temporary exceptions from the acyclic target graph; do not claim the entire existing package graph is acyclic while the legacy API still creates cycles. Do not invent a generic `compat` package for old names: wrappers must remain at the original fully qualified names to preserve callers.
 
 Migrate a vertical slice at a time: introduce its lower-level contracts, extract its private collaborators, add facade/adapters, switch engine and direct consumers, verify behavior, then retire the duplicate implementation. Deprecation and eventual removal of old names require an explicit release/version decision. Keep constructor/field compatibility, Java target support, silent defaults and the Gson profile schema visible in release checks. No Java module descriptor, new runtime dependency or multi-artifact publication is needed for this plan.
+
+#### Decided in the review of this plan (2026-10-20)
+
+- **The streak-shape predicate.** The old public method stays on `core.SourceExtractor`, the compatibility facade. The canonical `extraction.SourceExtractor` has no streak-shape method and no tracking dependency. Measurements live in `image.FootprintGeometry`, and the decision lives in tracking.
+- **Prepared inputs.** The main analysis methods take prepared inputs: tracking receives a built mask, and slow movers receive built stacks. Standalone convenience facades may still compose reference services; tell them apart from the analysis methods before tightening the dependency table.
+- **Temporary exceptions.** Model migration names its temporary dependency exceptions explicitly, for example `residual` and `photometry` naming `TrackLinker` types until the shared models move. The residual helper that takes `TrackLinker.Track` is called only by a test, so it alone does not decide a production dependency.
+- **Names are candidates.** The class names are design candidates, not a requirement to create every listed helper. Introduce a collaborator when its responsibility and ownership are clear.
 
 ### Responsibility map and refactor scope
 
@@ -371,154 +403,10 @@ Do not combine these changes with new detection gates, altered association order
 
 For VS-2/5/6/8/9 the assessment contains component reproductions and their caveats. They are retained as evidence, not presented as measured false-positive rates on the reference datasets. Secondary ideas about per-frame quantisation coverage, source-photon-noise errors, reference-population robustness, capping/performance and pre-epoch metadata remain unapproved investigations in that archive; they are not additional confirmed defects.
 
-## Decisions to keep current behavior
-
-| ID | Decision | Current behavior |
-|---|---|---|
-| IN-3 | Declined | Tracking returns no categories when fewer than three frame lists remain; slow movers and photometry are separate pipeline stages. Do not reinterpret this as an instruction to recover one/two-frame tracks. |
-| ST-4 | Declined | Keep existing streak-chain linking without a new global common-line/distance gate. |
-| PT-1 | Declined | Keep the geometric rhythm check's distance-based rule; it makes no capture-time assumption. |
-| PT-3 | Declined | Keep timed tracks that can bend; no final straightness requirement was accepted. |
-| SM-1 | Declined | No drift-path veto on maximum-stack slow-mover candidates. Camera-fixed point filtering does not implement this proposal. |
-| PH-1 | Declined | Slow-mover footprints continue to flag nearby photometry stars across frames. |
-| PT-9, X-1, X-2, X-3 | No separate linker change | Retain exposure-start timing and uniform metadata contracts. Engine/tuner `InputRules`, missing timestamp defaults and linker timestamp checks cover applicable boundary cases; do not schedule the old mixed-metadata examples as independent fixes. |
-| EX-3 | Formula retained; documented | Extraction FWHM has its existing second-moment convention (about sqrt(2) above a round Gaussian FWHM). Photometry and SpacePixels Night & Equipment measure size separately. |
-| XC-1 | Formula retained; documented | Integrated significance assumes uncorrelated pixels and photometry errors omit source photon noise. State these limits; do not insert a numerical correlation correction without blank-aperture evidence. |
-
-## Completed and retired findings
-
-| IDs | Outcome and implementation evidence |
-|---|---|
-| IN-1 | Implemented in SpacePixels: Manual Transient Inspection receives a configuration copy (`fd98a9a`, `475fc15` in SpacePixels). |
-| IN-2 | Implemented: engine/tuner `InputRules` and uniform linker timestamps (`0f28d7d`). Missing time is -1; 0 remains a real timestamp. |
-| IN-4 | Implemented: effective point minimum cannot fall below three; invalid ratios use the default (`3468ac1`). |
-| XC-4, EX-1 | Implemented: coverage/quality/data areas, common sky measurement area, kept-frame search areas, tuner crop constraints, removal of edge/void settings (`0200684`, `5e99e43`, `ba7c75a`, `13f7bce`, `8dcb41b`, `bec3455`). |
-| EX-2 | Retired: darkness/void probes and their configuration were removed with data areas. |
-| ST-2, ST-3 | Implemented: streak motion uses a unit-axis pixel displacement; a stationary multi-frame streak fails the motion check (`b502535`, `46e1dda`). |
-| AN-1, AN-3 | Implemented: standalone suspected-streak results removed; same-frame groups use present frame keys and survive only through confirmed-streak consolidation (`b92a985`). |
-| RS-2 | Implemented: residual span, gaps and coverage count kept frames; the line fit retains sequence indices (`48d7a9b`). |
-| AT-1, AT-2 | Implemented: calibrated crops fit inside the pool data area, rates use owned searchable pixels and injections have a safe margin (`8dcb41b`). |
-| AT-5 | Implemented: legacy mask growth matches `max(1, round(jitter / 2))` (`15f63b3`). This did not make the legacy master-grow threshold identical to the calibrated tuner's configurable hysteresis. |
-| DOC-1, HY-1 | Implemented: references/defaults/contracts corrected and unused code removed; output stays behind debug switches (`a6069a5`, `ed5aaea`, `e2e89d2`, `6992e9e` and subsequent documentation updates). |
-| VS-1, VS-3, VS-4, VS-7 | Implemented: crossing positions use registration-corrected coordinates, interpolation uses available capture times, every same-frame track fragment is considered, and undefined response slopes are INCONCLUSIVE. See current photometry sources and reference. |
-| XC-3 master pass | Implemented: global-sky stars plus nonoverlapping local-sky stars seeded at least at 5 sigma (`ffa60aa`); the first pass is retained to mask extended emission that per-frame extraction also detects. |
-| Camera-fixed rejection | Implemented: fill-edge registration and camera-coordinate groups (`4b443d7`), with `enableCameraFixedRejection` and exported review groups. The earlier Option A sensor study is historical, not a pending implementation. |
-| Anomalies on streak paths | Implemented: an anomaly on a confirmed streak's line in the same frame, or where the streak's motion puts it in a skipped, preceding or following frame, joins that streak; `AnomalyDetection.lowConfidence` is removed (`de1dc48`). On klangwolke-2, 17 of 39 anomalies joined (24 of 40 with a second profile), on klangwolke-1 one of six; the other 16 reference runs were identical. Joined pieces now flag the stars they cross in photometry: one borderline POSSIBLE star became CONSTANT, and with the second profile one constant star fell below the usable-frame minimum. |
-
-The [archived engine review](docs/archive/code-review-2026-10.md#implementation-status-2026-10-18) retains full commit/decision provenance. The [maintenance notes](docs/archive/maintenance-notes-2026-10-19.md) retain the 19-dataset per-step results, tuner differences and M81-kumar experiments. In particular, the recorded HIGH-profile M81 sequence is LR 274 → 84 → 10 and CM 52 → 5 → 3 after master-star and camera-fixed changes, respectively; these are historical measurements with the recorded profiles, not new benchmarks from this cleanup.
-
-## Review
-
-Comments from a review of this document on 2026-10-20, checked against the production tree at `bfafd64`. That commit does not change `src/main/java` relative to the architecture review's `b424a6e`, and the library version is still `1.0.5`. The blueprint's inventory matches this tree: 50 production Java files, 36 test files, and six paired rules in SpacePixels `DetectionSettingsRules.Pair`. Sampled evidence also matches the source: mutable `DetectionConfig` with stage-local clones, static tuner grids, in-place frame sorting, one frame pool reused by photometry after extraction, `IntStream.range(...).parallel()` in `MasterMapGenerator`, fallback results that keep the caller's `baseConfig` reference, `bestTransientRatio` assigned from `noisePerMpixFrame` in the calibrated tuner, `shutdown()` without waiting, and the iterative pipeline's full-session `short[][]` master. These comments do not change the status of any item above and do not authorize implementation.
-
-The decision list is in good shape. Algorithm findings stay separate from the JA items, statuses mean what the legend says, and the blueprint keeps one jar, the current public names, and the scientific stage order. The next useful edit is to close the four questions that change the dependency table and the acceptance tests for steps 1 and 2.
-
-> **Remark (2026-10-20):** The responses below distinguish factual corrections, clarifications and design preferences. There are seven questions below; each has a response. These remarks leave proposal statuses and implementation authorization unchanged.
-
-### Comments
-
-**The streak-shape move conflicts with the dependency table.** `SourceExtractor.isBinaryStarLikeStreakShape` is public, and `TrackLinker` calls it. The class table puts the predicate in package-private `tracking.StreakShapeFilter` and has the old extractor helper delegate through a tracking facade. The canonical home of `SourceExtractor` is `extraction`, whose allowed dependencies are `model`, `image`, `config` and `execution`. A delegate on that class adds `extraction` → `tracking`. Once `DetectedObject` lives in `model`, tracking does not need the extractor to judge a footprint. The arrangement that preserves the table is: measurements live in `image.FootprintGeometry`, the decision lives in tracking, and the old public method stays on a compatibility facade at today's class name. That facade is the temporary exception allowed to call tracking. The canonical extractor then has no streak-shape method.
-
-> **Remark (2026-10-20):** Agree with the proposed arrangement, but this is an ambiguity to clarify rather than an unavoidable conflict. The old method stays on `io.github.ppissias.jtransient.core.SourceExtractor`, the compatibility facade. The new `io.github.ppissias.jtransient.extraction.SourceExtractor` has no tracking dependency or streak-shape method. Measurements belong in `image`; the decision belongs in tracking.
-
-**Some allowed package edges follow today's call sites rather than the data those stages need.** `TrackLinker.filterTransients` calls `MasterVetoMask.build`, so the table allows `tracking` → `reference`. The mask is a `boolean[][]` built from master stars, width, height and jitter, and `MasterVetoMask` exists so the pipeline and the preview tools share one builder. If the engine passes the built mask in, tracking does not need the reference package, and mask construction stays in `reference`. `slowmover` → `reference` is required by the convenience overload `SlowMoverAnalyzer.analyze(cleanFrames, medianStackData, config)`, which calls `MasterMapGenerator.createMaximumMasterStack`. The analyzing method already receives both stacks. Stack construction can stay with the engine. `ResidualTransientAnalyzer.analyze` already takes detections only. Its package-private `collectAlreadyClassifiedPoints` takes `TrackLinker.Track` and `TrackLinker.AnomalyDetection`, and photometry's `Input.tracks` does the same in production. Those signatures become `residual` → `tracking` and `photometry` → `tracking` as soon as the packages split, which the table forbids. The delivery order places shared model contracts at step 5, after the tracking split, so the first tracking slice needs those signatures named as a temporary exception.
-
-> **Remark (2026-10-20):** Prepared masks and stacks are a good boundary for the main analysis methods. Removing every `tracking`/`slowmover` dependency on `reference` is optional: standalone convenience facades may legitimately compose reference services. Distinguish those facades from the analysis methods before tightening the table. Agree that model migration needs explicit temporary exceptions. The cited residual helper is currently called only by a test, so it should not alone determine a production dependency.
-
-**An instance admission guard misses the entries that share a process.** SpacePixels builds a new `JTransientEngine` for each detection, master stack and iterative pass, and calls `shutdown()` after the synchronous call returns. Two GUI passes do not share an instance. The tuners are static and allocate their own pools; `CalibratedAutoTuner.calibrate` calls `shutdownNow()` in `finally` on every path. Heap sizing reads process-wide `Runtime` figures, and master stacking uses the common `ForkJoinPool`. One active operation per engine is a sound instance contract. The runs that can still compete are two engines, a static tune beside an engine, and two tunes sharing the static grids. JA-02 and JA-04 need the same operation context, entered by the engine and by both tuners. A process-wide single-flight lock belongs with SpacePixels D02, which owns the GUI job slot. The library contract should say what a second direct caller may do, and leave job identity in the application.
-
-> **Remark (2026-10-20):** The cross-instance concern is valid, but only `CalibratedAutoTuner` creates its own worker pool; the legacy tuner runs synchronously on its caller thread. Both expose mutable static settings. Common operation-control contracts do not themselves impose a process-wide resource bound: that requires application admission or explicitly shared scheduling/budget resources. Keep one-operation-per-engine behavior separate from that policy, with application job identity in SpacePixels.
-
-**Step 1 changes observable behavior if rejection or fallback identity arrives with the snapshot.** Unsuccessful legacy `tune` paths set `optimizedConfig` to the supplied `baseConfig`. Calibrated `tune` does the same until `configFor` replaces it on success. An independent fallback copy is a contract change when a caller distinguishes fallback by reference identity. Rejecting a profile the engine currently accepts is the other contract change. The blueprint already asks to reconcile fallback before new rejection rules; the acceptance test for step 1 should name which paths stay same-reference fallback, which return an equal copy, and which become structured rejection.
-
-> **Remark (2026-10-20):** Agree that fallback aliasing and new rejection are observable changes. Proposed compatibility policy: existing entry points preserve their documented same-reference fallback behavior; a new snapshot-based API returns independent configurations consistently. Callers should use `success` to distinguish fallback. Decide and test these paths explicitly rather than changing them as an incidental consequence of cloning settings.
-
-SpacePixels currently checks finite `double` and `float` fields by reflection and checks the six pairs. Its own comment says profiles and the API are not checked yet. `DetectionConfigurationPanel` maps `DetectionSettingsRules.Pair` to spinners and shows `problems()` and `Pair.adjustment` sentences. Structured issues should carry field and rule identifiers, and the panel should keep those sentences, so display wording stays in the application. A test that every non-static `double` and `float` field has validity metadata keeps today's reflective coverage when a field is added. Master grow `0` still satisfies the current pair inequality whenever master sigma is non-negative. Alignment loses the sentinel only by writing the effective grow, which the blueprint already leaves unchanged.
-
-> **Remark (2026-10-20):** Agree with structured field/rule identifiers and application-owned presentation. GUI message templates must not duplicate comparisons, ranges or adjustment decisions. Shared rule/metadata coverage tests should include newly added fields and preserve sentinels. Operation-scoped enforcement must distinguish genuine global invariants from settings used only by an inactive branch.
-
-**Cancellation is the gap a caller can hit, and SpacePixels D04 is already in progress.** The long entry points throw `Exception`. Extraction invokes the progress listener on a pool thread while holding the monitor used as `synchronized (framesCompleted)`. A listener that throws fails that worker. `CalibratedAutoTuner.calibrate` catches `Exception`, appends `e` to `failureReason`, and does not restore the interrupt status. `JTransientEngine.shutdown` calls `executor.shutdown()` and returns. The current happy path closes an idle engine after `runPipeline` returns. A caller that stops waiting, or whose thread is interrupted in `Future.get`, leaves the pool tasks running. D04 should keep saying that JTransient does not yet stop cooperatively, until JA-03 names the checkpoints. The listener rules in JA-09 belong in that same contract.
-
-> **Remark (2026-10-20):** The risk is real, but the waiting point needs correction: engine extraction calls `invokeAll` before reading the returned futures, so the later `Future.get` is not normally waiting for running extraction tasks. Interrupted `invokeAll` cancels unfinished tasks; cancellation still does not guarantee that computations ignoring interruption have stopped. See the [ExecutorService contract](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/util/concurrent/ExecutorService.html). D04 should say that cancellation does not yet guarantee JTransient computation has stopped, and retain resource ownership until execution actually ends. Avoid saying workers always remain running after a stop request.
-
-**Prepared-frame identity matches the code, with one ordering detail worth recording.** `extractSourcesFromFrames` sorts the caller's list after drift analysis and before creating extraction tasks. `generateMasterStackWithDetails` sorts before drift analysis. `FrameDriftAnalyzer.analyze` sorts a copy, and registrations are kept by sequence index, so both orders zip metrics back to frames by sequence index today. `VariableStarAnalyzer.analyze` reads `input.frameMetrics.get(j)` in lockstep with `input.frames` and does not check the list lengths; the matching-order rule is that indexing plus the field comments. `TrackLinker` records veto `frameIndex = i` in the retained-list position. The engine's `FrameExtractionResult.frameIndex` stores `sequenceIndex`. The two names in JA-05 match that split. `ImageFrame`'s class comment calls the payload immutable; the fields are final, and `pixelData` remains a caller-owned mutable matrix, as JA-07 says. The class comment should be brought into line with that contract when the boundary is written.
-
-> **Remark (2026-10-20):** Agree. Preserve original sequence identity separately from retained position, and verify associations after sorting, rejection and subsetting. The `ImageFrame` comment should describe borrowed mutable pixel storage rather than imply deep immutability when that contract is implemented.
-
-**The blueprint can be built one slice at a time.** The class table is a vocabulary. The delivery table is a dependency order. Each JA item still needs its own discussion, and a long analyzer stays whole until it has a new ownership boundary. `DetectionConfigRules` becomes supported API as soon as SpacePixels imports it, so the JA-11 note for that change needs the Java baseline, what is public, and source compatibility. The build declares no toolchain or release target, and the README asks for a local JDK without a minimum version. The flowchart is an ownership sketch; the package table is the rule. Both tuners stop at extraction, quality, drift and master construction. They do not call `TrackLinker` or `runPipeline`. That cut matches the code and matches AT-4, whose budgets count single-frame survivors.
-
-> **Remark (2026-10-20):** Agree with incremental implementation and compatibility checks for the shared rules API. The proposed class names are design candidates, not a requirement to instantiate every listed helper. Preserve standalone services and introduce a collaborator when its responsibility and ownership are clear.
-
-**Two Proposed algorithm items sit only in the deferred table.** PT-5 and SM-F1 are Proposed. The JA summary is the table a reader scans first. One line under Status and scope, listing the non-JA Proposed ids, would make that scan complete. The deferred and declined scientific wording was not re-checked against the datasets for this review. It already limits those rows to source concerns and named examples, and it points measurement at the SpacePixels regression method.
-
-> **Remark (2026-10-20):** A navigation note or link is reasonable; keep PT-5 and SM-F1 in their existing scientific work list without changing their status or making them prerequisites for architectural refactoring.
-
-### Questions
-
-1. For the streak predicate, does the compatibility facade own the old public method, with measurements in `image` and the decision in tracking?
-
-   **Remark:** Yes: retain the old public method on `core.SourceExtractor`; the canonical extractor stays independent of tracking.
-
-2. Should tracking receive a built mask, and slow movers receive built stacks, so those packages do not depend on `reference`?
-
-   **Remark:** Prefer prepared inputs for the main analysis path; retain justified reference-service dependencies on standalone convenience facades.
-
-3. Is the first execution contract one operation per engine instance, with static tuners and parallel stacking entering the same operation context, while a process-wide GUI slot stays in D02?
-
-   **Remark:** Yes to the instance contract and common operation-control conventions. Process-wide resource limits need actual admission or shared execution resources, beyond a context object.
-
-4. Which JA-01 paths keep the same `baseConfig` instance, which return an equal copy, and which reject with structured issues?
-
-   **Remark:** Proposed: existing compatibility entry points retain fallback aliases; new snapshot-based APIs return independent copies. Preserve accepted-profile behavior until the validation/rejection policy is explicitly agreed.
-
-5. Should alignment results carry rule identifiers, with the settings tab keeping the current sentences?
-
-   **Remark:** Yes. Return field/rule identifiers and structured adjustments; SpacePixels formats the messages while JTransient defines the rules.
-
-6. Should validation be scoped as `validate(config, operation)`, so master-stack, transient-only and full-pipeline entry points check the settings that operation reads?
-
-   **Remark:** Yes, covering shared preparation and enabled branches. Inactive-stage settings should not block unrelated operations unless they violate a genuine global invariant.
-
-7. Until JA-03, should D04 state that stopping a detection job leaves JTransient workers running until the library checkpoints exist?
-
-   **Remark:** Use qualified wording: cancellation does not guarantee that JTransient computation has stopped. Retain resources until actual termination rather than assuming every stop request leaves workers running.
-
-### Review notes from the SpacePixels side (Claude, 2026-10-20)
-
-These notes add measurements made while implementing SpacePixels D04 (Cancel). They change no status here. Measured on klangwolke-2 (33 frames of 61 MPix, the maintainer's profile) through SpacePixels' job coordinator. A cancel there is a `JobCancelledException`, a `java.util.concurrent.CancellationException`, thrown by the progress listener at its next call.
-
-**Evidence for JA-03 and JA-09.**
-- **A listener exception does not stop sibling tasks.** Cancelled at "Extracting features from frame 5 of 33", the run ended 26 s later. Each extraction task does its frame's work before it reports, and `invokeAll` waits for every task, so the other frames are still extracted before `Future.get` rethrows. The remark under question 7 is right that an *interrupted* `invokeAll` cancels unfinished tasks. But SpacePixels' cancel is a listener exception in a worker, not an interrupt, so that path does not apply. A checkpoint at the start of each frame task would bound the wait to about one frame.
-- **Longest gaps between progress calls,** which bound a listener-driven cancel today:
-  - photometry's ensemble solution: 5–29 s;
-  - dither and corner-drift analysis: 2–14 s (14 s on a cold file cache);
-  - master star map to the maximum stack: about 6 s;
-  - calibrated tuning, preparing noise and injection images: 12.6 s (MEDIUM profile).
-
-  Everything else stayed under about 5 s.
-- **The calibrated tuner turns a cancel into a failed calibration.** All its progress calls run on the calling thread inside the `try` that catches `Exception`. A listener exception therefore comes back as `success = false`, with the exception in `failureReason`. SpacePixels now reports a tune as cancelled whenever a cancel was requested before the tuner returned. JA-03 should let a cancel leave the tuner as a cancel.
-- **A suggestion for the contract's type:** use `java.util.concurrent.CancellationException`, or a subclass, as the cancellation signal across the library. SpacePixels already recognises it through wrapping exceptions without depending on application classes. A JDK type keeps the JA-03 contract usable by other callers and needs no new public exception class.
-- **A listener that throws inside `synchronized (framesCompleted)`** releases the monitor normally. A slow listener serialises the workers there, as JA-09 notes. SpacePixels' listener only posts to the Swing thread, so it is cheap.
-
-**On JA-01 rules ownership.** Agree with the direction and with the remarks on questions 5 and 6.
-- **What SpacePixels uses today.** The six pairs drive three places:
-  - the settings tab's auto-apply (`normalizeDependentSpinners`), which moves one spinner of a crossed pair and words the change in the footer;
-  - `checkedSettings`, which refuses a save or run;
-  - since 2026-10-20, Preview Frame, whose threshold spinners share the tab's models, so its edits go through the same alignment.
-- **What a shared service must return** to replace this without changing behaviour:
-  - the direction of each adjustment (which field moves);
-  - a stable rule identifier, to which SpacePixels attaches its own titles and sentences;
-  - the field identifiers, so the tab can focus the field.
-
-**On JA-11 and releases.** SpacePixels builds against the published JTransient from Maven Central by default; the composite build is opt-in. A cancellation or rules API is usable in a SpacePixels release only after a JTransient release that contains it. The JA-03 and JA-01 slices should each name the JTransient version they need, and SpacePixels should keep working, with today's behaviour, against the version before.
-
-**On the document itself.** The blueprint is thorough, and its slices are the right size. With the review's questions now answered, consider moving this Review section to `docs/archive/` once its answers are folded into the JA items, as was done for the October reviews. This list then stays the single current plan.
-
-
 ## Verification for future changes
 
 1. Define the observable failure and the supported input contract. Use a deterministic component reproduction and an unchanged control where possible.
 2. Discuss the proposed rule and acceptance condition before changing an algorithm. Retain the decision/status here.
 3. Run engine tests and the consuming SpacePixels tests with the local composite build. Compare base/change on the same reference profiles and datasets using the SpacePixels regression procedure; compare frame rejection, tracks/anomalies, camera/common-motion groups, variable-star results star by star, and timings.
 4. Report differences before committing. Preserve user profiles/preferences, use scratch diagnostic code, and keep memory-heavy runs sequential.
-5. Update the relevant current reference after implementation, mark the item with evidence here, and archive lengthy experiment narratives rather than growing `AGENTS.md` into a session log.
+5. Update the relevant current reference after implementation, then move the item with its evidence to the [closed items archive](docs/archive/design-improvements-closed-2026-10.md). Archive lengthy experiment narratives too, rather than growing `AGENTS.md` into a session log.
