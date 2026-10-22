@@ -13,6 +13,7 @@ The separate [design and architecture review](#design-and-architecture-review-20
 Existing issue IDs are retained. Variable-star assessment numbers use a `VS-` prefix here to avoid ambiguity. No deferred issue becomes Accepted by being listed in this plan. Discuss a concrete engine fix, implement one at a time, and report real-data differences under [AGENTS.md](AGENTS.md).
 
 - **When an item is done, retired or declined,** describe current behaviour in the reference documents and move its record (decision and evidence) to the archive. The [decisions to keep current behavior](docs/archive/design-improvements-closed-2026-10.md#decisions-to-keep-current-behavior) stay binding: do not re-propose a declined item without new evidence.
+- **After each feature implementation,** commit its implementation, tests and documentation, then push to the current branch's configured upstream. Add commit-body notes explaining the change, rationale and validation or remaining limitations; report the commit ID and any push failure. Preserve ignored local configuration and do not force-push.
 - **Besides the JA items,** two Proposed algorithm items are listed under [deferred work](#deferred-work-and-optional-ideas): PT-5 and SM-F1.
 
 ## Design and architecture review (2026-10-20)
