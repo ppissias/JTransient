@@ -383,6 +383,7 @@ public class VariableStarAnalyzerTest {
         assertEquals(0, m.flags[0]);
     }
 
+    /** Measures Gaussian flux with crossed factors to verify resolved sky clearance follows the measured FWHM. */
     @Test
     public void effectiveGeometryUsesTheMeasuredFwhmAndKeepsTheSkyOutsideEveryAperture() {
         double sigma = 1.3;

@@ -21,6 +21,7 @@ import java.util.List;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
+/** Covers timestamp-aware crossing interpolation, fragmented streaks and effective inner/outer photometry radii. */
 public class TrackCrossingTest {
 
     /** A track point as flagTrack stores it: {sequence, x, y, angle, half length, half width, time}. */
@@ -84,6 +85,7 @@ public class TrackCrossingTest {
         return d;
     }
 
+    /** Verifies tracks and stacked slow-mover footprints flag stars inside the expanded outer sky boundary only. */
     @Test
     public void tracksAndSlowMoverCandidatesUseTheExpandedOuterAnnulus() {
         DetectionConfig config = expandedGeometry();
@@ -112,6 +114,7 @@ public class TrackCrossingTest {
         assertEquals(0, slowMeasurement.flags[1] & PhotometryFlags.CROSSING);
     }
 
+    /** Keeps the frame-detection veto at the effective inner boundary rather than the clipped outer sky ring. */
     @Test
     public void frameDetectionsUseTheExpandedInnerAnnulusWithoutFlaggingTheOuterSkyRing() {
         DetectionConfig config = expandedGeometry();
@@ -130,6 +133,7 @@ public class TrackCrossingTest {
         assertEquals(0, measurement.flags[1] & PhotometryFlags.CROSSING);
     }
 
+    /** Supplies crossed annulus factors that must expand outside the configured large main aperture. */
     private static DetectionConfig expandedGeometry() {
         DetectionConfig config = new DetectionConfig();
         config.photometryApertureFwhmFactor = 4;

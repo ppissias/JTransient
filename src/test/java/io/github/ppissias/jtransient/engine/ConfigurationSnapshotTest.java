@@ -15,7 +15,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.*;
 
+/** Exercises operation-boundary capture, structured rejection and legacy versus detached tuner fallback ownership. */
 public class ConfigurationSnapshotTest {
+    /** Pauses after capture, mutates caller settings, then verifies the active run retains its original stage choices. */
     @Test(timeout = 20_000)
     public void aPausedRunUsesTheCapturedConfigurationAfterItsCallerEditsTheOriginal() throws Exception {
         DetectionConfig config = new DetectionConfig();
@@ -52,6 +54,7 @@ public class ConfigurationSnapshotTest {
         }
     }
 
+    /** Preserves legacy base-reference fallbacks while both snapshot APIs return independent fallback settings. */
     @Test
     public void legacyAndSnapshotTunerFallbackIdentitiesAreDeliberatelyDifferent() {
         DetectionConfig base = new DetectionConfig();
@@ -71,6 +74,7 @@ public class ConfigurationSnapshotTest {
         assertEquals(5, calibratedSnapshot.optimizedConfig.qualitySigmaMultiplier, 0);
     }
 
+    /** Shows that edits from a progress callback cannot leak into a previously captured fallback. */
     @Test
     public void tunerProgressCannotChangeTheCapturedFallbackValues() {
         DetectionConfig base = new DetectionConfig();
@@ -80,6 +84,7 @@ public class ConfigurationSnapshotTest {
         assertEquals(2.25, result.optimizedConfig.masterSigmaMultiplier, 0);
     }
 
+    /** Ensures consumed invalid settings are rejected with field IDs before workers or progress callbacks start. */
     @Test
     public void invalidActiveValuesAreRejectedBeforeProgressWithStructuredIssues() throws Exception {
         DetectionConfig config = new DetectionConfig();
@@ -93,6 +98,7 @@ public class ConfigurationSnapshotTest {
         }
     }
 
+    /** Distinguishes invalid tuning inputs from inactive or sweep-overridden settings that tuning does not consume. */
     @Test
     public void bothTunersRejectNonFiniteConsumedSettingsButIgnoreOverriddenAndInactiveOnes() {
         DetectionConfig config = new DetectionConfig();
@@ -110,6 +116,7 @@ public class ConfigurationSnapshotTest {
         assertFalse(CalibratedAutoTuner.tuneSnapshot(frames(2), config, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null).success);
     }
 
+    /** Creates deterministic, independent noisy frames with consistent timestamps/exposures for boundary tests. */
     private static List<ImageFrame> frames(int count) {
         Random random = new Random(19);
         List<ImageFrame> frames = new ArrayList<>();
@@ -125,6 +132,7 @@ public class ConfigurationSnapshotTest {
         return frames;
     }
 
+    /** Protects the -1-only missing-time sentinel so valid pre-epoch timestamps do not activate geometric validation. */
     @Test
     public void negativeEpochTimestampsDoNotActivateGeometricFallbackValidation() throws Exception {
         DetectionConfig config = new DetectionConfig();

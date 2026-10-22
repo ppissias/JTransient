@@ -146,6 +146,7 @@ public class TrackLinkerGeometricDiscoveryTest {
         assertEquals(1, result.telemetry.countTrackTooShort);
     }
 
+    /** Demonstrates that pruning can enlarge a retained step beyond the raw linking cap without invalidating rhythm. */
     @Test
     public void pruningCanProduceSteadyStepsAboveTheRawGeometricJumpCap() {
         DetectionConfig config = new DetectionConfig();

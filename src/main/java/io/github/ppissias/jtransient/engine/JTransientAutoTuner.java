@@ -496,6 +496,18 @@ public class JTransientAutoTuner {
         return result;
     }
 
+    /**
+     * Tunes a captured configuration under an explicit cancellation scope without aliasing caller fallback settings.
+     *
+     * @param allFrames frame sequence available for sampling
+     * @param baseConfig caller settings, captured before progress and never modified by tuning
+     * @param profile scoring policy preset
+     * @param listener optional progress listener
+     * @param cancellation cancellation request checked before capture, during work and before return
+     * @return tuning outcome whose successful or fallback configuration is independent of baseConfig
+     * @throws DetectionConfigRules.InvalidConfigurationException if consumed configuration values are invalid
+     * @throws java.util.concurrent.CancellationException if cancellation is requested
+     */
     public static AutoTunerResult tuneSnapshot(List<ImageFrame> allFrames, DetectionConfig baseConfig,
                                               AutoTuneProfile profile, TransientEngineProgressListener listener,
                                               io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
@@ -507,12 +519,26 @@ public class JTransientAutoTuner {
         }
     }
 
+    /**
+     * Captures legacy-tuner inputs once and returns detached settings even when tuning cannot produce a winner.
+     * Inherits an enclosing cancellation scope; unlike {@link #tune}, fallback never returns the caller's base object.
+     *
+     * @param allFrames frame sequence available for sampling
+     * @param baseConfig caller-owned starting settings
+     * @param profile scoring policy preset
+     * @param listener optional progress listener
+     * @return tuning outcome with an independent optimized or fallback configuration
+     * @throws DetectionConfigRules.InvalidConfigurationException if consumed configuration values are invalid
+     * @throws IllegalArgumentException if frame input rules are violated
+     * @throws java.util.concurrent.CancellationException if the inherited scope is cancelled
+     */
     public static AutoTunerResult tuneSnapshot(List<ImageFrame> allFrames, DetectionConfig baseConfig,
                                               AutoTuneProfile profile, TransientEngineProgressListener listener) {
         CancellationScope.check();
         return tuneCaptured(allFrames, DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.AUTO_TUNE), profile, listener);
     }
 
+    /** Runs the legacy search using a validated private settings copy, including its detached fallback path. */
     private static AutoTunerResult tuneCaptured(List<ImageFrame> allFrames, DetectionConfig baseConfig,
                                                AutoTuneProfile profile, TransientEngineProgressListener listener) {
         CancellationScope.check();

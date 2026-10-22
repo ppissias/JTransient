@@ -10,7 +10,9 @@ import java.util.stream.Collectors;
 import static io.github.ppissias.jtransient.config.DetectionConfigRules.*;
 import static org.junit.Assert.*;
 
+/** Verifies complete rule metadata, scoped diagnostics, explicit alignment and legacy-setting compatibility. */
 public class DetectionConfigRulesTest {
+    /** Detects field-inventory drift and confirms metadata retains the DTO's types and engine defaults. */
     @Test
     public void metadataCoversEveryFieldAndPreservesItsTypeAndDefault() throws Exception {
         Set<String> fields = Arrays.stream(DetectionConfig.class.getFields())
@@ -25,6 +27,7 @@ public class DetectionConfigRulesTest {
         assertTrue(validate(new DetectionConfig(), Operation.CONFIGURATION).isEmpty());
     }
 
+    /** Checks that every floating field produces one identifiable non-finite error without modifying the DTO. */
     @Test
     public void everyFloatingFieldHasOneStructuredNonFiniteError() throws Exception {
         for (var field : DetectionConfig.class.getFields()) {
@@ -39,6 +42,7 @@ public class DetectionConfigRulesTest {
         }
     }
 
+    /** Separates active-operation read sets from the all-fields finite-number requirement for persisted profiles. */
     @Test
     public void operationScopesIgnoreUnreadOptionalValuesButProfilesRemainSerializable() {
         DetectionConfig config = new DetectionConfig();
@@ -56,6 +60,7 @@ public class DetectionConfigRulesTest {
         assertEquals(Stage.PHOTOMETRY, failure.issues().get(0).stage());
     }
 
+    /** Protects historical pair directions and defensive copies of aligned configurations. */
     @Test
     public void legacyAlignmentReturnsDetachedChangesInTheOriginalDirections() {
         DetectionConfig config = new DetectionConfig();
@@ -75,6 +80,7 @@ public class DetectionConfigRulesTest {
         assertEquals(5, aligned.config().growSigmaMultiplier, 0);
     }
 
+    /** Keeps new scientific-policy findings advisory until alignment is explicitly requested. */
     @Test
     public void reviewFindingsWarnWithoutRewritingAcceptedPoliciesAndSentinels() {
         DetectionConfig config = new DetectionConfig();
@@ -104,6 +110,7 @@ public class DetectionConfigRulesTest {
         assertEquals(-1, explicit.config().masterGrowSigmaMultiplier, 0);
     }
 
+    /** Exercises geometric/timed branch applicability, accepted equality and the non-universal rhythm/jump policy. */
     @Test
     public void geometricConflictsDependOnTheActualBranchAndEqualityIsNotRejected() {
         DetectionConfig config = new DetectionConfig();
@@ -132,6 +139,7 @@ public class DetectionConfigRulesTest {
         assertThrows(InvalidConfigurationException.class, () -> snapshot(config, Operation.PIPELINE, Timing.AVAILABLE));
     }
 
+    /** Preserves uncapped/disabled sentinels and independence of thresholds measured on different images. */
     @Test
     public void uncappedPhotometryAndIndependentImagesHaveNoInventedPairRules() {
         DetectionConfig config = new DetectionConfig();
@@ -153,10 +161,12 @@ public class DetectionConfigRulesTest {
         assertFalse(has(config, RuleId.PHOTOMETRY_STAR_CAP));
     }
 
+    /** Finds a rule by its stable identifier in configuration-boundary diagnostics. */
     private static boolean has(DetectionConfig config, RuleId rule) {
         return validate(config, Operation.CONFIGURATION).stream().anyMatch(issue -> issue.ruleId() == rule);
     }
 
+    /** Checks shared shape fields and distinguishes calibrated/legacy tuner inputs from overridden settings. */
     @Test
     public void sharedExtractionShapeAndTunerOverridesUseTheirActualReadScopes() {
         DetectionConfig config = new DetectionConfig();

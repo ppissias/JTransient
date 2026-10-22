@@ -4,7 +4,9 @@ import org.junit.Test;
 
 import static org.junit.Assert.*;
 
+/** Protects effective photometry pixel margins and diagnostic expansions across FWHM values and legacy factors. */
 public class PhotometryGeometryTest {
+    /** Compares shared resolution with the original measurement formula, including zero FWHM and crossed factors. */
     @Test
     public void sharedResolutionMatchesTheExistingMeasurementPolicyAcrossFwhmAndLegacyFactors() {
         for (double fwhm : new double[]{0, 0.3, 1, 2, 4, 10}) {
@@ -28,6 +30,7 @@ public class PhotometryGeometryTest {
         }
     }
 
+    /** Confirms expanded pixel radii carry rule IDs while configured annulus factors remain unchanged. */
     @Test
     public void adjustedPixelRadiiAreReportedWithoutRewritingConfiguredFactors() {
         DetectionConfig config = new DetectionConfig();

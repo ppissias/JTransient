@@ -23,6 +23,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+/** Checks selection boundaries, effective annulus coverage and neighbour-contamination estimates. */
 public class PhotometryStarSelectorTest {
 
     private static final double FWHM = 3.0;
@@ -68,6 +69,7 @@ public class PhotometryStarSelectorTest {
         return result.stream().anyMatch(s -> Math.hypot(s.x - x, s.y - y) < 0.5);
     }
 
+    /** Rejects an edge star whose raw configured sky ring fits but whose expanded measurement annulus does not. */
     @Test
     public void expandedMeasurementAnnulusAlsoControlsSelectionAtTheImageEdge() {
         DetectionConfig config = new DetectionConfig();

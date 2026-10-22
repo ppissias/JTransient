@@ -34,6 +34,8 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 
 This repository is a Gradle Java library project. Install a local JDK first and make sure `java` is available on `PATH`, or that `JAVA_HOME` points to the JDK installation.
 
+For development, document every new Java class, record, enum and interface at type level, including nested types and tests. Give each new method and explicit constructor a concise Javadoc description, including private helpers; explain important ownership/mutation, units and compatibility contracts. Keep these descriptions current when behavior changes and include them in the feature commit. Machine-specific agent instructions remain in the ignored local `AGENTS.md`.
+
 ```powershell
 .\gradlew.bat build
 ```

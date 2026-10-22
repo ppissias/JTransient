@@ -10,60 +10,149 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * Owns detection-setting metadata, operation-scoped validation and explicit copy-based alignment.
+ *
+ * <p>Validation never changes the public {@link DetectionConfig} DTO. Non-finite consumed values are errors;
+ * finite domain and consistency findings remain advisory for legacy compatibility. Alignment changes only
+ * settings selected by the requested policy and returns structured changes for application-owned presentation.</p>
+ *
+ * <p>The service is stateless and returned collections are immutable. Callers must synchronize writes that
+ * overlap validation or snapshot capture; copying primitive fields does not provide a multi-field transaction.</p>
+ */
 public final class DetectionConfigRules {
+    /** Minimum usable reference-star count required by the photometry ensemble solver. */
     public static final int MIN_ENSEMBLE_STARS = 10;
+    /** Selects the read set; CONFIGURATION checks persistence, AUTO_TUNE legacy tuning, and CALIBRATION calibrated tuning. */
     public enum Operation { CONFIGURATION, PIPELINE, TRANSIENTS, MASTER_STACK, AUTO_TUNE, CALIBRATION, EXTRACTION }
+    /** Timestamp availability used to scope geometric-linking advice; UNKNOWN retains conditional diagnostics. */
     public enum Timing { UNKNOWN, AVAILABLE, MISSING }
+    /** Engine responsibility associated with a setting or diagnostic, independent of GUI page layout. */
     public enum Stage { BACKGROUND, EXTRACTION, QUALITY, REFERENCE, SLOW_MOVERS, TRACKING, RESIDUAL, PHOTOMETRY }
+    /** Distinguishes blocking errors from advisory warnings and informational findings. */
     public enum Severity { ERROR, WARNING, INFO }
+    /** Whether alignment lowers a pair's first field or raises its second field. */
     public enum Direction { LOWER, RAISE }
+    /** Legacy GUI policy preserves six pairs; reviewed consistency adds quality/amplitude policies and excludes rhythm/jump. */
     public enum AlignmentPolicy { LEGACY_GUI, REVIEWED_CONSISTENCY }
+    /** Stable rule identifiers for diagnostics, alignment and application-owned messages. */
     public enum RuleId {
         NON_FINITE, NUMERIC_DOMAIN, GROW_SIGMA, MASTER_GROW_SIGMA, SLOW_MOVER_GROW_SIGMA,
         SLOW_MOVER_AXIS_RATIO, MEDIAN_MASK_OVERLAP, RHYTHM_STATIONARY_THRESHOLD, QUALITY_GROW_SIGMA,
         GEOMETRIC_JITTER_JUMP, PHOTOMETRY_STAR_CAP, PHOTOMETRY_GEOMETRY_FACTORS, PHOTOMETRY_EFFECTIVE_GEOMETRY,
         LIMITED_AMPLITUDE, ANOMALY_RESCUE_SUBSUMED, REDUNDANT_MINIMUM_PIXELS
     }
+    /** Recommended scalar domains, including sentinel-aware categories; these do not introduce hard rejection bounds. */
     public enum Domain {
         BOOLEAN, FINITE, POSITIVE, NON_NEGATIVE, FRACTION, PERCENTAGE, CORRELATION, ANGLE,
         ELONGATION, STRICT_ELONGATION, DISABLED_RATIO, NONPOSITIVE_UNCAPPED, NONPOSITIVE_DEFAULT,
         MASTER_GROW, ENCODING_LEVELS
     }
 
+    /**
+     * Describes one public primitive configuration field without introducing a second settings representation.
+     *
+     * @param id existing DetectionConfig field name
+     * @param type declared primitive type
+     * @param stage owning engine responsibility
+     * @param domain recommended scalar domain, including legacy sentinel semantics
+     * @param defaultValue boxed engine default, not an application-profile override
+     */
     public record FieldMetadata(String id, Class<?> type, Stage stage, Domain domain, Object defaultValue) {}
 
+    /**
+     * Describes a validation finding using identifiers and values rather than application-specific sentences.
+     *
+     * @param ruleId violated rule
+     * @param severity whether the finding blocks snapshot creation or is advisory
+     * @param stage affected engine responsibility
+     * @param fields affected configuration field names, in explanation order
+     * @param values numeric evidence keyed by field name or a rule-specific derived-value identifier
+     */
     public record Issue(RuleId ruleId, Severity severity, Stage stage, List<String> fields, Map<String, Number> values) {
+        /** Copies diagnostic collections so their membership cannot change after publication. */
         public Issue {
             fields = List.copyOf(fields);
             values = Map.copyOf(values);
         }
     }
 
+    /**
+     * Defines an ordering policy in which the first value should not exceed the second.
+     *
+     * @param ruleId ordering rule identifier
+     * @param firstField lower-side configuration field
+     * @param secondField upper-side configuration field
+     * @param direction which side moves when explicitly aligned
+     * @param stage affected engine responsibility
+     * @param legacyAlignment whether the original GUI policy includes this pair
+     */
     public record Pair(RuleId ruleId, String firstField, String secondField, Direction direction,
                        Stage stage, boolean legacyAlignment) {
+        /**
+         * Checks ordering and master-grow sentinel semantics, not stage applicability or numeric validity.
+         *
+         * @param config settings to inspect without mutation
+         * @return false only for a finite, non-sentinel ordering violation; non-finite values are validated separately
+         */
         public boolean holds(DetectionConfig config) { return !crossed(config, this); }
     }
 
+    /**
+     * Records one explicit alignment change without embedding GUI wording.
+     *
+     * @param ruleId policy responsible for the change
+     * @param stage affected engine responsibility
+     * @param field configuration field changed in the aligned copy
+     * @param relatedFields configuration fields explaining the relationship
+     * @param oldValue original boxed value
+     * @param newValue aligned boxed value
+     * @param direction whether the changed value was lowered or raised
+     */
     public record Adjustment(RuleId ruleId, Stage stage, String field, List<String> relatedFields,
                              Number oldValue, Number newValue, Direction direction) {
+        /** Detaches the related-field list from the caller's collection. */
         public Adjustment { relatedFields = List.copyOf(relatedFields); }
     }
 
+    /**
+     * Holds an aligned settings snapshot and the changes needed to explain it.
+     *
+     * @param config aligned settings, defensively cloned on construction and access
+     * @param adjustments immutable list of applied changes
+     */
     public record Alignment(DetectionConfig config, List<Adjustment> adjustments) {
+        /** Captures an independent configuration and immutable adjustment list. */
         public Alignment {
             config = config.clone();
             adjustments = List.copyOf(adjustments);
         }
+        /**
+         * Returns a fresh copy so a consumer cannot modify this alignment result's captured settings.
+         *
+         * @return detached aligned configuration
+         */
         @Override public DetectionConfig config() { return config.clone(); }
     }
 
+    /** Rejects snapshot creation while preserving structured validation errors for non-GUI callers. */
     public static final class InvalidConfigurationException extends IllegalArgumentException {
         private final List<Issue> issues;
+        /**
+         * Captures the blocking findings and builds a concise identifier-based exception message.
+         *
+         * @param issues errors reported for the rejected snapshot
+         */
         public InvalidConfigurationException(List<Issue> issues) {
             super("Invalid detection configuration: " + issues.stream()
                     .map(issue -> issue.ruleId() + " " + issue.fields()).toList());
             this.issues = List.copyOf(issues);
         }
+        /**
+         * Returns the immutable findings retained when the snapshot was rejected.
+         *
+         * @return structured blocking issues
+         */
         public List<Issue> issues() { return issues; }
     }
 
@@ -83,15 +172,42 @@ public final class DetectionConfigRules {
             new Pair(RuleId.RHYTHM_STATIONARY_THRESHOLD, "rhythmStationaryThreshold", "maxJumpPixels", Direction.LOWER, Stage.TRACKING, true),
             new Pair(RuleId.QUALITY_GROW_SIGMA, "qualityGrowSigmaMultiplier", "qualitySigmaMultiplier", Direction.LOWER, Stage.QUALITY, false));
 
+    /** Prevents instantiation of this stateless rules service. */
     private DetectionConfigRules() {}
 
+    /**
+     * Returns complete metadata keyed by existing configuration field names.
+     *
+     * @return immutable field definitions with engine defaults
+     */
     public static Map<String, FieldMetadata> metadata() { return METADATA; }
+    /**
+     * Returns shared ordering definitions in deterministic diagnostic/alignment order.
+     *
+     * @return immutable pair policies
+     */
     public static List<Pair> pairs() { return PAIRS; }
 
+    /**
+     * Validates settings with unknown timestamp availability, retaining conditional geometric advice.
+     *
+     * @param config settings to inspect without mutation
+     * @param operation read set to validate
+     * @return immutable structured findings
+     */
     public static List<Issue> validate(DetectionConfig config, Operation operation) {
         return validate(config, operation, Timing.UNKNOWN);
     }
 
+    /**
+     * Diagnoses numeric and relationship issues for the operation and enabled branches without changing settings.
+     * CONFIGURATION requires every persisted number to be finite, including disabled preferences.
+     *
+     * @param config settings to inspect without mutation
+     * @param operation read set or persistence boundary to validate
+     * @param timing known or unknown timestamp availability
+     * @return immutable errors, warnings and informational findings; warnings do not imply rejection
+     */
     public static List<Issue> validate(DetectionConfig config, Operation operation, Timing timing) {
         Objects.requireNonNull(config, "config");
         Objects.requireNonNull(operation, "operation");
@@ -157,10 +273,28 @@ public final class DetectionConfigRules {
         return List.copyOf(issues);
     }
 
+    /**
+     * Captures and validates a private settings copy with unknown timestamp availability.
+     *
+     * @param config caller-owned settings to capture
+     * @param operation read set to validate
+     * @return detached configuration, without implicit alignment
+     * @throws InvalidConfigurationException if validation reports blocking errors
+     */
     public static DetectionConfig snapshot(DetectionConfig config, Operation operation) {
         return snapshot(config, operation, Timing.UNKNOWN);
     }
 
+    /**
+     * Clones before validation so subsequent caller edits cannot affect the returned operation settings.
+     * Callers must synchronize writes that overlap the primitive-field capture itself.
+     *
+     * @param config caller-owned settings to capture
+     * @param operation read set or persistence boundary to validate
+     * @param timing timestamp availability for branch-dependent validation
+     * @return detached configuration preserving advisory findings and legacy values
+     * @throws InvalidConfigurationException if the captured settings contain error-level findings
+     */
     public static DetectionConfig snapshot(DetectionConfig config, Operation operation, Timing timing) {
         DetectionConfig snapshot = Objects.requireNonNull(config, "config").clone();
         List<Issue> errors = validate(snapshot, operation, timing).stream().filter(issue -> issue.severity() == Severity.ERROR).toList();
@@ -168,10 +302,28 @@ public final class DetectionConfigRules {
         return snapshot;
     }
 
+    /**
+     * Aligns a copy using the original six-pair GUI policy, preserving historical adjustment directions.
+     *
+     * @param config original settings, never modified
+     * @param operation scope to validate and align
+     * @return detached aligned settings and structured changes
+     * @throws InvalidConfigurationException if the input cannot form a valid snapshot
+     */
     public static Alignment align(DetectionConfig config, Operation operation) {
         return align(config, operation, AlignmentPolicy.LEGACY_GUI);
     }
 
+    /**
+     * Applies only the requested consistency policy to a validated copy and records every change.
+     * Neither policy chooses new jitter/star caps or rewrites persisted annulus factors.
+     *
+     * @param config original settings, never modified
+     * @param operation scope to validate and align
+     * @param policy legacy widget behavior or explicit reviewed consistency choices
+     * @return detached aligned settings and immutable structured changes
+     * @throws InvalidConfigurationException if the input cannot form a valid snapshot
+     */
     public static Alignment align(DetectionConfig config, Operation operation, AlignmentPolicy policy) {
         Objects.requireNonNull(policy, "policy");
         DetectionConfig aligned = snapshot(config, operation);
@@ -203,6 +355,7 @@ public final class DetectionConfigRules {
         return new Alignment(aligned, changes);
     }
 
+    /** Resolves a field's actual read scope, including tuner overrides, optional branches and timestamp availability. */
     private static boolean active(FieldMetadata metadata, DetectionConfig config, Operation operation, Timing timing) {
         if (operation == Operation.CALIBRATION) return CALIBRATION_FIELDS.contains(metadata.id());
         if (operation == Operation.AUTO_TUNE) return (CALIBRATION_FIELDS.contains(metadata.id())
@@ -223,6 +376,7 @@ public final class DetectionConfigRules {
         return true;
     }
 
+    /** Applies coarse operation/stage eligibility before field-specific consumption checks. */
     private static boolean stageActive(Stage stage, DetectionConfig config, Operation operation) {
         return switch (stage) {
             case BACKGROUND -> true;
@@ -237,6 +391,7 @@ public final class DetectionConfigRules {
         };
     }
 
+    /** Detects a finite pair inversion while preserving the automatic nonpositive master-grow sentinel. */
     private static boolean crossed(DetectionConfig config, Pair pair) {
         double first = number(config, pair.firstField()).doubleValue();
         double second = number(config, pair.secondField()).doubleValue();
@@ -244,26 +399,31 @@ public final class DetectionConfigRules {
                 && !(pair.ruleId() == RuleId.MASTER_GROW_SIGMA && first <= 0) && first > second;
     }
 
+    /** Converts a crossed ordering policy into an advisory finding with both original values. */
     private static Issue pairIssue(DetectionConfig config, Pair pair) {
         return issue(pair.ruleId(), Severity.WARNING, pair.stage(), List.of(pair.firstField(), pair.secondField()),
                 values(config, pair.firstField(), pair.secondField()));
     }
 
+    /** Builds a structured finding through the record's defensive-copy boundary. */
     private static Issue issue(RuleId rule, Severity severity, Stage stage, List<String> fields, Map<String, Number> values) {
         return new Issue(rule, severity, stage, fields, values);
     }
 
+    /** Collects numeric field evidence without duplicating reflection access in individual rules. */
     private static Map<String, Number> values(DetectionConfig config, String... fields) {
         Map<String, Number> values = new LinkedHashMap<>();
         for (String field : fields) values.put(field, number(config, field));
         return values;
     }
 
+    /** Reads a known numeric DTO field through the validated field registry. */
     private static Number number(DetectionConfig config, String name) {
         try { return (Number) FIELDS.get(name).get(config); }
         catch (IllegalAccessException failure) { throw new IllegalStateException(failure); }
     }
 
+    /** Writes an alignment value to the private copy while retaining the field's primitive type. */
     private static void set(DetectionConfig config, String name, Number value) {
         try {
             Field field = FIELDS.get(name);
@@ -272,6 +432,7 @@ public final class DetectionConfigRules {
         } catch (IllegalAccessException failure) { throw new IllegalStateException(failure); }
     }
 
+    /** Tests a finite scalar against its recommended domain, leaving sentinel-only categories unrestricted. */
     private static boolean inDomain(Domain domain, double value) {
         return switch (domain) {
             case POSITIVE -> value > 0;
@@ -288,6 +449,7 @@ public final class DetectionConfigRules {
         };
     }
 
+    /** Indexes public instance fields once so numeric rules use the existing DTO names consistently. */
     private static Map<String, Field> fields() {
         Map<String, Field> fields = new LinkedHashMap<>();
         for (Field field : DetectionConfig.class.getFields()) {
@@ -296,6 +458,7 @@ public final class DetectionConfigRules {
         return Collections.unmodifiableMap(fields);
     }
 
+    /** Defines all field domains/stages and fails initialization if the metadata inventory drifts from the DTO. */
     private static Map<String, FieldMetadata> metadataDefinitions() {
         Map<String, FieldMetadata> metadata = new LinkedHashMap<>();
         add(metadata, Stage.BACKGROUND, Domain.POSITIVE, "bgClippingIterations bgClippingFactor");
@@ -344,6 +507,7 @@ public final class DetectionConfigRules {
         return Collections.unmodifiableMap(metadata);
     }
 
+    /** Registers named fields with their actual types/defaults, rejecting unknown or duplicate definitions. */
     private static void add(Map<String, FieldMetadata> metadata, Stage stage, Domain domain, String names) {
         DetectionConfig defaults = new DetectionConfig();
         for (String name : names.split(" ")) {

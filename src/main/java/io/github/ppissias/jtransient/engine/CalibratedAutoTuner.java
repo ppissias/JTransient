@@ -389,6 +389,15 @@ public final class CalibratedAutoTuner {
         }
     }
 
+    /**
+     * Runs calibrated tuning while preserving the compatibility entry point's original-base fallback identity.
+     *
+     * @param poolFrames available calibration frames
+     * @param baseConfig settings captured for the measurement; returned by reference only on unsuccessful tuning
+     * @param profile sensitivity/budget policy preset
+     * @param listener optional progress listener
+     * @return selected settings on success, or an unsuccessful result referring to baseConfig
+     */
     public static JTransientAutoTuner.AutoTunerResult tune(List<ImageFrame> poolFrames,
                                                            DetectionConfig baseConfig,
                                                            JTransientAutoTuner.AutoTuneProfile profile,
@@ -398,6 +407,18 @@ public final class CalibratedAutoTuner {
         return result;
     }
 
+    /**
+     * Tunes a captured configuration under explicit cancellation and keeps both success and fallback settings detached.
+     *
+     * @param poolFrames available calibration frames
+     * @param baseConfig caller-owned settings captured before measurement
+     * @param profile sensitivity/budget policy preset
+     * @param listener optional progress listener
+     * @param cancellation request checked before capture, during work and before return
+     * @return calibrated tuning outcome with an independent optimized or fallback configuration
+     * @throws DetectionConfigRules.InvalidConfigurationException if consumed configuration values are invalid
+     * @throws java.util.concurrent.CancellationException if cancellation is requested
+     */
     public static JTransientAutoTuner.AutoTunerResult tuneSnapshot(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
             JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener,
             io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
@@ -409,12 +430,25 @@ public final class CalibratedAutoTuner {
         }
     }
 
+    /**
+     * Captures calibrated-tuner inputs once and never exposes the caller's config as a fallback.
+     * Inherits an enclosing cancellation scope; insufficient evidence remains an ordinary unsuccessful result.
+     *
+     * @param poolFrames available calibration frames
+     * @param baseConfig caller-owned settings, never modified by tuning
+     * @param profile sensitivity/budget policy preset
+     * @param listener optional progress listener
+     * @return calibrated tuning outcome with detached successful or fallback settings
+     * @throws DetectionConfigRules.InvalidConfigurationException if consumed configuration values are invalid
+     * @throws java.util.concurrent.CancellationException if the inherited scope is cancelled
+     */
     public static JTransientAutoTuner.AutoTunerResult tuneSnapshot(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
             JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener) {
         CancellationScope.check();
         return tuneCaptured(poolFrames, DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION), profile, listener);
     }
 
+    /** Measures and selects a profile using the validated private settings copy supplied by the entry point. */
     private static JTransientAutoTuner.AutoTunerResult tuneCaptured(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
             JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener) {
         JTransientAutoTuner.AutoTunerResult result = new JTransientAutoTuner.AutoTunerResult();
@@ -463,8 +497,13 @@ public final class CalibratedAutoTuner {
 
     /**
      * Measures noise, leakage, mask coverage and sensitivity for the whole settings grid and chooses the
-     * best setting for every profile.
+     * best setting for every profile, using a private settings snapshot captured before progress or workers start.
      *
+     * @param poolFrames available calibration frames
+     * @param baseConfig caller settings captured without mutation
+     * @param listener optional progress listener
+     * @return calibration measurements and choices, or an unsuccessful calibration when evidence is insufficient
+     * @throws DetectionConfigRules.InvalidConfigurationException if consumed configuration values are invalid
      * @throws IllegalArgumentException if the frames break the engine's input rules (see {@link JTransientEngine})
      */
     public static Calibration calibrate(List<ImageFrame> poolFrames,
@@ -474,6 +513,7 @@ public final class CalibratedAutoTuner {
         return calibrateCaptured(poolFrames, DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION), listener);
     }
 
+    /** Performs calibration against captured settings and joins its owned worker pool before returning. */
     private static Calibration calibrateCaptured(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
                                                  TransientEngineProgressListener listener) {
         CancellationScope.check();
