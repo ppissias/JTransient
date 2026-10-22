@@ -19,8 +19,16 @@ public final class CancellableTasks {
     private CancellableTasks() {
     }
 
+    /** Uses the current session's bounded workers, or the supplied compatibility executor outside a session. */
     public static <Result> List<Future<Result>> invokeAll(Executor executor,
                                                          List<? extends Callable<Result>> tasks) throws ExecutionException {
+        ExecutionSession session = ExecutionSession.current();
+        return session == null ? invokeDirect(executor, tasks) : session.invokeAll(tasks);
+    }
+
+    /** Runs an executor batch without session redirection; session-managed runners establish nested-worker scopes. */
+    static <Result> List<Future<Result>> invokeDirect(Executor executor,
+                                                    List<? extends Callable<Result>> tasks) throws ExecutionException {
         CancellationScope.check();
         CancellationToken parent = CancellationScope.current();
         AtomicBoolean stopping = new AtomicBoolean();

@@ -10,6 +10,8 @@
 package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.execution.CancellationScope;
+import io.github.ppissias.jtransient.execution.ExecutionPolicy;
+import io.github.ppissias.jtransient.execution.ExecutionSession;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.config.DetectionConfigRules;
 import io.github.ppissias.jtransient.core.DataArea;
@@ -103,6 +105,7 @@ public class JTransientAutoTuner {
      * Diagnostic sinks run synchronously on the tuning thread and are caller-owned; disabled diagnostics stay silent.
      */
     public static final class Options {
+        private final ExecutionPolicy executionPolicy;
         private final boolean debug;
         private final int sampleSize;
         private final double searchRadiusPx;
@@ -138,6 +141,7 @@ public class JTransientAutoTuner {
 
         /** Copies and validates a builder before progress callbacks or scientific work can start. */
         private Options(Builder builder) {
+            executionPolicy = java.util.Objects.requireNonNull(builder.executionPolicy, "executionPolicy");
             debug = builder.debug;
             sampleSize = builder.sampleSize;
             searchRadiusPx = builder.searchRadiusPx;
@@ -232,6 +236,19 @@ public class JTransientAutoTuner {
         /** Returns an independent builder, including detached copies of every search-grid array. */
         public Builder toBuilder() {
             return new Builder(this);
+        }
+
+        /** Returns the immutable per-operation CPU/scratch-estimation limits, excluding retained image buffers. */
+        public ExecutionPolicy executionPolicy() {
+            return executionPolicy;
+        }
+
+        /** Captures the actual borrowed-session policy in result provenance without changing scientific options. */
+        private Options withExecutionPolicy(ExecutionPolicy policy) {
+            if (executionPolicy.equals(policy)) return this;
+            Builder builder = toBuilder();
+            builder.executionPolicy = policy;
+            return builder.build();
         }
 
         /** Returns the captured debug policy value. */
@@ -401,6 +418,8 @@ public class JTransientAutoTuner {
 
         /** Mutable caller-owned construction state; build snapshots arrays and never modifies this builder. */
         public static final class Builder {
+            /** Per-operation batch limits; borrowed sessions use their own resource policy instead. */
+            public ExecutionPolicy executionPolicy;
             /** debug policy; array values are copied by build(). */
             public boolean debug;
             /** sampleSize policy; array values are copied by build(). */
@@ -468,6 +487,7 @@ public class JTransientAutoTuner {
 
             /** Captures the current legacy defaults, copying arrays immediately. */
             public Builder() {
+                executionPolicy = ExecutionPolicy.defaults();
                 debug = JTransientAutoTuner.DEBUG;
                 sampleSize = JTransientAutoTuner.AUTO_TUNE_SAMPLE_SIZE;
                 searchRadiusPx = JTransientAutoTuner.SEARCH_RADIUS_PX;
@@ -504,6 +524,7 @@ public class JTransientAutoTuner {
 
             /** Copies an immutable policy without consulting process-wide defaults. */
             private Builder(Options options) {
+                executionPolicy = options.executionPolicy;
                 debug = options.debug;
                 sampleSize = options.sampleSize;
                 searchRadiusPx = options.searchRadiusPx;
@@ -998,8 +1019,21 @@ public class JTransientAutoTuner {
                                                TransientEngineProgressListener listener) {
         CancellationScope.check();
         java.util.Objects.requireNonNull(options, "options");
-        return tuneCaptured(allFrames, DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.AUTO_TUNE),
-                profile, listener, options);
+        try (ExecutionSession execution = ExecutionSession.owned(options.executionPolicy)) {
+            return tuneSnapshot(allFrames, baseConfig, options, execution, profile, listener);
+        }
+    }
+
+    /** Tunes using caller-owned workers/session limits; all work is joined but the session is never closed here. */
+    public static AutoTunerResult tuneSnapshot(List<ImageFrame> allFrames, DetectionConfig baseConfig,
+                                               Options options, ExecutionSession execution, AutoTuneProfile profile,
+                                               TransientEngineProgressListener listener) {
+        CancellationScope.check();
+        java.util.Objects.requireNonNull(options, "options");
+        try (ExecutionSession.Scope scope = execution.open()) {
+            return tuneCaptured(allFrames, DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.AUTO_TUNE),
+                    profile, listener, options.withExecutionPolicy(execution.policy()));
+        }
     }
 
     /** Tunes with per-operation options and explicit cancellation, joining all work before returning or throwing. */
@@ -1045,6 +1079,9 @@ public class JTransientAutoTuner {
                                                AutoTuneProfile profile, TransientEngineProgressListener listener, Options options) {
         CancellationScope.check();
         InputRules.checkFrames(allFrames);
+
+        ExecutionSession.current().configureForWork(allFrames.size(),
+                (long) allFrames.get(0).pixelData.length * allFrames.get(0).pixelData[0].length);
 
         if (options.debug) {
             debug(options, "%s%n", "\n==================================================");

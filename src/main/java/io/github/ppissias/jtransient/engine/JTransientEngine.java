@@ -14,6 +14,8 @@ import io.github.ppissias.jtransient.config.DetectionConfigRules;
 import io.github.ppissias.jtransient.execution.CancellableTasks;
 import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.execution.CancellationToken;
+import io.github.ppissias.jtransient.execution.ExecutionPolicy;
+import io.github.ppissias.jtransient.execution.ExecutionSession;
 import io.github.ppissias.jtransient.core.CommonMotionRejector;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.FrameCoverage;
@@ -43,17 +45,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Orchestrates the full JTransient processing pipeline from extraction through track linking.
  *
- * <p>The engine owns an internal executor for concurrent frame processing. Reuse the same
- * instance across runs when practical, and call {@link #shutdown()} when the application no
- * longer needs it.</p>
+ * <p>The default engine owns reusable workers for concurrent stages. Constructors can instead borrow
+ * an executor or shared execution session. Reuse the same instance sequentially when practical and
+ * call {@link #shutdown()} when no longer needed; borrowed resources remain caller-owned.</p>
  *
  * <p>Every entry point checks its input first and throws {@link IllegalArgumentException}, naming the frames, when
  * the list is empty, the frames differ in size or share a sequence index, some frames have a timestamp and others
@@ -72,9 +73,13 @@ public class JTransientEngine implements AutoCloseable {
      */
     static final double MAX_SINGLE_FRAME_AREA_LOSS = 0.05;
 
-    private final ThreadPoolExecutor executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(1);
+    private final ExecutionSession execution;
+    private final boolean ownsSession;
+    private final ExecutorService executor;
     private boolean running;
+    private boolean closed;
 
+    /** Exclusively leases this facade and scopes all nested scientific batches to its owned or borrowed workers. */
     private <Result> Result executeOperation(CancellationToken cancellation, Callable<Result> operation) throws Exception {
         synchronized (this) {
             ensureOpen();
@@ -83,7 +88,8 @@ public class JTransientEngine implements AutoCloseable {
             }
             running = true;
         }
-        try (CancellationScope scope = CancellationScope.open(cancellation)) {
+        try (CancellationScope scope = CancellationScope.open(cancellation);
+             ExecutionSession.Scope executionScope = execution.open()) {
             CancellationScope.check();
             Result result = operation.call();
             CancellationScope.check();
@@ -99,14 +105,39 @@ public class JTransientEngine implements AutoCloseable {
      * Creates a new engine instance backed by its own worker pool.
      */
     public JTransientEngine() {
+        this(ExecutionPolicy.defaults());
     }
 
+    /** Creates an engine with owned workers and explicit per-operation CPU/scratch-estimation limits. */
+    public JTransientEngine(ExecutionPolicy policy) {
+        this(ExecutionSession.owned(policy), true);
+    }
+
+    /** Borrows caller-owned workers; closing this facade does not shut down that executor. */
+    public JTransientEngine(ExecutionPolicy policy, ExecutorService borrowedExecutor) {
+        this(ExecutionSession.borrowed(policy, borrowedExecutor), true);
+    }
+
+    /** Borrows a shared session; the caller closes it only after every borrowing engine has finished. */
+    public JTransientEngine(ExecutionSession execution) {
+        this(execution, false);
+    }
+
+    /** Captures resource ownership without allocating, copying or retaining any frame pixels. */
+    private JTransientEngine(ExecutionSession execution, boolean ownsSession) {
+        this.execution = java.util.Objects.requireNonNull(execution, "execution");
+        this.ownsSession = ownsSession;
+        this.executor = execution.executor();
+    }
+
+    /** Rejects work after facade/session closure, including premature shutdown of borrowed workers. */
     private void ensureOpen() {
-        if (executor.isShutdown()) {
+        if (closed || execution.isClosed()) {
             throw new IllegalStateException("JTransientEngine has been closed.");
         }
     }
 
+    /** Applies the operation budget to extraction, stacking and photometry without resizing borrowed resources. */
     private void configureFrameExecutor(List<ImageFrame> frames) {
         ensureOpen();
         long largestFramePixels = 1L;
@@ -114,25 +145,12 @@ public class JTransientEngine implements AutoCloseable {
             largestFramePixels = Math.max(largestFramePixels,
                     (long) frame.pixelData.length * frame.pixelData[0].length);
         }
-        Runtime runtime = Runtime.getRuntime();
-        long usedHeap = runtime.totalMemory() - runtime.freeMemory();
-        int workers = frameWorkerCount(frames.size(), largestFramePixels, runtime.availableProcessors(),
-                runtime.maxMemory(), usedHeap);
-        if (workers > executor.getMaximumPoolSize()) {
-            executor.setMaximumPoolSize(workers);
-            executor.setCorePoolSize(workers);
-        } else {
-            executor.setCorePoolSize(workers);
-            executor.setMaximumPoolSize(workers);
-        }
+        execution.configureForWork(frames.size(), largestFramePixels);
     }
 
+    /** Retains the existing deterministic worker heuristic for compatibility tests and diagnostics. */
     static int frameWorkerCount(int frameCount, long pixelCount, int processors, long maximumHeap, long usedHeap) {
-        long scratchBytesPerFrame = Math.max(1L, pixelCount) * 16L + 1024L * 1024L;
-        long availableHeap = Math.max(0L, maximumHeap - usedHeap);
-        long memoryBudget = Math.min(maximumHeap / 4L, availableHeap / 2L);
-        long memoryWorkers = Math.max(1L, memoryBudget / scratchBytesPerFrame);
-        return (int) Math.max(1L, Math.min(memoryWorkers, Math.min(Math.max(1, frameCount), Math.max(1, processors))));
+        return ExecutionPolicy.bounded(Math.max(1, processors)).workerCount(frameCount, pixelCount, maximumHeap, usedHeap);
     }
 
     /**
@@ -1022,27 +1040,17 @@ public class JTransientEngine implements AutoCloseable {
     }
 
     /**
-     * Gracefully shuts down the internal thread pool.
-     * Call this when your application is closing to prevent memory leaks.
+     * Closes an idle facade and joins its owned workers. Borrowed executors and sessions remain caller-owned.
+     * An active operation must first be cancelled and awaited; overlapping work and active close are rejected.
      */
     public void shutdown() {
         synchronized (this) {
             if (running) {
                 throw new IllegalStateException("Cancel and await the active operation before closing JTransientEngine.");
             }
-            executor.shutdown();
+            closed = true;
         }
-        boolean interrupted = Thread.interrupted();
-        while (!executor.isTerminated()) {
-            try {
-                executor.awaitTermination(1, java.util.concurrent.TimeUnit.SECONDS);
-            } catch (InterruptedException ignored) {
-                interrupted = true;
-            }
-        }
-        if (interrupted) {
-            Thread.currentThread().interrupt();
-        }
+        if (ownsSession) execution.close();
     }
 
     @Override

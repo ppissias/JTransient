@@ -16,6 +16,23 @@ import static org.junit.Assert.*;
 
 /** Verifies per-operation grid, sample, budget and diagnostics ownership without changing process-wide tuning state. */
 public class AutoTunerOptionsTest {
+    /** Verifies both tuner facades borrow a reusable session and record its actual resource policy in their results. */
+    @Test
+    public void borrowedSessionPolicyAndOwnershipArePreserved() {
+        var policy = io.github.ppissias.jtransient.execution.ExecutionPolicy.bounded(1);
+        try (var session = io.github.ppissias.jtransient.execution.ExecutionSession.owned(policy)) {
+            var legacy = JTransientAutoTuner.tuneSnapshot(frames(), new DetectionConfig(), legacyOptions(5, 4),
+                    session, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
+            var measured = CalibratedAutoTuner.calibrate(frames(), new DetectionConfig(), calibratedOptions(4, 1), session, null);
+            assertTrue(legacy.success);
+            assertTrue(measured.failureReason, measured.success);
+            assertEquals(policy, legacy.effectiveOptions.executionPolicy());
+            assertEquals(policy, measured.options.executionPolicy());
+            assertFalse(session.isClosed());
+            assertFalse(session.executor().isShutdown());
+        }
+    }
+
     /** Mutates both builder arrays and accessor copies and verifies neither changes the immutable snapshots. */
     @Test
     public void defensivelyCopiesAllSearchGrids() throws Exception {

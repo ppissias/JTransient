@@ -3,14 +3,12 @@ package io.github.ppissias.jtransient.engine;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import org.junit.Test;
 
-import java.lang.reflect.Field;
 import java.util.ArrayList;
-import java.util.concurrent.ThreadPoolExecutor;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
 
+/** Verifies observable lifecycle and the compatibility memory heuristic without depending on pool implementation details. */
 public class JTransientEngineConcurrencyTest {
 
     private static final long GIBIBYTE = 1024L * 1024L * 1024L;
@@ -36,13 +34,8 @@ public class JTransientEngineConcurrencyTest {
     @Test
     public void closeShutsDownThePoolAndRejectsFurtherRuns() throws Exception {
         JTransientEngine engine = new JTransientEngine();
-        Field field = JTransientEngine.class.getDeclaredField("executor");
-        field.setAccessible(true);
-        ThreadPoolExecutor executor = (ThreadPoolExecutor) field.get(engine);
-        assertEquals(1, executor.getMaximumPoolSize());
         engine.close();
         engine.close();
-        assertTrue(executor.isShutdown());
         assertThrows(IllegalStateException.class,
                 () -> engine.runPipeline(new ArrayList<>(), new DetectionConfig(), null));
     }

@@ -33,16 +33,15 @@ Statuses distinguish proposals from work already started. High priority means to
 
 | ID | Priority | Status | Design improvement | First useful result |
 |---|---|---|---|---|
-| JA-02 | High | In progress; shared execution policy remains | Define execution, concurrency and resource ownership | Callers know whether an engine can overlap runs and which work its resource limit controls. |
 | JA-03 | High | In progress; structured failure context remains | Give cancellation and failures an explicit contract | Cancellation stays distinct from fallback and failure; completion means the run's work has ended. |
 | JA-04 | High | In progress; tuner options complete, core diagnostic propagation remains | Replace mutable global tuning options with operation options | Two tunings can use independent options without changing each other's settings. |
-| JA-05 | Medium | Proposed | Make prepared-frame context and identity coherent | Frames, metrics, detections and registrations remain associated through QC and subset runs. |
-| JA-06 | Medium | Proposed | Separate tracking responsibilities while retaining its facade | Vetoing, point linking, streak assembly and classification have explicit inputs and ownership. |
-| JA-07 | Medium | Proposed | Stabilize public results and dependency direction | Public models and shared buffers have clear contracts independent of implementation helpers. |
-| JA-08 | Medium | Proposed | Separate tuning measurement, selection and presentation | Measurements can explain a choice without depending on report construction or ambiguous legacy fields. |
-| JA-09 | Medium | Proposed | Unify progress and stage outcome reporting | Callers can distinguish disabled, unavailable and completed-empty stages without parsing prose. |
-| JA-10 | Medium; before expanding reuse | Proposed | Carry provenance with reusable master references | Callers can identify a reference's origin and deliberately reuse it across compatible runs. |
-| JA-11 | Medium | Proposed | Declare and verify the supported library contract | Releases have a known Java target and a tested SpacePixels/JTransient dependency pair. |
+| JA-05 | Medium | Accepted (2026-10-22) | Make prepared-frame context and identity coherent | Frames, metrics, detections and registrations remain associated through QC and subset runs. |
+| JA-06 | Medium | Accepted (2026-10-22) | Separate tracking responsibilities while retaining its facade | Vetoing, point linking, streak assembly and classification have explicit inputs and ownership. |
+| JA-07 | Medium | Accepted (2026-10-22) | Stabilize public results and dependency direction | Public models and shared buffers have clear contracts independent of implementation helpers. |
+| JA-08 | Medium | Accepted (2026-10-22) | Separate tuning measurement, selection and presentation | Measurements can explain a choice without depending on report construction or ambiguous legacy fields. |
+| JA-09 | Medium | Accepted (2026-10-22) | Unify progress and stage outcome reporting | Callers can distinguish disabled, unavailable and completed-empty stages without parsing prose. |
+| JA-10 | Medium; before expanding reuse | Accepted (2026-10-22) | Carry provenance with reusable master references | Callers can identify a reference's origin and deliberately reuse it across compatible runs. |
+| JA-11 | Medium | Accepted (2026-10-22) | Declare and verify the supported library contract | Releases have a known Java target and a tested SpacePixels/JTransient dependency pair. |
 
 ### JA-01. Capture and validate configuration at an operation boundary
 
@@ -50,15 +49,7 @@ Statuses distinguish proposals from work already started. High priority means to
 
 ### JA-02. Define execution and resource ownership for a whole operation
 
-**Evidence.** [JTransientEngine.configureFrameExecutor](src/main/java/io/github/ppissias/jtransient/engine/JTransientEngine.java) resizes an owned `ThreadPoolExecutor` using frame size and heap headroom. The same pool later serves photometry. [MasterMapGenerator](src/main/java/io/github/ppissias/jtransient/core/MasterMapGenerator.java) uses cancellation-aware row batches on the common pool, outside the engine's frame-worker resource limit. [CalibratedAutoTuner.calibrate](src/main/java/io/github/ppissias/jtransient/engine/CalibratedAutoTuner.java) creates another pool sized from processor count. The engine now rejects overlapping operations and close during an active operation, and idle shutdown waits for pool termination. The completed admission/cancellation slice and its tests are [archived](docs/archive/design-improvements-closed-2026-10.md#ja-02ja-03-operation-cancellation-and-worker-lifetime-2026-10-21).
-
-**Risk and proposal.** The extraction memory bound is valuable, but it is not a whole-library resource bound. Concurrent engines, tunings and stacks can still compete for heap and CPU despite the implemented one-operation-per-engine rule. Keep that admission rule while defining shared resource accounting. Do not imply process-wide resource bounds merely because individual engines reject overlap.
-
-Introduce a small execution policy shared by orchestration and tuning: worker limits, memory admission assumptions and owned versus borrowed executor lifetime. Account for row-stack work as well as extraction. Keep the default memory heuristic, and document that estimates cannot guarantee enough heap for arbitrary input/output populations. Retain the implemented close/reuse/worker-join contract when introducing owned or borrowed execution policies. Avoid nested work that submits to and waits on an already occupied bounded pool.
-
-**Decided in the review of this plan (2026-10-20).** One active operation per engine instance is the instance contract. The engine and both tuners enter the same operation-control conventions. These conventions do not by themselves bound process-wide resources: that needs application admission (SpacePixels D02 holds the GUI's job slot) or explicitly shared scheduling. Only `CalibratedAutoTuner` creates its own pool; the legacy tuner runs on its caller's thread.
-
-**Acceptance.** Exercise overlap, repeated use, close during work, task failure and borrowed-executor ownership with controlled workers. Check bounded active work and absence of retained workers after terminal completion. Benchmark representative large frames sequentially, including stacking and tuning, before changing scheduling defaults.
+**Implemented (2026-10-22).** `ExecutionPolicy` and owned/borrowed `ExecutionSession` apply the existing scratch heuristic to engine/tuner batches, including stack rows and photometry. Nested managed batches execute inline; engines still reject overlap/active close and join owned resources. Independent sessions make no process-wide resource promise. See the [completion and real-data record](docs/archive/design-improvements-closed-2026-10.md#ja-02-shared-execution-policy-and-resource-ownership-2026-10-22) and [current API contract](PIPELINE.md#execution-policy-and-resource-ownership-106).
 
 ### JA-03. Distinguish cancellation, failure and tuning fallback
 
