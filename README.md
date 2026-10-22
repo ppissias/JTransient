@@ -18,6 +18,7 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 - `SourceExtractor.extractSources(...)`: standalone single-frame object extraction
 - `DetectionConfigRules`: shared, operation-scoped validation/metadata and explicit copy-based alignment; engine operations capture settings before processing
 - `CalibratedAutoTuner.tuneSnapshot(...)` / `JTransientAutoTuner.tuneSnapshot(...)`: detached tuning results, including unsuccessful fallback configs; legacy `tune(...)` retains fallback alias compatibility
+- `OperationOutcome` and engine/tuner `...Outcome(...)` entry points: additive completed/failed/cancelled results with stable stage/original-frame failure context, without changing legacy exception objects or scientific readiness/fallback behavior
 
 ## Documentation
 

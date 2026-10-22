@@ -31,6 +31,7 @@ public final class CancellableTasks {
                                                     List<? extends Callable<Result>> tasks) throws ExecutionException {
         CancellationScope.check();
         CancellationToken parent = CancellationScope.current();
+        OperationContext.Snapshot diagnostics = OperationContext.snapshot();
         AtomicBoolean stopping = new AtomicBoolean();
         AtomicReference<Throwable> failure = new AtomicReference<>();
         CountDownLatch finished = new CountDownLatch(tasks.size());
@@ -41,7 +42,8 @@ public final class CancellableTasks {
             for (Callable<Result> task : tasks) {
                 CancellationScope.check();
                 TrackedTask<Result> tracked = new TrackedTask<>(() -> {
-                    try (CancellationScope scope = CancellationScope.open(cancellation)) {
+                    try (CancellationScope scope = CancellationScope.open(cancellation);
+                         OperationContext.Scope diagnosticScope = OperationContext.restore(diagnostics)) {
                         try {
                             CancellationScope.check();
                             Result result = task.call();

@@ -9,6 +9,11 @@
  */
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.execution.OperationContext;
+import io.github.ppissias.jtransient.execution.OperationOutcome;
+import io.github.ppissias.jtransient.execution.FrameIdentity;
+import io.github.ppissias.jtransient.execution.StageId;
+
 import io.github.ppissias.jtransient.execution.CancellableTasks;
 import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.execution.ExecutionPolicy;
@@ -463,6 +468,35 @@ public final class CalibratedAutoTuner {
     private CalibratedAutoTuner() {
     }
 
+    /** Captures calibrated tuning execution failures/cancellation; scientific insufficient-evidence fallback remains completed. */
+    public static OperationOutcome<JTransientAutoTuner.AutoTunerResult> tuneOutcome(List<ImageFrame> frames, DetectionConfig config,
+            Options options, JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener,
+            io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
+        return OperationContext.capture(StageId.CALIBRATION, () -> {
+            var result = tuneSnapshot(frames, config, options, profile, listener, cancellation);
+            rethrowExecutionFailure(result.calibration);
+            return result;
+        });
+    }
+
+    /** Captures direct measurement failure separately from its ordinary insufficient-evidence result, inheriting cancellation. */
+    public static OperationOutcome<Calibration> calibrateOutcome(List<ImageFrame> frames, DetectionConfig config,
+                                                                Options options, TransientEngineProgressListener listener) {
+        return OperationContext.capture(StageId.CALIBRATION, () -> {
+            Calibration result = calibrate(frames, config, options, listener);
+            rethrowExecutionFailure(result);
+            return result;
+        });
+    }
+
+    /** Adapts only runtime execution failure for outcome capture; existing result APIs retain their original cause/fallback shape. */
+    private static void rethrowExecutionFailure(Calibration calibration) throws Exception {
+        if (calibration == null || calibration.failureCause == null) return;
+        if (calibration.failureCause instanceof Exception failure) throw failure;
+        if (calibration.failureCause instanceof Error error) throw error;
+        throw new java.util.concurrent.ExecutionException(calibration.failureCause);
+    }
+
     // =========================================================================
     // Data holders
     // =========================================================================
@@ -565,6 +599,8 @@ public final class CalibratedAutoTuner {
 
     /** Per crop-frame images used for the measurements. */
     private static final class CropFrame {
+        /** Original metadata captured before worker use; no source pixel buffer is retained by this identity. */
+        FrameIdentity sourceFrame;
         final int crop;
         final short[][] positive;
         final short[][] negative;
@@ -793,7 +829,7 @@ public final class CalibratedAutoTuner {
         CancellationScope.check();
         java.util.Objects.requireNonNull(options, "options");
         try (ExecutionSession.Scope scope = execution.open()) {
-            return tuneCaptured(poolFrames, DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION),
+            return tuneCaptured(poolFrames, OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION)),
                     profile, listener, options.withExecutionPolicy(execution.policy()));
         }
     }
@@ -893,7 +929,7 @@ public final class CalibratedAutoTuner {
         java.util.Objects.requireNonNull(options, "options");
         try (ExecutionSession.Scope scope = execution.open()) {
             return calibrateCaptured(poolFrames,
-                    DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION), listener,
+                    OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION)), listener,
                     options.withExecutionPolicy(execution.policy()));
         }
     }
@@ -909,7 +945,7 @@ public final class CalibratedAutoTuner {
             calibration.failureReason = "At least 5 frames are needed for calibrated auto-tuning.";
             return calibration;
         }
-        InputRules.checkFrames(poolFrames);
+        OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkFrames(poolFrames));
         ExecutionSession execution = ExecutionSession.current();
         ExecutorService executor = execution.executor();
         try {
@@ -932,7 +968,8 @@ public final class CalibratedAutoTuner {
 
             // Frame drift: sizes the border kept clear of alignment padding, and lets detections fixed on the
             // sensor (hot pixels) be recognised although they move across the registered frames.
-            FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = FrameDriftAnalyzer.analyze(pool);
+            FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = OperationContext.compute(StageId.REGISTRATION, null,
+                    () -> FrameDriftAnalyzer.analyze(pool));
             Map<Integer, SourceExtractor.Pixel> driftBySequence = new HashMap<>();
             for (SourceExtractor.Pixel p : driftAnalysis.driftPoints) {
                 CancellationScope.check();
@@ -984,7 +1021,8 @@ public final class CalibratedAutoTuner {
                 for (ImageFrame f : pool) {
                     cropped.add(new ImageFrame(f.sequenceIndex, f.filename, crop(f.pixelData, crop), f.timestamp, f.exposureDuration));
                 }
-                masters.add(MasterMapGenerator.createMedianMasterStack(cropped));
+                masters.add(OperationContext.compute(StageId.MEDIAN_STACK, null,
+                        () -> MasterMapGenerator.createMedianMasterStack(cropped)));
             }
 
             // --- PSF and jitter ---
@@ -1012,8 +1050,13 @@ public final class CalibratedAutoTuner {
             for (int i = 0; i < measurementCrops.size(); i++) {
                 CancellationScope.check();
                 int c = measurementCropIndex.get(i);
-                CropFrame prepared = prepareCropFrame(c, measurementCrops.get(i), masters.get(c), psfSigma, baseConfig, random, options);
-                SourceExtractor.Pixel drift = driftBySequence.get(measurementFrames.get(i % measurementFrames.size()).sequenceIndex);
+                int measurementIndex = i;
+                ImageFrame sourceFrame = measurementFrames.get(i % measurementFrames.size());
+                FrameIdentity identity = new FrameIdentity(sourceFrame.sequenceIndex, sourceFrame.filename);
+                CropFrame prepared = OperationContext.compute(StageId.CALIBRATION, identity,
+                        () -> prepareCropFrame(c, measurementCrops.get(measurementIndex), masters.get(c), psfSigma, baseConfig, random, options));
+                prepared.sourceFrame = identity;
+                SourceExtractor.Pixel drift = driftBySequence.get(sourceFrame.sequenceIndex);
                 if (drift != null) {
                     prepared.driftX = drift.x;
                     prepared.driftY = drift.y;
@@ -1464,10 +1507,10 @@ public final class CalibratedAutoTuner {
         List<Callable<Detection[][]>> tasks = new ArrayList<>();
         for (CropFrame cf : cropFrames) {
             CancellationScope.check();
-            tasks.add(() -> new Detection[][]{
+            tasks.add(() -> OperationContext.compute(StageId.FRAME_EXTRACTION, cf.sourceFrame, () -> new Detection[][]{
                     extract(cf.positive, fs, cfg, width),
                     extract(cf.negative, fs, cfg, width),
-                    extract(cf.injected, fs, cfg, width)});
+                    extract(cf.injected, fs, cfg, width)}));
         }
         List<Detection[][]> out = new ArrayList<>();
         for (Future<Detection[][]> f : CancellableTasks.invokeAll(executor, tasks)) {
@@ -2069,7 +2112,7 @@ public final class CalibratedAutoTuner {
     private static void progress(TransientEngineProgressListener listener, int percent, String message) {
         CancellationScope.check();
         if (listener != null) {
-            listener.onProgressUpdate(percent, message);
+            OperationContext.notify(listener::onProgressUpdate, percent, message);
         }
     }
 }

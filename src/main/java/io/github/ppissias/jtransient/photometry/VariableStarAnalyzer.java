@@ -9,6 +9,10 @@
  */
 package io.github.ppissias.jtransient.photometry;
 
+import io.github.ppissias.jtransient.execution.OperationContext;
+import io.github.ppissias.jtransient.execution.FrameIdentity;
+import io.github.ppissias.jtransient.execution.StageId;
+
 import io.github.ppissias.jtransient.execution.CancellableTasks;
 import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.config.DetectionConfig;
@@ -544,7 +548,7 @@ public final class VariableStarAnalyzer {
      */
     private static void report(Input input, int percent, String message) {
         if (input.progress != null) {
-            input.progress.onProgressUpdate(percent, message);
+            OperationContext.notify(input.progress::onProgressUpdate, percent, message);
         }
     }
 
@@ -654,7 +658,8 @@ public final class VariableStarAnalyzer {
         for (int j = 0; j < nFrames; j++) {
             CancellationScope.check();
             final int frame = j;
-            tasks.add(() -> {
+            tasks.add(() -> OperationContext.call(StageId.PHOTOMETRY,
+                    new FrameIdentity(input.frames.get(frame).sequenceIndex, input.frames.get(frame).filename), () -> {
                 ApertureMeasurer.FrameMeasurement m = ApertureMeasurer.measure(
                         input.frames.get(frame).pixelData,
                         frameFwhm[frame],
@@ -668,7 +673,7 @@ public final class VariableStarAnalyzer {
                             "Photometry: measured frame " + done + " of " + nFrames);
                 }
                 return m;
-            });
+            }));
         }
         if (executor == null) {
             for (int j = 0; j < nFrames; j++) {

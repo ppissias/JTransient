@@ -9,6 +9,9 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.execution.OperationContext;
+import io.github.ppissias.jtransient.execution.StageId;
+
 import io.github.ppissias.jtransient.execution.CancellationScope;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
@@ -67,7 +70,7 @@ public final class MasterReferenceAnalyzer {
                                                   DetectionConfig config) {
         short[][] masterStackData = providedMasterStack != null
                 ? providedMasterStack
-                : MasterMapGenerator.createMedianMasterStack(cleanFrames);
+                : OperationContext.compute(StageId.MEDIAN_STACK, null, () -> MasterMapGenerator.createMedianMasterStack(cleanFrames));
         return analyzeFromMasterStack(masterStackData, config);
     }
 
@@ -125,7 +128,7 @@ public final class MasterReferenceAnalyzer {
         int width = stack[0].length;
         DataArea wholeImage = DataArea.wholeImage(width, height);
         List<SourceExtractor.DetectedObject> stars = new ArrayList<>(
-                SourceExtractor.extractSources(stack, sigma, minPixels, config, null, wholeImage).objects);
+                OperationContext.compute(StageId.MASTER_REFERENCE, null, () -> SourceExtractor.extractSources(stack, sigma, minPixels, config, null, wholeImage)).objects);
         short[][] flat = SkyBackground.flatten(stack);
         if (flat == stack) {
             return stars;
@@ -140,8 +143,8 @@ public final class MasterReferenceAnalyzer {
             }
         }
         for (SourceExtractor.DetectedObject candidate
-                : SourceExtractor.extractSources(flat, Math.max(sigma, LOCAL_PASS_MIN_SIGMA), minPixels, config, null,
-                wholeImage).objects) {
+                : OperationContext.compute(StageId.MASTER_REFERENCE, null, () -> SourceExtractor.extractSources(flat, Math.max(sigma, LOCAL_PASS_MIN_SIGMA), minPixels, config, null,
+                wholeImage)).objects) {
             if (candidate.rawPixels == null) {
                 continue;
             }

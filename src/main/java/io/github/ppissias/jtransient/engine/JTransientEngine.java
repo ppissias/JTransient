@@ -16,6 +16,10 @@ import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.execution.CancellationToken;
 import io.github.ppissias.jtransient.execution.ExecutionPolicy;
 import io.github.ppissias.jtransient.execution.ExecutionSession;
+import io.github.ppissias.jtransient.execution.FrameIdentity;
+import io.github.ppissias.jtransient.execution.OperationContext;
+import io.github.ppissias.jtransient.execution.OperationOutcome;
+import io.github.ppissias.jtransient.execution.StageId;
 import io.github.ppissias.jtransient.core.CommonMotionRejector;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.FrameCoverage;
@@ -106,6 +110,36 @@ public class JTransientEngine implements AutoCloseable {
      */
     public JTransientEngine() {
         this(ExecutionPolicy.defaults());
+    }
+
+    /** Captures terminal pipeline failures/cancellation with stage/frame context; ordinary scientific emptiness remains completed. */
+    public OperationOutcome<PipelineResult> runPipelineOutcome(List<ImageFrame> inputFrames, DetectionConfig config,
+                                                              TransientEngineProgressListener listener) {
+        return runPipelineOutcome(inputFrames, config, listener, null, CancellationScope.current());
+    }
+
+    /** Runs the legacy pipeline under additive failure capture, preserving its sorting/pixel ownership and joining all work. */
+    public OperationOutcome<PipelineResult> runPipelineOutcome(List<ImageFrame> inputFrames, DetectionConfig config,
+                                                              TransientEngineProgressListener listener, short[][] providedMasterStack,
+                                                              CancellationToken cancellation) {
+        return OperationContext.capture(StageId.OPERATION,
+                () -> runPipeline(inputFrames, config, listener, providedMasterStack, cancellation));
+    }
+
+    /** Captures terminal master-preparation outcomes without changing the existing exception-based entry point. */
+    public OperationOutcome<MasterStackResult> generateMasterStackOutcome(List<ImageFrame> inputFrames, DetectionConfig config,
+                                                                        TransientEngineProgressListener listener,
+                                                                        CancellationToken cancellation) {
+        return OperationContext.capture(StageId.OPERATION,
+                () -> generateMasterStackWithDetails(inputFrames, config, listener, cancellation));
+    }
+
+    /** Captures transient-only completion/failure/cancellation; empty per-frame exports remain normal completed results. */
+    public OperationOutcome<List<FrameTransients>> detectTransientsOutcome(List<ImageFrame> inputFrames, DetectionConfig config,
+                                                                         TransientEngineProgressListener listener,
+                                                                         short[][] providedMasterStack, CancellationToken cancellation) {
+        return OperationContext.capture(StageId.OPERATION,
+                () -> detectTransients(inputFrames, config, listener, providedMasterStack, cancellation));
     }
 
     /** Creates an engine with owned workers and explicit per-operation CPU/scratch-estimation limits. */
@@ -216,16 +250,16 @@ public class JTransientEngine implements AutoCloseable {
     public MasterStackResult generateMasterStackWithDetails(List<ImageFrame> inputFrames, DetectionConfig config,
                                                             TransientEngineProgressListener listener, CancellationToken cancellation) throws Exception {
         return executeOperation(cancellation, () -> generateMasterStackWithDetailsInternal(inputFrames,
-                DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.MASTER_STACK), listener));
+                OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.MASTER_STACK)), listener));
     }
 
     private MasterStackResult generateMasterStackWithDetailsInternal(List<ImageFrame> inputFrames, DetectionConfig config,
                                                             TransientEngineProgressListener listener) throws Exception {
         ensureOpen();
-        InputRules.checkPipelineInput(inputFrames, null);
+        OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkPipelineInput(inputFrames, null));
         configureFrameExecutor(inputFrames);
         if (listener != null) {
-            listener.onProgressUpdate(0, "Evaluating frames for Master Stack...");
+            OperationContext.notify(listener::onProgressUpdate, 0, "Evaluating frames for Master Stack...");
         }
 
         if (DEBUG) {
@@ -243,21 +277,21 @@ public class JTransientEngine implements AutoCloseable {
         AtomicInteger framesCompleted = new AtomicInteger(0);
 
         for (ImageFrame frame : inputFrames) {
-            tasks.add(() -> {
+            tasks.add(() -> OperationContext.call(StageId.FRAME_QUALITY, new FrameIdentity(frame.sequenceIndex, frame.filename), () -> {
                 // We only need quality metrics to drop outliers. We skip SourceExtractor to save massive CPU time!
-                FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData, config, quality.area);
+                FrameQualityAnalyzer.FrameMetrics metrics = OperationContext.compute(StageId.FRAME_QUALITY, null, () -> FrameQualityAnalyzer.evaluateFrame(frame.pixelData, config, quality.area));
                 metrics.filename = frame.filename;
 
                 synchronized (framesCompleted) { // keeps the reported progress in order across threads
                     int completed = framesCompleted.incrementAndGet();
                     if (listener != null) {
                         int progress = (int) ((completed / (double) totalFrames) * 50.0);
-                        listener.onProgressUpdate(progress, "Evaluating frame " + completed + " of " + totalFrames);
+                        OperationContext.notify(listener::onProgressUpdate, progress, "Evaluating frame " + completed + " of " + totalFrames);
                     }
                 }
 
                 return new FrameExtractionResult(frame.sequenceIndex, null, metrics);
-            });
+            }));
         }
 
         List<FrameExtractionResult> completedResults = new ArrayList<>();
@@ -273,10 +307,11 @@ public class JTransientEngine implements AutoCloseable {
         }
 
         if (listener != null) {
-            listener.onProgressUpdate(55, "Filtering outlier frames...");
+            OperationContext.notify(listener::onProgressUpdate, 55, "Filtering outlier frames...");
         }
 
-        rejectUnusableFrames(sessionMetrics, inputFrames, telemetry.driftExcludedFrames, quality.coverageOutliers, config);
+        OperationContext.compute(StageId.FRAME_SELECTION, null,
+                () -> rejectUnusableFrames(sessionMetrics, inputFrames, telemetry.driftExcludedFrames, quality.coverageOutliers, config));
 
         List<ImageFrame> cleanFrames = new ArrayList<>();
         List<Integer> keptFrames = new ArrayList<>();
@@ -299,10 +334,10 @@ public class JTransientEngine implements AutoCloseable {
         }
 
         if (listener != null) {
-            listener.onProgressUpdate(60, "Stacking " + cleanFrames.size() + " clean frames...");
+            OperationContext.notify(listener::onProgressUpdate, 60, "Stacking " + cleanFrames.size() + " clean frames...");
         }
 
-        return new MasterStackResult(MasterMapGenerator.createMedianMasterStack(cleanFrames), keptFrames, rejectedFrames);
+        return new MasterStackResult(OperationContext.compute(StageId.MEDIAN_STACK, null, () -> MasterMapGenerator.createMedianMasterStack(cleanFrames)), keptFrames, rejectedFrames);
     }
 
     /**
@@ -359,35 +394,37 @@ public class JTransientEngine implements AutoCloseable {
 
     public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack, CancellationToken cancellation) throws Exception {
         return executeOperation(cancellation, () -> detectTransientsInternal(inputFrames,
-                DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.TRANSIENTS), listener, providedMasterStack));
+                OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.TRANSIENTS)), listener, providedMasterStack));
     }
 
     private List<FrameTransients> detectTransientsInternal(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
         ensureOpen();
-        InputRules.checkPipelineInput(inputFrames, providedMasterStack);
+        OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkPipelineInput(inputFrames, providedMasterStack));
         ExtractedFramesContext context = extractSourcesFromFrames(inputFrames, config, listener);
 
         if (providedMasterStack != null) {
-            if (listener != null) listener.onProgressUpdate(45, "Using pre-computed Master Stack for Veto Mask...");
+            if (listener != null) OperationContext.notify(listener::onProgressUpdate, 45, "Using pre-computed Master Stack for Veto Mask...");
         } else {
-            if (listener != null) listener.onProgressUpdate(45, "Generating Median Master Stack for Veto Mask...");
+            if (listener != null) OperationContext.notify(listener::onProgressUpdate, 45, "Generating Median Master Stack for Veto Mask...");
         }
 
-        if (listener != null) listener.onProgressUpdate(48, "Extracting Master Star Map...");
+        if (listener != null) OperationContext.notify(listener::onProgressUpdate, 48, "Extracting Master Star Map...");
 
-        MasterReferenceAnalyzer.MasterReferenceAnalysis masterReference = MasterReferenceAnalyzer.analyze(
+        MasterReferenceAnalyzer.MasterReferenceAnalysis masterReference = OperationContext.compute(StageId.MASTER_REFERENCE, null, () -> MasterReferenceAnalyzer.analyze(
                 context.cleanFrames,
                 providedMasterStack,
                 config
-        );
+        ));
         short[][] masterStackData = masterReference.masterStackData;
         List<SourceExtractor.DetectedObject> masterStars = masterReference.masterStars;
         int sensorHeight = masterReference.sensorHeight;
         int sensorWidth = masterReference.sensorWidth;
 
-        TransientEngineProgressListener proxyListener = null;
+        TransientEngineProgressListener proxyListener;
         if (listener != null) {
-            proxyListener = (percentage, message) -> listener.onProgressUpdate(60 + (int) (percentage * 0.40), message); // Scale 0-100 to 60-100
+            proxyListener = (percentage, message) -> OperationContext.notify(listener::onProgressUpdate, 60 + (int) (percentage * 0.40), message); // Scale 0-100 to 60-100
+        } else {
+            proxyListener = null;
         }
 
         List<List<SourceExtractor.DetectedObject>> cleanFramesObjects = new ArrayList<>();
@@ -395,10 +432,10 @@ public class JTransientEngine implements AutoCloseable {
             cleanFramesObjects.add(extRes.objects);
         }
 
-        TrackLinker.TransientsFilterResult filterResult = TrackLinker.filterTransients(
-                cleanFramesObjects, masterStars, config, proxyListener, sensorWidth, sensorHeight);
+        TrackLinker.TransientsFilterResult filterResult = OperationContext.compute(StageId.TRANSIENT_VETO, null, () -> TrackLinker.filterTransients(
+                cleanFramesObjects, masterStars, config, proxyListener, sensorWidth, sensorHeight));
         
-        if (listener != null) listener.onProgressUpdate(100, "Transient Extraction Complete!");
+        if (listener != null) OperationContext.notify(listener::onProgressUpdate, 100, "Transient Extraction Complete!");
 
         List<FrameTransients> finalResult = new ArrayList<>();
         for (int i = 0; i < context.cleanFrames.size(); i++) {
@@ -427,7 +464,7 @@ public class JTransientEngine implements AutoCloseable {
         telemetry.totalFramesLoaded = inputFrames.size();
 
         if (listener != null) {
-            listener.onProgressUpdate(0, "Initializing pipeline...");
+            OperationContext.notify(listener::onProgressUpdate, 0, "Initializing pipeline...");
         }
 
         if (DEBUG) {
@@ -457,16 +494,16 @@ public class JTransientEngine implements AutoCloseable {
         AtomicInteger framesCompleted = new AtomicInteger(0);
 
         for (ImageFrame frame : inputFrames) {
-            tasks.add(() -> {
+            tasks.add(() -> OperationContext.call(StageId.FRAME_EXTRACTION, new FrameIdentity(frame.sequenceIndex, frame.filename), () -> {
                 // 1. Extract Sources (Passing config as the 4th argument)
-                SourceExtractor.ExtractionResult extResult = SourceExtractor.extractSources(
+                SourceExtractor.ExtractionResult extResult = OperationContext.compute(StageId.FRAME_EXTRACTION, null, () -> SourceExtractor.extractSources(
                         frame.pixelData,
                         config.detectionSigmaMultiplier,
                         config.minDetectionPixels,
                         config,
                         quality.area,
                         wholeFrame
-                );
+                ));
                 List<SourceExtractor.DetectedObject> objectsInFrame = extResult.objects;
 
                 for (SourceExtractor.DetectedObject obj : objectsInFrame) {
@@ -477,7 +514,7 @@ public class JTransientEngine implements AutoCloseable {
                 }
 
                 // 2. Quality Metrics (Passing config down)
-                FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData, config, quality.area);
+                FrameQualityAnalyzer.FrameMetrics metrics = OperationContext.compute(StageId.FRAME_QUALITY, null, () -> FrameQualityAnalyzer.evaluateFrame(frame.pixelData, config, quality.area));
                 metrics.filename = frame.filename;
 
                 // Safely update progress from multiple threads (Mapping Phase 1 to 0-40% of the total bar)
@@ -485,12 +522,12 @@ public class JTransientEngine implements AutoCloseable {
                     int completed = framesCompleted.incrementAndGet();
                     if (listener != null) {
                         int progress = (int) ((completed / (double) totalFrames) * 40.0);
-                        listener.onProgressUpdate(progress, "Extracting features from frame " + completed + " of " + totalFrames);
+                        OperationContext.notify(listener::onProgressUpdate, progress, "Extracting features from frame " + completed + " of " + totalFrames);
                     }
                 }
 
                 return new FrameExtractionResult(frame.sequenceIndex, extResult, metrics);
-            });
+            }));
         }
 
         // Execute parallel extraction
@@ -530,12 +567,13 @@ public class JTransientEngine implements AutoCloseable {
         }
 
         if (listener != null) {
-            listener.onProgressUpdate(42, "Filtering outlier frames...");
+            OperationContext.notify(listener::onProgressUpdate, 42, "Filtering outlier frames...");
         }
 
         // Pass the config down to the evaluator
         SessionEvaluator.SessionThresholds sessionThresholds =
-                rejectUnusableFrames(sessionMetrics, inputFrames, telemetry.driftExcludedFrames, quality.coverageOutliers, config);
+                OperationContext.compute(StageId.FRAME_SELECTION, null,
+                        () -> rejectUnusableFrames(sessionMetrics, inputFrames, telemetry.driftExcludedFrames, quality.coverageOutliers, config));
         telemetry.qualityThresholds.available = sessionThresholds.available;
         telemetry.qualityThresholds.minAllowedStarCount = sessionThresholds.minAllowedStarCount;
         telemetry.qualityThresholds.maxAllowedFwhm = sessionThresholds.maxAllowedFwhm;
@@ -739,10 +777,10 @@ public class JTransientEngine implements AutoCloseable {
                                                               TransientEngineProgressListener listener,
                                                               PipelineTelemetry telemetry) {
         if (listener != null) {
-            listener.onProgressUpdate(0, "Analyzing sequence dither and corner drift...");
+            OperationContext.notify(listener::onProgressUpdate, 0, "Analyzing sequence dither and corner drift...");
         }
 
-        FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = FrameDriftAnalyzer.analyze(inputFrames);
+        FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = OperationContext.compute(StageId.REGISTRATION, null, () -> FrameDriftAnalyzer.analyze(inputFrames));
 
         telemetry.driftExcludedFrames.addAll(driftAnalysis.failedRegistrationFrames);
         if (DEBUG && !driftAnalysis.failedRegistrationFrames.isEmpty()) {
@@ -776,15 +814,15 @@ public class JTransientEngine implements AutoCloseable {
 
     public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack, CancellationToken cancellation) throws Exception {
         return executeOperation(cancellation, () -> runPipelineInternal(inputFrames,
-                DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.PIPELINE,
+                OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.PIPELINE,
                         inputFrames != null && inputFrames.stream().anyMatch(frame -> frame != null && frame.timestamp != -1L)
-                                ? DetectionConfigRules.Timing.AVAILABLE : DetectionConfigRules.Timing.MISSING),
+                                ? DetectionConfigRules.Timing.AVAILABLE : DetectionConfigRules.Timing.MISSING)),
                 listener, providedMasterStack));
     }
 
     private PipelineResult runPipelineInternal(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
         ensureOpen();
-        InputRules.checkPipelineInput(inputFrames, providedMasterStack);
+        OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkPipelineInput(inputFrames, providedMasterStack));
         ExtractedFramesContext context = extractSourcesFromFrames(inputFrames, config, listener);
         long stageStartedNanos = System.nanoTime();
         PipelineTelemetry telemetry = context.telemetry;
@@ -799,14 +837,14 @@ public class JTransientEngine implements AutoCloseable {
                 System.out.println("\n--- JTRANSIENT: PHASE 0 (Using Pre-Computed Master Stack) ---");
             }
             if (listener != null) {
-                listener.onProgressUpdate(45, "Using pre-computed Master Stack...");
+                OperationContext.notify(listener::onProgressUpdate, 45, "Using pre-computed Master Stack...");
             }
         } else {
             if (DEBUG) {
                 System.out.println("\n--- JTRANSIENT: PHASE 0 (Master Map Generation) ---");
             }
             if (listener != null) {
-                listener.onProgressUpdate(45, "Generating Median Master Stack...");
+                OperationContext.notify(listener::onProgressUpdate, 45, "Generating Median Master Stack...");
             }
         }
 
@@ -816,14 +854,14 @@ public class JTransientEngine implements AutoCloseable {
         }
 
         if (listener != null) {
-            listener.onProgressUpdate(48, "Extracting Master Star Map...");
+            OperationContext.notify(listener::onProgressUpdate, 48, "Extracting Master Star Map...");
         }
 
-        MasterReferenceAnalyzer.MasterReferenceAnalysis masterReference = MasterReferenceAnalyzer.analyze(
+        MasterReferenceAnalyzer.MasterReferenceAnalysis masterReference = OperationContext.compute(StageId.MASTER_REFERENCE, null, () -> MasterReferenceAnalyzer.analyze(
                 cleanFrames,
                 providedMasterStack,
                 config
-        );
+        ));
         short[][] masterStackData = masterReference.masterStackData;
         List<SourceExtractor.DetectedObject> masterStars = masterReference.masterStars;
         int sensorHeight = masterReference.sensorHeight;
@@ -840,7 +878,7 @@ public class JTransientEngine implements AutoCloseable {
         telemetry.recordStage(PipelineTelemetry.Stage.MASTER_REFERENCE, stageStartedNanos);
         // Build once for both the detector and PipelineResult.maximumStackData.
         stageStartedNanos = System.nanoTime();
-        short[][] maximumStackData = MasterMapGenerator.createMaximumMasterStack(cleanFrames);
+        short[][] maximumStackData = OperationContext.compute(StageId.MAXIMUM_STACK, null, () -> MasterMapGenerator.createMaximumMasterStack(cleanFrames));
         telemetry.recordStage(PipelineTelemetry.Stage.MAXIMUM_STACK, stageStartedNanos);
         SlowMoverAnalysis slowMoverAnalysis = SlowMoverAnalysis.empty();
         short[][] slowMoverStackData = null;
@@ -854,16 +892,16 @@ public class JTransientEngine implements AutoCloseable {
                 System.out.println("\n--- JTRANSIENT: PHASE 0.5 (Slow Mover Detection) ---");
             }
             if (listener != null) {
-                listener.onProgressUpdate(49, "Analyzing Maximum Stack for Slow Movers...");
+                OperationContext.notify(listener::onProgressUpdate, 49, "Analyzing Maximum Stack for Slow Movers...");
             }
 
-            slowMoverAnalysis = SlowMoverAnalyzer.analyze(
+            slowMoverAnalysis = OperationContext.compute(StageId.SLOW_MOVERS, null, () -> SlowMoverAnalyzer.analyze(
                     maximumStackData,
                     masterStackData,
                     cleanFrames,
                     config,
                     context.dataArea
-            );
+            ));
             slowMoverStackData = slowMoverAnalysis.slowMoverStackData;
             slowMoverMedianVetoMask = slowMoverAnalysis.medianVetoMask;
             slowMoverCandidates = new ArrayList<>(slowMoverAnalysis.candidates.size());
@@ -922,12 +960,14 @@ public class JTransientEngine implements AutoCloseable {
         // --- THE PROXY LISTENER ---
         // We pass a synthetic listener to the Linker. It maps the Linker's 0-100% to the Engine's 50-90% range;
         // residual analysis and photometry follow, so the progress never goes back.
-        TransientEngineProgressListener trackingProxyListener = null;
+        TransientEngineProgressListener trackingProxyListener;
         if (listener != null) {
             trackingProxyListener = (percentage, message) -> {
                 int scaledProgress = 50 + (int) (percentage * 0.4);
-                listener.onProgressUpdate(scaledProgress, message);
+                OperationContext.notify(listener::onProgressUpdate, scaledProgress, message);
             };
+        } else {
+            trackingProxyListener = null;
         }
 
         List<List<SourceExtractor.DetectedObject>> cleanFramesObjects = new ArrayList<>();
@@ -952,7 +992,7 @@ public class JTransientEngine implements AutoCloseable {
         }
 
         stageStartedNanos = System.nanoTime();
-        TrackLinker.TrackingResult trackResult = TrackLinker.findMovingObjects(
+        TrackLinker.TrackingResult trackResult = OperationContext.compute(StageId.TRACKING, null, () -> TrackLinker.findMovingObjects(
                 cleanFramesObjects,
                 masterStars,
                 config,
@@ -960,7 +1000,7 @@ public class JTransientEngine implements AutoCloseable {
                 sensorWidth,
                 sensorHeight,
                 context.frameRegistrations
-        );
+        ));
 
         telemetry.recordStage(PipelineTelemetry.Stage.TRACKING, stageStartedNanos);
         // Map the track results back to our main telemetry object
@@ -974,18 +1014,19 @@ public class JTransientEngine implements AutoCloseable {
         if (config.enableCommonMotionRejection) {
             stageStartedNanos = System.nanoTime();
             if (listener != null) {
-                listener.onProgressUpdate(92, "Filtering common-motion transients...");
+                OperationContext.notify(listener::onProgressUpdate, 92, "Filtering common-motion transients...");
             }
-            commonMotionGroups = CommonMotionRejector.reject(trackResult.unclassifiedTransients, config);
+            commonMotionGroups = OperationContext.compute(StageId.COMMON_MOTION, null,
+                    () -> CommonMotionRejector.reject(trackResult.unclassifiedTransients, config));
             telemetry.recordStage(PipelineTelemetry.Stage.COMMON_MOTION, stageStartedNanos);
         }
         ResidualTransientAnalysis residual = ResidualTransientAnalysis.empty();
         if (config.enableResidualTransientAnalysis) {
             stageStartedNanos = System.nanoTime();
             if (listener != null) {
-                listener.onProgressUpdate(92, "Analyzing residual transients...");
+                OperationContext.notify(listener::onProgressUpdate, 92, "Analyzing residual transients...");
             }
-            residual = ResidualTransientAnalyzer.analyze(trackResult.unclassifiedTransients, config);
+            residual = OperationContext.compute(StageId.RESIDUAL_ANALYSIS, null, () -> ResidualTransientAnalyzer.analyze(trackResult.unclassifiedTransients, config));
             telemetry.recordStage(PipelineTelemetry.Stage.RESIDUAL_ANALYSIS, stageStartedNanos);
         }
         ResidualTransientAnalysis residualTransientAnalysis = new ResidualTransientAnalysis(
@@ -1001,7 +1042,7 @@ public class JTransientEngine implements AutoCloseable {
                 System.out.println("\n--- JTRANSIENT: PHASE 5 (Variable-Star Photometry) ---");
             }
             if (listener != null) {
-                listener.onProgressUpdate(93, "Measuring stationary-star photometry...");
+                OperationContext.notify(listener::onProgressUpdate, 93, "Measuring stationary-star photometry...");
             }
             VariableStarAnalyzer.Input photometryInput = new VariableStarAnalyzer.Input();
             photometryInput.frames = cleanFrames;
@@ -1015,20 +1056,20 @@ public class JTransientEngine implements AutoCloseable {
             photometryInput.dataArea = context.dataArea;
             if (listener != null) {
                 // Photometry 0-100% maps to 93-99%.
-                photometryInput.progress = (percentage, message) -> listener.onProgressUpdate(93 + (int) (percentage * 0.06), message);
+                photometryInput.progress = (percentage, message) -> OperationContext.notify(listener::onProgressUpdate, 93 + (int) (percentage * 0.06), message);
             }
-            variableStarAnalysis = VariableStarAnalyzer.analyze(photometryInput, config, executor);
+            variableStarAnalysis = OperationContext.call(StageId.PHOTOMETRY, null, () -> VariableStarAnalyzer.analyze(photometryInput, config, executor));
             telemetry.photometryTelemetry = variableStarAnalysis.telemetry;
             telemetry.recordStage(PipelineTelemetry.Stage.PHOTOMETRY, stageStartedNanos);
         }
 
         if (listener != null) {
-            listener.onProgressUpdate(100, "Processing Complete!");
+            OperationContext.notify(listener::onProgressUpdate, 100, "Processing Complete!");
         }
 
         // --- FINAL POST-PROCESSING ---
         if (listener != null) {
-            listener.onProgressUpdate(100, "Maximum Stack generation complete.");
+            OperationContext.notify(listener::onProgressUpdate, 100, "Maximum Stack generation complete.");
         }
 
         telemetry.processingTimeMs = (System.nanoTime() - context.startNanos) / 1_000_000L;

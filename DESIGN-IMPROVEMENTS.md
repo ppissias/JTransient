@@ -33,13 +33,12 @@ Statuses distinguish proposals from work already started. High priority means to
 
 | ID | Priority | Status | Design improvement | First useful result |
 |---|---|---|---|---|
-| JA-03 | High | In progress; structured failure context remains | Give cancellation and failures an explicit contract | Cancellation stays distinct from fallback and failure; completion means the run's work has ended. |
 | JA-04 | High | In progress; tuner options complete, core diagnostic propagation remains | Replace mutable global tuning options with operation options | Two tunings can use independent options without changing each other's settings. |
 | JA-05 | Medium | Accepted (2026-10-22) | Make prepared-frame context and identity coherent | Frames, metrics, detections and registrations remain associated through QC and subset runs. |
 | JA-06 | Medium | Accepted (2026-10-22) | Separate tracking responsibilities while retaining its facade | Vetoing, point linking, streak assembly and classification have explicit inputs and ownership. |
 | JA-07 | Medium | Accepted (2026-10-22) | Stabilize public results and dependency direction | Public models and shared buffers have clear contracts independent of implementation helpers. |
 | JA-08 | Medium | Accepted (2026-10-22) | Separate tuning measurement, selection and presentation | Measurements can explain a choice without depending on report construction or ambiguous legacy fields. |
-| JA-09 | Medium | Accepted (2026-10-22) | Unify progress and stage outcome reporting | Callers can distinguish disabled, unavailable and completed-empty stages without parsing prose. |
+| JA-09 | Medium | In progress; terminal operation outcomes implemented, stage progress/outcomes remain | Unify progress and stage outcome reporting | Callers can distinguish disabled, unavailable and completed-empty stages without parsing prose. |
 | JA-10 | Medium; before expanding reuse | Accepted (2026-10-22) | Carry provenance with reusable master references | Callers can identify a reference's origin and deliberately reuse it across compatible runs. |
 | JA-11 | Medium | In progress; Java 21 and staged artifact gates implemented, Central availability remains | Declare and verify the supported library contract | Releases have a known Java target and a tested SpacePixels/JTransient dependency pair. |
 
@@ -53,11 +52,7 @@ Statuses distinguish proposals from work already started. High priority means to
 
 ### JA-03. Distinguish cancellation, failure and tuning fallback
 
-**In progress: structured failure context remains.** The per-operation cancellation contract, interruption preservation, cooperative checkpoints, stop-and-join worker batches and direct propagation from calibrated tuning are implemented. The decision, tests and real-data evidence are [archived](docs/archive/design-improvements-closed-2026-10.md#ja-02ja-03-operation-cancellation-and-worker-lifetime-2026-10-21); the current contract is in [PIPELINE.md](PIPELINE.md#cancellation-and-worker-lifetime). SpacePixels already consumes this through the local composite build. Published-release validation remains JA-11.
-
-**Open.** Complete consistent stage/frame context for runtime failures across orchestration, photometry and both tuners without losing their original cause. Calibrated tuning now exposes its cause as the runtime-only `Calibration.failureCause`; scientific readiness/insufficient-evidence outcomes retain their existing result shape. Other operations still expose broad exception contracts. Coordinate any structured stage model with JA-09, preserving existing entry points and saved tuning JSON.
-
-**Acceptance.** Inject failures at extraction, stacking, tracking, tuning and photometry boundaries, including listeners. Each failure retains its original cause and identifies its operation/stage and frame where applicable. Keep invalid input, scientific readiness, cancellation and execution failure distinguishable; do not change detection verdicts merely to introduce a diagnostic model.
+**Implemented (2026-10-22).** Additive `OperationOutcome` APIs and scoped `OperationContext` retain stable stage/original-frame context and the original cause, without changing legacy thrown exceptions or calibrated `failureCause` identity. Completed empty/readiness/fallback results, execution failures and joined cooperative cancellation remain distinct. See the [completion record](docs/archive/design-improvements-closed-2026-10.md#ja-03-structured-failure-outcomes-with-legacy-exceptions-preserved-2026-10-22) and [current outcome contract](PIPELINE.md#structured-operation-outcomes-106). Detailed stage progress/outcomes remain JA-09; public artifact availability remains JA-11.
 
 ### JA-04. Make tuning options and diagnostics belong to an operation
 

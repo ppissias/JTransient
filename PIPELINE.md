@@ -53,6 +53,21 @@ Both tuners' options include `executionPolicy` for their default owned session. 
 
 Each engine admits one active operation; this does not limit all engines or tuners in the JVM. Explicitly sharing a bounded executor provides an aggregate execution ceiling, but individual sessions' heap estimates are not additive reservations. Applications still own admission control and dataset retention.
 
+## Structured operation outcomes (1.0.6)
+
+Existing exception-based methods remain available with their original exception/cause objects and fallback behavior. Additive terminal result APIs are:
+- Engine `runPipelineOutcome(frames, config, listener[, master, cancellation])`.
+- Engine `generateMasterStackOutcome(frames, config, listener, cancellation)` and `detectTransientsOutcome(frames, config, listener, master, cancellation)`.
+- Both tuners' `tuneOutcome(frames, config, options, profile, listener, cancellation)` and calibrated `calibrateOutcome(frames, config, options, listener)`.
+
+These return sealed `OperationOutcome.Completed<Result>`, `Failed<Result>` or `Cancelled<Result>`. Completed means the joined operation returned normally, not that it found objects or satisfied scientific readiness. Empty results and tuning fallback for insufficient evidence are completed results carrying the existing readiness/success fields. Runtime calibration failure is failed in this additive API, while old result APIs still retain their unsuccessful result and the same `Calibration.failureCause`. Cancellation is not a failure or partial successful result. A 100% progress callback is not terminal completion and may itself fail.
+
+Failure exposes `OperationFailure.stage()`, optional `frame()`, `message()` and the original runtime-only `cause()`. `StageId` values do not depend on localized progress text. `FrameIdentity.sequenceIndex` is the original caller identifier, not a retained/completed-list position; filename may be null when unavailable in an older internal crop descriptor. Validation, registration, quality, extraction, frame selection, stacking/reference, tracking/veto, slow-mover, residual/common-motion, photometry and callback boundaries capture their own context. Managed batches propagate the diagnostic scope and restore it when workers finish. Photometry and calibrated crop extraction keep original frame identity. Legacy cropped sweeps currently retain original sequence ID only; JA-05 will carry complete prepared metadata.
+
+`OperationContext.capture(defaultStage, callable)` also supports standalone stage calls. Nested `call`/unchecked `compute`/void `run` scopes add explicit labels; a null frame inherits enclosing identity. Legacy code still throws the same object; capture callers receive a terminal value only after work/cleanup returns. Concurrent failures retain the first recorded ordinary failure, not a deterministic winner among racing faults. Listener callbacks remain synchronous on the existing caller/worker thread and keep the same percentages, ordering and locking; slow or blocking callbacks can delay completion. Context captures no image buffers; exceptions/results retain their existing ownership.
+
+Interruption is cancelled and preserves its thread flag. Fatal errors, including future-wrapped errors, propagate as errors rather than ordinary failed outcomes. `OperationFailure.cause` is transient; outcome objects are in-memory API values, not a new persisted replay schema. Per-stage Disabled/InsufficientInput/CompletedEmpty/Findings progress events and scientific readiness adapters remain JA-09.
+
 ## Input Rules
 
 Configuration capture/validation happens before frame processing; invalid configuration can therefore be reported before an invalid frame sequence.

@@ -9,6 +9,11 @@
  */
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.execution.OperationContext;
+import io.github.ppissias.jtransient.execution.OperationOutcome;
+import io.github.ppissias.jtransient.execution.FrameIdentity;
+import io.github.ppissias.jtransient.execution.StageId;
+
 import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.execution.ExecutionPolicy;
 import io.github.ppissias.jtransient.execution.ExecutionSession;
@@ -574,6 +579,15 @@ public class JTransientAutoTuner {
     public JTransientAutoTuner() {
     }
 
+    /** Captures legacy tuning failures/cancellation; insufficient frames or no winning policy remain completed detached results. */
+    public static OperationOutcome<AutoTunerResult> tuneOutcome(List<ImageFrame> allFrames, DetectionConfig baseConfig,
+                                                               Options options, AutoTuneProfile profile,
+                                                               TransientEngineProgressListener listener,
+                                                               io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
+        return OperationContext.capture(StageId.LEGACY_TUNING,
+                () -> tuneSnapshot(allFrames, baseConfig, options, profile, listener, cancellation));
+    }
+
     /**
      * Result of one auto-tuning run.
      */
@@ -1031,7 +1045,7 @@ public class JTransientAutoTuner {
         CancellationScope.check();
         java.util.Objects.requireNonNull(options, "options");
         try (ExecutionSession.Scope scope = execution.open()) {
-            return tuneCaptured(allFrames, DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.AUTO_TUNE),
+            return tuneCaptured(allFrames, OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.AUTO_TUNE)),
                     profile, listener, options.withExecutionPolicy(execution.policy()));
         }
     }
@@ -1060,7 +1074,7 @@ public class JTransientAutoTuner {
                                                        io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
         try (CancellationScope scope = CancellationScope.open(cancellation)) {
             CancellationScope.check();
-            InputRules.checkFrames(allFrames);
+            OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkFrames(allFrames));
             Options.Builder options = Options.builder();
             options.sampleSize = Math.min(options.sampleSize, allFrames.size());
             AutoTunerResult result = tuneSnapshot(allFrames, baseConfig, options.build(), profile, listener);
@@ -1078,7 +1092,7 @@ public class JTransientAutoTuner {
     private static AutoTunerResult tuneCaptured(List<ImageFrame> allFrames, DetectionConfig baseConfig,
                                                AutoTuneProfile profile, TransientEngineProgressListener listener, Options options) {
         CancellationScope.check();
-        InputRules.checkFrames(allFrames);
+        OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkFrames(allFrames));
 
         ExecutionSession.current().configureForWork(allFrames.size(),
                 (long) allFrames.get(0).pixelData.length * allFrames.get(0).pixelData[0].length);
@@ -1091,7 +1105,7 @@ public class JTransientAutoTuner {
         }
 
         if (listener != null) {
-            listener.onProgressUpdate(0, "Initializing Auto-Tuner...");
+            OperationContext.notify(listener::onProgressUpdate, 0, "Initializing Auto-Tuner...");
         }
 
         AutoTunePolicy policy = getPolicy(profile);
@@ -1112,7 +1126,7 @@ public class JTransientAutoTuner {
         }
 
         if (listener != null) {
-            listener.onProgressUpdate(3, "Evaluating frame quality and selecting tuning sample...");
+            OperationContext.notify(listener::onProgressUpdate, 3, "Evaluating frame quality and selecting tuning sample...");
         }
 
         List<ImageFrame> tuningFrames = getBestSampleFrames(allFrames, baseConfig, report, options);
@@ -1129,7 +1143,7 @@ public class JTransientAutoTuner {
         int sensorWidth = tuningFrames.get(0).pixelData[0].length;
 
         if (listener != null) {
-            listener.onProgressUpdate(6, "Selecting representative tuning crops...");
+            OperationContext.notify(listener::onProgressUpdate, 6, "Selecting representative tuning crops...");
         }
 
         List<CropRegion> cropRegions = buildTuningCropRegions(sensorWidth, sensorHeight, report, options);
@@ -1157,7 +1171,7 @@ public class JTransientAutoTuner {
         }
 
         if (listener != null) {
-            listener.onProgressUpdate(7, "Calibrating maxStarJitter from sampled stars...");
+            OperationContext.notify(listener::onProgressUpdate, 7, "Calibrating maxStarJitter from sampled stars...");
         }
 
         double measuredMaxStarJitter = measureMaxStarJitter(croppedFramesByRegion, baseConfig, report, options);
@@ -1208,7 +1222,7 @@ public class JTransientAutoTuner {
 
                         if (listener != null) {
                             int progress = 8 + (int) (((double) currentCombination / totalCombinations) * 82.0);
-                            listener.onProgressUpdate(
+                            OperationContext.notify(listener::onProgressUpdate,
                                     progress,
                                     String.format("Testing σ=%.1f, grow=%.2f, minPix=%d, overlap=%.2f",
                                             sigma, growSigma, minPix, overlapFraction)
@@ -1259,7 +1273,8 @@ public class JTransientAutoTuner {
                             totalMaskArea += cropWidth * cropHeight;
 
                             // STEP A: Build master stack for this crop only
-                            short[][] masterStackData = createMedianMasterStackForCrops(cropFrames);
+                            short[][] masterStackData = OperationContext.compute(StageId.MEDIAN_STACK, null,
+                    () -> createMedianMasterStackForCrops(cropFrames));
 
                             double masterSigma = testConfig.masterSigmaMultiplier;
                             int masterMinPix = testConfig.masterMinDetectionPixels;
@@ -1319,12 +1334,12 @@ public class JTransientAutoTuner {
 
                             // STEP C: Extract each cropped frame and test against this crop mask
                             for (CroppedFrame frame : cropFrames) {
-                                List<SourceExtractor.DetectedObject> objects = extractInCrop(
+                                List<SourceExtractor.DetectedObject> objects = OperationContext.compute(StageId.FRAME_EXTRACTION, new FrameIdentity(frame.sequenceIndex, null), () -> extractInCrop(
                                         frame.pixelData,
                                         testConfig.detectionSigmaMultiplier,
                                         testConfig.minDetectionPixels,
                                         testConfig
-                                );
+                                ));
 
                                 totalObjectsExtracted += objects.size();
 
@@ -1522,7 +1537,7 @@ public class JTransientAutoTuner {
             bestConfig.maxStarJitter = measuredMaxStarJitter;
 
             if (listener != null) {
-                listener.onProgressUpdate(93, "Validating final tuned configuration...");
+                OperationContext.notify(listener::onProgressUpdate, 93, "Validating final tuned configuration...");
             }
 
             AutoTunerResult.FinalValidationTelemetry finalValidationTelemetry =
@@ -1560,14 +1575,14 @@ public class JTransientAutoTuner {
             result.success = true;
 
             if (listener != null) {
-                listener.onProgressUpdate(100, "Auto-Tuning Complete!");
+                OperationContext.notify(listener::onProgressUpdate, 100, "Auto-Tuning Complete!");
             }
 
             if (options.debug) debug(options, "%s%n", "\n[SUCCESS] Auto-Tuning Complete.");
 
         } else {
             if (listener != null) {
-                listener.onProgressUpdate(100, "Auto-Tuning Failed. Using base config.");
+                OperationContext.notify(listener::onProgressUpdate, 100, "Auto-Tuning Failed. Using base config.");
             }
             if (options.debug) {
                 System.err.println("\n[FAILED] Could not find stable configuration. Falling back to base settings.");
@@ -1760,8 +1775,9 @@ public class JTransientAutoTuner {
                         + " (Index: " + frame.sequenceIndex + ")...");
             }
 
-            FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData, samplingConfig,
-                    DataArea.ofFrame(frame.pixelData));
+            FrameQualityAnalyzer.FrameMetrics metrics = OperationContext.compute(StageId.FRAME_QUALITY,
+                    new FrameIdentity(frame.sequenceIndex, frame.filename),
+                    () -> FrameQualityAnalyzer.evaluateFrame(frame.pixelData, samplingConfig, DataArea.ofFrame(frame.pixelData)));
             double score = metrics.backgroundNoise * metrics.medianFWHM;
             records.add(new FrameQualityRecord(frame, metrics, score));
         }
@@ -2093,7 +2109,8 @@ public class JTransientAutoTuner {
             int cropWidth = cropRegion.width;
             totalMaskArea += cropWidth * cropHeight;
 
-            short[][] masterStackData = createMedianMasterStackForCrops(cropFrames);
+            short[][] masterStackData = OperationContext.compute(StageId.MEDIAN_STACK, null,
+                    () -> createMedianMasterStackForCrops(cropFrames));
 
             DetectionConfig evalConfig = finalConfig.clone();
             double originalGrowSigma = evalConfig.growSigmaMultiplier;
@@ -2155,12 +2172,12 @@ public class JTransientAutoTuner {
 
             for (CroppedFrame frame : cropFrames) {
                 CancellationScope.check();
-                List<SourceExtractor.DetectedObject> objects = extractInCrop(
+                List<SourceExtractor.DetectedObject> objects = OperationContext.compute(StageId.FRAME_EXTRACTION, new FrameIdentity(frame.sequenceIndex, null), () -> extractInCrop(
                         frame.pixelData,
                         evalConfig.detectionSigmaMultiplier,
                         evalConfig.minDetectionPixels,
                         evalConfig
-                );
+                ));
 
                 totalObjectsExtracted += objects.size();
 
@@ -2519,7 +2536,8 @@ public class JTransientAutoTuner {
                 continue;
             }
 
-            short[][] masterStackData = createMedianMasterStackForCrops(cropFrames);
+            short[][] masterStackData = OperationContext.compute(StageId.MEDIAN_STACK, null,
+                    () -> createMedianMasterStackForCrops(cropFrames));
 
             DetectionConfig masterConfig = probeConfig.clone();
             masterConfig.growSigmaMultiplier = masterConfig.masterSigmaMultiplier;
@@ -2537,11 +2555,11 @@ public class JTransientAutoTuner {
             List<List<SourceExtractor.DetectedObject>> frameObjectsByCrop = new ArrayList<>(cropFrames.size());
             for (CroppedFrame frame : cropFrames) {
                 CancellationScope.check();
-                frameObjectsByCrop.add(extractInCrop(
+                frameObjectsByCrop.add(OperationContext.compute(StageId.FRAME_EXTRACTION, new FrameIdentity(frame.sequenceIndex, null), () -> extractInCrop(
                         frame.pixelData,
                         probeConfig.detectionSigmaMultiplier,
                         probeConfig.minDetectionPixels,
-                        probeConfig));
+                        probeConfig)));
             }
 
             for (SourceExtractor.DetectedObject masterStar : masterStars) {
