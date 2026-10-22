@@ -182,10 +182,11 @@ public class JTransientAutoTunerJitterTest {
                 "measureMaxStarJitter",
                 List.class,
                 DetectionConfig.class,
-                StringBuilder.class
+                StringBuilder.class,
+                JTransientAutoTuner.Options.class
         );
         method.setAccessible(true);
-        return (Double) method.invoke(null, croppedFramesByRegion, config, report);
+        return (Double) method.invoke(null, croppedFramesByRegion, config, report, JTransientAutoTuner.Options.captureDefaults());
     }
 
     @SuppressWarnings("unchecked")
@@ -196,10 +197,11 @@ public class JTransientAutoTunerJitterTest {
                 "getBestSampleFrames",
                 List.class,
                 DetectionConfig.class,
-                StringBuilder.class
+                StringBuilder.class,
+                JTransientAutoTuner.Options.class
         );
         method.setAccessible(true);
-        return (List<ImageFrame>) method.invoke(null, frames, config, report);
+        return (List<ImageFrame>) method.invoke(null, frames, config, report, JTransientAutoTuner.Options.captureDefaults());
     }
 
     private static boolean isBetterSweepCandidate(double candidateScore,
@@ -213,10 +215,11 @@ public class JTransientAutoTunerJitterTest {
                 double.class,
                 double.class,
                 DetectionConfig.class,
-                JTransientAutoTuner.AutoTuneProfile.class
+                JTransientAutoTuner.AutoTuneProfile.class,
+                JTransientAutoTuner.Options.class
         );
         method.setAccessible(true);
-        return (Boolean) method.invoke(null, candidateScore, candidateSigma, bestScore, bestConfig, profile);
+        return (Boolean) method.invoke(null, candidateScore, candidateSigma, bestScore, bestConfig, profile, JTransientAutoTuner.Options.captureDefaults());
     }
 
     private static double deriveSweepGrowSigma(double sigma,
@@ -226,10 +229,11 @@ public class JTransientAutoTunerJitterTest {
                 "deriveSweepGrowSigma",
                 double.class,
                 double.class,
-                DetectionConfig.class
+                DetectionConfig.class,
+                JTransientAutoTuner.Options.class
         );
         method.setAccessible(true);
-        return (Double) method.invoke(null, sigma, growDelta, baseConfig);
+        return (Double) method.invoke(null, sigma, growDelta, baseConfig, JTransientAutoTuner.Options.captureDefaults());
     }
 
     private static Object getPolicy(JTransientAutoTuner.AutoTuneProfile profile) throws Exception {

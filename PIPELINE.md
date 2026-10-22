@@ -12,6 +12,14 @@ The public surface is split into three layers:
 
 `runPipeline(...)` executes the complete analysis. `generateMasterStack(...)` shares registration/quality selection but returns only a median stack. `detectTransients(...)` adds extraction and stationary-star/streak filtering, then stops before point linking. Tuners search configurations on sampled crops; `SourceExtractor` works on one image. The [algorithm flow](ALGORITHM.md#high-level-flow) defines stage ordering.
 
+## Per-operation tuner options (1.0.6)
+
+Both tuner facades expose immutable `Options`, `Options.builder()`, `Options.captureDefaults()` and `toBuilder()`. Builders are caller-owned and mutable; build and array accessors copy all arrays. Options validate finite/positive grids and counts before work. Explicit `tuneSnapshot(frames, config, options, profile, listener[, cancellation])` overloads never edit process-wide knobs. Calibrated measurement also accepts `calibrate(frames, config, options, listener)`. Pixel arrays remain borrowed until the joined operation returns.
+
+Legacy entry points retain signatures and fallback-alias behavior, but capture static defaults once before callbacks/workers. Do not edit compatibility defaults concurrently with capture; use explicit options for independent requests. The legacy result's `effectiveOptions` and calibrated result's `calibration.options` identify the policy used, including unsuccessful outcomes. Calibrated tradeoff rebuilding uses that policy, with current defaults only for older manually assembled calibrations lacking provenance. Existing mutable result models are not thereby deeply immutable.
+
+The legacy `Options.Builder.debug` and `diagnosticSink` control only that operation's synchronous diagnostics. Disabled diagnostics emit nothing; enabled sinks are caller-owned and must be thread-safe if shared between operations. Core `JTransientEngine.DEBUG` migration is separate. `JTransientAutoTuner.tuneAvailableSnapshot(..., cancellation)` caps its captured sample request to the available frames without global mutation; ordinary snapshot overloads retain their minimum-sample fallback contract. SpacePixels uses this optional capability on 1.0.6 while preserving 1.0.5 compatibility.
+
 ## Cancellation and worker lifetime
 
 The cancellation types live in `io.github.ppissias.jtransient.execution`. An operation can take a thread-safe `CancellationToken` through the final parameter of `runPipeline(..., providedMasterStack, cancellation)`, `detectTransients(..., providedMasterStack, cancellation)`, `generateMasterStackWithDetails(..., cancellation)` or either tuner's profile-based `tune(..., cancellation)` overload. Existing signatures remain available and inherit an enclosing cancellation scope, or use no requested cancellation when there is none.

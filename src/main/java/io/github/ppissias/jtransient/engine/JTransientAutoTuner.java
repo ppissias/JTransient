@@ -98,6 +98,454 @@ public class JTransientAutoTuner {
     // =========================================================================
 
     /**
+     * Immutable per-operation tuning policy. Arrays are copied on capture and access; pixel buffers are not owned.
+     * Legacy static knobs are read only by the builder, never by a running operation.
+     * Diagnostic sinks run synchronously on the tuning thread and are caller-owned; disabled diagnostics stay silent.
+     */
+    public static final class Options {
+        private final boolean debug;
+        private final int sampleSize;
+        private final double searchRadiusPx;
+        private final int minStableStars;
+        private final double optimalStarCount;
+        private final int maxTotalExtractedObjects;
+        private final int minTotalExtractedObjects;
+        private final double[] sigmasToTest;
+        private final int[] minPixelsToTest;
+        private final double[] growDeltasToTest;
+        private final double minGrowSigmaAboveMasterSigma;
+        private final double[] maskOverlapToTest;
+        private final double softMaskCoverageStart;
+        private final double hardMaskCoverageReject;
+        private final double aggressiveLowerSigmaScoreWindow;
+        private final double stableStarsCvAnchor;
+        private final double transientsCvAnchor;
+        private final double jitterPercentile;
+        private final double minJitterFloor;
+        private final double jitterSafetyMultiplier;
+        private final double initialJitterFallbackPx;
+        private final double initialJitterProbeSigma;
+        private final double initialJitterProbeGrowSigma;
+        private final int initialJitterProbeMinPixels;
+        private final double initialJitterProbeMaxElongation;
+        private final int minInitialJitterMatches;
+        private final int cropCount;
+        private final int borderMargin;
+        private final int preferredCropSizeLarge;
+        private final int preferredCropSizeSmall;
+        private final int minCropSize;
+        private final java.util.function.Consumer<String> diagnosticSink;
+
+        /** Copies and validates a builder before progress callbacks or scientific work can start. */
+        private Options(Builder builder) {
+            debug = builder.debug;
+            sampleSize = builder.sampleSize;
+            searchRadiusPx = builder.searchRadiusPx;
+            minStableStars = builder.minStableStars;
+            optimalStarCount = builder.optimalStarCount;
+            maxTotalExtractedObjects = builder.maxTotalExtractedObjects;
+            minTotalExtractedObjects = builder.minTotalExtractedObjects;
+            sigmasToTest = java.util.Objects.requireNonNull(builder.sigmasToTest, "sigmasToTest").clone();
+            minPixelsToTest = java.util.Objects.requireNonNull(builder.minPixelsToTest, "minPixelsToTest").clone();
+            growDeltasToTest = java.util.Objects.requireNonNull(builder.growDeltasToTest, "growDeltasToTest").clone();
+            minGrowSigmaAboveMasterSigma = builder.minGrowSigmaAboveMasterSigma;
+            maskOverlapToTest = java.util.Objects.requireNonNull(builder.maskOverlapToTest, "maskOverlapToTest").clone();
+            softMaskCoverageStart = builder.softMaskCoverageStart;
+            hardMaskCoverageReject = builder.hardMaskCoverageReject;
+            aggressiveLowerSigmaScoreWindow = builder.aggressiveLowerSigmaScoreWindow;
+            stableStarsCvAnchor = builder.stableStarsCvAnchor;
+            transientsCvAnchor = builder.transientsCvAnchor;
+            jitterPercentile = builder.jitterPercentile;
+            minJitterFloor = builder.minJitterFloor;
+            jitterSafetyMultiplier = builder.jitterSafetyMultiplier;
+            initialJitterFallbackPx = builder.initialJitterFallbackPx;
+            initialJitterProbeSigma = builder.initialJitterProbeSigma;
+            initialJitterProbeGrowSigma = builder.initialJitterProbeGrowSigma;
+            initialJitterProbeMinPixels = builder.initialJitterProbeMinPixels;
+            initialJitterProbeMaxElongation = builder.initialJitterProbeMaxElongation;
+            minInitialJitterMatches = builder.minInitialJitterMatches;
+            cropCount = builder.cropCount;
+            borderMargin = builder.borderMargin;
+            preferredCropSizeLarge = builder.preferredCropSizeLarge;
+            preferredCropSizeSmall = builder.preferredCropSizeSmall;
+            minCropSize = builder.minCropSize;
+            diagnosticSink = java.util.Objects.requireNonNull(builder.diagnosticSink, "diagnosticSink");
+            require(sampleSize > 0, "sampleSize must be positive");
+            require(Double.isFinite(searchRadiusPx) && searchRadiusPx > 0, "searchRadiusPx must be finite and positive");
+            require(minStableStars >= 0, "minStableStars must be nonnegative");
+            require(Double.isFinite(optimalStarCount) && optimalStarCount > 0, "optimalStarCount must be finite and positive");
+            require(maxTotalExtractedObjects > 0, "maxTotalExtractedObjects must be positive");
+            require(minTotalExtractedObjects >= 0, "minTotalExtractedObjects must be nonnegative");
+            require(sigmasToTest.length > 0, "sigmasToTest must not be empty");
+            for (double value : sigmasToTest) {
+                require(Double.isFinite(value) && value > 0, "sigmasToTest contains an invalid value");
+            }
+            require(minPixelsToTest.length > 0, "minPixelsToTest must not be empty");
+            for (int value : minPixelsToTest) {
+                require(value > 0, "minPixelsToTest contains an invalid value");
+            }
+            require(growDeltasToTest.length > 0, "growDeltasToTest must not be empty");
+            for (double value : growDeltasToTest) {
+                require(Double.isFinite(value) && value > 0, "growDeltasToTest contains an invalid value");
+            }
+            require(Double.isFinite(minGrowSigmaAboveMasterSigma) && minGrowSigmaAboveMasterSigma >= 0, "minGrowSigmaAboveMasterSigma must be finite and nonnegative");
+            require(maskOverlapToTest.length > 0, "maskOverlapToTest must not be empty");
+            for (double value : maskOverlapToTest) {
+                require(Double.isFinite(value) && value > 0 && value <= 1, "maskOverlapToTest contains an invalid value");
+            }
+            require(Double.isFinite(softMaskCoverageStart) && softMaskCoverageStart >= 0, "softMaskCoverageStart must be finite and nonnegative");
+            require(softMaskCoverageStart <= 1, "softMaskCoverageStart must not exceed one");
+            require(Double.isFinite(hardMaskCoverageReject) && hardMaskCoverageReject > 0, "hardMaskCoverageReject must be finite and positive");
+            require(hardMaskCoverageReject <= 1, "hardMaskCoverageReject must not exceed one");
+            require(Double.isFinite(aggressiveLowerSigmaScoreWindow) && aggressiveLowerSigmaScoreWindow >= 0, "aggressiveLowerSigmaScoreWindow must be finite and nonnegative");
+            require(Double.isFinite(stableStarsCvAnchor) && stableStarsCvAnchor > 0, "stableStarsCvAnchor must be finite and positive");
+            require(Double.isFinite(transientsCvAnchor) && transientsCvAnchor > 0, "transientsCvAnchor must be finite and positive");
+            require(Double.isFinite(jitterPercentile) && jitterPercentile > 0, "jitterPercentile must be finite and positive");
+            require(jitterPercentile <= 1, "jitterPercentile must not exceed one");
+            require(Double.isFinite(minJitterFloor) && minJitterFloor > 0, "minJitterFloor must be finite and positive");
+            require(Double.isFinite(jitterSafetyMultiplier) && jitterSafetyMultiplier > 0, "jitterSafetyMultiplier must be finite and positive");
+            require(Double.isFinite(initialJitterFallbackPx) && initialJitterFallbackPx > 0, "initialJitterFallbackPx must be finite and positive");
+            require(Double.isFinite(initialJitterProbeSigma) && initialJitterProbeSigma > 0, "initialJitterProbeSigma must be finite and positive");
+            require(Double.isFinite(initialJitterProbeGrowSigma) && initialJitterProbeGrowSigma > 0, "initialJitterProbeGrowSigma must be finite and positive");
+            require(initialJitterProbeMinPixels > 0, "initialJitterProbeMinPixels must be positive");
+            require(Double.isFinite(initialJitterProbeMaxElongation) && initialJitterProbeMaxElongation > 0, "initialJitterProbeMaxElongation must be finite and positive");
+            require(minInitialJitterMatches > 0, "minInitialJitterMatches must be positive");
+            require(cropCount > 0, "cropCount must be positive");
+            require(borderMargin >= 0, "borderMargin must be nonnegative");
+            require(preferredCropSizeLarge > 0, "preferredCropSizeLarge must be positive");
+            require(preferredCropSizeSmall > 0, "preferredCropSizeSmall must be positive");
+            require(minCropSize > 0, "minCropSize must be positive");
+            require(maxTotalExtractedObjects >= minTotalExtractedObjects, "object-count bounds are reversed");
+            require(hardMaskCoverageReject >= softMaskCoverageStart, "mask-coverage bounds are reversed");
+        }
+
+        /** Captures compatibility defaults once; callers must not edit static knobs concurrently with this capture. */
+        public static Options captureDefaults() {
+            return new Builder().build();
+        }
+
+        /** Creates an independent mutable builder from the current compatibility defaults. */
+        public static Builder builder() {
+            return new Builder();
+        }
+
+        /** Returns an independent builder, including detached copies of every search-grid array. */
+        public Builder toBuilder() {
+            return new Builder(this);
+        }
+
+        /** Returns the captured debug policy value. */
+        public boolean debug() {
+            return debug;
+        }
+
+        /** Returns the captured sampleSize policy value in pixels where applicable. */
+        public int sampleSize() {
+            return sampleSize;
+        }
+
+        /** Returns the captured searchRadiusPx policy value in pixels where applicable. */
+        public double searchRadiusPx() {
+            return searchRadiusPx;
+        }
+
+        /** Returns the captured minStableStars policy value. */
+        public int minStableStars() {
+            return minStableStars;
+        }
+
+        /** Returns the captured optimalStarCount policy value. */
+        public double optimalStarCount() {
+            return optimalStarCount;
+        }
+
+        /** Returns the captured maxTotalExtractedObjects policy value. */
+        public int maxTotalExtractedObjects() {
+            return maxTotalExtractedObjects;
+        }
+
+        /** Returns the captured minTotalExtractedObjects policy value. */
+        public int minTotalExtractedObjects() {
+            return minTotalExtractedObjects;
+        }
+
+        /** Returns a detached copy of the sigmasToTest grid. */
+        public double[] sigmasToTest() {
+            return sigmasToTest.clone();
+        }
+
+        /** Returns a detached copy of the minPixelsToTest grid in pixels where applicable. */
+        public int[] minPixelsToTest() {
+            return minPixelsToTest.clone();
+        }
+
+        /** Returns a detached copy of the growDeltasToTest grid. */
+        public double[] growDeltasToTest() {
+            return growDeltasToTest.clone();
+        }
+
+        /** Returns the captured minGrowSigmaAboveMasterSigma policy value. */
+        public double minGrowSigmaAboveMasterSigma() {
+            return minGrowSigmaAboveMasterSigma;
+        }
+
+        /** Returns a detached copy of the maskOverlapToTest grid. */
+        public double[] maskOverlapToTest() {
+            return maskOverlapToTest.clone();
+        }
+
+        /** Returns the captured softMaskCoverageStart policy value. */
+        public double softMaskCoverageStart() {
+            return softMaskCoverageStart;
+        }
+
+        /** Returns the captured hardMaskCoverageReject policy value. */
+        public double hardMaskCoverageReject() {
+            return hardMaskCoverageReject;
+        }
+
+        /** Returns the captured aggressiveLowerSigmaScoreWindow policy value. */
+        public double aggressiveLowerSigmaScoreWindow() {
+            return aggressiveLowerSigmaScoreWindow;
+        }
+
+        /** Returns the captured stableStarsCvAnchor policy value. */
+        public double stableStarsCvAnchor() {
+            return stableStarsCvAnchor;
+        }
+
+        /** Returns the captured transientsCvAnchor policy value. */
+        public double transientsCvAnchor() {
+            return transientsCvAnchor;
+        }
+
+        /** Returns the captured jitterPercentile policy value. */
+        public double jitterPercentile() {
+            return jitterPercentile;
+        }
+
+        /** Returns the captured minJitterFloor policy value. */
+        public double minJitterFloor() {
+            return minJitterFloor;
+        }
+
+        /** Returns the captured jitterSafetyMultiplier policy value. */
+        public double jitterSafetyMultiplier() {
+            return jitterSafetyMultiplier;
+        }
+
+        /** Returns the captured initialJitterFallbackPx policy value in pixels where applicable. */
+        public double initialJitterFallbackPx() {
+            return initialJitterFallbackPx;
+        }
+
+        /** Returns the captured initialJitterProbeSigma policy value. */
+        public double initialJitterProbeSigma() {
+            return initialJitterProbeSigma;
+        }
+
+        /** Returns the captured initialJitterProbeGrowSigma policy value. */
+        public double initialJitterProbeGrowSigma() {
+            return initialJitterProbeGrowSigma;
+        }
+
+        /** Returns the captured initialJitterProbeMinPixels policy value in pixels where applicable. */
+        public int initialJitterProbeMinPixels() {
+            return initialJitterProbeMinPixels;
+        }
+
+        /** Returns the captured initialJitterProbeMaxElongation policy value. */
+        public double initialJitterProbeMaxElongation() {
+            return initialJitterProbeMaxElongation;
+        }
+
+        /** Returns the captured minInitialJitterMatches policy value. */
+        public int minInitialJitterMatches() {
+            return minInitialJitterMatches;
+        }
+
+        /** Returns the captured cropCount policy value. */
+        public int cropCount() {
+            return cropCount;
+        }
+
+        /** Returns the captured borderMargin policy value in pixels where applicable. */
+        public int borderMargin() {
+            return borderMargin;
+        }
+
+        /** Returns the captured preferredCropSizeLarge policy value in pixels where applicable. */
+        public int preferredCropSizeLarge() {
+            return preferredCropSizeLarge;
+        }
+
+        /** Returns the captured preferredCropSizeSmall policy value in pixels where applicable. */
+        public int preferredCropSizeSmall() {
+            return preferredCropSizeSmall;
+        }
+
+        /** Returns the captured minCropSize policy value in pixels where applicable. */
+        public int minCropSize() {
+            return minCropSize;
+        }
+
+        /** Returns the caller-owned synchronous diagnostic sink. */
+        public java.util.function.Consumer<String> diagnosticSink() {
+            return diagnosticSink;
+        }
+
+        /** Rejects invalid policy values without invoking callbacks or reading image data. */
+        private static void require(boolean condition, String message) {
+            if (!condition) throw new IllegalArgumentException(message);
+        }
+
+        /** Mutable caller-owned construction state; build snapshots arrays and never modifies this builder. */
+        public static final class Builder {
+            /** debug policy; array values are copied by build(). */
+            public boolean debug;
+            /** sampleSize policy; array values are copied by build(). */
+            public int sampleSize;
+            /** searchRadiusPx policy; array values are copied by build(). */
+            public double searchRadiusPx;
+            /** minStableStars policy; array values are copied by build(). */
+            public int minStableStars;
+            /** optimalStarCount policy; array values are copied by build(). */
+            public double optimalStarCount;
+            /** maxTotalExtractedObjects policy; array values are copied by build(). */
+            public int maxTotalExtractedObjects;
+            /** minTotalExtractedObjects policy; array values are copied by build(). */
+            public int minTotalExtractedObjects;
+            /** sigmasToTest policy; array values are copied by build(). */
+            public double[] sigmasToTest;
+            /** minPixelsToTest policy; array values are copied by build(). */
+            public int[] minPixelsToTest;
+            /** growDeltasToTest policy; array values are copied by build(). */
+            public double[] growDeltasToTest;
+            /** minGrowSigmaAboveMasterSigma policy; array values are copied by build(). */
+            public double minGrowSigmaAboveMasterSigma;
+            /** maskOverlapToTest policy; array values are copied by build(). */
+            public double[] maskOverlapToTest;
+            /** softMaskCoverageStart policy; array values are copied by build(). */
+            public double softMaskCoverageStart;
+            /** hardMaskCoverageReject policy; array values are copied by build(). */
+            public double hardMaskCoverageReject;
+            /** aggressiveLowerSigmaScoreWindow policy; array values are copied by build(). */
+            public double aggressiveLowerSigmaScoreWindow;
+            /** stableStarsCvAnchor policy; array values are copied by build(). */
+            public double stableStarsCvAnchor;
+            /** transientsCvAnchor policy; array values are copied by build(). */
+            public double transientsCvAnchor;
+            /** jitterPercentile policy; array values are copied by build(). */
+            public double jitterPercentile;
+            /** minJitterFloor policy; array values are copied by build(). */
+            public double minJitterFloor;
+            /** jitterSafetyMultiplier policy; array values are copied by build(). */
+            public double jitterSafetyMultiplier;
+            /** initialJitterFallbackPx policy; array values are copied by build(). */
+            public double initialJitterFallbackPx;
+            /** initialJitterProbeSigma policy; array values are copied by build(). */
+            public double initialJitterProbeSigma;
+            /** initialJitterProbeGrowSigma policy; array values are copied by build(). */
+            public double initialJitterProbeGrowSigma;
+            /** initialJitterProbeMinPixels policy; array values are copied by build(). */
+            public int initialJitterProbeMinPixels;
+            /** initialJitterProbeMaxElongation policy; array values are copied by build(). */
+            public double initialJitterProbeMaxElongation;
+            /** minInitialJitterMatches policy; array values are copied by build(). */
+            public int minInitialJitterMatches;
+            /** cropCount policy; array values are copied by build(). */
+            public int cropCount;
+            /** borderMargin policy; array values are copied by build(). */
+            public int borderMargin;
+            /** preferredCropSizeLarge policy; array values are copied by build(). */
+            public int preferredCropSizeLarge;
+            /** preferredCropSizeSmall policy; array values are copied by build(). */
+            public int preferredCropSizeSmall;
+            /** minCropSize policy; array values are copied by build(). */
+            public int minCropSize;
+            /** Synchronous diagnostic destination, used only when debug is enabled. */
+            public java.util.function.Consumer<String> diagnosticSink;
+
+            /** Captures the current legacy defaults, copying arrays immediately. */
+            public Builder() {
+                debug = JTransientAutoTuner.DEBUG;
+                sampleSize = JTransientAutoTuner.AUTO_TUNE_SAMPLE_SIZE;
+                searchRadiusPx = JTransientAutoTuner.SEARCH_RADIUS_PX;
+                minStableStars = JTransientAutoTuner.MIN_STABLE_STARS;
+                optimalStarCount = JTransientAutoTuner.OPTIMAL_STAR_COUNT;
+                maxTotalExtractedObjects = JTransientAutoTuner.MAX_TOTAL_EXTRACTED_OBJECTS;
+                minTotalExtractedObjects = JTransientAutoTuner.MIN_TOTAL_EXTRACTED_OBJECTS;
+                sigmasToTest = JTransientAutoTuner.SIGMAS_TO_TEST.clone();
+                minPixelsToTest = JTransientAutoTuner.MIN_PIXELS_TO_TEST.clone();
+                growDeltasToTest = JTransientAutoTuner.GROW_DELTAS_TO_TEST.clone();
+                minGrowSigmaAboveMasterSigma = JTransientAutoTuner.MIN_GROW_SIGMA_ABOVE_MASTER_SIGMA;
+                maskOverlapToTest = JTransientAutoTuner.MASK_OVERLAP_TO_TEST.clone();
+                softMaskCoverageStart = JTransientAutoTuner.SOFT_MASK_COVERAGE_START;
+                hardMaskCoverageReject = JTransientAutoTuner.HARD_MASK_COVERAGE_REJECT;
+                aggressiveLowerSigmaScoreWindow = JTransientAutoTuner.AGGRESSIVE_LOWER_SIGMA_SCORE_WINDOW;
+                stableStarsCvAnchor = JTransientAutoTuner.STABLE_STARS_CV_ANCHOR;
+                transientsCvAnchor = JTransientAutoTuner.TRANSIENTS_CV_ANCHOR;
+                jitterPercentile = JTransientAutoTuner.JITTER_PERCENTILE;
+                minJitterFloor = JTransientAutoTuner.MIN_JITTER_FLOOR;
+                jitterSafetyMultiplier = JTransientAutoTuner.JITTER_SAFETY_MULTIPLIER;
+                initialJitterFallbackPx = JTransientAutoTuner.INITIAL_JITTER_FALLBACK_PX;
+                initialJitterProbeSigma = JTransientAutoTuner.INITIAL_JITTER_PROBE_SIGMA;
+                initialJitterProbeGrowSigma = JTransientAutoTuner.INITIAL_JITTER_PROBE_GROW_SIGMA;
+                initialJitterProbeMinPixels = JTransientAutoTuner.INITIAL_JITTER_PROBE_MIN_PIXELS;
+                initialJitterProbeMaxElongation = JTransientAutoTuner.INITIAL_JITTER_PROBE_MAX_ELONGATION;
+                minInitialJitterMatches = JTransientAutoTuner.MIN_INITIAL_JITTER_MATCHES;
+                cropCount = JTransientAutoTuner.AUTO_TUNE_CROP_COUNT;
+                borderMargin = JTransientAutoTuner.AUTO_TUNE_BORDER_MARGIN;
+                preferredCropSizeLarge = JTransientAutoTuner.AUTO_TUNE_PREFERRED_CROP_SIZE_LARGE;
+                preferredCropSizeSmall = JTransientAutoTuner.AUTO_TUNE_PREFERRED_CROP_SIZE_SMALL;
+                minCropSize = JTransientAutoTuner.AUTO_TUNE_MIN_CROP_SIZE;
+                diagnosticSink = System.out::print;
+            }
+
+            /** Copies an immutable policy without consulting process-wide defaults. */
+            private Builder(Options options) {
+                debug = options.debug;
+                sampleSize = options.sampleSize;
+                searchRadiusPx = options.searchRadiusPx;
+                minStableStars = options.minStableStars;
+                optimalStarCount = options.optimalStarCount;
+                maxTotalExtractedObjects = options.maxTotalExtractedObjects;
+                minTotalExtractedObjects = options.minTotalExtractedObjects;
+                sigmasToTest = options.sigmasToTest.clone();
+                minPixelsToTest = options.minPixelsToTest.clone();
+                growDeltasToTest = options.growDeltasToTest.clone();
+                minGrowSigmaAboveMasterSigma = options.minGrowSigmaAboveMasterSigma;
+                maskOverlapToTest = options.maskOverlapToTest.clone();
+                softMaskCoverageStart = options.softMaskCoverageStart;
+                hardMaskCoverageReject = options.hardMaskCoverageReject;
+                aggressiveLowerSigmaScoreWindow = options.aggressiveLowerSigmaScoreWindow;
+                stableStarsCvAnchor = options.stableStarsCvAnchor;
+                transientsCvAnchor = options.transientsCvAnchor;
+                jitterPercentile = options.jitterPercentile;
+                minJitterFloor = options.minJitterFloor;
+                jitterSafetyMultiplier = options.jitterSafetyMultiplier;
+                initialJitterFallbackPx = options.initialJitterFallbackPx;
+                initialJitterProbeSigma = options.initialJitterProbeSigma;
+                initialJitterProbeGrowSigma = options.initialJitterProbeGrowSigma;
+                initialJitterProbeMinPixels = options.initialJitterProbeMinPixels;
+                initialJitterProbeMaxElongation = options.initialJitterProbeMaxElongation;
+                minInitialJitterMatches = options.minInitialJitterMatches;
+                cropCount = options.cropCount;
+                borderMargin = options.borderMargin;
+                preferredCropSizeLarge = options.preferredCropSizeLarge;
+                preferredCropSizeSmall = options.preferredCropSizeSmall;
+                minCropSize = options.minCropSize;
+                diagnosticSink = options.diagnosticSink;
+            }
+
+            /** Builds an immutable validated policy whose arrays no longer alias the builder. */
+            public Options build() {
+                return new Options(this);
+            }
+        }
+    }
+
+    /**
      * Creates an auto-tuner facade.
      *
      * <p>The class is typically used through its static {@code tune(...)} methods.</p>
@@ -150,6 +598,8 @@ public class JTransientAutoTuner {
             public double transientCv;
         }
 
+        /** Effective immutable policy used by this legacy operation; null for calibrated or older serialized results. */
+        public Options effectiveOptions;
         /** Whether a stable optimized configuration was found. */
         public boolean success;
         /** Tuned configuration, or the provided base configuration on fallback. */
@@ -535,20 +985,72 @@ public class JTransientAutoTuner {
     public static AutoTunerResult tuneSnapshot(List<ImageFrame> allFrames, DetectionConfig baseConfig,
                                               AutoTuneProfile profile, TransientEngineProgressListener listener) {
         CancellationScope.check();
-        return tuneCaptured(allFrames, DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.AUTO_TUNE), profile, listener);
+        return tuneSnapshot(allFrames, baseConfig, Options.captureDefaults(), profile, listener);
+    }
+
+
+    /**
+     * Tunes with an immutable caller-supplied policy; neither config nor policy arrays alias running work.
+     * Borrows frame pixels until return and inherits the current cancellation scope.
+     */
+    public static AutoTunerResult tuneSnapshot(List<ImageFrame> allFrames, DetectionConfig baseConfig,
+                                               Options options, AutoTuneProfile profile,
+                                               TransientEngineProgressListener listener) {
+        CancellationScope.check();
+        java.util.Objects.requireNonNull(options, "options");
+        return tuneCaptured(allFrames, DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.AUTO_TUNE),
+                profile, listener, options);
+    }
+
+    /** Tunes with per-operation options and explicit cancellation, joining all work before returning or throwing. */
+    public static AutoTunerResult tuneSnapshot(List<ImageFrame> allFrames, DetectionConfig baseConfig,
+                                               Options options, AutoTuneProfile profile,
+                                               TransientEngineProgressListener listener,
+                                               io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
+        try (CancellationScope scope = CancellationScope.open(cancellation)) {
+            CancellationScope.check();
+            AutoTunerResult result = tuneSnapshot(allFrames, baseConfig, options, profile, listener);
+            CancellationScope.check();
+            return result;
+        }
+    }
+
+    /**
+     * Tunes with captured defaults while limiting the legacy sample request to the available frame count.
+     * This compatibility-friendly entry point replaces temporary edits of AUTO_TUNE_SAMPLE_SIZE in callers.
+     * Borrows pixels until return, detaches fallback settings, and uses explicit cooperative cancellation.
+     * Introduced in 1.0.6; the ordinary snapshot overload retains its minimum-sample fallback behavior.
+     */
+    public static AutoTunerResult tuneAvailableSnapshot(List<ImageFrame> allFrames, DetectionConfig baseConfig,
+                                                       AutoTuneProfile profile, TransientEngineProgressListener listener,
+                                                       io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
+        try (CancellationScope scope = CancellationScope.open(cancellation)) {
+            CancellationScope.check();
+            InputRules.checkFrames(allFrames);
+            Options.Builder options = Options.builder();
+            options.sampleSize = Math.min(options.sampleSize, allFrames.size());
+            AutoTunerResult result = tuneSnapshot(allFrames, baseConfig, options.build(), profile, listener);
+            CancellationScope.check();
+            return result;
+        }
+    }
+
+    /** Formats a diagnostic only when called by an enabled operation; the synchronous sink is caller-owned. */
+    private static void debug(Options options, String format, Object... arguments) {
+        options.diagnosticSink.accept(String.format(format, arguments));
     }
 
     /** Runs the legacy search using a validated private settings copy, including its detached fallback path. */
     private static AutoTunerResult tuneCaptured(List<ImageFrame> allFrames, DetectionConfig baseConfig,
-                                               AutoTuneProfile profile, TransientEngineProgressListener listener) {
+                                               AutoTuneProfile profile, TransientEngineProgressListener listener, Options options) {
         CancellationScope.check();
         InputRules.checkFrames(allFrames);
 
-        if (DEBUG) {
-            System.out.println("\n==================================================");
-            System.out.println("      JTRANSIENT AUTO-TUNER INITIALIZED");
-            System.out.println("==================================================");
-            System.out.println("Total frames available: " + allFrames.size());
+        if (options.debug) {
+            debug(options, "%s%n", "\n==================================================");
+            debug(options, "%s%n", "      JTRANSIENT AUTO-TUNER INITIALIZED");
+            debug(options, "%s%n", "==================================================");
+            debug(options, "%s%n", "Total frames available: " + allFrames.size());
         }
 
         if (listener != null) {
@@ -558,12 +1060,13 @@ public class JTransientAutoTuner {
         AutoTunePolicy policy = getPolicy(profile);
 
         AutoTunerResult result = new AutoTunerResult();
+        result.effectiveOptions = options;
         StringBuilder report = new StringBuilder("=== JTransient Auto-Tuning Report ===\n");
         report.append("Profile: ").append(profile).append("\n");
         appendInputFrameOrderTrace(allFrames, report);
         appendInputConfigTrace(baseConfig, report);
 
-        if (allFrames.size() < AUTO_TUNE_SAMPLE_SIZE) {
+        if (allFrames.size() < options.sampleSize) {
             report.append("Warning: Not enough frames for Auto-Tuning. Falling back to base config.\n");
             result.optimizedConfig = baseConfig;
             result.success = false;
@@ -575,7 +1078,7 @@ public class JTransientAutoTuner {
             listener.onProgressUpdate(3, "Evaluating frame quality and selecting tuning sample...");
         }
 
-        List<ImageFrame> tuningFrames = getBestSampleFrames(allFrames, baseConfig, report);
+        List<ImageFrame> tuningFrames = getBestSampleFrames(allFrames, baseConfig, report, options);
 
         if (tuningFrames.isEmpty()) {
             report.append("Failed to select tuning sample. Falling back to base config.\n");
@@ -592,7 +1095,7 @@ public class JTransientAutoTuner {
             listener.onProgressUpdate(6, "Selecting representative tuning crops...");
         }
 
-        List<CropRegion> cropRegions = buildTuningCropRegions(sensorWidth, sensorHeight, report);
+        List<CropRegion> cropRegions = buildTuningCropRegions(sensorWidth, sensorHeight, report, options);
         if (cropRegions.isEmpty()) {
             report.append("Failed to create valid tuning crops. Falling back to base config.\n");
             result.optimizedConfig = baseConfig;
@@ -601,11 +1104,11 @@ public class JTransientAutoTuner {
             return result;
         }
 
-        if (DEBUG) {
-            System.out.println("\n[ROI] Using " + cropRegions.size() + " crops for tuning.");
+        if (options.debug) {
+            debug(options, "%s%n", "\n[ROI] Using " + cropRegions.size() + " crops for tuning.");
             for (CropRegion r : cropRegions) {
                 CancellationScope.check();
-                System.out.println("   -> " + r.label + ": x=" + r.x + ", y=" + r.y + ", w=" + r.width + ", h=" + r.height);
+                debug(options, "%s%n", "   -> " + r.label + ": x=" + r.x + ", y=" + r.y + ", w=" + r.width + ", h=" + r.height);
             }
         }
 
@@ -620,18 +1123,18 @@ public class JTransientAutoTuner {
             listener.onProgressUpdate(7, "Calibrating maxStarJitter from sampled stars...");
         }
 
-        double measuredMaxStarJitter = measureMaxStarJitter(croppedFramesByRegion, baseConfig, report);
+        double measuredMaxStarJitter = measureMaxStarJitter(croppedFramesByRegion, baseConfig, report, options);
 
-        if (DEBUG) {
-            System.out.printf("%n[JITTER] Calibrated maxStarJitter before the sweep: %.2f px%n", measuredMaxStarJitter);
+        if (options.debug) {
+            debug(options, "%n[JITTER] Calibrated maxStarJitter before the sweep: %.2f px%n", measuredMaxStarJitter);
         }
 
         // =====================================================================
         // PHASE 1: THRESHOLD / GROW / VETO SWEEP
         // =====================================================================
-        if (DEBUG) System.out.println("\n[START] Phase 1: Detection Threshold Sweep on cropped regions...");
+        if (options.debug) debug(options, "%s%n", "\n[START] Phase 1: Detection Threshold Sweep on cropped regions...");
         report.append("\n--- PHASE 1: Detection Threshold Sweep (Cropped ROIs) ---\n");
-        appendSweepBaselineTrace(baseConfig, measuredMaxStarJitter, report);
+        appendSweepBaselineTrace(baseConfig, measuredMaxStarJitter, report, options);
 
         DetectionConfig bestConfig = null;
         List<SweepCandidateTelemetry> acceptedCandidates = new ArrayList<>();
@@ -641,25 +1144,25 @@ public class JTransientAutoTuner {
         double bestScore = -Double.MAX_VALUE;
 
         int totalCombinations =
-                MIN_PIXELS_TO_TEST.length
-                        * SIGMAS_TO_TEST.length
-                        * GROW_DELTAS_TO_TEST.length
-                        * MASK_OVERLAP_TO_TEST.length;
+                options.minPixelsToTest.length
+                        * options.sigmasToTest.length
+                        * options.growDeltasToTest.length
+                        * options.maskOverlapToTest.length;
 
         int currentCombination = 0;
 
-        for (int minPix : MIN_PIXELS_TO_TEST) {
+        for (int minPix : options.minPixelsToTest) {
             CancellationScope.check();
-            for (double sigma : SIGMAS_TO_TEST) {
+            for (double sigma : options.sigmasToTest) {
                 CancellationScope.check();
-                for (double growDelta : GROW_DELTAS_TO_TEST) {
-                    for (double overlapFraction : MASK_OVERLAP_TO_TEST) {
+                for (double growDelta : options.growDeltasToTest) {
+                    for (double overlapFraction : options.maskOverlapToTest) {
 
                         currentCombination++;
-                        double growSigma = deriveSweepGrowSigma(sigma, growDelta, baseConfig);
+                        double growSigma = deriveSweepGrowSigma(sigma, growDelta, baseConfig, options);
                         if (growSigma >= sigma) {
-                            if (DEBUG) {
-                                System.out.println(" -> Skipping invalid hysteresis candidate: Sigma " + sigma
+                            if (options.debug) {
+                                debug(options, "%s%n", " -> Skipping invalid hysteresis candidate: Sigma " + sigma
                                         + " | GrowSigma floor " + growSigma
                                         + " would meet/exceed the seed threshold.");
                             }
@@ -675,9 +1178,9 @@ public class JTransientAutoTuner {
                             );
                         }
 
-                        if (DEBUG) {
-                            System.out.println("\n--------------------------------------------------");
-                            System.out.println(" -> Testing Sigma: " + sigma
+                        if (options.debug) {
+                            debug(options, "%s%n", "\n--------------------------------------------------");
+                            debug(options, "%s%n", " -> Testing Sigma: " + sigma
                                     + " | GrowSigma: " + growSigma
                                     + " | MinPix: " + minPix
                                     + " | MaskOverlap: " + overlapFraction);
@@ -731,8 +1234,8 @@ public class JTransientAutoTuner {
                             testConfig.growSigmaMultiplier = originalGrowSigma;
 
                             if (masterStars == null || masterStars.isEmpty()) {
-                                if (DEBUG) {
-                                    System.out.println("      [REJECTED] Crop " + cropRegion.label + " master extraction found no stars.");
+                                if (options.debug) {
+                                    debug(options, "%s%n", "      [REJECTED] Crop " + cropRegion.label + " master extraction found no stars.");
                                 }
                                 rejected = true;
                                 break;
@@ -768,9 +1271,9 @@ public class JTransientAutoTuner {
                             totalMaskTrueCount += maskTrueCountThisCrop;
 
                             double maskCoverageThisCrop = (double) maskTrueCountThisCrop / (cropWidth * (double) cropHeight);
-                            if (maskCoverageThisCrop > HARD_MASK_COVERAGE_REJECT) {
-                                if (DEBUG) {
-                                    System.out.printf("      [REJECTED] Crop %s mask coverage too high: %.2f%%%n",
+                            if (maskCoverageThisCrop > options.hardMaskCoverageReject) {
+                                if (options.debug) {
+                                    debug(options, "      [REJECTED] Crop %s mask coverage too high: %.2f%%%n",
                                             cropRegion.label, maskCoverageThisCrop * 100.0);
                                 }
                                 rejected = true;
@@ -822,10 +1325,10 @@ public class JTransientAutoTuner {
                             continue;
                         }
 
-                        if (totalObjectsExtracted > MAX_TOTAL_EXTRACTED_OBJECTS
-                                || totalObjectsExtracted < MIN_TOTAL_EXTRACTED_OBJECTS) {
-                            if (DEBUG) {
-                                System.out.println("      [REJECTED] Extracted " + totalObjectsExtracted + " total objects (Out of bounds).");
+                        if (totalObjectsExtracted > options.maxTotalExtractedObjects
+                                || totalObjectsExtracted < options.minTotalExtractedObjects) {
+                            if (options.debug) {
+                                debug(options, "%s%n", "      [REJECTED] Extracted " + totalObjectsExtracted + " total objects (Out of bounds).");
                             }
                             report.append(String.format(
                                     "Skip -> Sigma: %.1f, Grow: %.2f, MinPix: %d, Overlap: %.2f | Extracted %d objects (Out of bounds)%n",
@@ -841,17 +1344,17 @@ public class JTransientAutoTuner {
                                 ? 1.0
                                 : (double) totalMaskTrueCount / totalMaskArea;
 
-                        if (DEBUG) {
-                            System.out.println(String.format(
+                        if (options.debug) {
+                            debug(options, "%s%n", String.format(
                                     "      [RESULT] StableStars: %d | Transients: %d | Ratio: %.2f%% | AggregatedMaskCoverage: %.2f%%",
                                     totalStableStars, totalTransients, transientRatio * 100.0, aggregatedMaskCoverage * 100.0));
                         }
 
                         boolean isClean = (transientRatio <= policy.maxTransientRatio)
-                                && (totalStableStars >= MIN_STABLE_STARS);
+                                && (totalStableStars >= options.minStableStars);
 
                         if (!isClean) {
-                            if (DEBUG) System.out.println("      [REJECTED] Failed noise ratio or stable star requirements.");
+                            if (options.debug) debug(options, "%s%n", "      [REJECTED] Failed noise ratio or stable star requirements.");
                             report.append(String.format(
                                     "Test -> Sigma: %.1f, Grow: %.2f, MinPix: %d, Overlap: %.2f | Stable: %d | Transients: %d | Ratio: %.2f%% [REJECTED]%n",
                                     sigma, growSigma, minPix, overlapFraction, totalStableStars, totalTransients, transientRatio * 100.0));
@@ -865,7 +1368,7 @@ public class JTransientAutoTuner {
                         double avgStableStars = totalStableStars / cropFrameCount;
                         double avgTransientsPerCropFrame = totalTransients / cropFrameCount;
 
-                        double stableYieldScore = clamp01(avgStableStars / OPTIMAL_STAR_COUNT);
+                        double stableYieldScore = clamp01(avgStableStars / options.optimalStarCount);
 
                         // Strong penalty for too many transients
                         double transientOverflowPenalty = clamp01(transientRatio / policy.maxTransientRatio);
@@ -882,20 +1385,20 @@ public class JTransientAutoTuner {
                         double transientCv = coefficientOfVariation(transientCountsPerCropFrame);
 
                         double variancePenalty =
-                                0.6 * clamp01(stableCv / STABLE_STARS_CV_ANCHOR) +
-                                        0.4 * clamp01(transientCv / TRANSIENTS_CV_ANCHOR);
+                                0.6 * clamp01(stableCv / options.stableStarsCvAnchor) +
+                                        0.4 * clamp01(transientCv / options.transientsCvAnchor);
 
                         double maskCoveragePenalty = 0.0;
-                        if (aggregatedMaskCoverage > SOFT_MASK_COVERAGE_START) {
+                        if (aggregatedMaskCoverage > options.softMaskCoverageStart) {
                             maskCoveragePenalty = clamp01(
-                                    (aggregatedMaskCoverage - SOFT_MASK_COVERAGE_START)
-                                            / (HARD_MASK_COVERAGE_REJECT - SOFT_MASK_COVERAGE_START)
+                                    (aggregatedMaskCoverage - options.softMaskCoverageStart)
+                                            / (options.hardMaskCoverageReject - options.softMaskCoverageStart)
                             );
                         }
 
-                        double sigmaHarshness = normalize(sigma, SIGMAS_TO_TEST[0], SIGMAS_TO_TEST[SIGMAS_TO_TEST.length - 1]);
-                        double minPixHarshness = normalize(minPix, MIN_PIXELS_TO_TEST[0], MIN_PIXELS_TO_TEST[MIN_PIXELS_TO_TEST.length - 1]);
-                        double growHarshness = normalize(growDelta, GROW_DELTAS_TO_TEST[0], GROW_DELTAS_TO_TEST[GROW_DELTAS_TO_TEST.length - 1]);
+                        double sigmaHarshness = normalize(sigma, options.sigmasToTest[0], options.sigmasToTest[options.sigmasToTest.length - 1]);
+                        double minPixHarshness = normalize(minPix, options.minPixelsToTest[0], options.minPixelsToTest[options.minPixelsToTest.length - 1]);
+                        double growHarshness = normalize(growDelta, options.growDeltasToTest[0], options.growDeltasToTest[options.growDeltasToTest.length - 1]);
 
                         double harshnessPenalty =
                                 (policy.harshnessSigmaWeight * sigmaHarshness) +
@@ -918,8 +1421,8 @@ public class JTransientAutoTuner {
                                         - (policy.scoreWeightHarshness * harshnessPenalty)
                                         - (policy.lowSigmaMinPixGuardWeight * lowSigmaMinPixGuardPenalty);
 
-                        if (DEBUG) {
-                            System.out.printf(
+                        if (options.debug) {
+                            debug(options,
                                     "      [SCORE] %.2f | profile=%s | stable=%.3f overflow=%.3f sweet=%.3f avgTrans/cropFrame=%.3f variance=%.3f mask=%.3f harsh=%.3f%n",
                                     score,
                                     profile,
@@ -963,8 +1466,8 @@ public class JTransientAutoTuner {
                                 score
                         ));
 
-                        if (isBetterSweepCandidate(score, sigma, bestScore, bestConfig, profile)) {
-                            if (DEBUG) System.out.println("      *** NEW BEST CONFIGURATION FOUND ***");
+                        if (isBetterSweepCandidate(score, sigma, bestScore, bestConfig, profile, options)) {
+                            if (options.debug) debug(options, "%s%n", "      *** NEW BEST CONFIGURATION FOUND ***");
 
                             bestScore = score;
                             bestStableStars = totalStableStars;
@@ -986,7 +1489,7 @@ public class JTransientAutoTuner {
             }
 
             AutoTunerResult.FinalValidationTelemetry finalValidationTelemetry =
-                    validateFinalConfig(cropRegions, croppedFramesByRegion, bestConfig, policy);
+                    validateFinalConfig(cropRegions, croppedFramesByRegion, bestConfig, policy, options);
             result.finalValidationTelemetry = finalValidationTelemetry;
 
             report.append("\n--- PHASE 2: FINAL CONFIG VALIDATION ---\n");
@@ -1023,13 +1526,13 @@ public class JTransientAutoTuner {
                 listener.onProgressUpdate(100, "Auto-Tuning Complete!");
             }
 
-            if (DEBUG) System.out.println("\n[SUCCESS] Auto-Tuning Complete.");
+            if (options.debug) debug(options, "%s%n", "\n[SUCCESS] Auto-Tuning Complete.");
 
         } else {
             if (listener != null) {
                 listener.onProgressUpdate(100, "Auto-Tuning Failed. Using base config.");
             }
-            if (DEBUG) {
+            if (options.debug) {
                 System.err.println("\n[FAILED] Could not find stable configuration. Falling back to base settings.");
             }
             report.append("\nFAILED TO FIND STABLE CONFIGURATION. FALLING BACK TO BASE SETTINGS.\n");
@@ -1064,11 +1567,11 @@ public class JTransientAutoTuner {
     /**
      * Builds the set of representative interior crops used during tuning.
      */
-    private static List<CropRegion> buildTuningCropRegions(int sensorWidth, int sensorHeight, StringBuilder report) {
+    private static List<CropRegion> buildTuningCropRegions(int sensorWidth, int sensorHeight, StringBuilder report, Options options) {
         List<CropRegion> regions = new ArrayList<>();
 
-        int usableWidth = sensorWidth - (2 * AUTO_TUNE_BORDER_MARGIN);
-        int usableHeight = sensorHeight - (2 * AUTO_TUNE_BORDER_MARGIN);
+        int usableWidth = sensorWidth - (2 * options.borderMargin);
+        int usableHeight = sensorHeight - (2 * options.borderMargin);
 
         if (usableWidth <= 0 || usableHeight <= 0) {
             report.append("Frame is too small to honor the requested crop border margin.\n");
@@ -1076,25 +1579,25 @@ public class JTransientAutoTuner {
         }
 
         int cropSize;
-        if (usableWidth >= AUTO_TUNE_PREFERRED_CROP_SIZE_LARGE && usableHeight >= AUTO_TUNE_PREFERRED_CROP_SIZE_LARGE) {
-            cropSize = AUTO_TUNE_PREFERRED_CROP_SIZE_LARGE;
-        } else if (usableWidth >= AUTO_TUNE_PREFERRED_CROP_SIZE_SMALL && usableHeight >= AUTO_TUNE_PREFERRED_CROP_SIZE_SMALL) {
-            cropSize = AUTO_TUNE_PREFERRED_CROP_SIZE_SMALL;
+        if (usableWidth >= options.preferredCropSizeLarge && usableHeight >= options.preferredCropSizeLarge) {
+            cropSize = options.preferredCropSizeLarge;
+        } else if (usableWidth >= options.preferredCropSizeSmall && usableHeight >= options.preferredCropSizeSmall) {
+            cropSize = options.preferredCropSizeSmall;
         } else {
             cropSize = Math.min(usableWidth, usableHeight);
         }
 
-        if (cropSize < AUTO_TUNE_MIN_CROP_SIZE) {
+        if (cropSize < options.minCropSize) {
             report.append(String.format(
                     "Computed crop size %d is too small for reliable auto-tuning (minimum %d).%n",
-                    cropSize, AUTO_TUNE_MIN_CROP_SIZE));
+                    cropSize, options.minCropSize));
             return regions;
         }
 
-        int minX = AUTO_TUNE_BORDER_MARGIN;
-        int minY = AUTO_TUNE_BORDER_MARGIN;
-        int maxX = sensorWidth - AUTO_TUNE_BORDER_MARGIN - cropSize;
-        int maxY = sensorHeight - AUTO_TUNE_BORDER_MARGIN - cropSize;
+        int minX = options.borderMargin;
+        int minY = options.borderMargin;
+        int maxX = sensorWidth - options.borderMargin - cropSize;
+        int maxY = sensorHeight - options.borderMargin - cropSize;
 
         if (maxX < minX || maxY < minY) {
             report.append("Frame is too small to place crops with the requested border margin.\n");
@@ -1109,13 +1612,13 @@ public class JTransientAutoTuner {
         regions.add(new CropRegion(centerX, centerY, cropSize, cropSize, "center"));
         regions.add(new CropRegion(maxX, maxY, cropSize, cropSize, "lower-right"));
 
-        if (AUTO_TUNE_CROP_COUNT < regions.size()) {
-            return regions.subList(0, AUTO_TUNE_CROP_COUNT);
+        if (options.cropCount < regions.size()) {
+            return regions.subList(0, options.cropCount);
         }
 
         report.append(String.format(
                 "Using %d tuning crops of size %dx%d with border margin >= %d px where possible:%n",
-                regions.size(), cropSize, cropSize, AUTO_TUNE_BORDER_MARGIN));
+                regions.size(), cropSize, cropSize, options.borderMargin));
         for (CropRegion r : regions) {
             CancellationScope.check();
             report.append(String.format(" -> %s crop at x=%d, y=%d%n", r.label, r.x, r.y));
@@ -1205,7 +1708,7 @@ public class JTransientAutoTuner {
      */
     private static List<ImageFrame> getBestSampleFrames(List<ImageFrame> allFrames,
                                                         DetectionConfig config,
-                                                        StringBuilder report) {
+                                                        StringBuilder report, Options options) {
         List<FrameQualityRecord> records = new ArrayList<>();
         int totalFrames = allFrames.size();
         DetectionConfig samplingConfig = config.clone();
@@ -1215,8 +1718,8 @@ public class JTransientAutoTuner {
             CancellationScope.check();
             ImageFrame frame = allFrames.get(i);
 
-            if (DEBUG) {
-                System.out.println("   -> Evaluating Frame Quality: " + (i + 1) + " of " + totalFrames
+            if (options.debug) {
+                debug(options, "%s%n", "   -> Evaluating Frame Quality: " + (i + 1) + " of " + totalFrames
                         + " (Index: " + frame.sequenceIndex + ")...");
             }
 
@@ -1231,7 +1734,7 @@ public class JTransientAutoTuner {
         List<ImageFrame> selected = new ArrayList<>();
         List<Integer> usedIndices = new ArrayList<>();
 
-        int target = Math.min(AUTO_TUNE_SAMPLE_SIZE, records.size());
+        int target = Math.min(options.sampleSize, records.size());
         int eliteCount = Math.min(3, target);
 
         report.append(String.format("Selected %d tuning frames (best + representative median quality):%n", target));
@@ -1405,7 +1908,7 @@ public class JTransientAutoTuner {
      */
     private static void appendSweepBaselineTrace(DetectionConfig baseConfig,
                                                  double measuredMaxStarJitter,
-                                                 StringBuilder report) {
+                                                 StringBuilder report, Options options) {
         DetectionConfig defaults = new DetectionConfig();
         List<String> deltas = new ArrayList<>();
 
@@ -1424,7 +1927,7 @@ public class JTransientAutoTuner {
                 baseConfig.streakMinPixels,
                 baseConfig.masterSigmaMultiplier,
                 baseConfig.masterMinDetectionPixels,
-                getMinimumSweepGrowSigma(baseConfig),
+                getMinimumSweepGrowSigma(baseConfig, options),
                 measuredMaxStarJitter
         ));
         report.append("Phase 1 inherited deltas from defaults: ")
@@ -1432,7 +1935,7 @@ public class JTransientAutoTuner {
                 .append('\n');
         report.append(String.format(
                 "Phase 1 per-test overrides -> DetectSigma grid, GrowSigma grid with floor MasterSigma+%.2f, MinPix grid, Overlap grid, MaxStarJitter=%.2f; quality-side sampling thresholds are fixed from the input config%n",
-                MIN_GROW_SIGMA_ABOVE_MASTER_SIGMA,
+                options.minGrowSigmaAboveMasterSigma,
                 measuredMaxStarJitter
         ));
     }
@@ -1441,16 +1944,16 @@ public class JTransientAutoTuner {
      * Derives the effective grow sigma tested during Phase 1 while keeping hysteresis
      * safely above the master-map grow level.
      */
-    private static double deriveSweepGrowSigma(double sigma, double growDelta, DetectionConfig baseConfig) {
+    private static double deriveSweepGrowSigma(double sigma, double growDelta, DetectionConfig baseConfig, Options options) {
         double growSigma = Math.max(1.0, sigma - growDelta);
-        return Math.max(growSigma, getMinimumSweepGrowSigma(baseConfig));
+        return Math.max(growSigma, getMinimumSweepGrowSigma(baseConfig, options));
     }
 
     /**
      * Returns the minimum grow sigma allowed during the detection sweep.
      */
-    private static double getMinimumSweepGrowSigma(DetectionConfig baseConfig) {
-        return Math.max(1.0, baseConfig.masterSigmaMultiplier + MIN_GROW_SIGMA_ABOVE_MASTER_SIGMA);
+    private static double getMinimumSweepGrowSigma(DetectionConfig baseConfig, Options options) {
+        return Math.max(1.0, baseConfig.masterSigmaMultiplier + options.minGrowSigmaAboveMasterSigma);
     }
 
     /**
@@ -1531,7 +2034,7 @@ public class JTransientAutoTuner {
     private static AutoTunerResult.FinalValidationTelemetry validateFinalConfig(List<CropRegion> cropRegions,
                                                                                 List<List<CroppedFrame>> croppedFramesByRegion,
                                                                                 DetectionConfig finalConfig,
-                                                                                AutoTunePolicy policy) {
+                                                                                AutoTunePolicy policy, Options options) {
         AutoTunerResult.FinalValidationTelemetry telemetry = new AutoTunerResult.FinalValidationTelemetry();
         telemetry.executed = true;
 
@@ -1601,14 +2104,14 @@ public class JTransientAutoTuner {
             totalMaskTrueCount += maskTrueCountThisCrop;
 
             double maskCoverageThisCrop = (double) maskTrueCountThisCrop / (cropWidth * (double) cropHeight);
-            if (maskCoverageThisCrop > HARD_MASK_COVERAGE_REJECT) {
+            if (maskCoverageThisCrop > options.hardMaskCoverageReject) {
                 telemetry.completed = false;
                 telemetry.failedCropLabel = cropRegion.label;
                 telemetry.statusMessage = String.format(
                         "Final validation failed: crop %s mask coverage %.2f%% exceeds %.2f%%.",
                         cropRegion.label,
                         maskCoverageThisCrop * 100.0,
-                        HARD_MASK_COVERAGE_REJECT * 100.0
+                        options.hardMaskCoverageReject * 100.0
                 );
                 return telemetry;
             }
@@ -1652,13 +2155,13 @@ public class JTransientAutoTuner {
         telemetry.totalStableStars = totalStableStars;
         telemetry.totalTransients = totalTransients;
         telemetry.objectCountInBounds =
-                totalObjectsExtracted <= MAX_TOTAL_EXTRACTED_OBJECTS
-                        && totalObjectsExtracted >= MIN_TOTAL_EXTRACTED_OBJECTS;
+                totalObjectsExtracted <= options.maxTotalExtractedObjects
+                        && totalObjectsExtracted >= options.minTotalExtractedObjects;
         telemetry.transientRatio = totalObjectsExtracted == 0
                 ? 1.0
                 : (double) totalTransients / totalObjectsExtracted;
         telemetry.transientRatioWithinLimit = telemetry.transientRatio <= policy.maxTransientRatio;
-        telemetry.stableStarsWithinLimit = totalStableStars >= MIN_STABLE_STARS;
+        telemetry.stableStarsWithinLimit = totalStableStars >= options.minStableStars;
         telemetry.aggregatedMaskCoverage = totalMaskArea == 0
                 ? 1.0
                 : (double) totalMaskTrueCount / totalMaskArea;
@@ -1795,7 +2298,7 @@ public class JTransientAutoTuner {
                                                   double candidateSigma,
                                                   double bestScore,
                                                   DetectionConfig bestConfig,
-                                                  AutoTuneProfile profile) {
+                                                  AutoTuneProfile profile, Options options) {
         if (bestConfig == null) {
             return true;
         }
@@ -1808,7 +2311,7 @@ public class JTransientAutoTuner {
             return false;
         }
 
-        if ((bestScore - candidateScore) > AGGRESSIVE_LOWER_SIGMA_SCORE_WINDOW) {
+        if ((bestScore - candidateScore) > options.aggressiveLowerSigmaScoreWindow) {
             return false;
         }
 
@@ -1963,14 +2466,14 @@ public class JTransientAutoTuner {
      */
     private static double measureMaxStarJitter(List<List<CroppedFrame>> croppedFramesByRegion,
                                                DetectionConfig baseConfig,
-                                               StringBuilder report) {
+                                               StringBuilder report, Options options) {
         List<Double> distances = new ArrayList<>();
         int usableReferenceStars = 0;
 
         DetectionConfig probeConfig = baseConfig.clone();
-        probeConfig.detectionSigmaMultiplier = INITIAL_JITTER_PROBE_SIGMA;
-        probeConfig.growSigmaMultiplier = INITIAL_JITTER_PROBE_GROW_SIGMA;
-        probeConfig.minDetectionPixels = INITIAL_JITTER_PROBE_MIN_PIXELS;
+        probeConfig.detectionSigmaMultiplier = options.initialJitterProbeSigma;
+        probeConfig.growSigmaMultiplier = options.initialJitterProbeGrowSigma;
+        probeConfig.minDetectionPixels = options.initialJitterProbeMinPixels;
 
         for (int cropIndex = 0; cropIndex < croppedFramesByRegion.size(); cropIndex++) {
             CancellationScope.check();
@@ -2006,25 +2509,25 @@ public class JTransientAutoTuner {
 
             for (SourceExtractor.DetectedObject masterStar : masterStars) {
                 CancellationScope.check();
-                if (!isUsableForJitterCalibration(masterStar)) {
+                if (!isUsableForJitterCalibration(masterStar, options)) {
                     continue;
                 }
 
                 usableReferenceStars++;
 
                 for (List<SourceExtractor.DetectedObject> frameObjects : frameObjectsByCrop) {
-                    SourceExtractor.DetectedObject frameStar = findClosestUsableJitterMatch(masterStar, frameObjects);
+                    SourceExtractor.DetectedObject frameStar = findClosestUsableJitterMatch(masterStar, frameObjects, options);
                     if (frameStar == null) {
                         continue;
                     }
 
                     double dist = distance(masterStar, frameStar);
-                    if (dist > SEARCH_RADIUS_PX) {
+                    if (dist > options.searchRadiusPx) {
                         continue;
                     }
 
                     // Require reciprocal nearest-neighbor matching back to the reference stack.
-                    SourceExtractor.DetectedObject reciprocal = findClosestUsableJitterMatch(frameStar, masterStars);
+                    SourceExtractor.DetectedObject reciprocal = findClosestUsableJitterMatch(frameStar, masterStars, options);
                     if (reciprocal != masterStar) {
                         continue;
                     }
@@ -2034,11 +2537,11 @@ public class JTransientAutoTuner {
             }
         }
 
-        if (distances.size() < MIN_INITIAL_JITTER_MATCHES) {
-            double fallback = Math.max(MIN_JITTER_FLOOR, INITIAL_JITTER_FALLBACK_PX);
+        if (distances.size() < options.minInitialJitterMatches) {
+            double fallback = Math.max(options.minJitterFloor, options.initialJitterFallbackPx);
 
-            if (DEBUG) {
-                System.out.printf(
+            if (options.debug) {
+                debug(options,
                         "[JITTER] maxStarJitter calibration had too few matches (%d) across %d reference stars. Falling back to %.2f px%n",
                         distances.size(), usableReferenceStars, fallback
                 );
@@ -2053,20 +2556,20 @@ public class JTransientAutoTuner {
         }
 
         Collections.sort(distances);
-        double pJitter = getPercentileFromSorted(distances, JITTER_PERCENTILE);
+        double pJitter = getPercentileFromSorted(distances, options.jitterPercentile);
 
-        double estimated = Math.max(MIN_JITTER_FLOOR, pJitter * JITTER_SAFETY_MULTIPLIER);
+        double estimated = Math.max(options.minJitterFloor, pJitter * options.jitterSafetyMultiplier);
 
-        if (DEBUG) {
-            System.out.printf(
+        if (options.debug) {
+            debug(options,
                     "[JITTER] Calibrated maxStarJitter from %d matches across %d reference stars: P%.0f = %.2f px -> %.2f px%n",
-                    distances.size(), usableReferenceStars, JITTER_PERCENTILE * 100.0, pJitter, estimated
+                    distances.size(), usableReferenceStars, options.jitterPercentile * 100.0, pJitter, estimated
             );
         }
 
         report.append(String.format(
                 "Calibrated maxStarJitter from %d matches across %d reference stars: P%.0f = %.2f px -> %.2f px%n",
-                distances.size(), usableReferenceStars, JITTER_PERCENTILE * 100.0, pJitter, estimated
+                distances.size(), usableReferenceStars, options.jitterPercentile * 100.0, pJitter, estimated
         ));
 
         return estimated;
@@ -2075,29 +2578,29 @@ public class JTransientAutoTuner {
     /**
      * Returns whether an extracted object is reliable enough to use for jitter calibration.
      */
-    private static boolean isUsableForJitterCalibration(SourceExtractor.DetectedObject obj) {
+    private static boolean isUsableForJitterCalibration(SourceExtractor.DetectedObject obj, Options options) {
         if (obj == null) {
             return false;
         }
 
-        if (obj.rawPixels == null || obj.rawPixels.size() < INITIAL_JITTER_PROBE_MIN_PIXELS) {
+        if (obj.rawPixels == null || obj.rawPixels.size() < options.initialJitterProbeMinPixels) {
             return false;
         }
 
-        return obj.elongation <= INITIAL_JITTER_PROBE_MAX_ELONGATION;
+        return obj.elongation <= options.initialJitterProbeMaxElongation;
     }
 
     /**
      * Finds the closest usable jitter-calibration match for a source object.
      */
     private static SourceExtractor.DetectedObject findClosestUsableJitterMatch(SourceExtractor.DetectedObject source,
-                                                                               List<SourceExtractor.DetectedObject> candidates) {
+                                                                               List<SourceExtractor.DetectedObject> candidates, Options options) {
         SourceExtractor.DetectedObject best = null;
         double bestDist = Double.MAX_VALUE;
 
         for (SourceExtractor.DetectedObject candidate : candidates) {
             CancellationScope.check();
-            if (!isUsableForJitterCalibration(candidate)) {
+            if (!isUsableForJitterCalibration(candidate, options)) {
                 continue;
             }
 

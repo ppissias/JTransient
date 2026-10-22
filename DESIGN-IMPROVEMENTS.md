@@ -35,7 +35,7 @@ Statuses distinguish proposals from work already started. High priority means to
 |---|---|---|---|---|
 | JA-02 | High | In progress; shared execution policy remains | Define execution, concurrency and resource ownership | Callers know whether an engine can overlap runs and which work its resource limit controls. |
 | JA-03 | High | In progress; structured failure context remains | Give cancellation and failures an explicit contract | Cancellation stays distinct from fallback and failure; completion means the run's work has ended. |
-| JA-04 | High | Proposed | Replace mutable global tuning options with operation options | Two tunings can use independent options without changing each other's settings. |
+| JA-04 | High | In progress; tuner options complete, core diagnostic propagation remains | Replace mutable global tuning options with operation options | Two tunings can use independent options without changing each other's settings. |
 | JA-05 | Medium | Proposed | Make prepared-frame context and identity coherent | Frames, metrics, detections and registrations remain associated through QC and subset runs. |
 | JA-06 | Medium | Proposed | Separate tracking responsibilities while retaining its facade | Vetoing, point linking, streak assembly and classification have explicit inputs and ownership. |
 | JA-07 | Medium | Proposed | Stabilize public results and dependency direction | Public models and shared buffers have clear contracts independent of implementation helpers. |
@@ -69,6 +69,8 @@ Introduce a small execution policy shared by orchestration and tuning: worker li
 **Acceptance.** Inject failures at extraction, stacking, tracking, tuning and photometry boundaries, including listeners. Each failure retains its original cause and identifies its operation/stage and frame where applicable. Keep invalid input, scientific readiness, cancellation and execution failure distinguishable; do not change detection verdicts merely to introduce a diagnostic model.
 
 ### JA-04. Make tuning options and diagnostics belong to an operation
+
+**Implemented slice (2026-10-22).** Both tuner facades now capture immutable `Options` with defensive grid/budget copies and retain the effective policy with results. Explicit-options overloads allow independent concurrent operations. SpacePixels uses the 1.0.6 independent available-sample entry point when present and retains the 1.0.5 adapter. Legacy diagnostics have a per-run sink; propagation through non-tuner science stages remains for the execution/diagnostic-context seam. See the [validation record](docs/archive/design-improvements-closed-2026-10.md#ja-04-tuner-options-slice-2026-10-22). These nested public facade options deliberately stabilize the contract before moving canonical tuner implementations to the blueprint's `tuning` package.
 
 **Evidence.** [JTransientAutoTuner](src/main/java/io/github/ppissias/jtransient/engine/JTransientAutoTuner.java) and [CalibratedAutoTuner](src/main/java/io/github/ppissias/jtransient/engine/CalibratedAutoTuner.java) expose writable static scalars and arrays for sample counts, search grids, crop settings and budgets. Copying an array reference does not freeze its contents. SpacePixels [AutoTunerRunner](../SpacePixels/src/main/java/eu/startales/spacepixels/util/AutoTunerRunner.java) temporarily changes `AUTO_TUNE_SAMPLE_SIZE` and restores it in `finally`; its public API documents a same-JVM Auto-Tune concurrency restriction. Core extraction, stacking, tracking and quality code also reference `JTransientEngine.DEBUG`, while legacy tuning has a separate debug switch.
 
@@ -160,7 +162,7 @@ Define source and binary compatibility expectations for published releases, incl
 
 ### Structural blueprint: packages, classes and dependencies
 
-**Proposed structural design, added 2026-10-20.** This elaborates JA-01–11 rather than creating another work queue or authorizing their implementation. The maintainer agreed the JA-01 rules-ownership direction separately. Names below specify a reviewable target; an individual change can refine a name with its rationale recorded here. Keep one Gradle project and published jar. Introduce a package when its boundary is implemented, without creating empty directories or moving every public class in one release.
+**Proposed structural design, added 2026-10-20.** This elaborates JA-01–11 rather than creating another work queue or authorizing their implementation. The maintainer agreed the JA-01 rules-ownership direction separately and authorized the remaining proposed JTransient work on 2026-10-22; deferred/declined algorithm decisions remain unchanged. Names below specify a reviewable target; an individual change can refine a name with its rationale recorded here. Keep one Gradle project and published jar. Introduce a package when its boundary is implemented, without creating empty directories or moving every public class in one release.
 
 #### Current dependency assessment
 

@@ -135,6 +135,311 @@ public final class CalibratedAutoTuner {
      */
     private static final double RAW_NOISE_SKIP_FACTOR = 10.0;
 
+    /**
+     * Immutable per-operation tuning policy. Arrays are copied on capture and access; pixel buffers are not owned.
+     * Legacy static knobs are read only by the builder, never by a running operation.
+     */
+    public static final class Options {
+        private final double[] falsePositiveBudgetPerMpixFrame;
+        private final double[] sigmasToTest;
+        private final double[] growDeltasToTest;
+        private final double[] minPixelAreaFactors;
+        private final int maxMinPixels;
+        private final double[] masterSigmasToTest;
+        private final double[] masterGrowOffsetsToTest;
+        private final double[] masterMinPixelAreaFactors;
+        private final double[] maskOverlapsToTest;
+        private final double[] injectionPeakSnr;
+        private final int injectionsPerLevelPerCropFrame;
+        private final int measurementFrames;
+        private final int cropCount;
+        private final int maxCropsPerSide;
+        private final int preferredCropSize;
+        private final int minCropSize;
+        private final int cropBorderMargin;
+        private final int minCropBorderMargin;
+        private final int cropPaddingClearance;
+
+        /** Copies and validates a builder before progress callbacks or scientific work can start. */
+        private Options(Builder builder) {
+            falsePositiveBudgetPerMpixFrame = java.util.Objects.requireNonNull(builder.falsePositiveBudgetPerMpixFrame, "falsePositiveBudgetPerMpixFrame").clone();
+            sigmasToTest = java.util.Objects.requireNonNull(builder.sigmasToTest, "sigmasToTest").clone();
+            growDeltasToTest = java.util.Objects.requireNonNull(builder.growDeltasToTest, "growDeltasToTest").clone();
+            minPixelAreaFactors = java.util.Objects.requireNonNull(builder.minPixelAreaFactors, "minPixelAreaFactors").clone();
+            maxMinPixels = builder.maxMinPixels;
+            masterSigmasToTest = java.util.Objects.requireNonNull(builder.masterSigmasToTest, "masterSigmasToTest").clone();
+            masterGrowOffsetsToTest = java.util.Objects.requireNonNull(builder.masterGrowOffsetsToTest, "masterGrowOffsetsToTest").clone();
+            masterMinPixelAreaFactors = java.util.Objects.requireNonNull(builder.masterMinPixelAreaFactors, "masterMinPixelAreaFactors").clone();
+            maskOverlapsToTest = java.util.Objects.requireNonNull(builder.maskOverlapsToTest, "maskOverlapsToTest").clone();
+            injectionPeakSnr = java.util.Objects.requireNonNull(builder.injectionPeakSnr, "injectionPeakSnr").clone();
+            injectionsPerLevelPerCropFrame = builder.injectionsPerLevelPerCropFrame;
+            measurementFrames = builder.measurementFrames;
+            cropCount = builder.cropCount;
+            maxCropsPerSide = builder.maxCropsPerSide;
+            preferredCropSize = builder.preferredCropSize;
+            minCropSize = builder.minCropSize;
+            cropBorderMargin = builder.cropBorderMargin;
+            minCropBorderMargin = builder.minCropBorderMargin;
+            cropPaddingClearance = builder.cropPaddingClearance;
+            require(falsePositiveBudgetPerMpixFrame.length > 0, "falsePositiveBudgetPerMpixFrame must not be empty");
+            for (double value : falsePositiveBudgetPerMpixFrame) {
+                require(Double.isFinite(value) && value >= 0, "falsePositiveBudgetPerMpixFrame contains an invalid value");
+            }
+            require(sigmasToTest.length > 0, "sigmasToTest must not be empty");
+            for (double value : sigmasToTest) {
+                require(Double.isFinite(value) && value > 0, "sigmasToTest contains an invalid value");
+            }
+            require(growDeltasToTest.length > 0, "growDeltasToTest must not be empty");
+            for (double value : growDeltasToTest) {
+                require(Double.isFinite(value) && value > 0, "growDeltasToTest contains an invalid value");
+            }
+            require(minPixelAreaFactors.length > 0, "minPixelAreaFactors must not be empty");
+            for (double value : minPixelAreaFactors) {
+                require(Double.isFinite(value) && value > 0, "minPixelAreaFactors contains an invalid value");
+            }
+            require(maxMinPixels > 0, "maxMinPixels must be positive");
+            require(masterSigmasToTest.length > 0, "masterSigmasToTest must not be empty");
+            for (double value : masterSigmasToTest) {
+                require(Double.isFinite(value) && value > 0, "masterSigmasToTest contains an invalid value");
+            }
+            require(masterGrowOffsetsToTest.length > 0, "masterGrowOffsetsToTest must not be empty");
+            for (double value : masterGrowOffsetsToTest) {
+                require(Double.isFinite(value) && value >= 0, "masterGrowOffsetsToTest contains an invalid value");
+            }
+            require(masterMinPixelAreaFactors.length > 0, "masterMinPixelAreaFactors must not be empty");
+            for (double value : masterMinPixelAreaFactors) {
+                require(Double.isFinite(value) && value > 0, "masterMinPixelAreaFactors contains an invalid value");
+            }
+            require(maskOverlapsToTest.length > 0, "maskOverlapsToTest must not be empty");
+            for (double value : maskOverlapsToTest) {
+                require(Double.isFinite(value) && value > 0 && value <= 1, "maskOverlapsToTest contains an invalid value");
+            }
+            require(injectionPeakSnr.length > 0, "injectionPeakSnr must not be empty");
+            for (double value : injectionPeakSnr) {
+                require(Double.isFinite(value) && value > 0, "injectionPeakSnr contains an invalid value");
+            }
+            require(injectionsPerLevelPerCropFrame > 0, "injectionsPerLevelPerCropFrame must be positive");
+            require(measurementFrames > 0, "measurementFrames must be positive");
+            require(cropCount > 0, "cropCount must be positive");
+            require(maxCropsPerSide > 0, "maxCropsPerSide must be positive");
+            require(preferredCropSize > 0, "preferredCropSize must be positive");
+            require(minCropSize > 0, "minCropSize must be positive");
+            require(cropBorderMargin >= 0, "cropBorderMargin must be nonnegative");
+            require(minCropBorderMargin >= 0, "minCropBorderMargin must be nonnegative");
+            require(cropPaddingClearance >= 0, "cropPaddingClearance must be nonnegative");
+            require(falsePositiveBudgetPerMpixFrame.length == PROFILE_COUNT, "one false-positive budget is required per profile");
+        }
+
+        /** Captures compatibility defaults once; callers must not edit static knobs concurrently with this capture. */
+        public static Options captureDefaults() {
+            return new Builder().build();
+        }
+
+        /** Creates an independent mutable builder from the current compatibility defaults. */
+        public static Builder builder() {
+            return new Builder();
+        }
+
+        /** Returns an independent builder, including detached copies of every search-grid array. */
+        public Builder toBuilder() {
+            return new Builder(this);
+        }
+
+        /** Returns a detached copy of the falsePositiveBudgetPerMpixFrame grid. */
+        public double[] falsePositiveBudgetPerMpixFrame() {
+            return falsePositiveBudgetPerMpixFrame.clone();
+        }
+
+        /** Returns a detached copy of the sigmasToTest grid. */
+        public double[] sigmasToTest() {
+            return sigmasToTest.clone();
+        }
+
+        /** Returns a detached copy of the growDeltasToTest grid. */
+        public double[] growDeltasToTest() {
+            return growDeltasToTest.clone();
+        }
+
+        /** Returns a detached copy of the minPixelAreaFactors grid. */
+        public double[] minPixelAreaFactors() {
+            return minPixelAreaFactors.clone();
+        }
+
+        /** Returns the captured maxMinPixels policy value in pixels where applicable. */
+        public int maxMinPixels() {
+            return maxMinPixels;
+        }
+
+        /** Returns a detached copy of the masterSigmasToTest grid. */
+        public double[] masterSigmasToTest() {
+            return masterSigmasToTest.clone();
+        }
+
+        /** Returns a detached copy of the masterGrowOffsetsToTest grid. */
+        public double[] masterGrowOffsetsToTest() {
+            return masterGrowOffsetsToTest.clone();
+        }
+
+        /** Returns a detached copy of the masterMinPixelAreaFactors grid. */
+        public double[] masterMinPixelAreaFactors() {
+            return masterMinPixelAreaFactors.clone();
+        }
+
+        /** Returns a detached copy of the maskOverlapsToTest grid. */
+        public double[] maskOverlapsToTest() {
+            return maskOverlapsToTest.clone();
+        }
+
+        /** Returns a detached copy of the injectionPeakSnr grid. */
+        public double[] injectionPeakSnr() {
+            return injectionPeakSnr.clone();
+        }
+
+        /** Returns the captured injectionsPerLevelPerCropFrame policy value. */
+        public int injectionsPerLevelPerCropFrame() {
+            return injectionsPerLevelPerCropFrame;
+        }
+
+        /** Returns the captured measurementFrames policy value. */
+        public int measurementFrames() {
+            return measurementFrames;
+        }
+
+        /** Returns the captured cropCount policy value. */
+        public int cropCount() {
+            return cropCount;
+        }
+
+        /** Returns the captured maxCropsPerSide policy value. */
+        public int maxCropsPerSide() {
+            return maxCropsPerSide;
+        }
+
+        /** Returns the captured preferredCropSize policy value in pixels where applicable. */
+        public int preferredCropSize() {
+            return preferredCropSize;
+        }
+
+        /** Returns the captured minCropSize policy value in pixels where applicable. */
+        public int minCropSize() {
+            return minCropSize;
+        }
+
+        /** Returns the captured cropBorderMargin policy value in pixels where applicable. */
+        public int cropBorderMargin() {
+            return cropBorderMargin;
+        }
+
+        /** Returns the captured minCropBorderMargin policy value in pixels where applicable. */
+        public int minCropBorderMargin() {
+            return minCropBorderMargin;
+        }
+
+        /** Returns the captured cropPaddingClearance policy value in pixels where applicable. */
+        public int cropPaddingClearance() {
+            return cropPaddingClearance;
+        }
+
+        /** Rejects invalid policy values without invoking callbacks or reading image data. */
+        private static void require(boolean condition, String message) {
+            if (!condition) throw new IllegalArgumentException(message);
+        }
+
+        /** Mutable caller-owned construction state; build snapshots arrays and never modifies this builder. */
+        public static final class Builder {
+            /** falsePositiveBudgetPerMpixFrame policy; array values are copied by build(). */
+            public double[] falsePositiveBudgetPerMpixFrame;
+            /** sigmasToTest policy; array values are copied by build(). */
+            public double[] sigmasToTest;
+            /** growDeltasToTest policy; array values are copied by build(). */
+            public double[] growDeltasToTest;
+            /** minPixelAreaFactors policy; array values are copied by build(). */
+            public double[] minPixelAreaFactors;
+            /** maxMinPixels policy; array values are copied by build(). */
+            public int maxMinPixels;
+            /** masterSigmasToTest policy; array values are copied by build(). */
+            public double[] masterSigmasToTest;
+            /** masterGrowOffsetsToTest policy; array values are copied by build(). */
+            public double[] masterGrowOffsetsToTest;
+            /** masterMinPixelAreaFactors policy; array values are copied by build(). */
+            public double[] masterMinPixelAreaFactors;
+            /** maskOverlapsToTest policy; array values are copied by build(). */
+            public double[] maskOverlapsToTest;
+            /** injectionPeakSnr policy; array values are copied by build(). */
+            public double[] injectionPeakSnr;
+            /** injectionsPerLevelPerCropFrame policy; array values are copied by build(). */
+            public int injectionsPerLevelPerCropFrame;
+            /** measurementFrames policy; array values are copied by build(). */
+            public int measurementFrames;
+            /** cropCount policy; array values are copied by build(). */
+            public int cropCount;
+            /** maxCropsPerSide policy; array values are copied by build(). */
+            public int maxCropsPerSide;
+            /** preferredCropSize policy; array values are copied by build(). */
+            public int preferredCropSize;
+            /** minCropSize policy; array values are copied by build(). */
+            public int minCropSize;
+            /** cropBorderMargin policy; array values are copied by build(). */
+            public int cropBorderMargin;
+            /** minCropBorderMargin policy; array values are copied by build(). */
+            public int minCropBorderMargin;
+            /** cropPaddingClearance policy; array values are copied by build(). */
+            public int cropPaddingClearance;
+
+            /** Captures the current legacy defaults, copying arrays immediately. */
+            public Builder() {
+                falsePositiveBudgetPerMpixFrame = CalibratedAutoTuner.FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME.clone();
+                sigmasToTest = CalibratedAutoTuner.SIGMAS_TO_TEST.clone();
+                growDeltasToTest = CalibratedAutoTuner.GROW_DELTAS_TO_TEST.clone();
+                minPixelAreaFactors = CalibratedAutoTuner.MIN_PIXEL_AREA_FACTORS.clone();
+                maxMinPixels = CalibratedAutoTuner.MAX_MIN_PIXELS;
+                masterSigmasToTest = CalibratedAutoTuner.MASTER_SIGMAS_TO_TEST.clone();
+                masterGrowOffsetsToTest = CalibratedAutoTuner.MASTER_GROW_OFFSETS_TO_TEST.clone();
+                masterMinPixelAreaFactors = CalibratedAutoTuner.MASTER_MIN_PIXEL_AREA_FACTORS.clone();
+                maskOverlapsToTest = CalibratedAutoTuner.MASK_OVERLAPS_TO_TEST.clone();
+                injectionPeakSnr = CalibratedAutoTuner.INJECTION_PEAK_SNR.clone();
+                injectionsPerLevelPerCropFrame = CalibratedAutoTuner.INJECTIONS_PER_LEVEL_PER_CROP_FRAME;
+                measurementFrames = CalibratedAutoTuner.MEASUREMENT_FRAMES;
+                cropCount = CalibratedAutoTuner.CROP_COUNT;
+                maxCropsPerSide = CalibratedAutoTuner.MAX_CROPS_PER_SIDE;
+                preferredCropSize = CalibratedAutoTuner.PREFERRED_CROP_SIZE;
+                minCropSize = CalibratedAutoTuner.MIN_CROP_SIZE;
+                cropBorderMargin = CalibratedAutoTuner.CROP_BORDER_MARGIN;
+                minCropBorderMargin = CalibratedAutoTuner.MIN_CROP_BORDER_MARGIN;
+                cropPaddingClearance = CalibratedAutoTuner.CROP_PADDING_CLEARANCE;
+            }
+
+            /** Copies an immutable policy without consulting process-wide defaults. */
+            private Builder(Options options) {
+                falsePositiveBudgetPerMpixFrame = options.falsePositiveBudgetPerMpixFrame.clone();
+                sigmasToTest = options.sigmasToTest.clone();
+                growDeltasToTest = options.growDeltasToTest.clone();
+                minPixelAreaFactors = options.minPixelAreaFactors.clone();
+                maxMinPixels = options.maxMinPixels;
+                masterSigmasToTest = options.masterSigmasToTest.clone();
+                masterGrowOffsetsToTest = options.masterGrowOffsetsToTest.clone();
+                masterMinPixelAreaFactors = options.masterMinPixelAreaFactors.clone();
+                maskOverlapsToTest = options.maskOverlapsToTest.clone();
+                injectionPeakSnr = options.injectionPeakSnr.clone();
+                injectionsPerLevelPerCropFrame = options.injectionsPerLevelPerCropFrame;
+                measurementFrames = options.measurementFrames;
+                cropCount = options.cropCount;
+                maxCropsPerSide = options.maxCropsPerSide;
+                preferredCropSize = options.preferredCropSize;
+                minCropSize = options.minCropSize;
+                cropBorderMargin = options.cropBorderMargin;
+                minCropBorderMargin = options.minCropBorderMargin;
+                cropPaddingClearance = options.cropPaddingClearance;
+            }
+
+            /** Builds an immutable validated policy whose arrays no longer alias the builder. */
+            public Options build() {
+                return new Options(this);
+            }
+        }
+    }
+
+    /** Prevents construction of the static compatibility facade. */
     private CalibratedAutoTuner() {
     }
 
@@ -273,6 +578,8 @@ public final class CalibratedAutoTuner {
 
     /** Full measurement of one session: every evaluated candidate and the choice for each profile. */
     public static final class Calibration {
+        /** Immutable policy captured for measurement, selection and later tradeoff formatting; null in legacy hand-built data. */
+        public Options options;
         /** Whether the measurement completed. */
         public boolean success;
         /** Human-readable explanation when {@link #success} is false. */
@@ -445,15 +752,37 @@ public final class CalibratedAutoTuner {
     public static JTransientAutoTuner.AutoTunerResult tuneSnapshot(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
             JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener) {
         CancellationScope.check();
-        return tuneCaptured(poolFrames, DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION), profile, listener);
+        return tuneSnapshot(poolFrames, baseConfig, Options.captureDefaults(), profile, listener);
+    }
+
+
+    /** Tunes with detached configuration and immutable options, borrowing frame pixels until the joined operation returns. */
+    public static JTransientAutoTuner.AutoTunerResult tuneSnapshot(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+            Options options, JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener) {
+        CancellationScope.check();
+        java.util.Objects.requireNonNull(options, "options");
+        return tuneCaptured(poolFrames, DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION),
+                profile, listener, options);
+    }
+
+    /** Tunes with independent options and explicit cancellation; no process-wide tuner state is changed. */
+    public static JTransientAutoTuner.AutoTunerResult tuneSnapshot(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+            Options options, JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener,
+            io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
+        try (CancellationScope scope = CancellationScope.open(cancellation)) {
+            CancellationScope.check();
+            JTransientAutoTuner.AutoTunerResult result = tuneSnapshot(poolFrames, baseConfig, options, profile, listener);
+            CancellationScope.check();
+            return result;
+        }
     }
 
     /** Measures and selects a profile using the validated private settings copy supplied by the entry point. */
     private static JTransientAutoTuner.AutoTunerResult tuneCaptured(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
-            JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener) {
+            JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener, Options options) {
         JTransientAutoTuner.AutoTunerResult result = new JTransientAutoTuner.AutoTunerResult();
         result.optimizedConfig = baseConfig;
-        Calibration calibration = calibrateCaptured(poolFrames, baseConfig, listener);
+        Calibration calibration = calibrateCaptured(poolFrames, baseConfig, listener, options);
         result.calibration = calibration;
         StringBuilder report = new StringBuilder("=== JTransient Calibrated Auto-Tuning Report ===\n");
         report.append("Profile: ").append(profile.displayName()).append("\n");
@@ -465,7 +794,7 @@ public final class CalibratedAutoTuner {
         }
         int p = profile.ordinal();
         Candidate best = calibration.chosen[p];
-        appendCalibrationReport(calibration, p, report);
+        appendCalibrationReport(calibration, p, report, options);
         discardSweep(calibration);
 
         result.optimizedConfig = configFor(calibration, baseConfig, profile);
@@ -485,7 +814,7 @@ public final class CalibratedAutoTuner {
                 profile.displayName(), calibration.withinBudget[p] ? "" : " (no setting met the budget; the cleanest one was used)",
                 best.sigma, best.growSigma, best.minPixels, best.masterSigma, best.masterGrowSigma, best.masterMinPixels,
                 best.maskOverlap, calibration.jitter,
-                best.falsePositivesPerMpixFrame, best.noisePerMpixFrame, best.leakagePerMpixFrame, FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[p],
+                best.falsePositivesPerMpixFrame, best.noisePerMpixFrame, best.leakagePerMpixFrame, options.falsePositiveBudgetPerMpixFrame[p],
                 best.realSurvivorsPerMpixFrame,
                 100 * best.recoveredFraction, 100 * best.brightRecovery,
                 Double.isNaN(best.snr50) ? "n/a" : String.format(Locale.US, "%.2f", best.snr50),
@@ -510,15 +839,26 @@ public final class CalibratedAutoTuner {
                                         DetectionConfig baseConfig,
                                         TransientEngineProgressListener listener) {
         CancellationScope.check();
-        return calibrateCaptured(poolFrames, DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION), listener);
+        return calibrate(poolFrames, baseConfig, Options.captureDefaults(), listener);
+    }
+
+
+    /** Measures and selects all profiles with an immutable policy and detached settings, inheriting cancellation. */
+    public static Calibration calibrate(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+                                        Options options, TransientEngineProgressListener listener) {
+        CancellationScope.check();
+        java.util.Objects.requireNonNull(options, "options");
+        return calibrateCaptured(poolFrames,
+                DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION), listener, options);
     }
 
     /** Performs calibration against captured settings and joins its owned worker pool before returning. */
     private static Calibration calibrateCaptured(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
-                                                 TransientEngineProgressListener listener) {
+                                                 TransientEngineProgressListener listener, Options options) {
         CancellationScope.check();
         long start = System.currentTimeMillis();
         Calibration calibration = new Calibration();
+        calibration.options = options;
         if (poolFrames == null || poolFrames.size() < 5) {
             calibration.failureReason = "At least 5 frames are needed for calibrated auto-tuning.";
             return calibration;
@@ -551,9 +891,9 @@ public final class CalibratedAutoTuner {
                 CancellationScope.check();
                 driftBySequence.put(p.value, p);
             }
-            int margin = Math.min(CROP_BORDER_MARGIN,
-                    Math.max(MIN_CROP_BORDER_MARGIN, driftAnalysis.maxPaddingPixels + CROP_PADDING_CLEARANCE));
-            List<int[]> crops = new ArrayList<>(cropRegions(width, height, margin));
+            int margin = Math.min(options.cropBorderMargin,
+                    Math.max(options.minCropBorderMargin, driftAnalysis.maxPaddingPixels + options.cropPaddingClearance));
+            List<int[]> crops = new ArrayList<>(cropRegions(width, height, margin, options));
             if (crops.isEmpty()) {
                 calibration.failureReason = "Frames are too small for tuning crops.";
                 return calibration;
@@ -579,7 +919,7 @@ public final class CalibratedAutoTuner {
                 ownedMpixPerFrame += ownedMpix[c];
             }
             // Small sensors measure on more frames, so that the budgets can still be verified.
-            int wantedFrames = Math.max(MEASUREMENT_FRAMES,
+            int wantedFrames = Math.max(options.measurementFrames,
                     Math.min(MAX_MEASUREMENT_FRAMES, (int) Math.ceil(TARGET_MEASURED_MPIX_FRAMES / ownedMpixPerFrame)));
             List<ImageFrame> measurementFrames = evenlySpaced(pool, Math.min(wantedFrames, pool.size()));
             calibration.poolFrames = pool.size();
@@ -624,7 +964,7 @@ public final class CalibratedAutoTuner {
             for (int i = 0; i < measurementCrops.size(); i++) {
                 CancellationScope.check();
                 int c = measurementCropIndex.get(i);
-                CropFrame prepared = prepareCropFrame(c, measurementCrops.get(i), masters.get(c), psfSigma, baseConfig, random);
+                CropFrame prepared = prepareCropFrame(c, measurementCrops.get(i), masters.get(c), psfSigma, baseConfig, random, options);
                 SourceExtractor.Pixel drift = driftBySequence.get(measurementFrames.get(i % measurementFrames.size()).sequenceIndex);
                 if (drift != null) {
                     prepared.driftX = drift.x;
@@ -645,8 +985,8 @@ public final class CalibratedAutoTuner {
             calibration.skippedCrops = measurementCrops.size() - cropFrames.size();
 
             // --- Masks for every master setting ---
-            List<FrameSetting> frameSettings = frameSettings(psfCoreArea);
-            List<MasterSetting> masterSettings = masterSettings(psfCoreArea);
+            List<FrameSetting> frameSettings = frameSettings(psfCoreArea, options);
+            List<MasterSetting> masterSettings = masterSettings(psfCoreArea, options);
             int dilation = (int) Math.max(1, Math.round(calibration.jitter / 2.0)); // production veto-mask rule
             BitSet[][] masks = new BitSet[masterSettings.size()][crops.size()];
             double[] coverage = new double[masterSettings.size()];
@@ -708,7 +1048,7 @@ public final class CalibratedAutoTuner {
                 // Lowest noise any master could leave: negative detections surviving the deepest mask at the most
                 // permissive overlap value.
                 long minimumNoise = 0;
-                double maxOverlap = Arrays.stream(MASK_OVERLAPS_TO_TEST).max().orElse(1.0);
+                double maxOverlap = Arrays.stream(options.maskOverlapsToTest).max().orElse(1.0);
                 for (int i = 0; i < cropFrames.size(); i++) {
                     BitSet deepest = masks[deepestMask][cropFrames.get(i).crop];
                     BitSet own = owned[cropFrames.get(i).crop];
@@ -716,7 +1056,7 @@ public final class CalibratedAutoTuner {
                         if (!d.streak && isOwned(d, own, cropSize) && overlap(d, deepest) <= maxOverlap) minimumNoise++;
                     }
                 }
-                double maxBudget = Arrays.stream(FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME).max().orElse(1.0);
+                double maxBudget = Arrays.stream(options.falsePositiveBudgetPerMpixFrame).max().orElse(1.0);
                 if (minimumNoise / measuredMpixFrames > RAW_NOISE_SKIP_FACTOR * maxBudget) {
                     calibration.skippedFrameSettings++;
                     continue;
@@ -744,10 +1084,10 @@ public final class CalibratedAutoTuner {
                             overlaps.add(o);
                         }
                         List<Candidate> out = new ArrayList<>();
-                        for (double ov : MASK_OVERLAPS_TO_TEST) {
+                        for (double ov : options.maskOverlapsToTest) {
                             out.add(evaluate(fs, ms, ov, coverage[mi], cropFrames, detections, overlaps,
                                     owned, ownedMpix, cropSize, crops.size(), nearStar, recurrenceRadius, nearStarRecurrenceRadius,
-                                    matchRadius));
+                                    matchRadius, options));
                         }
                         return out;
                     });
@@ -780,9 +1120,9 @@ public final class CalibratedAutoTuner {
             progress(listener, 96, "Selecting settings per profile...");
             for (int p = 0; p < PROFILE_COUNT; p++) {
                 CancellationScope.check();
-                calibration.budgetVerifiable[p] = FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[p] * calibration.measuredMpixFrames >= 1.0;
+                calibration.budgetVerifiable[p] = options.falsePositiveBudgetPerMpixFrame[p] * calibration.measuredMpixFrames >= 1.0;
                 Candidate chosen = select(calibration.candidates,
-                        effectiveBudget(FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[p], calibration.measuredMpixFrames));
+                        effectiveBudget(options.falsePositiveBudgetPerMpixFrame[p], calibration.measuredMpixFrames));
                 calibration.withinBudget[p] = chosen != null;
                 calibration.chosen[p] = chosen != null ? chosen : cleanest(calibration.candidates);
             }
@@ -791,7 +1131,7 @@ public final class CalibratedAutoTuner {
                 calibration.failureReason = "No combination could be evaluated.";
             }
             calibration.elapsedSeconds = (System.currentTimeMillis() - start) / 1000.0;
-            buildTradeoff(calibration);
+            buildTradeoff(calibration, options);
             progress(listener, 100, "Calibrated auto-tuning complete.");
             return calibration;
         } catch (java.util.concurrent.CancellationException cancelled) {
@@ -817,7 +1157,7 @@ public final class CalibratedAutoTuner {
         }
     }
 
-    private static void appendCalibrationReport(Calibration calibration, int profileIndex, StringBuilder report) {
+    private static void appendCalibrationReport(Calibration calibration, int profileIndex, StringBuilder report, Options options) {
         report.append(String.format(Locale.US, "Pool frames for the master: %d | measurement frames: %d | crops: %d x %dx%d px%n",
                 calibration.poolFrames, calibration.measurementFrames, calibration.crops, calibration.cropSize, calibration.cropSize));
         report.append(String.format(Locale.US, "Measured star FWHM: %.2f px | residual jitter: %.2f px%n", calibration.fwhm, calibration.jitter));
@@ -840,14 +1180,14 @@ public final class CalibratedAutoTuner {
             CancellationScope.check();
             Candidate c = calibration.chosen[p];
             report.append(String.format(Locale.US, "%s%s (budget %.2f)%s%n   %s%n   %s%n",
-                    p == profileIndex ? "* " : "  ", names[p].displayName(), FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[p],
+                    p == profileIndex ? "* " : "  ", names[p].displayName(), options.falsePositiveBudgetPerMpixFrame[p],
                     (calibration.withinBudget[p] ? "" : " [NO SETTING WITHIN BUDGET - cleanest setting used]")
                             + (calibration.budgetVerifiable[p] ? "" : " [area too small to confirm this budget - zero false positives accepted]"),
                     c.settingsText(), c.measurementText()));
         }
         appendSensitivityLadder(calibration.candidates,
-                effectiveBudget(FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[profileIndex], calibration.measuredMpixFrames), report);
-        appendCompletenessCurve(calibration.chosen[profileIndex], report);
+                effectiveBudget(options.falsePositiveBudgetPerMpixFrame[profileIndex], calibration.measuredMpixFrames), report, options);
+        appendCompletenessCurve(calibration.chosen[profileIndex], report, options);
     }
 
     // =========================================================================
@@ -933,8 +1273,8 @@ public final class CalibratedAutoTuner {
                                       List<CropFrame> cropFrames, List<Detection[][]> detections, List<double[][]> overlaps,
                                       BitSet[] owned, double[] ownedMpix, int cropSize, int cropCount,
                                       BitSet[] nearStar, double recurrenceRadius,
-                                      double nearStarRecurrenceRadius, double matchRadius) {
-        int levels = INJECTION_PEAK_SNR.length;
+                                      double nearStarRecurrenceRadius, double matchRadius, Options options) {
+        int levels = options.injectionPeakSnr.length;
         long noise = 0;
         long realSurvivors = 0;
         long starEdgeSurvivors = 0;
@@ -1070,13 +1410,13 @@ public final class CalibratedAutoTuner {
         int brightLevels = 0;
         for (int l = 0; l < levels; l++) {
             CancellationScope.check();
-            if (INJECTION_PEAK_SNR[l] >= BRIGHT_LEVEL_SNR) {
+            if (options.injectionPeakSnr[l] >= BRIGHT_LEVEL_SNR) {
                 bright += cand.completeness[l];
                 brightLevels++;
             }
         }
         cand.brightRecovery = brightLevels > 0 ? bright / brightLevels : 0;
-        cand.snr50 = halfRecoveryLevel(cand.completeness);
+        cand.snr50 = halfRecoveryLevel(cand.completeness, options);
         return cand;
     }
 
@@ -1193,7 +1533,7 @@ public final class CalibratedAutoTuner {
      * spread over the injection levels, placed on a jittered grid away from the crop edges.
      */
     private static CropFrame prepareCropFrame(int crop, short[][] positive, short[][] master, double psfSigma,
-                                              DetectionConfig base, Random random) {
+                                              DetectionConfig base, Random random, Options options) {
         int h = positive.length;
         int w = positive[0].length;
         short[][] negative = new short[h][w];
@@ -1210,8 +1550,8 @@ public final class CalibratedAutoTuner {
         }
         double backgroundSigma = SourceExtractor.calculateBackgroundSigmaClipped(positive, w, h, 3.0, base).sigma;
 
-        int levels = INJECTION_PEAK_SNR.length;
-        int count = levels * INJECTIONS_PER_LEVEL_PER_CROP_FRAME;
+        int levels = options.injectionPeakSnr.length;
+        int count = levels * options.injectionsPerLevelPerCropFrame;
         int margin = INJECTION_MARGIN;
         int cols = (int) Math.ceil(Math.sqrt(count * (w - 2.0 * margin) / Math.max(1.0, h - 2.0 * margin)));
         int rows = (int) Math.ceil(count / (double) cols);
@@ -1228,7 +1568,7 @@ public final class CalibratedAutoTuner {
             xs[s] = margin + (col + 0.2 + 0.6 * random.nextDouble()) * cellW;
             ys[s] = margin + (row + 0.2 + 0.6 * random.nextDouble()) * cellH;
             lv[s] = s % levels;
-            double amplitude = INJECTION_PEAK_SNR[lv[s]] * backgroundSigma;
+            double amplitude = options.injectionPeakSnr[lv[s]] * backgroundSigma;
             int cx = (int) Math.round(xs[s]);
             int cy = (int) Math.round(ys[s]);
             for (int dy = -radius; dy <= radius; dy++) {
@@ -1392,7 +1732,14 @@ public final class CalibratedAutoTuner {
      * Fills {@link Calibration#tradeoff} from the evaluated combinations: the best setting at each detection
      * sigma for every profile. When the combinations have already been discarded, the stored summary is returned.
      */
+
     public static Tradeoff buildTradeoff(Calibration calibration) {
+        if (calibration == null) return null;
+        return buildTradeoff(calibration, calibration.options == null ? Options.captureDefaults() : calibration.options);
+    }
+
+    /** Builds the compatibility tradeoff from the policy captured during measurement, never fresh global grids. */
+    private static Tradeoff buildTradeoff(Calibration calibration, Options options) {
         if (calibration == null) {
             return null;
         }
@@ -1400,15 +1747,15 @@ public final class CalibratedAutoTuner {
             return calibration.tradeoff;
         }
         Tradeoff tradeoff = new Tradeoff();
-        tradeoff.sigmas = SIGMAS_TO_TEST.clone();
-        tradeoff.peakSnr = INJECTION_PEAK_SNR.clone();
+        tradeoff.sigmas = options.sigmasToTest.clone();
+        tradeoff.peakSnr = options.injectionPeakSnr.clone();
         tradeoff.profiles = new ProfileTradeoff[PROFILE_COUNT];
         for (int p = 0; p < PROFILE_COUNT; p++) {
             CancellationScope.check();
             ProfileTradeoff profile = new ProfileTradeoff();
-            profile.nominalBudgetPerMpixFrame = FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[p];
+            profile.nominalBudgetPerMpixFrame = options.falsePositiveBudgetPerMpixFrame[p];
             profile.effectiveBudgetPerMpixFrame = effectiveBudget(
-                    FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[p], calibration.measuredMpixFrames);
+                    options.falsePositiveBudgetPerMpixFrame[p], calibration.measuredMpixFrames);
             profile.bySigma = new SigmaChoice[tradeoff.sigmas.length];
             for (int s = 0; s < tradeoff.sigmas.length; s++) {
                 CancellationScope.check();
@@ -1519,9 +1866,9 @@ public final class CalibratedAutoTuner {
 
     /** Best candidate within the budget at each detection sigma, to show the sensitivity-noise trade-off. */
     private static void appendSensitivityLadder(List<Candidate> candidates, double budget,
-                                                StringBuilder report) {
+                                                StringBuilder report, Options options) {
         report.append("\n--- BEST SETTING PER DETECTION SIGMA (within the selected profile's budget) ---\n");
-        for (double sigma : SIGMAS_TO_TEST) {
+        for (double sigma : options.sigmasToTest) {
             CancellationScope.check();
             List<Candidate> atSigma = new ArrayList<>();
             for (Candidate c : candidates) {
@@ -1539,23 +1886,23 @@ public final class CalibratedAutoTuner {
         }
     }
 
-    private static void appendCompletenessCurve(Candidate best, StringBuilder report) {
+    private static void appendCompletenessCurve(Candidate best, StringBuilder report, Options options) {
         report.append("\n--- RECOVERY OF SYNTHETIC SOURCES (chosen setting) ---\n");
-        for (int l = 0; l < INJECTION_PEAK_SNR.length; l++) {
+        for (int l = 0; l < options.injectionPeakSnr.length; l++) {
             CancellationScope.check();
-            report.append(String.format(Locale.US, "peak SNR %5.1f: %5.1f%%%n", INJECTION_PEAK_SNR[l], 100 * best.completeness[l]));
+            report.append(String.format(Locale.US, "peak SNR %5.1f: %5.1f%%%n", options.injectionPeakSnr[l], 100 * best.completeness[l]));
         }
     }
 
-    private static double halfRecoveryLevel(double[] completeness) {
+    private static double halfRecoveryLevel(double[] completeness, Options options) {
         for (int l = 0; l < completeness.length; l++) {
             CancellationScope.check();
             if (completeness[l] >= 0.5) {
-                if (l == 0) return INJECTION_PEAK_SNR[0];
+                if (l == 0) return options.injectionPeakSnr[0];
                 double c0 = completeness[l - 1];
                 double c1 = completeness[l];
                 double t = (0.5 - c0) / Math.max(1e-9, c1 - c0);
-                return INJECTION_PEAK_SNR[l - 1] + t * (INJECTION_PEAK_SNR[l] - INJECTION_PEAK_SNR[l - 1]);
+                return options.injectionPeakSnr[l - 1] + t * (options.injectionPeakSnr[l] - options.injectionPeakSnr[l - 1]);
             }
         }
         return Double.NaN;
@@ -1565,17 +1912,23 @@ public final class CalibratedAutoTuner {
     // Grid and helpers
     // =========================================================================
 
+
     static List<FrameSetting> frameSettings(double psfCoreArea) {
+        return frameSettings(psfCoreArea, Options.captureDefaults());
+    }
+
+    /** Enumerates frame settings from one immutable operation policy, preserving grid order and deduplication. */
+    private static List<FrameSetting> frameSettings(double psfCoreArea, Options options) {
         List<Integer> minPixels = new ArrayList<>();
-        for (double f : MIN_PIXEL_AREA_FACTORS) {
+        for (double f : options.minPixelAreaFactors) {
             CancellationScope.check();
-            int mp = Math.min(MAX_MIN_PIXELS, Math.max(3, (int) Math.round(f * psfCoreArea)));
+            int mp = Math.min(options.maxMinPixels, Math.max(3, (int) Math.round(f * psfCoreArea)));
             if (!minPixels.contains(mp)) minPixels.add(mp);
         }
         List<FrameSetting> out = new ArrayList<>();
-        for (double sigma : SIGMAS_TO_TEST) {
+        for (double sigma : options.sigmasToTest) {
             CancellationScope.check();
-            for (double delta : GROW_DELTAS_TO_TEST) {
+            for (double delta : options.growDeltasToTest) {
                 CancellationScope.check();
                 double grow = Math.max(1.0, sigma - delta);
                 for (int mp : minPixels) {
@@ -1586,18 +1939,18 @@ public final class CalibratedAutoTuner {
         return out;
     }
 
-    private static List<MasterSetting> masterSettings(double psfCoreArea) {
+    private static List<MasterSetting> masterSettings(double psfCoreArea, Options options) {
         List<Integer> minPixels = new ArrayList<>();
         minPixels.add(3);
-        for (double f : MASTER_MIN_PIXEL_AREA_FACTORS) {
+        for (double f : options.masterMinPixelAreaFactors) {
             CancellationScope.check();
             int mp = Math.max(3, (int) Math.round(f * psfCoreArea));
             if (!minPixels.contains(mp)) minPixels.add(mp);
         }
         List<MasterSetting> out = new ArrayList<>();
-        for (double seed : MASTER_SIGMAS_TO_TEST) {
+        for (double seed : options.masterSigmasToTest) {
             CancellationScope.check();
-            for (double offset : MASTER_GROW_OFFSETS_TO_TEST) {
+            for (double offset : options.masterGrowOffsetsToTest) {
                 CancellationScope.check();
                 double grow = Math.max(1.0, seed - offset);
                 for (int mp : minPixels) {
@@ -1613,14 +1966,14 @@ public final class CalibratedAutoTuner {
      * holds more than {@link #CROP_COUNT} crops, otherwise the centre and up to four interior corners (at most
      * {@link #CROP_COUNT}). A frame too small for that gets one centred crop.
      */
-    private static List<int[]> cropRegions(int width, int height, int margin) {
+    private static List<int[]> cropRegions(int width, int height, int margin, Options options) {
         List<int[]> out = new ArrayList<>();
         int usableW = width - 2 * margin;
         int usableH = height - 2 * margin;
-        int size = Math.min(PREFERRED_CROP_SIZE, Math.min(usableW, usableH));
-        if (size < MIN_CROP_SIZE) {
+        int size = Math.min(options.preferredCropSize, Math.min(usableW, usableH));
+        if (size < options.minCropSize) {
             int fallback = Math.min(width, height);
-            if (fallback < MIN_CROP_SIZE) {
+            if (fallback < options.minCropSize) {
                 return out;
             }
             out.add(new int[]{(width - fallback) / 2, (height - fallback) / 2, fallback});
@@ -1630,9 +1983,9 @@ public final class CalibratedAutoTuner {
         int minY = margin;
         int maxX = width - margin - size;
         int maxY = height - margin - size;
-        int cols = Math.max(1, Math.min(MAX_CROPS_PER_SIDE, (int) Math.ceil(usableW / (2.0 * size))));
-        int rows = Math.max(1, Math.min(MAX_CROPS_PER_SIDE, (int) Math.ceil(usableH / (2.0 * size))));
-        if (cols >= 2 && rows >= 2 && cols * rows > CROP_COUNT) {
+        int cols = Math.max(1, Math.min(options.maxCropsPerSide, (int) Math.ceil(usableW / (2.0 * size))));
+        int rows = Math.max(1, Math.min(options.maxCropsPerSide, (int) Math.ceil(usableH / (2.0 * size))));
+        if (cols >= 2 && rows >= 2 && cols * rows > options.cropCount) {
             for (int r = 0; r < rows; r++) {
                 CancellationScope.check();
                 for (int c = 0; c < cols; c++) {
@@ -1650,7 +2003,7 @@ public final class CalibratedAutoTuner {
             out.add(new int[]{maxX, minY, size});
             out.add(new int[]{minX, maxY, size});
         }
-        return out.subList(0, Math.min(CROP_COUNT, out.size()));
+        return out.subList(0, Math.min(options.cropCount, out.size()));
     }
 
     private static short[][] crop(short[][] image, int[] region) {

@@ -40,7 +40,7 @@ For development, document every new Java class, record, enum and interface at ty
 .\gradlew.bat build
 ```
 
-The project name is `JTransient` and the current library version in `build.gradle` is `1.0.5`.
+The project name is `JTransient` and the current library version in `build.gradle` is `1.0.6`. SpacePixels retains its published 1.0.5 dependency until 1.0.6 is released and uses the new isolated-tuner capability when available.
 
 To prepare a Maven Central release bundle locally:
 
@@ -256,6 +256,18 @@ public final class AutoTuneExample {
 Profiles: `LOW` (fewest false detections), `MEDIUM`, `HIGH` (close to the noise level) and `MAXIMUM` (as sensitive as possible; on large sensors it leaves many candidates to review, so it is meant for small sensors or targeted searches for a faint object).
 
 The legacy tuner has the same signature: `JTransientAutoTuner.tune(frames, baseConfig, profile, listener)`; its three-argument overload defaults to `MEDIUM`. It treats `MAXIMUM` like `HIGH`. See [Auto-tuning](ALGORITHM.md#auto-tuning) for both.
+
+Per-operation options (introduced in 1.0.6) avoid changing static knobs:
+
+```java
+var policy = CalibratedAutoTuner.Options.builder();
+policy.sigmasToTest = new double[] {3.0, 4.0, 5.0};
+policy.falsePositiveBudgetPerMpixFrame = new double[] {0.05, 0.4, 1.5, 3.5};
+var result = CalibratedAutoTuner.tuneSnapshot(frames, config, policy.build(),
+        JTransientAutoTuner.AutoTuneProfile.MEDIUM, listener);
+```
+
+All arrays are snapshotted; legacy static entry points remain compatibility adapters. See [option ownership and diagnostics](PIPELINE.md#per-operation-tuner-options-106).
 
 ### 4. Reuse a precomputed master stack
 
