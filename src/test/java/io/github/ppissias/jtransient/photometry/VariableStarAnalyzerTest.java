@@ -384,6 +384,27 @@ public class VariableStarAnalyzerTest {
     }
 
     @Test
+    public void effectiveGeometryUsesTheMeasuredFwhmAndKeepsTheSkyOutsideEveryAperture() {
+        double sigma = 1.3;
+        double[][] image = new double[96][96];
+        for (double[] row : image) java.util.Arrays.fill(row, SKY);
+        renderStar(image, 48.3, 47.6, 100_000, sigma);
+        DetectionConfig config = new DetectionConfig();
+        config.photometryApertureFwhmFactor = 4;
+        config.photometryAnnulusInnerFwhmFactor = 1;
+        config.photometryAnnulusOuterFwhmFactor = 2;
+        var stars = List.of(new PhotometryStarSelector.Star(48.3, 47.6, 100_000));
+        var measurement = ApertureMeasurer.measure(toPixels(image, DoubleUnaryOperator.identity()),
+                2.355 * sigma, stars, null, 70_000, config);
+        var geometry = io.github.ppissias.jtransient.config.PhotometryGeometry.resolve(config, measurement.fwhm);
+        assertEquals(geometry.mainRadius(), measurement.radii[ApertureMeasurer.R_MAIN], 0);
+        assertEquals(100_000, measurement.flux[ApertureMeasurer.R_MAIN][0], 1000);
+        assertEquals(SKY, measurement.sky[0], 1);
+        assertEquals(0, measurement.flags[0]);
+        assertEquals(2, geometry.adjustments(config, measurement.fwhm).size());
+    }
+
+    @Test
     public void lowSkyNoiseIsNotTakenForPaddingButADeadPixelIs() {
         // A sky of 60 ADU with 20 ADU of noise: pixels below half the sky are ordinary noise, not padding.
         double sigma = 1.3;

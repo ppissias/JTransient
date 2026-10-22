@@ -12,6 +12,7 @@ package io.github.ppissias.jtransient.engine;
 import io.github.ppissias.jtransient.execution.CancellableTasks;
 import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.config.DetectionConfigRules;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.FrameDriftAnalyzer;
 import io.github.ppissias.jtransient.core.MasterMapGenerator;
@@ -392,9 +393,33 @@ public final class CalibratedAutoTuner {
                                                            DetectionConfig baseConfig,
                                                            JTransientAutoTuner.AutoTuneProfile profile,
                                                            TransientEngineProgressListener listener) {
+        JTransientAutoTuner.AutoTunerResult result = tuneSnapshot(poolFrames, baseConfig, profile, listener);
+        if (!result.success) result.optimizedConfig = baseConfig;
+        return result;
+    }
+
+    public static JTransientAutoTuner.AutoTunerResult tuneSnapshot(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+            JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener,
+            io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
+        try (CancellationScope scope = CancellationScope.open(cancellation)) {
+            CancellationScope.check();
+            JTransientAutoTuner.AutoTunerResult result = tuneSnapshot(poolFrames, baseConfig, profile, listener);
+            CancellationScope.check();
+            return result;
+        }
+    }
+
+    public static JTransientAutoTuner.AutoTunerResult tuneSnapshot(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+            JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener) {
+        CancellationScope.check();
+        return tuneCaptured(poolFrames, DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION), profile, listener);
+    }
+
+    private static JTransientAutoTuner.AutoTunerResult tuneCaptured(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+            JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener) {
         JTransientAutoTuner.AutoTunerResult result = new JTransientAutoTuner.AutoTunerResult();
         result.optimizedConfig = baseConfig;
-        Calibration calibration = calibrate(poolFrames, baseConfig, listener);
+        Calibration calibration = calibrateCaptured(poolFrames, baseConfig, listener);
         result.calibration = calibration;
         StringBuilder report = new StringBuilder("=== JTransient Calibrated Auto-Tuning Report ===\n");
         report.append("Profile: ").append(profile.displayName()).append("\n");
@@ -445,6 +470,12 @@ public final class CalibratedAutoTuner {
     public static Calibration calibrate(List<ImageFrame> poolFrames,
                                         DetectionConfig baseConfig,
                                         TransientEngineProgressListener listener) {
+        CancellationScope.check();
+        return calibrateCaptured(poolFrames, DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION), listener);
+    }
+
+    private static Calibration calibrateCaptured(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+                                                 TransientEngineProgressListener listener) {
         CancellationScope.check();
         long start = System.currentTimeMillis();
         Calibration calibration = new Calibration();

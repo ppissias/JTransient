@@ -83,4 +83,58 @@ public class TrackCrossingTest {
         d.fwhm = 3.0;
         return d;
     }
+
+    @Test
+    public void tracksAndSlowMoverCandidatesUseTheExpandedOuterAnnulus() {
+        DetectionConfig config = expandedGeometry();
+        var stars = List.of(new PhotometryStarSelector.Star(110, 100, 1000),
+                new PhotometryStarSelector.Star(125, 100, 1000));
+        VariableStarAnalyzer.Input input = new VariableStarAnalyzer.Input();
+        input.frames = List.of(new ImageFrame(0, "frame0.fits", new short[1][1], -1, -1));
+        input.masterStars = new ArrayList<>();
+        SourceExtractor.DetectedObject detection = new SourceExtractor.DetectedObject(100, 100, 5000, 10);
+        detection.sourceFrameIndex = 0;
+        detection.fwhm = 2;
+        TrackLinker.Track track = new TrackLinker.Track();
+        track.points.add(detection);
+        input.tracks = List.of(track);
+        var trackMeasurement = new ApertureMeasurer.FrameMeasurement(2, stars.size());
+        VariableStarAnalyzer.flagCrossings(input, stars, input.masterStars,
+                new ApertureMeasurer.FrameMeasurement[]{trackMeasurement}, config);
+        assertEquals(PhotometryFlags.CROSSING, trackMeasurement.flags[0] & PhotometryFlags.CROSSING);
+        assertEquals(0, trackMeasurement.flags[1] & PhotometryFlags.CROSSING);
+        input.tracks = List.of();
+        input.slowMoverCandidates = List.of(detection);
+        var slowMeasurement = new ApertureMeasurer.FrameMeasurement(2, stars.size());
+        VariableStarAnalyzer.flagCrossings(input, stars, input.masterStars,
+                new ApertureMeasurer.FrameMeasurement[]{slowMeasurement}, config);
+        assertEquals(PhotometryFlags.CROSSING, slowMeasurement.flags[0] & PhotometryFlags.CROSSING);
+        assertEquals(0, slowMeasurement.flags[1] & PhotometryFlags.CROSSING);
+    }
+
+    @Test
+    public void frameDetectionsUseTheExpandedInnerAnnulusWithoutFlaggingTheOuterSkyRing() {
+        DetectionConfig config = expandedGeometry();
+        var stars = List.of(new PhotometryStarSelector.Star(108, 100, 1000),
+                new PhotometryStarSelector.Star(111, 100, 1000));
+        VariableStarAnalyzer.Input input = new VariableStarAnalyzer.Input();
+        input.masterStars = new ArrayList<>();
+        SourceExtractor.DetectedObject detection = new SourceExtractor.DetectedObject(100, 100, 5000, 10);
+        detection.peakSigma = 10;
+        detection.rawPixels = List.of(new SourceExtractor.Pixel(100, 100, (short) 100));
+        input.frameDetections = List.of(List.of(detection));
+        var measurement = new ApertureMeasurer.FrameMeasurement(2, stars.size());
+        VariableStarAnalyzer.flagCrossings(input, stars, input.masterStars,
+                new ApertureMeasurer.FrameMeasurement[]{measurement}, config);
+        assertEquals(PhotometryFlags.CROSSING, measurement.flags[0] & PhotometryFlags.CROSSING);
+        assertEquals(0, measurement.flags[1] & PhotometryFlags.CROSSING);
+    }
+
+    private static DetectionConfig expandedGeometry() {
+        DetectionConfig config = new DetectionConfig();
+        config.photometryApertureFwhmFactor = 4;
+        config.photometryAnnulusInnerFwhmFactor = 1;
+        config.photometryAnnulusOuterFwhmFactor = 2;
+        return config;
+    }
 }

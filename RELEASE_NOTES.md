@@ -12,4 +12,8 @@ In preparation: changes since 1.0.4 are collected here and completed at release.
 
 ### API changes
 
+- **JA-01: captured configuration and shared rules.** Engine operations, both tuners and direct calibration capture private settings before processing. `DetectionConfigRules` exposes metadata for all 107 fields, operation-scoped structured validation and explicit alignment with field/rule IDs and adjustment directions. Non-finite consumed values are errors; finite legacy values, sentinels and scientific-policy conflicts remain accepted with advice. No serialized config fields/defaults change.
+- Both tuners add `tuneSnapshot(...[, cancellation])` with detached fallback configs. Existing `tune` overloads preserve the same-reference fallback contract. SpacePixels consumes the rules for GUI, profiles, API and iterative requests. This is a coordinated local source integration; published-pair compatibility still needs release validation.
+- `PhotometryGeometry` centralizes existing effective aperture/annulus pixel margins and exposes structured radius adjustments. Selection and crossing checks now follow expanded measurement radii instead of raw factors; configured factors remain unchanged. Targeted edge/crossing/flux tests cover custom/legacy factors. On the 153-frame africano-reg reference sequence, full scientific snapshots remain byte-identical to the pre-JA-01 baseline (excluding execution timings, hashing image/mask arrays).
+
 - `TrackLinker.AnomalyDetection.lowConfidence` is removed. The anomalies it marked, those on a streak in the same frame, are now pieces of that streak's track in `PipelineResult.tracks` instead of entries in `PipelineResult.anomalies`.

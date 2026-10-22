@@ -11,6 +11,7 @@ package io.github.ppissias.jtransient.photometry;
 
 import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.config.PhotometryGeometry;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.PixelEncoding;
 
@@ -40,8 +41,8 @@ final class ApertureMeasurer {
      * broadening near 0.6 FWHM; at 1.0 FWHM the aperture already holds 94% of the flux and the
      * index barely moves.
      */
-    static final double CI_INNER_FWHM_FACTOR = 0.7;
-    static final double CI_OUTER_FWHM_FACTOR = 2.5;
+    static final double CI_INNER_FWHM_FACTOR = PhotometryGeometry.CONCENTRATION_INNER_FACTOR;
+    static final double CI_OUTER_FWHM_FACTOR = PhotometryGeometry.LARGEST_COMPARISON_FACTOR;
 
     /** Stars used to measure the registration offset and FWHM, skipping the brightest (possibly saturated) tenth. */
     private static final int SHAPE_STARS = 50;
@@ -53,7 +54,6 @@ final class ApertureMeasurer {
     /** An annulus with more floor pixels than this share is treated as void padding. */
     private static final double MAX_FLOOR_SHARE_IN_ANNULUS = 0.5;
     private static final int SUPERSAMPLE = 5;
-    private static final double MIN_RADIUS_PIXELS = 1.0;
 
     /** Measurements of every selected star on one frame. */
     static final class FrameMeasurement {
@@ -119,19 +119,19 @@ final class ApertureMeasurer {
                                     DetectionConfig config) {
         int n = stars.size();
         FrameMeasurement m = new FrameMeasurement(extractionFwhm, n);
-        double guideInner = config.photometryAnnulusInnerFwhmFactor * extractionFwhm;
-        double guideOuter = Math.max(guideInner + 2.0, config.photometryAnnulusOuterFwhmFactor * extractionFwhm);
-        measureShapeAndOffset(pixels, stars, extractionFwhm, guideInner, guideOuter, otherStarMask, m);
+        PhotometryGeometry guide = PhotometryGeometry.resolve(config, extractionFwhm);
+        measureShapeAndOffset(pixels, stars, extractionFwhm, guide.annulusInnerRadius(), guide.annulusOuterRadius(), otherStarMask, m);
 
         double fwhm = m.fwhm;
-        m.radii[R_CI_INNER] = Math.max(MIN_RADIUS_PIXELS, CI_INNER_FWHM_FACTOR * fwhm);
-        m.radii[R_SMALL] = Math.max(MIN_RADIUS_PIXELS, 1.0 * fwhm);
-        m.radii[R_MAIN] = Math.max(MIN_RADIUS_PIXELS, config.photometryApertureFwhmFactor * fwhm);
-        m.radii[R_LARGE] = Math.max(MIN_RADIUS_PIXELS, 2.0 * fwhm);
-        m.radii[R_CI_OUTER] = Math.max(MIN_RADIUS_PIXELS, CI_OUTER_FWHM_FACTOR * fwhm);
-        double maxApertureRadius = Arrays.stream(m.radii).max().orElse(MIN_RADIUS_PIXELS);
-        double innerRadius = Math.max(maxApertureRadius + 1.0, config.photometryAnnulusInnerFwhmFactor * fwhm);
-        double outerRadius = Math.max(innerRadius + 2.0, config.photometryAnnulusOuterFwhmFactor * fwhm);
+        PhotometryGeometry geometry = PhotometryGeometry.resolve(config, fwhm);
+        m.radii[R_CI_INNER] = geometry.concentrationInnerRadius();
+        m.radii[R_SMALL] = geometry.smallRadius();
+        m.radii[R_MAIN] = geometry.mainRadius();
+        m.radii[R_LARGE] = geometry.largeRadius();
+        m.radii[R_CI_OUTER] = geometry.concentrationOuterRadius();
+        double maxApertureRadius = geometry.largestApertureRadius();
+        double innerRadius = geometry.annulusInnerRadius();
+        double outerRadius = geometry.annulusOuterRadius();
 
         double[] floorShares = new double[n];
         Arrays.fill(floorShares, Double.NaN);

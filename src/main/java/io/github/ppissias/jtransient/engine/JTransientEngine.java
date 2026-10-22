@@ -10,6 +10,7 @@
 package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.config.DetectionConfigRules;
 import io.github.ppissias.jtransient.execution.CancellableTasks;
 import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.execution.CancellationToken;
@@ -196,7 +197,8 @@ public class JTransientEngine implements AutoCloseable {
 
     public MasterStackResult generateMasterStackWithDetails(List<ImageFrame> inputFrames, DetectionConfig config,
                                                             TransientEngineProgressListener listener, CancellationToken cancellation) throws Exception {
-        return executeOperation(cancellation, () -> generateMasterStackWithDetailsInternal(inputFrames, config, listener));
+        return executeOperation(cancellation, () -> generateMasterStackWithDetailsInternal(inputFrames,
+                DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.MASTER_STACK), listener));
     }
 
     private MasterStackResult generateMasterStackWithDetailsInternal(List<ImageFrame> inputFrames, DetectionConfig config,
@@ -338,7 +340,8 @@ public class JTransientEngine implements AutoCloseable {
     }
 
     public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack, CancellationToken cancellation) throws Exception {
-        return executeOperation(cancellation, () -> detectTransientsInternal(inputFrames, config, listener, providedMasterStack));
+        return executeOperation(cancellation, () -> detectTransientsInternal(inputFrames,
+                DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.TRANSIENTS), listener, providedMasterStack));
     }
 
     private List<FrameTransients> detectTransientsInternal(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
@@ -754,7 +757,11 @@ public class JTransientEngine implements AutoCloseable {
     }
 
     public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack, CancellationToken cancellation) throws Exception {
-        return executeOperation(cancellation, () -> runPipelineInternal(inputFrames, config, listener, providedMasterStack));
+        return executeOperation(cancellation, () -> runPipelineInternal(inputFrames,
+                DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.PIPELINE,
+                        inputFrames != null && inputFrames.stream().anyMatch(frame -> frame != null && frame.timestamp != -1L)
+                                ? DetectionConfigRules.Timing.AVAILABLE : DetectionConfigRules.Timing.MISSING),
+                listener, providedMasterStack));
     }
 
     private PipelineResult runPipelineInternal(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {

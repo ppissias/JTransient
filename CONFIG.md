@@ -4,9 +4,20 @@
 
 All fields are public and mutable. A few implementation details matter when you use it:
 
+- engine operations capture and validate a private primitive snapshot at entry, so later caller edits do not change an active run; callers must synchronize edits during capture
 - the engine never changes the caller's config object; registration fill is handled by the session data area, not by a setting
 - the engine uses stage-local config overrides for master-star and slow-mover extraction so the caller's config object is not left mutated afterward
-- the auto-tuners (`CalibratedAutoTuner.tune(...)`, and the legacy `JTransientAutoTuner.tune(...)`) clone configs while searching and return an optimized clone on success; fallback paths may return the base config
+- both tuners expose `tuneSnapshot(...)`: success and fallback configurations are detached from the caller; compatibility `tune(...)` returns the original base reference on unsuccessful results
+
+## Shared rules and compatibility
+
+`DetectionConfigRules.metadata()` covers all 107 primitive fields with stable names, types, defaults, stages and recommended domains. `validate(config, operation[, timing])` returns immutable structured issues; it does not change the DTO. `snapshot` clones then rejects error-level issues. `align` returns an independent copy plus changes identifying the rule, field, related fields, old/new values and direction. No engine operation implicitly aligns scientific settings.
+
+Non-finite values read by an operation are errors. `CONFIGURATION` checks every numeric field for finite serialization, even disabled settings. Other scopes follow actual consumers: master-stack quality, transient extraction, the full pipeline and enabled stages, standalone extraction, legacy tuning (`AUTO_TUNE`) and calibrated tuning (`CALIBRATION`). The calibrated tuner does not consume the quality settings; both tuners replace several detection settings during their searches. See [PIPELINE.md](PIPELINE.md#configuration-snapshots-and-shared-rules).
+
+Finite values outside recommended domains remain warnings, not new rejection limits. Preserve master-grow <= 0 (automatic), nonpositive photometry caps (uncapped), nonpositive shape/brightness ratios (disabled), and nonpositive track-count defaults. Positive ratios below 1 warn. Relative tolerances may exceed 1; signed split-half correlation spans -1 to 1. Independent images' sigma/minimum-pixel thresholds are not ordered. Persistence may exceed the minimum measurement count; actual data governs readiness.
+
+`LEGACY_GUI` aligns the original six SpacePixels pairs in their historical directions, including disabled preferences when applied to `CONFIGURATION`. `REVIEWED_CONSISTENCY` aligns enabled grow/seed and slow-mover pairs, adds hidden quality grow and limited-readiness amplitude, and excludes rhythm/jump. Other findings (geometric jitter/jump, star-cap impossibility, configured annulus geometry and anomaly redundancy) are advisory only. Geometric jitter/jump checks depend on `Timing` because timestamp-free data forces that branch even when its checkbox is off. Unknown timing yields conditional advice, not a readiness verdict.
 
 This document tracks the fields that actually exist in `src/main/java/io/github/ppissias/jtransient/config/DetectionConfig.java`. The defaults given are the engine's. SpacePixels ships its own profile (`src/dist/config/default_detection_profile.json` in SpacePixels), which differs on purpose, for example:
 
@@ -402,6 +413,7 @@ Minimum fraction of consistent jumps required by the rhythm check.
 Minimum median jump required for a geometric track.
 
 - tracks whose median step falls below this are treated as stationary leakage
+- this is not universally bounded by `maxJumpPixels`: geometric pruning can remove an intermediate point, increasing the remaining step, and untimed streak checks also use rhythm. The shared validator warns; only the explicit legacy GUI alignment policy lowers it to the raw jump cap.
 
 ## 5. Session Rejection
 
@@ -591,6 +603,8 @@ Main aperture radius in units of each frame's FWHM. Each brightness range of sta
 ### `photometryAnnulusInnerFwhmFactor` / `photometryAnnulusOuterFwhmFactor` (defaults `3.0` / `5.0`)
 
 Sky annulus radii in FWHM. Pixels of photometry's own star list (extracted from the median stack at 3 sigma, independent of the detection settings) are masked in the annulus. A star is not measured when its neighbours add more than 2% light to its main aperture, a neighbour lies within 1 FWHM, or a neighbour with at least 10% of its flux lies within the inner radius. A frame detection marks a star as crossed only when it peaks at 5 sigma or more and reaches the inner radius.
+
+`PhotometryGeometry.resolve(config, measuredFwhm)` resolves effective pixel radii consistently for selection, shape/offset estimation, measurement and crossing/edge checks. Each aperture has a 1 px floor; comparison apertures extend through 2.5 FWHM, even when the configured main aperture is smaller. The inner annulus is at least 1 px outside the largest aperture, and the outer annulus at least 2 px beyond the inner. Selection also retains its existing registration-offset allowance. Frame detections use the effective inner radius; tracks and slow movers use the effective outer radius. `geometry.adjustments(config, fwhm)` exposes field/rule IDs and configured/effective pixel values for diagnostics. Factors, including legacy crossed or nonpositive finite values, are not rewritten or rejected; the geometry warning describes runtime expansion rather than an automatic profile correction.
 
 ### `photometrySaturationFraction` (default `0.85`)
 

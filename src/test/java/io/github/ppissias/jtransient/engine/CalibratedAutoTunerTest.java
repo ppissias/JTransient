@@ -118,12 +118,20 @@ public class CalibratedAutoTunerTest {
 
     @Test
     public void tuneReturnsTheChosenSettings() {
-        JTransientAutoTuner.AutoTunerResult result = CalibratedAutoTuner.tune(createFrames(), new DetectionConfig(),
-                JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
+        DetectionConfig base = new DetectionConfig();
+        DetectionConfig original = base.clone();
+        JTransientAutoTuner.AutoTunerResult result = CalibratedAutoTuner.tuneSnapshot(createFrames(), base,
+                JTransientAutoTuner.AutoTuneProfile.MEDIUM, (percent, message) -> base.qualitySigmaMultiplier = 17);
         assertTrue(result.telemetryReport, result.success);
         assertTrue(result.summary.contains("Medium profile"));
         assertTrue(result.optimizedConfig.growSigmaMultiplier < result.optimizedConfig.detectionSigmaMultiplier);
         assertTrue("the result carries the measurement of every profile", result.calibration != null && result.calibration.success);
+        assertEquals(original.qualitySigmaMultiplier, result.optimizedConfig.qualitySigmaMultiplier, 0);
+        assertEquals(original.detectionSigmaMultiplier, base.detectionSigmaMultiplier, 0);
+        assertEquals(original.growSigmaMultiplier, base.growSigmaMultiplier, 0);
+        assertEquals(original.masterSigmaMultiplier, base.masterSigmaMultiplier, 0);
+        assertEquals(17, base.qualitySigmaMultiplier, 0);
+        org.junit.Assert.assertNotSame(base, result.optimizedConfig);
     }
 
     @Test

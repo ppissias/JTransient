@@ -16,7 +16,9 @@ import com.google.gson.annotations.SerializedName;
  *
  * <p>The fields are intentionally public so applications can tune the detector directly,
  * persist settings to JSON, and clone a baseline config before running auto-tuning or
- * dataset-specific overrides.</p>
+ * dataset-specific overrides. Engine operations and tuners capture private primitive snapshots at entry;
+ * later edits do not change an active operation. Use {@link DetectionConfigRules} for shared validation,
+ * metadata and explicit alignment. Synchronize caller writes that overlap snapshot capture.</p>
  */
 public class DetectionConfig implements Cloneable {
 

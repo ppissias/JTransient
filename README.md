@@ -16,6 +16,8 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 - `JTransientEngine.detectTransients(...)`: same early pipeline, but stops after the stationary-star veto and returns per-frame transients
 - `JTransientEngine.generateMasterStack(...)`: precomputes a reusable median master stack
 - `SourceExtractor.extractSources(...)`: standalone single-frame object extraction
+- `DetectionConfigRules`: shared, operation-scoped validation/metadata and explicit copy-based alignment; engine operations capture settings before processing
+- `CalibratedAutoTuner.tuneSnapshot(...)` / `JTransientAutoTuner.tuneSnapshot(...)`: detached tuning results, including unsuccessful fallback configs; legacy `tune(...)` retains fallback alias compatibility
 
 ## Documentation
 
@@ -230,7 +232,7 @@ public final class AutoTuneExample {
         List<ImageFrame> frames = loadFrames();
         DetectionConfig baseConfig = new DetectionConfig();
 
-        JTransientAutoTuner.AutoTunerResult tuning = CalibratedAutoTuner.tune(
+        JTransientAutoTuner.AutoTunerResult tuning = CalibratedAutoTuner.tuneSnapshot(
                 frames,
                 baseConfig,
                 JTransientAutoTuner.AutoTuneProfile.MEDIUM,

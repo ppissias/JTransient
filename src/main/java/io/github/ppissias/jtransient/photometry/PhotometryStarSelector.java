@@ -10,6 +10,7 @@
 package io.github.ppissias.jtransient.photometry;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.config.PhotometryGeometry;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.PixelEncoding;
 import io.github.ppissias.jtransient.core.SourceExtractor;
@@ -93,12 +94,13 @@ final class PhotometryStarSelector {
                              DataArea dataArea) {
         int height = masterStack.length;
         int width = masterStack[0].length;
-        double outerRadius = config.photometryAnnulusOuterFwhmFactor * sessionFwhm + OFFSET_ALLOWANCE_PIXELS;
-        double innerRadius = config.photometryAnnulusInnerFwhmFactor * sessionFwhm;
+        PhotometryGeometry geometry = PhotometryGeometry.resolve(config, sessionFwhm);
+        double outerRadius = geometry.annulusOuterRadius() + OFFSET_ALLOWANCE_PIXELS;
+        double innerRadius = geometry.annulusInnerRadius();
         DataArea area = dataArea != null ? dataArea : DataArea.fullFrame(width, height);
 
         NeighbourIndex neighbours = new NeighbourIndex(masterStars, Math.max(4.0, innerRadius));
-        double apertureRadius = config.photometryApertureFwhmFactor * sessionFwhm;
+        double apertureRadius = geometry.mainRadius();
         double[] enclosed = enclosedFractionTable(sessionFwhm / 2.355, apertureRadius, innerRadius + apertureRadius);
         telemetry.masterStarsConsidered = masterStars.size();
 

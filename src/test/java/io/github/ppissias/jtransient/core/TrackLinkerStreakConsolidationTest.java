@@ -269,17 +269,19 @@ public class TrackLinkerStreakConsolidationTest {
     @Test
     public void findMovingObjectsLinksAStreakThatMoves() {
         DetectionConfig config = new DetectionConfig();
-        SourceExtractor.DetectedObject first = createStreak(20.0, 40.0, 0, 0.0, 12.0, 0L);
-        SourceExtractor.DetectedObject second = createStreak(40.0, 40.0, 1, 0.0, 12.0, 120_000L);
-        SourceExtractor.DetectedObject third = createStreak(60.0, 40.0, 2, 0.0, 12.0, 240_000L);
-
-        List<List<SourceExtractor.DetectedObject>> frames = List.of(List.of(first), List.of(second), List.of(third));
-        TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
-                frames, new ArrayList<>(), config, null, 100, 100);
-
-        assertEquals(1, result.tracks.size());
-        assertTrue(result.tracks.get(0).isStreakTrack);
-        assertEquals(3, countFrames(result.tracks.get(0)));
+        config.maxJumpPixels = 1;
+        config.rhythmStationaryThreshold = 10;
+        for (boolean timed : new boolean[]{true, false}) {
+            SourceExtractor.DetectedObject first = createStreak(20.0, 40.0, 0, 0.0, 12.0, timed ? 0 : -1);
+            SourceExtractor.DetectedObject second = createStreak(40.0, 40.0, 1, 0.0, 12.0, timed ? 120_000 : -1);
+            SourceExtractor.DetectedObject third = createStreak(60.0, 40.0, 2, 0.0, 12.0, timed ? 240_000 : -1);
+            List<List<SourceExtractor.DetectedObject>> frames = List.of(List.of(first), List.of(second), List.of(third));
+            TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
+                    frames, new ArrayList<>(), config, null, 100, 100);
+            assertEquals(1, result.tracks.size());
+            assertTrue(result.tracks.get(0).isStreakTrack);
+            assertEquals(3, countFrames(result.tracks.get(0)));
+        }
     }
 
     private static int countFrames(TrackLinker.Track track) {

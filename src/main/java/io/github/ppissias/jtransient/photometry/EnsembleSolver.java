@@ -23,7 +23,7 @@ import java.util.Arrays;
 final class EnsembleSolver {
 
     /** Fewest usable stars for a frame to be solved. */
-    static final int MIN_STARS_PER_FRAME = 10;
+    static final int MIN_STARS_PER_FRAME = io.github.ppissias.jtransient.config.DetectionConfigRules.MIN_ENSEMBLE_STARS;
     /** Fewest usable stars for the plane term; below this only the zero point is fitted. */
     private static final int MIN_STARS_FOR_PLANE = 30;
     private static final int MAX_ITERATIONS = 15;

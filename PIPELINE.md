@@ -33,7 +33,9 @@ An engine admits one operation at a time. An overlapping operation, or `shutdown
 
 ## Input Rules
 
-Every `JTransientEngine` entry point and both auto-tuners check their frames first and throw `IllegalArgumentException`, naming the frames, when:
+Configuration capture/validation happens before frame processing; invalid configuration can therefore be reported before an invalid frame sequence.
+
+Every `JTransientEngine` entry point and both auto-tuners check their frames and throw `IllegalArgumentException`, naming the frames, when:
 
 - the frame list is empty (pipeline entry points), frames have no pixels or ragged rows, frames differ in size, or two frames share a sequence index;
 - some frames have a timestamp and others don't (`-1` means missing; 0 is a real time);
@@ -43,6 +45,31 @@ Every `JTransientEngine` entry point and both auto-tuners check their frames fir
 `TrackLinker.findMovingObjects` throws when some detections have a timestamp and others have none. These are the SpacePixels import rules that still apply once the pixels are in memory.
 
 Timestamps are taken as exposure starts. The linker compares them directly; SpacePixels converts to exposure midpoints only for the report.
+
+## Configuration snapshots and shared rules
+
+`DetectionConfig` keeps its public primitive fields and Gson profile shape. Each engine operation, tuner and direct `calibrate` captures its caller's config before progress/worker execution and uses private stage copies thereafter. Later caller edits cannot change that operation. The primitive copy is not a transaction across concurrent edits: synchronize callers that write several fields during capture. Pixel arrays, frame-list ownership and mutable process-wide tuning/debug options are not changed by this contract.
+
+`DetectionConfigRules` is supported public API, independent of SpacePixels and Swing:
+
+- `metadata()` covers all 107 fields with ID, type, default, stage and recommended domain; `pairs()` exposes shared ordering policies.
+- `validate(config, operation[, timing])` returns immutable issues containing rule ID, severity, stage, fields and values, without changing the config.
+- `snapshot(config, operation[, timing])` clones and throws `InvalidConfigurationException` for error-level issues; `issues()` retains the structured diagnostics.
+- `align(config, operation[, policy])` returns a detached config and immutable adjustments (rule/stage/field IDs, old/new values and direction). Engine execution never requests alignment implicitly.
+
+| Operation scope | Settings consumed |
+|---|---|
+| `CONFIGURATION` | All persisted numbers must be finite, including disabled preferences; advisory relationships follow enabled stages. Used by SpacePixels profiles/API requests. |
+| `MASTER_STACK` | Background, extraction shape classification shared by quality, quality metrics and session rejection; not ordinary detection/master-reference thresholds. |
+| `TRANSIENTS` | Shared preparation, frame extraction, master-reference extraction/veto; not downstream linking, optional slow movers, residual analysis or photometry. |
+| `PIPELINE` | Shared preparation/extraction/reference plus linking and enabled optional stages. Timing scopes geometric-branch diagnostics. |
+| `AUTO_TUNE` | Legacy tuner's quality sample, background/shape settings and master seed/minimum; ignores replaced detection/grow/jitter/mask settings and unused session-rejection preferences. |
+| `CALIBRATION` | Calibrated tuner's background/shape settings, master seed/minimum and the base pixel minimum used for streak corridors; no quality or downstream-stage settings. |
+| `EXTRACTION` | Standalone background, extraction and shape settings. Low-level helpers do not automatically capture/validate on every call; direct users can request this scope explicitly. |
+
+Non-finite consumed values are errors; finite out-of-domain or cross-field findings remain warnings/information for legacy compatibility. `LEGACY_GUI` retains the original six pair adjustment directions. `REVIEWED_CONSISTENCY` adds quality-grow and limited-amplitude policies and excludes rhythm/jump, which is not universally bounded after pruning. Neither policy invents a jitter/cap choice or persists resolved annulus factors. See [CONFIG.md](CONFIG.md#shared-rules-and-compatibility).
+
+Both tuners add `tuneSnapshot(frames, base, profile, listener[, cancellation])`, returning independent successful **and fallback** configs. Existing `tune` overloads preserve their original-base reference on unsuccessful results; inspect `success`. Direct `CalibratedAutoTuner.calibrate` also uses captured settings. Cancellation remains distinct from fallback. These APIs first appear in the unreleased `1.0.5` source line; a published dependency pair is not certified by the local composite tests.
 
 ## Entry Point Summary
 

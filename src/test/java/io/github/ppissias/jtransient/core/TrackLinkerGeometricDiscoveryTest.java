@@ -8,6 +8,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Regression tests for the optional geometric point-track linker.
@@ -143,6 +144,28 @@ public class TrackLinkerGeometricDiscoveryTest {
         assertEquals(1, result.telemetry.countP3NonPositiveDelta);
         assertEquals(1, result.telemetry.countP3VelocityMismatch);
         assertEquals(1, result.telemetry.countTrackTooShort);
+    }
+
+    @Test
+    public void pruningCanProduceSteadyStepsAboveTheRawGeometricJumpCap() {
+        DetectionConfig config = new DetectionConfig();
+        config.maxJumpPixels = 1;
+        config.maxStarJitter = 0.6;
+        config.rhythmStationaryThreshold = 1.2;
+        config.rhythmAllowedVariance = 0.8;
+        List<List<SourceExtractor.DetectedObject>> frames = List.of(
+                List.of(createPoint(10, 10, 0, -1, -1)),
+                List.of(createPoint(10.8, 10, 1, -1, -1)),
+                List.of(createPoint(11.3, 10, 2, -1, -1)),
+                List.of(createPoint(12.3, 10, 3, -1, -1)));
+        var result = TrackLinker.findMovingObjects(frames, new ArrayList<>(), config, null, 64, 64);
+        assertEquals(1, result.tracks.size());
+        var track = result.tracks.getFirst();
+        assertEquals(List.of(0, 1, 3), track.points.stream().map(point -> point.sourceFrameIndex).toList());
+        assertTrue(TrackLinker.hasSteadyRhythm(track, config.rhythmAllowedVariance,
+                config.rhythmStationaryThreshold, config.rhythmMinConsistencyRatio));
+        assertEquals(1.5, track.points.get(2).x - track.points.get(1).x, 1e-9);
+        assertEquals(1.2, config.rhythmStationaryThreshold, 0);
     }
 
     private static SourceExtractor.DetectedObject createPoint(

@@ -11,6 +11,7 @@ package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.config.DetectionConfigRules;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.MasterReferenceAnalyzer;
 import io.github.ppissias.jtransient.core.MasterVetoMask;
@@ -490,6 +491,30 @@ public class JTransientAutoTuner {
                                        DetectionConfig baseConfig,
                                        AutoTuneProfile profile,
                                        TransientEngineProgressListener listener) {
+        AutoTunerResult result = tuneSnapshot(allFrames, baseConfig, profile, listener);
+        if (!result.success) result.optimizedConfig = baseConfig;
+        return result;
+    }
+
+    public static AutoTunerResult tuneSnapshot(List<ImageFrame> allFrames, DetectionConfig baseConfig,
+                                              AutoTuneProfile profile, TransientEngineProgressListener listener,
+                                              io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
+        try (CancellationScope scope = CancellationScope.open(cancellation)) {
+            CancellationScope.check();
+            AutoTunerResult result = tuneSnapshot(allFrames, baseConfig, profile, listener);
+            CancellationScope.check();
+            return result;
+        }
+    }
+
+    public static AutoTunerResult tuneSnapshot(List<ImageFrame> allFrames, DetectionConfig baseConfig,
+                                              AutoTuneProfile profile, TransientEngineProgressListener listener) {
+        CancellationScope.check();
+        return tuneCaptured(allFrames, DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.AUTO_TUNE), profile, listener);
+    }
+
+    private static AutoTunerResult tuneCaptured(List<ImageFrame> allFrames, DetectionConfig baseConfig,
+                                               AutoTuneProfile profile, TransientEngineProgressListener listener) {
         CancellationScope.check();
         InputRules.checkFrames(allFrames);
 

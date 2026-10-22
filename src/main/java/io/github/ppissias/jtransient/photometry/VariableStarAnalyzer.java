@@ -12,6 +12,7 @@ package io.github.ppissias.jtransient.photometry;
 import io.github.ppissias.jtransient.execution.CancellableTasks;
 import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.config.PhotometryGeometry;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.core.TrackLinker;
@@ -67,7 +68,7 @@ public final class VariableStarAnalyzer {
      * detection flags a star only when it peaks at CROSSING_PEAK_SIGMA or more, so the detection sigmas don't change
      * them. Sigmas are in units of each image's measured noise. The results still depend on the detection run in
      * other ways: the kept frames and their FWHM, the tracks crossing stars, and the slow-mover candidates, which
-     * flag every star within the outer sky radius (photometryAnnulusOuterFwhmFactor x FWHM) of their footprint in
+     * flag every star within the resolved effective outer sky radius of their footprint in
      * every frame.
      */
     static final double STAR_LIST_SEED_SIGMA = 3.0;
@@ -690,7 +691,7 @@ public final class VariableStarAnalyzer {
      * slow-mover footprints (in every frame). Frame positions are moved into the master system with the
      * frame's measured registration offset, the same correction the apertures use.
      */
-    private static void flagCrossings(Input input,
+    static void flagCrossings(Input input,
                                       List<PhotometryStarSelector.Star> stars,
                                       List<SourceExtractor.DetectedObject> photometryStars,
                                       ApertureMeasurer.FrameMeasurement[] measurements,
@@ -718,7 +719,7 @@ public final class VariableStarAnalyzer {
             ApertureMeasurer.FrameMeasurement m = measurements[j];
             // A detection flags a star only when it reaches the aperture or the gap before the sky ring; the clipped
             // sky median already ignores faint blobs in the ring itself.
-            double radius = config.photometryAnnulusInnerFwhmFactor * m.fwhm;
+            double radius = PhotometryGeometry.resolve(config, m.fwhm).annulusInnerRadius();
             double stationaryRadius = Math.max(config.maxStarJitter, 0.5 * m.fwhm);
             double ox = finiteOrZero(m.offsetX);
             double oy = finiteOrZero(m.offsetY);
@@ -763,7 +764,7 @@ public final class VariableStarAnalyzer {
             for (SourceExtractor.DetectedObject candidate : input.slowMoverCandidates) {
                 CancellationScope.check();
                 for (int j = 0; j < nFrames; j++) {
-                    double radius = config.photometryAnnulusOuterFwhmFactor * measurements[j].fwhm;
+                    double radius = PhotometryGeometry.resolve(config, measurements[j].fwhm).annulusOuterRadius();
                     if (candidate.rawPixels != null && !candidate.rawPixels.isEmpty()) {
                         for (SourceExtractor.Pixel p : candidate.rawPixels) {
                             for (int i : starGrid.within(p.x, p.y, radius)) {
@@ -826,7 +827,7 @@ public final class VariableStarAnalyzer {
             if (sequence < firstSequence || sequence > lastSequence) {
                 continue;
             }
-            double annulus = config.photometryAnnulusOuterFwhmFactor * measurements[j].fwhm;
+            double annulus = PhotometryGeometry.resolve(config, measurements[j].fwhm).annulusOuterRadius();
             boolean observed = false;
             for (double[] p : points) {
                 CancellationScope.check();

@@ -69,6 +69,24 @@ public class PhotometryStarSelectorTest {
     }
 
     @Test
+    public void expandedMeasurementAnnulusAlsoControlsSelectionAtTheImageEdge() {
+        DetectionConfig config = new DetectionConfig();
+        config.photometryApertureFwhmFactor = 4;
+        config.photometryAnnulusInnerFwhmFactor = 1;
+        config.photometryAnnulusOuterFwhmFactor = 2;
+        short[][] stack = new short[240][240];
+        for (short[] row : stack) java.util.Arrays.fill(row, (short) (1000 - 32768));
+        PipelineTelemetry.PhotometryTelemetry telemetry = new PipelineTelemetry.PhotometryTelemetry();
+        var result = PhotometryStarSelector.select(List.of(star(10, 120, 10_000), star(120, 120, 10_000)),
+                stack, 2, 60_000, config, telemetry);
+        assertFalse(selected(result, 10, 120));
+        assertTrue(selected(result, 120, 120));
+        assertEquals(1, telemetry.starsRejectedEdgeOrVoid);
+        assertEquals(1, config.photometryAnnulusInnerFwhmFactor, 0);
+        assertEquals(2, config.photometryAnnulusOuterFwhmFactor, 0);
+    }
+
+    @Test
     public void faintNeighbourDoesNotMakeAStarCrowded() {
         // A neighbour 7.5 mag fainter at two FWHM adds far less than 2% light to the aperture.
         List<SourceExtractor.DetectedObject> stars = new ArrayList<>();
