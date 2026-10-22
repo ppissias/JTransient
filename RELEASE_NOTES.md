@@ -1,5 +1,11 @@
 # JTransient Release Notes
 
+## 1.0.6 (unreleased)
+
+- **Independent tuner operations.** Both tuner facades capture immutable options, defensively copy grids/budgets and retain effective policy provenance. Explicit options support concurrent independent requests. Legacy per-run debug sinks stay silent by default. Existing entry points and legacy fallback aliases remain compatible; `tuneAvailableSnapshot` avoids temporarily changing sample-size globals in SpacePixels.
+- **Whole-operation worker ownership.** `ExecutionPolicy` and owned/borrowed `ExecutionSession` cover engine/tuner batches, stack rows and photometry. Managed nested batches execute inline, borrowed resources remain caller-owned, and completion still joins sibling work. Heap accounting is an explicit scratch estimate, not a process-wide memory guarantee. Reference science outputs remain equivalent; the documented large-frame single sample is slower with higher pool peaks, so no performance improvement is claimed.
+- **Java and compatibility gates.** Java 21 toolchain/`--release 21`, a legacy source/binary API consumer and bytecode checks for adopted config/execution boundaries run under `check`. The coordinated SpacePixels matrix verifies source-built 1.0.5/1.0.6 artifacts with composites disabled and both Gradle/POM metadata. The 1.0.5 section below describes the predecessor unreleased source baseline, not a publicly available artifact; actual Central release availability remains unverified. No publication is performed by these checks.
+
 ## 1.0.5 (unreleased)
 
 In preparation: changes since 1.0.4 are collected here and completed at release. Used by SpacePixels 2026.10-04.

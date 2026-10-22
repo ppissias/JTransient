@@ -32,7 +32,7 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 
 ## Build
 
-This repository is a Gradle Java library project. Install a local JDK first and make sure `java` is available on `PATH`, or that `JAVA_HOME` points to the JDK installation.
+This repository is a Gradle Java library project targeting **Java 21**. Install JDK 21 and make sure `java` is available on `PATH`, or that `JAVA_HOME` points to it. The build selects a Java 21 toolchain and compiles all source sets with `--release 21`; Java 25 is not the baseline.
 
 For development, document every new Java class, record, enum and interface at type level, including nested types and tests. Give each new method and explicit constructor a concise Javadoc description, including private helpers; explain important ownership/mutation, units and compatibility contracts. Keep these descriptions current when behavior changes and include them in the feature commit. Machine-specific agent instructions remain in the ignored local `AGENTS.md`.
 
@@ -41,6 +41,8 @@ For development, document every new Java class, record, enum and interface at ty
 ```
 
 The project name is `JTransient` and the current library version in `build.gradle` is `1.0.6`. SpacePixels retains its published 1.0.5 dependency until 1.0.6 is released and uses the new isolated-tuner capability when available.
+
+`check` also runs a legacy public-API consumer and bytecode dependency checks for the adopted `config`/`execution` boundaries. For binary compatibility, pass `-PcompatibilityBaselineJar=<path-to-previous-engine.jar>`: the consumer compiles against that previous JAR but executes against this engine. Without that property it is a current-source compatibility canary, not a binary comparison. See the sibling [staged pair workflow](../SpacePixels/docs/engine-compatibility.md) for old/new SpacePixels artifact validation with composites disabled. Local staging is not Maven Central certification or publication.
 
 To prepare a Maven Central release bundle locally:
 

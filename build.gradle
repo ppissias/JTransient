@@ -31,12 +31,71 @@ base {
 }
 
 java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
     withSourcesJar()
     withJavadocJar()
 }
 
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    options.release = 21
+}
+
+sourceSets {
+    compatibility {
+        compileClasspath = configurations.runtimeClasspath + sourceSets.main.output
+        runtimeClasspath = output + sourceSets.main.output + configurations.runtimeClasspath
+    }
+}
+
+def compatibilityBaselineJar = providers.gradleProperty('compatibilityBaselineJar')
+tasks.named('compileCompatibilityJava', JavaCompile) {
+    if (compatibilityBaselineJar.isPresent()) {
+        classpath = files(compatibilityBaselineJar.get()) + configurations.runtimeClasspath
+    }
+}
+
+tasks.register('legacyApiCompatibility', JavaExec) {
+    group = 'verification'
+    description = 'Compiles an existing API consumer (optionally against a baseline JAR) and runs it on the current engine.'
+    dependsOn tasks.named('compatibilityClasses')
+    classpath = sourceSets.compatibility.runtimeClasspath
+    mainClass = 'io.github.ppissias.jtransient.compatibility.LegacyApiConsumer'
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+}
+
+tasks.register('verifyArchitecture') {
+    group = 'verification'
+    description = 'Checks bytecode dependencies of the adopted configuration/execution boundaries using JDK jdeps.'
+    dependsOn tasks.named('classes')
+    inputs.files(sourceSets.main.output.classesDirs)
+    inputs.files(configurations.runtimeClasspath)
+    def report = layout.buildDirectory.file('reports/architecture/dependencies.txt')
+    outputs.file(report)
+    doLast {
+        def launcher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }.get()
+        def suffix = System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('windows') ? '.exe' : ''
+        def jdeps = launcher.metadata.installationPath.file("bin/jdeps${suffix}").asFile.absolutePath
+        def output = providers.exec {
+            commandLine([jdeps, '--ignore-missing-deps', '--multi-release', '21', '-verbose:package', '-filter:none',
+                         '--class-path', configurations.runtimeClasspath.asPath] +
+                    sourceSets.main.output.classesDirs.files.collect { it.absolutePath })
+        }.standardOutput.asText.get()
+        def violations = []
+        output.eachLine { line ->
+            def dependency = line =~ /^\s*io\.github\.ppissias\.jtransient\.(config|execution)(?:\.[\w]+)*\s+->\s+io\.github\.ppissias\.jtransient\.([\w]+)/
+            if (dependency.find() && dependency.group(2) != dependency.group(1)) violations.add(line.trim())
+        }
+        report.get().asFile.parentFile.mkdirs()
+        report.get().asFile.text = output
+        if (violations) throw new GradleException("Configuration/execution boundary violations: ${violations.join('; ')}")
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('legacyApiCompatibility'), tasks.named('verifyArchitecture')
 }
 
 tasks.withType(Javadoc).configureEach {

@@ -22,6 +22,8 @@ The legacy `Options.Builder.debug` and `diagnosticSink` control only that operat
 
 ## Cancellation and worker lifetime
 
+Runtime diagnostic sinks are transient and excluded from serialized option provenance. Captured policy JSON is not a factory for restoring a live operation or callback; construct new validated options/builders for execution.
+
 The cancellation types live in `io.github.ppissias.jtransient.execution`. An operation can take a thread-safe `CancellationToken` through the final parameter of `runPipeline(..., providedMasterStack, cancellation)`, `detectTransients(..., providedMasterStack, cancellation)`, `generateMasterStackWithDetails(..., cancellation)` or either tuner's profile-based `tune(..., cancellation)` overload. Existing signatures remain available and inherit an enclosing cancellation scope, or use no requested cancellation when there is none.
 
 ```java

@@ -137,7 +137,7 @@ public class JTransientAutoTuner {
         private final int preferredCropSizeLarge;
         private final int preferredCropSizeSmall;
         private final int minCropSize;
-        private final java.util.function.Consumer<String> diagnosticSink;
+        private final transient java.util.function.Consumer<String> diagnosticSink;
 
         /** Copies and validates a builder before progress callbacks or scientific work can start. */
         private Options(Builder builder) {

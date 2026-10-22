@@ -41,7 +41,7 @@ Statuses distinguish proposals from work already started. High priority means to
 | JA-08 | Medium | Accepted (2026-10-22) | Separate tuning measurement, selection and presentation | Measurements can explain a choice without depending on report construction or ambiguous legacy fields. |
 | JA-09 | Medium | Accepted (2026-10-22) | Unify progress and stage outcome reporting | Callers can distinguish disabled, unavailable and completed-empty stages without parsing prose. |
 | JA-10 | Medium; before expanding reuse | Accepted (2026-10-22) | Carry provenance with reusable master references | Callers can identify a reference's origin and deliberately reuse it across compatible runs. |
-| JA-11 | Medium | Accepted (2026-10-22) | Declare and verify the supported library contract | Releases have a known Java target and a tested SpacePixels/JTransient dependency pair. |
+| JA-11 | Medium | In progress; Java 21 and staged artifact gates implemented, Central availability remains | Declare and verify the supported library contract | Releases have a known Java target and a tested SpacePixels/JTransient dependency pair. |
 
 ### JA-01. Capture and validate configuration at an operation boundary
 
@@ -136,6 +136,8 @@ Before caching master stars, masks or full preparation, define invalidation sepa
 **Acceptance.** Verify same-run reuse, intentional full-session/subset reuse, a foreign same-size reference, changed master-extraction settings and changed frame rejection. Compare cached and uncached results where caching is later introduced. Report actual saved work and retained heap before expanding the reuse API.
 
 ### JA-11. Verify architecture and release contracts explicitly
+
+**Implemented slice (2026-10-22).** Java 21 toolchain/release target, a legacy source/binary consumer and bytecode dependency checks for adopted `config`/`execution` boundaries are part of `check`. SpacePixels has explicit old/new no-composite artifact verification and a repeatable local staging/matrix script. See [current validation instructions](../SpacePixels/docs/engine-compatibility.md). Maven Central does not currently resolve the default 1.0.5 dependency; local staged artifacts cannot certify public availability. Extend the boundary checks as later JA seams are adopted; no empty target packages or full-graph layering claim is introduced.
 
 **Evidence.** [build.gradle](build.gradle) uses `java-library`, sources/Javadoc artifacts and a small dependency set, but declares no Java toolchain, release target or compatibility level. [README.md](README.md#build) requests a local JDK without specifying a minimum supported version. Existing tests focus on scientific components and several input/concurrency contracts; the concurrency test name does not imply coverage of run overlap or cancellation. The public facade also exposes implementation-nested types, so moving internal code can affect source/binary consumers. SpacePixels can use either a published dependency or a sibling composite build.
 

@@ -16,6 +16,15 @@ import static org.junit.Assert.*;
 
 /** Verifies per-operation grid, sample, budget and diagnostics ownership without changing process-wide tuning state. */
 public class AutoTunerOptionsTest {
+    /** Keeps caller-owned runtime sinks out of JSON provenance while preserving captured scientific grids and limits. */
+    @Test
+    public void diagnosticSinkIsNotSerializedAsMeasurementProvenance() {
+        String json = new com.google.gson.GsonBuilder().serializeNulls().create().toJson(legacyOptions(5, 4));
+        assertFalse(json.contains("diagnosticSink"));
+        assertTrue(json.contains("sampleSize"));
+        assertTrue(json.contains("sigmasToTest"));
+    }
+
     /** Verifies both tuner facades borrow a reusable session and record its actual resource policy in their results. */
     @Test
     public void borrowedSessionPolicyAndOwnershipArePreserved() {
