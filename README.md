@@ -26,7 +26,9 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 | [ALGORITHM.md](ALGORITHM.md) | Detection, slow movers, variable-star photometry and both auto-tuners in one reference |
 | [PIPELINE.md](PIPELINE.md) | Public entry points, result contracts and progress |
 | [CONFIG.md](CONFIG.md) | `DetectionConfig` fields and engine defaults |
-| [DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md) | Proposed work, maintainer decisions and known limitations |
+| [DEVELOPER.md](DEVELOPER.md) | Principles, working rules, build and code organisation |
+| [DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md) | Pending design and refactoring work |
+| [FEATURE-REQUESTS.md](FEATURE-REQUESTS.md) | Algorithm proposals, maintainer decisions and known limitations |
 | [PUBLISHING.md](PUBLISHING.md) | Maven Central staging and release bundles |
 | [RELEASE_NOTES.md](RELEASE_NOTES.md) | Changes in each library version |
 
@@ -34,7 +36,7 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 
 This repository is a Gradle Java library project targeting **Java 21**. Install JDK 21 and make sure `java` is available on `PATH`, or that `JAVA_HOME` points to it. The build selects a Java 21 toolchain and compiles all source sets with `--release 21`; Java 25 is not the baseline.
 
-For development, document every new Java class, record, enum and interface at type level, including nested types and tests. Give each new method and explicit constructor a concise Javadoc description, including private helpers; explain important ownership/mutation, units and compatibility contracts. Keep these descriptions current when behavior changes and include them in the feature commit. Machine-specific agent instructions remain in the ignored local `AGENTS.md`.
+For development, document every new Java class, record, enum and interface at type level, including nested types and tests. Give each new method and explicit constructor a concise Javadoc description, including private helpers; explain important ownership/mutation, units and compatibility contracts. Keep these descriptions current when behavior changes and include them in the feature commit. The development rules are in [DEVELOPER.md](DEVELOPER.md); machine-specific paths are in the git-ignored `LOCAL-ENVIRONMENT.txt`.
 
 ```powershell
 .\gradlew.bat build

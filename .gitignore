@@ -10,4 +10,6 @@ build
 bin
 .project
 .classpath
-AGENTS.md
+
+# Machine-specific paths for developers and agents (see AGENTS.md)
+LOCAL-ENVIRONMENT.txt

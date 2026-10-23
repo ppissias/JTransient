@@ -337,7 +337,7 @@ Telemetry includes extraction counts, per-gate rejection counters, shape/overlap
 
 Slow-mover candidates are separate from point/streak tracks and rescued anomalies. Their footprints can flag nearby variable-star measurements across frames. The camera-fixed point-detection filter does not run on these stack candidates.
 
-There are no three-bin temporal stacks or fitted slow-mover motion paths. Proposed/Deferred/Declined changes are tracked in [DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md). Existing geometry/branch coverage is in `SourceExtractorBlobGeometryTest` and `JTransientEngineSlowMoverTest`.
+There are no three-bin temporal stacks or fitted slow-mover motion paths. Proposed, deferred and declined changes are tracked in [FEATURE-REQUESTS.md](FEATURE-REQUESTS.md). Existing geometry/branch coverage is in `SourceExtractorBlobGeometryTest` and `JTransientEngineSlowMoverTest`.
 
 ## 9. Stationary-Star Veto Filtering And Streak Linking
 
@@ -878,7 +878,7 @@ Initial values: `M(i)` is the median of the star's usable magnitudes, and `sigma
 3. **Star solve.** `M(i)` is the `w_ij`-weighted mean of `m(i,j) − Z(j) − a(j)x(i) − b(j)y(i)`.
 4. **Reweight.** Each star's own robust residual sigma is compared with the expected sigma, which is the median own sigma of the 50 stars nearest in magnitude. Then `sigma_i = max(own, expected)`, with a floor of 0.001 mag. Point weights are Cauchy weights, `w_ij = 1 / (1 + (r_ij / (3 sigma_i))^2)`.
 
-The loop stops when no zero point moves by more than 1e-5 mag. It does not test plane-coefficient convergence; this remains deferred finding VS-2 in the [improvement plan](DESIGN-IMPROVEMENTS.md).
+The loop stops when no zero point moves by more than 1e-5 mag. It does not test plane-coefficient convergence; this remains deferred proposal VS-2 in [FEATURE-REQUESTS.md](FEATURE-REQUESTS.md).
 
 A variable star has a large own sigma, so `1 / sigma_i^2` lowers its weight in the frame solve. The variables remove themselves from the reference without having to be identified first. The Cauchy weights also limit the effect of individual bad points that no flag caught. Using `max(own, expected)` stops an unusually quiet star from getting too much weight.
 
@@ -1043,7 +1043,7 @@ These values are in the code and are not configurable:
 - **Saturation is estimated heuristically.** Similar unsaturated maxima can resemble a clipping pile-up; there is no caller-supplied saturation limit (VS-8).
 - **Reference counts have different meanings.** Check B's default 50 references are counted inside its retained brightness range. An ideal selected sample needs at least 55 before further exclusions; selecting exactly 50 cannot satisfy that default check (VS-9).
 
-These limitations remain deferred by the maintainer. The [improvement plan](DESIGN-IMPROVEMENTS.md) records decisions and links the historical component evidence. Earlier crossing-coordinate, timestamp/fragment interpolation and undefined-response findings are implemented fixes, not open proposals.
+These limitations remain deferred by the maintainer; [FEATURE-REQUESTS.md](FEATURE-REQUESTS.md) records them and the decisions. Earlier crossing-coordinate, timestamp/fragment interpolation and undefined-response findings are implemented fixes, not open proposals.
 
 ## 17. Output Assembly
 
@@ -1132,4 +1132,4 @@ The tuner provides a starting extraction configuration for a subsequent full pip
 
 ## 20. Design Decisions And Future Work
 
-[DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md) records proposals, deferred limitations and maintainer decisions. Historical reviews in `docs/archive/` preserve their original evidence, not current specifications. This reference combines the former detection, slow-mover, variable-star and auto-tuner guides; public entry points remain in [PIPELINE.md](PIPELINE.md) and field defaults in [CONFIG.md](CONFIG.md).
+[FEATURE-REQUESTS.md](FEATURE-REQUESTS.md) records algorithm proposals, deferred limitations and maintainer decisions, including the declined ones. This reference combines the former detection, slow-mover, variable-star and auto-tuner guides; public entry points remain in [PIPELINE.md](PIPELINE.md) and field defaults in [CONFIG.md](CONFIG.md).
