@@ -16,6 +16,26 @@ import static org.junit.Assert.*;
 
 /** Verifies per-operation grid, sample, budget and diagnostics ownership without changing process-wide tuning state. */
 public class AutoTunerOptionsTest {
+    /** Both tuning facades propagate caller core diagnostics through owned and borrowed scientific workers. */
+    @Test
+    public void bothTunersInheritCoreDiagnosticsWithoutEnablingLegacyTunerText() {
+        List<String> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
+        var policy = io.github.ppissias.jtransient.execution.ExecutionPolicy.bounded(1);
+        try (var scope = io.github.ppissias.jtransient.execution.DiagnosticContext.open(
+                new io.github.ppissias.jtransient.execution.DiagnosticOptions(true, messages::add));
+             var session = io.github.ppissias.jtransient.execution.ExecutionSession.owned(policy)) {
+            var legacy = JTransientAutoTuner.tuneSnapshot(frames(), new DetectionConfig(), legacyOptions(5, 4),
+                    session, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
+            assertTrue(legacy.success);
+            assertTrue(messages.stream().anyMatch(message -> message.contains("BACKGROUND STATS")));
+            messages.clear();
+            var calibrated = CalibratedAutoTuner.calibrate(frames(), new DetectionConfig(), calibratedOptions(4, 1), session, null);
+            assertTrue(calibrated.failureReason, calibrated.success);
+            assertTrue(messages.stream().anyMatch(message -> message.contains("BACKGROUND STATS")));
+            assertFalse(session.isClosed());
+        }
+    }
+
     /** Keeps caller-owned runtime sinks out of JSON provenance while preserving captured scientific grids and limits. */
     @Test
     public void diagnosticSinkIsNotSerializedAsMeasurementProvenance() {

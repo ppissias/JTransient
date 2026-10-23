@@ -9,6 +9,8 @@
  */
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.execution.DiagnosticContext;
+
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.config.DetectionConfigRules;
 import io.github.ppissias.jtransient.execution.CancellableTasks;
@@ -70,6 +72,10 @@ public class JTransientEngine implements AutoCloseable {
     /** Global debug switch shared by the core library. */
     public static boolean DEBUG = false;
 
+    static {
+        DiagnosticContext.registerLegacyDebugFlag(() -> DEBUG);
+    }
+
     /**
      * A frame is rejected when leaving it out would enlarge the area where every frame has image data by at least
      * this share of the frame: it is shifted far from the others, and keeping it would cost every other frame that
@@ -93,7 +99,8 @@ public class JTransientEngine implements AutoCloseable {
             running = true;
         }
         try (CancellationScope scope = CancellationScope.open(cancellation);
-             ExecutionSession.Scope executionScope = execution.open()) {
+             ExecutionSession.Scope executionScope = execution.open();
+             DiagnosticContext.Scope diagnosticScope = DiagnosticContext.openDefaults()) {
             CancellationScope.check();
             Result result = operation.call();
             CancellationScope.check();
@@ -271,8 +278,8 @@ public class JTransientEngine implements AutoCloseable {
             OperationContext.notify(listener::onProgressUpdate, 0, "Evaluating frames for Master Stack...");
         }
 
-        if (DEBUG) {
-            System.out.println("\n--- JTRANSIENT: PRE-COMPUTING MASTER STACK ---");
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.println("\n--- JTRANSIENT: PRE-COMPUTING MASTER STACK ---");
         }
 
         PipelineTelemetry telemetry = new PipelineTelemetry();
@@ -473,8 +480,8 @@ public class JTransientEngine implements AutoCloseable {
             OperationContext.notify(listener::onProgressUpdate, 0, "Initializing pipeline...");
         }
 
-        if (DEBUG) {
-            System.out.println("\n--- JTRANSIENT: PHASE 1 (Extraction) ---");
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.println("\n--- JTRANSIENT: PHASE 1 (Extraction) ---");
         }
 
         // =================================================================
@@ -563,8 +570,8 @@ public class JTransientEngine implements AutoCloseable {
 
         telemetry.recordStage(PipelineTelemetry.Stage.SOURCE_EXTRACTION, stageStartedNanos);
         stageStartedNanos = System.nanoTime();
-        if (DEBUG) {
-            System.out.println("\n--- JTRANSIENT: PHASE 2 & 3 (Quality Filter) ---");
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.println("\n--- JTRANSIENT: PHASE 2 & 3 (Quality Filter) ---");
         }
 
         if (listener != null) {
@@ -780,12 +787,12 @@ public class JTransientEngine implements AutoCloseable {
         FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = OperationContext.compute(StageId.REGISTRATION, null, () -> FrameDriftAnalyzer.analyze(inputFrames));
 
         telemetry.driftExcludedFrames.addAll(driftAnalysis.failedRegistrationFrames);
-        if (DEBUG && !driftAnalysis.failedRegistrationFrames.isEmpty()) {
-            System.out.println("DEBUG: Dither Diagnostics left out blank or failed-registration frames "
+        if (DiagnosticContext.enabled() && !driftAnalysis.failedRegistrationFrames.isEmpty()) {
+            DiagnosticContext.println("DEBUG: Dither Diagnostics left out blank or failed-registration frames "
                     + "(less than half the pixels valid): " + driftAnalysis.failedRegistrationFrames);
         }
-        if (DEBUG && driftAnalysis.maxPaddingPixels > 0) {
-            System.out.println("DEBUG: Dither Diagnostics found registration padding up to "
+        if (DiagnosticContext.enabled() && driftAnalysis.maxPaddingPixels > 0) {
+            DiagnosticContext.println("DEBUG: Dither Diagnostics found registration padding up to "
                     + driftAnalysis.maxPaddingPixels + " px.");
         }
         return driftAnalysis;
@@ -830,23 +837,23 @@ public class JTransientEngine implements AutoCloseable {
         // PHASE 0 (Generate Deep Master Star Map)
         // =================================================================
         if (providedMasterStack != null) {
-            if (DEBUG) {
-                System.out.println("\n--- JTRANSIENT: PHASE 0 (Using Pre-Computed Master Stack) ---");
+            if (DiagnosticContext.enabled()) {
+                DiagnosticContext.println("\n--- JTRANSIENT: PHASE 0 (Using Pre-Computed Master Stack) ---");
             }
             if (listener != null) {
                 OperationContext.notify(listener::onProgressUpdate, 45, "Using pre-computed Master Stack...");
             }
         } else {
-            if (DEBUG) {
-                System.out.println("\n--- JTRANSIENT: PHASE 0 (Master Map Generation) ---");
+            if (DiagnosticContext.enabled()) {
+                DiagnosticContext.println("\n--- JTRANSIENT: PHASE 0 (Master Map Generation) ---");
             }
             if (listener != null) {
                 OperationContext.notify(listener::onProgressUpdate, 45, "Generating Median Master Stack...");
             }
         }
 
-        if (DEBUG) {
-            System.out.printf("DEBUG: Master Map Config -> Master Sigma: %.2f | Master Grow: %.2f | Master MinPix: %d%n",
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.printf("DEBUG: Master Map Config -> Master Sigma: %.2f | Master Grow: %.2f | Master MinPix: %d%n",
                     config.masterSigmaMultiplier, MasterReferenceAnalyzer.effectiveMasterGrowSigma(config), config.masterMinDetectionPixels);
         }
 
@@ -864,8 +871,8 @@ public class JTransientEngine implements AutoCloseable {
         int sensorHeight = masterReference.sensorHeight;
         int sensorWidth = masterReference.sensorWidth;
 
-        if (DEBUG) {
-            System.out.println("DEBUG: Master Stack generated. Found " + masterStars.size() + " deep stationary objects.");
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.println("DEBUG: Master Stack generated. Found " + masterStars.size() + " deep stationary objects.");
         }
 
         // =================================================================
@@ -885,8 +892,8 @@ public class JTransientEngine implements AutoCloseable {
 
         if (config.enableSlowMoverDetection) {
             stageStartedNanos = System.nanoTime();
-            if (DEBUG) {
-                System.out.println("\n--- JTRANSIENT: PHASE 0.5 (Slow Mover Detection) ---");
+            if (DiagnosticContext.enabled()) {
+                DiagnosticContext.println("\n--- JTRANSIENT: PHASE 0.5 (Slow Mover Detection) ---");
             }
             if (listener != null) {
                 OperationContext.notify(listener::onProgressUpdate, 49, "Analyzing Maximum Stack for Slow Movers...");
@@ -907,15 +914,15 @@ public class JTransientEngine implements AutoCloseable {
             }
             smTelemetry = slowMoverAnalysis.telemetry.toLegacyTelemetry(slowMoverAnalysis.candidates);
 
-            if (DEBUG) {
-                System.out.printf(
+            if (DiagnosticContext.enabled()) {
+                DiagnosticContext.printf(
                         "DEBUG: Slow Mover Shape -> Axis Ratio: %.2f-%.2f | Min Fill: %.2f | Avg Accepted Axis Ratio: %.2f%n",
                         smTelemetry.minAxisRatioThreshold,
                         smTelemetry.maxAxisRatioThreshold,
                         smTelemetry.minFillFactorThreshold,
                         smTelemetry.avgCandidateAxisRatio
                 );
-                System.out.printf(
+                DiagnosticContext.printf(
                         "DEBUG: Slow Mover Filters -> Raw: %d | LowPixels: %d | LowAxis: %d | HighAxis: %d | LowFill: %d | MaskStage: %d | LowMedianOverlap: %d | HighMedianOverlap: %d | Final: %d%n",
                         smTelemetry.rawCandidatesExtracted,
                         smTelemetry.rejectedBelowMinPixels,
@@ -927,7 +934,7 @@ public class JTransientEngine implements AutoCloseable {
                         smTelemetry.rejectedHighMedianSupport,
                         smTelemetry.candidatesDetected
                 );
-                System.out.printf(
+                DiagnosticContext.printf(
                         "DEBUG: Slow Mover Mask -> MinOverlap: %.3f | MaxOverlap: %.3f | AvgOverlap: %.3f | AvgEstimatedMotion: %.2f px%n",
                         smTelemetry.medianSupportOverlapThreshold,
                         smTelemetry.medianSupportMaxOverlapThreshold,
@@ -935,7 +942,7 @@ public class JTransientEngine implements AutoCloseable {
                         smTelemetry.avgEstimatedMotionPixels
                 );
                 if (!smTelemetry.candidateMedianSupportOverlaps.isEmpty()) {
-                    System.out.printf(
+                    DiagnosticContext.printf(
                             "DEBUG: Accepted Slow Mover Overlaps -> %s%n",
                             formatOverlapPercentages(smTelemetry.candidateMedianSupportOverlaps)
                     );
@@ -950,8 +957,8 @@ public class JTransientEngine implements AutoCloseable {
         // =================================================================
         // PHASE 4 (Track Linking)
         // =================================================================
-        if (DEBUG) {
-            System.out.println("\n--- JTRANSIENT: PHASE 4 (Track Linking) ---");
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.println("\n--- JTRANSIENT: PHASE 4 (Track Linking) ---");
         }
 
         // --- THE PROXY LISTENER ---
@@ -972,12 +979,12 @@ public class JTransientEngine implements AutoCloseable {
             cleanFramesObjects.add(extRes.objects);
         }
 
-        if (DEBUG) {
-            System.out.println("DEBUG: TrackLinker input frame timing summary:");
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.println("DEBUG: TrackLinker input frame timing summary:");
             for (int i = 0; i < cleanFrames.size(); i++) {
                 ImageFrame frame = cleanFrames.get(i);
                 int objectCount = cleanFramesData.get(i).objects.size();
-                System.out.printf(
+                DiagnosticContext.printf(
                         "   Frame %d [%s] -> timestamp=%d exposure=%d detectedObjects=%d%n",
                         frame.sequenceIndex,
                         frame.filename,
@@ -1036,8 +1043,8 @@ public class JTransientEngine implements AutoCloseable {
         VariableStarAnalysis variableStarAnalysis = VariableStarAnalysis.empty();
         if (config.enableVariableStarDetection) {
             stageStartedNanos = System.nanoTime();
-            if (DEBUG) {
-                System.out.println("\n--- JTRANSIENT: PHASE 5 (Variable-Star Photometry) ---");
+            if (DiagnosticContext.enabled()) {
+                DiagnosticContext.println("\n--- JTRANSIENT: PHASE 5 (Variable-Star Photometry) ---");
             }
             if (listener != null) {
                 OperationContext.notify(listener::onProgressUpdate, 93, "Measuring stationary-star photometry...");

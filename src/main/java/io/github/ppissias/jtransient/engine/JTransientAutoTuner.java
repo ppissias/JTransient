@@ -9,6 +9,8 @@
  */
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.execution.DiagnosticContext;
+
 import io.github.ppissias.jtransient.execution.OperationContext;
 import io.github.ppissias.jtransient.execution.OperationOutcome;
 import io.github.ppissias.jtransient.execution.FrameIdentity;
@@ -1046,7 +1048,8 @@ public class JTransientAutoTuner {
                                                TransientEngineProgressListener listener) {
         CancellationScope.check();
         java.util.Objects.requireNonNull(options, "options");
-        try (ExecutionSession.Scope scope = execution.open()) {
+        try (ExecutionSession.Scope scope = execution.open();
+             DiagnosticContext.Scope diagnosticScope = DiagnosticContext.openDefaults()) {
             return tuneCaptured(allFrames, OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.AUTO_TUNE)),
                     profile, listener, options.withExecutionPolicy(execution.policy()));
         }

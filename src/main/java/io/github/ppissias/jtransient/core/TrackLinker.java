@@ -9,9 +9,10 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.execution.DiagnosticContext;
+
 import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.config.DetectionConfig;
-import io.github.ppissias.jtransient.engine.JTransientEngine;
 import io.github.ppissias.jtransient.engine.TransientEngineProgressListener;
 import io.github.ppissias.jtransient.telemetry.TrackerTelemetry;
 
@@ -269,7 +270,7 @@ public class TrackLinker {
         // =================================================================
         // PHASE 2: BINARY MASK MASTER STAR MAP VETO
         // =================================================================
-        if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 2] Building Binary Footprint Mask from Master Map...");
+        if (DiagnosticContext.enabled()) DiagnosticContext.println("DEBUG: [PHASE 2] Building Binary Footprint Mask from Master Map...");
 
         boolean[][] masterVetoMask = MasterVetoMask.build(masterStars, sensorWidth, sensorHeight, config.maxStarJitter);
 
@@ -324,9 +325,9 @@ public class TrackLinker {
         }
         telemetry.totalStationaryStreaksPurged = purgedStreakCount;
 
-        if (JTransientEngine.DEBUG) {
-            System.out.println("DEBUG: [PHASE 2] Completed. Total pure point transients: " + totalTransientsFound);
-            System.out.println("DEBUG: [PHASE 2] Purged " + purgedStreakCount + " stationary streaks. " + validMovingStreaks.size() + " remain.");
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.println("DEBUG: [PHASE 2] Completed. Total pure point transients: " + totalTransientsFound);
+            DiagnosticContext.println("DEBUG: [PHASE 2] Purged " + purgedStreakCount + " stationary streaks. " + validMovingStreaks.size() + " remain.");
         }
 
         if (listener != null) {
@@ -336,7 +337,7 @@ public class TrackLinker {
         // =================================================================
         // PHASE 3: LINK FAST-MOVING STREAKS
         // =================================================================
-        if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3] Linking fast-moving streaks... Candidates: " + validMovingStreaks.size());
+        if (DiagnosticContext.enabled()) DiagnosticContext.println("DEBUG: [PHASE 3] Linking fast-moving streaks... Candidates: " + validMovingStreaks.size());
         boolean[] streakMatched = new boolean[validMovingStreaks.size()];
         List<SourceExtractor.DetectedObject> unmatchedSingleStreaks = new ArrayList<>();
         int streakTracksFound = 0;
@@ -450,7 +451,7 @@ public class TrackLinker {
                 streakTracksFound++;
             }
         }
-        if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3] Completed. Found " + streakTracksFound + " streak track(s).");
+        if (DiagnosticContext.enabled()) DiagnosticContext.println("DEBUG: [PHASE 3] Completed. Found " + streakTracksFound + " streak track(s).");
 
         List<List<SourceExtractor.DetectedObject>> allTransients = buildAllTransients(
                 transients,
@@ -510,14 +511,14 @@ public class TrackLinker {
 
         checkUniformTimestamps(allFrames);
         int numFrames = allFrames.size();
-        if (JTransientEngine.DEBUG) System.out.println("\nDEBUG: [START] findMovingObjects initialized with " + numFrames + " frames.");
+        if (DiagnosticContext.enabled()) DiagnosticContext.println("\nDEBUG: [START] findMovingObjects initialized with " + numFrames + " frames.");
 
         if (listener != null) {
             listener.onProgressUpdate(0, "Initializing tracking engine...");
         }
 
         if (numFrames < 3) {
-            if (JTransientEngine.DEBUG) System.out.println("DEBUG: [ABORT] Less than 3 frames provided. Cannot form point tracks.");
+            if (DiagnosticContext.enabled()) DiagnosticContext.println("DEBUG: [ABORT] Less than 3 frames provided. Cannot form point tracks.");
             return new TrackingResult(
                     new ArrayList<>(),
                     new ArrayList<>(),
@@ -574,16 +575,16 @@ public class TrackLinker {
             }
         }
 
-        if (JTransientEngine.DEBUG) {
-            System.out.println("DEBUG: [PHASE 3.5] Timestamp probe per frame:");
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.println("DEBUG: [PHASE 3.5] Timestamp probe per frame:");
             for (int i = 0; i < allFrames.size(); i++) {
                 CancellationScope.check();
                 List<SourceExtractor.DetectedObject> frame = allFrames.get(i);
                 if (frame.isEmpty()) {
-                    System.out.printf("   Frame %d -> empty%n", i);
+                    DiagnosticContext.printf("   Frame %d -> empty%n", i);
                 } else {
                     SourceExtractor.DetectedObject sample = frame.get(0);
-                    System.out.printf(
+                    DiagnosticContext.printf(
                             "   Frame %d -> objects=%d sampleTimestamp=%d sampleExposure=%d%n",
                             i,
                             frame.size(),
@@ -592,7 +593,7 @@ public class TrackLinker {
                     );
                 }
             }
-            System.out.printf(
+            DiagnosticContext.printf(
                     "DEBUG: [PHASE 3.5] hasTimestamps=%s enableGeometricTrackLinking=%s%n",
                     hasTimestamps,
                     config.enableGeometricTrackLinking
@@ -600,7 +601,7 @@ public class TrackLinker {
         }
 
         if (hasTimestamps) {
-            if (JTransientEngine.DEBUG) System.out.println("DEBUG: [PHASE 3.5] Timestamps detected. Running Time-Based Velocity Linking...");
+            if (DiagnosticContext.enabled()) DiagnosticContext.println("DEBUG: [PHASE 3.5] Timestamps detected. Running Time-Based Velocity Linking...");
             if (listener != null) listener.onProgressUpdate(50, "Analyzing precise velocity kinematics...");
 
             int generatedTimeTracks = 0;
@@ -783,8 +784,8 @@ public class TrackLinker {
                 pointTracks.add(candidate.track);
                 usedPoints.addAll(candidate.track.points);
                 timeTracksFound++;
-                if (JTransientEngine.DEBUG) {
-                    System.out.printf(
+                if (DiagnosticContext.enabled()) {
+                    DiagnosticContext.printf(
                             "DEBUG: [PHASE 3.5] Accepted time-based point track -> points=%d startFrame=%d endFrame=%d%n",
                             candidate.track.points.size(),
                             candidate.track.points.get(0).sourceFrameIndex,
@@ -793,15 +794,15 @@ public class TrackLinker {
                 }
             }
 
-            if (JTransientEngine.DEBUG) {
-                System.out.println("DEBUG: [PHASE 3.5] Completed. Generated " + generatedTimeTracks
+            if (DiagnosticContext.enabled()) {
+                DiagnosticContext.println("DEBUG: [PHASE 3.5] Completed. Generated " + generatedTimeTracks
                         + " precise time-based track candidate(s), accepted " + timeTracksFound + " after ranking.");
             }
         }
 
         boolean runGeometricTrackLinking = config.enableGeometricTrackLinking || !hasTimestamps;
-        if (JTransientEngine.DEBUG) {
-            System.out.printf(
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.printf(
                     "DEBUG: [PHASE 4] runGeometricTrackLinking=%s (enableGeometricTrackLinking=%s, hasTimestamps=%s)%n",
                     runGeometricTrackLinking,
                     config.enableGeometricTrackLinking,
@@ -813,12 +814,12 @@ public class TrackLinker {
         // PHASE 4: GEOMETRIC COLLINEAR LINKING (Optional / Timestamp Fallback)
         // =================================================================
         if (runGeometricTrackLinking) {
-            if (JTransientEngine.DEBUG) {
+            if (DiagnosticContext.enabled()) {
                 String mode = hasTimestamps
                         ? "optional geometric fallback enabled"
                         : "forced geometric fallback because timestamps are unavailable";
-                System.out.println("DEBUG: [PHASE 4] Applying time-agnostic geometric linker (" + mode + ")...");
-                System.out.println("  -> Track confirmation threshold: " + minPointsRequired + " points.");
+                DiagnosticContext.println("DEBUG: [PHASE 4] Applying time-agnostic geometric linker (" + mode + ")...");
+                DiagnosticContext.println("  -> Track confirmation threshold: " + minPointsRequired + " points.");
             }
 
             for (int f1 = 0; f1 < loopMax; f1++) {
@@ -937,7 +938,7 @@ public class TrackLinker {
                                 // --- RE-EVALUATE AFTER PRUNING ---
                                 if (currentTrack.points.size() >= minPointsRequired) {
 
-                                    if (JTransientEngine.DEBUG) {
+                                    if (DiagnosticContext.enabled()) {
                                         SourceExtractor.DetectedObject trackStart = currentTrack.points.get(0);
                                         SourceExtractor.DetectedObject trackEnd = currentTrack.points.get(currentTrack.points.size() - 1);
                                         double totalDistanceMoved = distance(trackStart.x, trackStart.y, trackEnd.x, trackEnd.y);
@@ -951,8 +952,8 @@ public class TrackLinker {
                                         if (!isTrackAlreadyFound(pointTracks, currentTrack)) {
                                             pointTracks.add(currentTrack);
                                             usedPoints.addAll(currentTrack.points);
-                                            if (JTransientEngine.DEBUG) {
-                                                System.out.printf(
+                                            if (DiagnosticContext.enabled()) {
+                                                DiagnosticContext.printf(
                                                         "DEBUG: [PHASE 4] Accepted geometric point track -> points=%d startFrame=%d endFrame=%d enableGeometricTrackLinking=%s hasTimestamps=%s%n",
                                                         currentTrack.points.size(),
                                                         currentTrack.points.get(0).sourceFrameIndex,
@@ -961,11 +962,11 @@ public class TrackLinker {
                                                         hasTimestamps
                                                 );
                                                 if (hasTimestamps && !config.enableGeometricTrackLinking) {
-                                                    System.out.println("DEBUG: [PHASE 4] INVARIANT WARNING: geometric point track accepted even though timestamps are available and geometric linking is disabled.");
+                                                    DiagnosticContext.println("DEBUG: [PHASE 4] INVARIANT WARNING: geometric point track accepted even though timestamps are available and geometric linking is disabled.");
                                                 }
                                             }
 
-                                            if (JTransientEngine.DEBUG) {
+                                            if (DiagnosticContext.enabled()) {
                                                 SourceExtractor.DetectedObject trackStart = currentTrack.points.get(0);
                                                 SpatialGrid masterGridForDebug = new SpatialGrid(masterStars, 30.0);
                                                 double distToMaster = masterGridForDebug.getNearestDistance(trackStart.x, trackStart.y, 30.0);
@@ -998,8 +999,8 @@ public class TrackLinker {
                     }
                 }
             }
-        } else if (JTransientEngine.DEBUG) {
-            System.out.println("DEBUG: [PHASE 4] Skipping geometric linker because timestamps are available and enableGeometricTrackLinking=false.");
+        } else if (DiagnosticContext.enabled()) {
+            DiagnosticContext.println("DEBUG: [PHASE 4] Skipping geometric linker because timestamps are available and enableGeometricTrackLinking=false.");
         }
 
         if (listener != null) {
@@ -1028,8 +1029,8 @@ public class TrackLinker {
                 pointTracks
         );
         if (config.enableAnomalyRescue) {
-            if (JTransientEngine.DEBUG) {
-                System.out.println("DEBUG: [PHASE 5] Scanning merged transients for High-Energy Anomalies...");
+            if (DiagnosticContext.enabled()) {
+                DiagnosticContext.println("DEBUG: [PHASE 5] Scanning merged transients for High-Energy Anomalies...");
             }
 
             for (int i = 0; i < numFrames; i++) {
@@ -1099,39 +1100,39 @@ public class TrackLinker {
         telemetry.anomaliesFound = anomalies.size();
         telemetry.integratedSigmaAnomaliesFound = integratedSigmaAnomaliesRescued;
 
-        if (JTransientEngine.DEBUG) {
-            System.out.println("\n--------------------------------------------------");
-            System.out.println(" PHASE 4 TELEMETRY: FILTER REJECTION STATISTICS   ");
-            System.out.println("--------------------------------------------------");
-            System.out.println("1. Baseline Generation (p1 -> p2) Rejections:");
-            System.out.println("   - Stationary / Jitter           : " + telemetry.countBaselineJitter);
-            System.out.println("   - Non-Positive Time Delta       : " + telemetry.countBaselineNonPositiveDelta);
-            System.out.println("   - Exceeded Max Jump Velocity    : " + telemetry.countBaselineJump);
-            System.out.println("   - Morphological Profile Mismatch: " + telemetry.countBaselineSize);
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.println("\n--------------------------------------------------");
+            DiagnosticContext.println(" PHASE 4 TELEMETRY: FILTER REJECTION STATISTICS   ");
+            DiagnosticContext.println("--------------------------------------------------");
+            DiagnosticContext.println("1. Baseline Generation (p1 -> p2) Rejections:");
+            DiagnosticContext.println("   - Stationary / Jitter           : " + telemetry.countBaselineJitter);
+            DiagnosticContext.println("   - Non-Positive Time Delta       : " + telemetry.countBaselineNonPositiveDelta);
+            DiagnosticContext.println("   - Exceeded Max Jump Velocity    : " + telemetry.countBaselineJump);
+            DiagnosticContext.println("   - Morphological Profile Mismatch: " + telemetry.countBaselineSize);
 
-            System.out.println("\n2. Point 3+ (p3, p4...) Search Rejections:");
-            System.out.println("   - Non-Positive Time Delta       : " + telemetry.countP3NonPositiveDelta);
-            System.out.println("   - Velocity Mismatch             : " + telemetry.countP3VelocityMismatch);
-            System.out.println("   - Not Collinear (Off-line)      : " + telemetry.countP3NotLine);
-            System.out.println("   - Wrong Direction / Angle       : " + telemetry.countP3WrongDirection);
-            System.out.println("   - Exceeded Max Jump Velocity    : " + telemetry.countP3Jump);
-            System.out.println("   - Morphological Profile Mismatch: " + telemetry.countP3Size);
+            DiagnosticContext.println("\n2. Point 3+ (p3, p4...) Search Rejections:");
+            DiagnosticContext.println("   - Non-Positive Time Delta       : " + telemetry.countP3NonPositiveDelta);
+            DiagnosticContext.println("   - Velocity Mismatch             : " + telemetry.countP3VelocityMismatch);
+            DiagnosticContext.println("   - Not Collinear (Off-line)      : " + telemetry.countP3NotLine);
+            DiagnosticContext.println("   - Wrong Direction / Angle       : " + telemetry.countP3WrongDirection);
+            DiagnosticContext.println("   - Exceeded Max Jump Velocity    : " + telemetry.countP3Jump);
+            DiagnosticContext.println("   - Morphological Profile Mismatch: " + telemetry.countP3Size);
 
-            System.out.println("\n3. Final Track Rejections:");
-            System.out.println("   - Insufficient track length     : " + telemetry.countTrackTooShort);
-            System.out.println("   - Erratic kinematic rhythm      : " + telemetry.countTrackErraticRhythm);
-            System.out.println("   - Duplicate track (Ignored)     : " + telemetry.countTrackDuplicate);
-            System.out.println("--------------------------------------------------\n");
+            DiagnosticContext.println("\n3. Final Track Rejections:");
+            DiagnosticContext.println("   - Insufficient track length     : " + telemetry.countTrackTooShort);
+            DiagnosticContext.println("   - Erratic kinematic rhythm      : " + telemetry.countTrackErraticRhythm);
+            DiagnosticContext.println("   - Duplicate track (Ignored)     : " + telemetry.countTrackDuplicate);
+            DiagnosticContext.println("--------------------------------------------------\n");
 
-            System.out.println("\n4. Valid Tracks Confirmed:");
-            System.out.println("   - Returned Confirmed Streaks    : " + telemetry.streakTracksFound);
-            System.out.println("   - Binary-Star Streak Rejects    : " + telemetry.rejectedBinaryStarStreakShape);
-            System.out.println("   - Slow Point Tracks (Phase 4)   : " + telemetry.pointTracksFound);
-            System.out.println("   - TOTAL RETURNED TRACKS         : "
+            DiagnosticContext.println("\n4. Valid Tracks Confirmed:");
+            DiagnosticContext.println("   - Returned Confirmed Streaks    : " + telemetry.streakTracksFound);
+            DiagnosticContext.println("   - Binary-Star Streak Rejects    : " + telemetry.rejectedBinaryStarStreakShape);
+            DiagnosticContext.println("   - Slow Point Tracks (Phase 4)   : " + telemetry.pointTracksFound);
+            DiagnosticContext.println("   - TOTAL RETURNED TRACKS         : "
                     + (telemetry.streakTracksFound + telemetry.pointTracksFound));
-            System.out.println("   - Single-Frame Anomalies        : " + telemetry.anomaliesFound);
-            System.out.println("      -> Integrated-Sigma Rescue   : " + telemetry.integratedSigmaAnomaliesFound);
-            System.out.println("--------------------------------------------------\n");
+            DiagnosticContext.println("   - Single-Frame Anomalies        : " + telemetry.anomaliesFound);
+            DiagnosticContext.println("      -> Integrated-Sigma Rescue   : " + telemetry.integratedSigmaAnomaliesFound);
+            DiagnosticContext.println("--------------------------------------------------\n");
         }
 
         if (listener != null) {
@@ -1139,7 +1140,7 @@ public class TrackLinker {
         }
 
         confirmedTracks.addAll(pointTracks);
-        if (JTransientEngine.DEBUG) {
+        if (DiagnosticContext.enabled()) {
             int finalStreakTracks = 0;
             int finalTimeBasedPointTracks = 0;
             int finalGeometricPointTracks = 0;
@@ -1155,7 +1156,7 @@ public class TrackLinker {
                 }
             }
 
-            System.out.printf(
+            DiagnosticContext.printf(
                     "DEBUG: [FINAL TRACK SUMMARY] streak=%d timeBasedPoint=%d geometricPoint=%d%n",
                     finalStreakTracks,
                     finalTimeBasedPointTracks,

@@ -9,8 +9,9 @@
  */
 package io.github.ppissias.jtransient.quality;
 
+import io.github.ppissias.jtransient.execution.DiagnosticContext;
+
 import io.github.ppissias.jtransient.config.DetectionConfig;
-import io.github.ppissias.jtransient.engine.JTransientEngine;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -85,8 +86,8 @@ public class SessionEvaluator {
                 ? calculateMedianAndSigma(brightEccValues, config)
                 : null;
 
-        if (JTransientEngine.DEBUG) {
-            System.out.println(String.format(
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.println(String.format(
                     "Session Baseline - FWHM: %.2f, Background: %.2f, Stars: %.0f, Eccentricity: %.2f, Bright-Star Eccentricity: %s",
                     fwhmStats[0],
                     bgStats[0],
@@ -142,8 +143,8 @@ public class SessionEvaluator {
 
             // Stars: We only care if it drops too low (clouds).
             if (m.starCount < thresholds.minAllowedStarCount) {
-                if (JTransientEngine.DEBUG) {
-                    System.out.printf("DEBUG REJECT [Frame %d]: Stars %.0f < Min Threshold %.2f (Median: %.2f, Sigma: %.4f)%n",
+                if (DiagnosticContext.enabled()) {
+                    DiagnosticContext.printf("DEBUG REJECT [Frame %d]: Stars %.0f < Min Threshold %.2f (Median: %.2f, Sigma: %.4f)%n",
                             i, (double)m.starCount, thresholds.minAllowedStarCount, starStats[0], starStats[1]);
                 }
                 reject(m, "Star Count dropped anomalously low");
@@ -152,8 +153,8 @@ public class SessionEvaluator {
 
             // FWHM: We only care if it gets too high (blurry/bad focus/wind).
             if (m.medianFWHM > thresholds.maxAllowedFwhm) {
-                if (JTransientEngine.DEBUG) {
-                    System.out.printf("DEBUG REJECT [Frame %d]: FWHM %.3f > Max Threshold %.3f (Median: %.3f, Sigma: %.4f)%n",
+                if (DiagnosticContext.enabled()) {
+                    DiagnosticContext.printf("DEBUG REJECT [Frame %d]: FWHM %.3f > Max Threshold %.3f (Median: %.3f, Sigma: %.4f)%n",
                             i, m.medianFWHM, thresholds.maxAllowedFwhm, fwhmStats[0], fwhmStats[1]);
                 }
                 reject(m, "FWHM spiked (Blurry image)");
@@ -162,8 +163,8 @@ public class SessionEvaluator {
 
             // Eccentricity: We only care if it gets too high (tracking error, mount bump, wind).
             if (m.medianEccentricity > thresholds.maxAllowedEccentricity) {
-                if (JTransientEngine.DEBUG) {
-                    System.out.printf("DEBUG REJECT [Frame %d]: Eccentricity %.3f > Max Threshold %.3f (Median: %.3f, Sigma: %.4f)%n",
+                if (DiagnosticContext.enabled()) {
+                    DiagnosticContext.printf("DEBUG REJECT [Frame %d]: Eccentricity %.3f > Max Threshold %.3f (Median: %.3f, Sigma: %.4f)%n",
                             i, m.medianEccentricity, thresholds.maxAllowedEccentricity, eccStats[0], eccStats[1]);
                 }
                 reject(m, "Eccentricity spiked (Tracking error/Wind)");
@@ -174,8 +175,8 @@ public class SessionEvaluator {
                     && Double.isFinite(thresholds.maxAllowedBrightStarEccentricity)
                     && Double.isFinite(m.brightStarMedianEccentricity)
                     && m.brightStarMedianEccentricity > thresholds.maxAllowedBrightStarEccentricity) {
-                if (JTransientEngine.DEBUG) {
-                    System.out.printf(
+                if (DiagnosticContext.enabled()) {
+                    DiagnosticContext.printf(
                             "DEBUG REJECT [Frame %d]: Bright-Star Eccentricity %.3f > Max Threshold %.3f (Median: %.3f, Sigma: %.4f)%n",
                             i,
                             m.brightStarMedianEccentricity,
@@ -191,8 +192,8 @@ public class SessionEvaluator {
             // Background: We care if it spikes (car headlights) or drops completely.
             double currentBgDev = Math.abs(m.backgroundMedian - bgStats[0]);
             if (currentBgDev > thresholds.maxAllowedBackgroundDeviation) {
-                if (JTransientEngine.DEBUG) {
-                    System.out.printf("DEBUG REJECT [Frame %d]: BG Deviation %.3f > Max Allowed %.3f (Median: %.3f, Sigma: %.4f)%n",
+                if (DiagnosticContext.enabled()) {
+                    DiagnosticContext.printf("DEBUG REJECT [Frame %d]: BG Deviation %.3f > Max Allowed %.3f (Median: %.3f, Sigma: %.4f)%n",
                             i, currentBgDev, thresholds.maxAllowedBackgroundDeviation, bgStats[0], bgStats[1]);
                 }
                 reject(m, "Background deviation (Clouds/Light leak)");

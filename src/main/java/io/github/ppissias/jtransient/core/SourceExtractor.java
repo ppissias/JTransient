@@ -9,9 +9,10 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.execution.DiagnosticContext;
+
 import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.config.DetectionConfig;
-import io.github.ppissias.jtransient.engine.JTransientEngine;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -231,10 +232,10 @@ public class SourceExtractor {
         // 1. Calculate Background
         BackgroundMetrics bg = calculateBackgroundSigmaClipped(image, width, height, sigmaMultiplier, config, backgroundArea);
 
-        if (JTransientEngine.DEBUG) {
-            System.out.printf("BACKGROUND STATS -> Median: %.2f | Sigma: %.2f | Seed Thresh: %.2f | Grow Thresh: %.2f%n",
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.printf("BACKGROUND STATS -> Median: %.2f | Sigma: %.2f | Seed Thresh: %.2f | Grow Thresh: %.2f%n",
                     bg.median, bg.sigma, bg.median + (bg.sigma * sigmaMultiplier), bg.median + (bg.sigma * config.growSigmaMultiplier));
-            System.out.printf("  -> Engine Config Applied [MinPix: %d | BaseSigma: %.2f | GrowSigma: %.2f]%n",
+            DiagnosticContext.printf("  -> Engine Config Applied [MinPix: %d | BaseSigma: %.2f | GrowSigma: %.2f]%n",
                     minPixels, sigmaMultiplier, config.growSigmaMultiplier);
         }
 
@@ -321,8 +322,8 @@ public class SourceExtractor {
         }
 
         // --- PRINT FINAL FRAME TELEMETRY SUMMARY ---
-        if (JTransientEngine.DEBUG) {
-            System.out.printf("  -> Extracted %d valid objects. [BFS Triggers: %d | Rejected Noise: %d | Outside Search Area: %d]%n",
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.printf("  -> Extracted %d valid objects. [BFS Triggers: %d | Rejected Noise: %d | Outside Search Area: %d]%n",
                     detectedObjects.size(), statBfsTriggers, statRejectedNoise, statRejectedEdge);
         }
 

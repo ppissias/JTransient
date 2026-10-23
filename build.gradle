@@ -68,7 +68,7 @@ tasks.register('legacyApiCompatibility', JavaExec) {
 
 tasks.register('verifyArchitecture') {
     group = 'verification'
-    description = 'Checks bytecode dependencies of the adopted configuration/execution boundaries using JDK jdeps.'
+    description = 'Checks adopted configuration/execution boundaries and prevents science depending on the engine facade.'
     dependsOn tasks.named('classes')
     inputs.files(sourceSets.main.output.classesDirs)
     inputs.files(configurations.runtimeClasspath)
@@ -79,18 +79,20 @@ tasks.register('verifyArchitecture') {
         def suffix = System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('windows') ? '.exe' : ''
         def jdeps = launcher.metadata.installationPath.file("bin/jdeps${suffix}").asFile.absolutePath
         def output = providers.exec {
-            commandLine([jdeps, '--ignore-missing-deps', '--multi-release', '21', '-verbose:package', '-filter:none',
+            commandLine([jdeps, '--ignore-missing-deps', '--multi-release', '21', '-verbose:class', '-filter:none',
                          '--class-path', configurations.runtimeClasspath.asPath] +
                     sourceSets.main.output.classesDirs.files.collect { it.absolutePath })
         }.standardOutput.asText.get()
         def violations = []
         output.eachLine { line ->
-            def dependency = line =~ /^\s*io\.github\.ppissias\.jtransient\.(config|execution)(?:\.[\w]+)*\s+->\s+io\.github\.ppissias\.jtransient\.([\w]+)/
+            def dependency = line =~ /^\s*io\.github\.ppissias\.jtransient\.(config|execution)(?:\.[\w$]+)*\s+->\s+io\.github\.ppissias\.jtransient\.([\w]+)/
             if (dependency.find() && dependency.group(2) != dependency.group(1)) violations.add(line.trim())
+            def facadeDependency = line =~ /^\s*io\.github\.ppissias\.jtransient\.(core|quality|photometry)(?:\.[\w$]+)*\s+->\s+io\.github\.ppissias\.jtransient\.engine\.JTransientEngine\s+/
+            if (facadeDependency.find()) violations.add(line.trim())
         }
         report.get().asFile.parentFile.mkdirs()
         report.get().asFile.text = output
-        if (violations) throw new GradleException("Configuration/execution boundary violations: ${violations.join('; ')}")
+        if (violations) throw new GradleException("Adopted architecture boundary violations: ${violations.join('; ')}")
     }
 }
 

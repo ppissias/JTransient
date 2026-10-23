@@ -9,8 +9,9 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.execution.DiagnosticContext;
+
 import io.github.ppissias.jtransient.engine.ImageFrame;
-import io.github.ppissias.jtransient.engine.JTransientEngine;
 
 import java.util.Arrays;
 import java.util.List;
@@ -41,8 +42,8 @@ public class MasterMapGenerator {
 
         short[][] masterMap = new short[height][width];
 
-        if (JTransientEngine.DEBUG) {
-            System.out.println("\n[PHASE 0] Generating Median Master Stack across " + numFrames + " frames...");
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.println("\n[PHASE 0] Generating Median Master Stack across " + numFrames + " frames...");
         }
 
         // Multi-thread the row processing for maximum speed!
@@ -65,8 +66,8 @@ public class MasterMapGenerator {
             }
         });
 
-        if (JTransientEngine.DEBUG) {
-            System.out.println("  -> Master Stack generation complete.");
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.println("  -> Master Stack generation complete.");
         }
 
         return masterMap;
@@ -85,8 +86,8 @@ public class MasterMapGenerator {
 
         short[][] masterMap = new short[height][width];
 
-        if (JTransientEngine.DEBUG) {
-            System.out.println("\n[POST-PROCESS] Generating Maximum Master Stack across " + numFrames + " frames...");
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.println("\n[POST-PROCESS] Generating Maximum Master Stack across " + numFrames + " frames...");
         }
 
         forEachRow(height, y -> {
@@ -102,8 +103,8 @@ public class MasterMapGenerator {
             }
         });
 
-        if (JTransientEngine.DEBUG) {
-            System.out.println("  -> Maximum Stack generation complete.");
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.println("  -> Maximum Stack generation complete.");
         }
 
         return masterMap;

@@ -9,6 +9,8 @@
  */
 package io.github.ppissias.jtransient.photometry;
 
+import io.github.ppissias.jtransient.execution.DiagnosticContext;
+
 import io.github.ppissias.jtransient.execution.OperationContext;
 import io.github.ppissias.jtransient.execution.FrameIdentity;
 import io.github.ppissias.jtransient.execution.StageId;
@@ -21,7 +23,6 @@ import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.core.TrackLinker;
 import io.github.ppissias.jtransient.engine.ImageFrame;
-import io.github.ppissias.jtransient.engine.JTransientEngine;
 import io.github.ppissias.jtransient.engine.TransientEngineProgressListener;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
@@ -468,8 +469,8 @@ public final class VariableStarAnalyzer {
             }
         }
         if (spatialDrops > 0) {
-            if (JTransientEngine.DEBUG) {
-                System.out.println("SPATIAL_FRAMES dropped=" + spatialDrops + " frames=" + spatialFrames);
+            if (DiagnosticContext.enabled()) {
+                DiagnosticContext.println("SPATIAL_FRAMES dropped=" + spatialDrops + " frames=" + spatialFrames);
             }
             usable = usableMatrix(mag, flags, starExcluded, frameActive);
             solution = EnsembleSolver.solve(mag, usable, xNorm, yNorm, frameActive, config.photometryFitPlane);
@@ -1198,8 +1199,8 @@ public final class VariableStarAnalyzer {
         telemetry.slopeSkyCorrelation = readiness.slopeSkyCorrelation;
         telemetry.framesFailingResponse = readiness.framesFailingResponse;
         telemetry.processingTimeMs = (System.nanoTime() - start) / 1_000_000L;
-        if (JTransientEngine.DEBUG) {
-            System.out.println("DEBUG: Photometry verdict " + readiness.verdict + " " + readiness.messages);
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.println("DEBUG: Photometry verdict " + readiness.verdict + " " + readiness.messages);
         }
         return new VariableStarAnalysis(readiness, curves, telemetry);
     }

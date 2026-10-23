@@ -33,7 +33,6 @@ Statuses distinguish proposals from work already started. High priority means to
 
 | ID | Priority | Status | Design improvement | First useful result |
 |---|---|---|---|---|
-| JA-04 | High | In progress; tuner options complete, core diagnostic propagation remains | Replace mutable global tuning options with operation options | Two tunings can use independent options without changing each other's settings. |
 | JA-06 | Medium | Accepted (2026-10-22) | Separate tracking responsibilities while retaining its facade | Vetoing, point linking, streak assembly and classification have explicit inputs and ownership. |
 | JA-07 | Medium | Accepted (2026-10-22) | Stabilize public results and dependency direction | Public models and shared buffers have clear contracts independent of implementation helpers. |
 | JA-08 | Medium | Accepted (2026-10-22) | Separate tuning measurement, selection and presentation | Measurements can explain a choice without depending on report construction or ambiguous legacy fields. |
@@ -55,15 +54,7 @@ Statuses distinguish proposals from work already started. High priority means to
 
 ### JA-04. Make tuning options and diagnostics belong to an operation
 
-**Implemented slice (2026-10-22).** Both tuner facades now capture immutable `Options` with defensive grid/budget copies and retain the effective policy with results. Explicit-options overloads allow independent concurrent operations. SpacePixels uses the 1.0.6 independent available-sample entry point when present and retains the 1.0.5 adapter. Legacy diagnostics have a per-run sink; propagation through non-tuner science stages remains for the execution/diagnostic-context seam. See the [validation record](docs/archive/design-improvements-closed-2026-10.md#ja-04-tuner-options-slice-2026-10-22). These nested public facade options deliberately stabilize the contract before moving canonical tuner implementations to the blueprint's `tuning` package.
-
-**Evidence.** [JTransientAutoTuner](src/main/java/io/github/ppissias/jtransient/engine/JTransientAutoTuner.java) and [CalibratedAutoTuner](src/main/java/io/github/ppissias/jtransient/engine/CalibratedAutoTuner.java) expose writable static scalars and arrays for sample counts, search grids, crop settings and budgets. Copying an array reference does not freeze its contents. SpacePixels [AutoTunerRunner](../SpacePixels/src/main/java/eu/startales/spacepixels/util/AutoTunerRunner.java) temporarily changes `AUTO_TUNE_SAMPLE_SIZE` and restores it in `finally`; its public API documents a same-JVM Auto-Tune concurrency restriction. Core extraction, stacking, tracking and quality code also reference `JTransientEngine.DEBUG`, while legacy tuning has a separate debug switch.
-
-**Risk and proposal.** Global options make independent requests depend on process state and complicate reproducibility. Provide immutable tuner options with defensive copies of grids and budgets, captured once for an operation. Record the effective options with the measurement. Keep legacy entry points as adapters to snapshotted defaults while callers migrate; merely synchronizing the SpacePixels wrapper cannot protect unrelated library users.
-
-Pass an optional per-run diagnostic sink or diagnostic options through the execution context so lower-level stages do not depend on the engine facade for logging. Preserve silent defaults and the existing debug switches as compatibility adapters until their callers migrate. This needs no logging framework or new `DetectionConfig` profile fields.
-
-**Acceptance.** Interleave tunings with different sample counts, grids and budgets and compare each with its isolated control. Mutate arrays supplied when constructing options and verify isolation. Verify default library use remains silent. Remove SpacePixels' documented concurrency restriction only after both its integration and the engine contract support doing so.
+**Implemented (2026-10-23).** Immutable tuner options and per-run legacy tuning diagnostics are now joined by scoped core `DiagnosticOptions`/`DiagnosticContext`. Engine/tuner boundaries capture defaults once; worker batches inherit explicit sinks and restore prior policy. Lower science code no longer depends on the engine facade for logging. Legacy debug flags remain compatibility adapters, and default use remains silent. See the [completion and original acceptance record](docs/archive/design-improvements-closed-2026-10.md#ja-04-operation-owned-core-diagnostics-2026-10-23) and [current diagnostic contract](PIPELINE.md#per-operation-core-diagnostics-106).
 
 ### JA-05. Represent prepared frames and their identities together
 
@@ -147,7 +138,7 @@ Define source and binary compatibility expectations for published releases, incl
 
 #### Current dependency assessment
 
-The current package graph is not layered: `engine` calls `core`, `quality` and `photometry`, while those packages refer back to `engine`. Examples are `SourceExtractor`, `MasterMapGenerator`, `TrackLinker`, `SessionEvaluator` and `VariableStarAnalyzer` reading `JTransientEngine.DEBUG`; shared frames and progress callbacks also reside in `engine`. These source dependencies were checked again when preparing this blueprint. The cycles mix access to data/diagnostics with orchestration; they do not demonstrate incorrect calculations.
+The original review package graph was not layered: `engine` calls `core`, `quality` and `photometry`, while those packages referred back to `engine` for debug state, shared frames and progress callbacks. JA-04 now routes diagnostics through `execution` and the class-level bytecode gate prevents science classes from depending on `JTransientEngine` itself. Shared `ImageFrame`, progress callbacks and nested legacy models still reside in implementation packages; those remaining dependencies belong to JA-07. Removing facade debug dependencies does not claim the whole graph is layered or change scientific calculations.
 
 `core` contains extraction, image geometry, stacks, tracking, slow movers and residual analysis. Its classes often have useful responsibilities, but the package does not express those boundaries. Conversely, `photometry` already gives its helpers a coherent home and uses package-private implementation classes. Keep that pattern. `PipelineTelemetry` has no imports of the science packages today, but placing their frame records inside it makes those packages depend on a pipeline-level container; moving diagnostics must reverse that ownership carefully.
 

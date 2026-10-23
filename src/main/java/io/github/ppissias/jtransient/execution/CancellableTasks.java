@@ -32,6 +32,7 @@ public final class CancellableTasks {
         CancellationScope.check();
         CancellationToken parent = CancellationScope.current();
         OperationContext.Snapshot diagnostics = OperationContext.snapshot();
+        DiagnosticOptions logOptions = DiagnosticContext.currentOptions();
         AtomicBoolean stopping = new AtomicBoolean();
         AtomicReference<Throwable> failure = new AtomicReference<>();
         CountDownLatch finished = new CountDownLatch(tasks.size());
@@ -43,7 +44,8 @@ public final class CancellableTasks {
                 CancellationScope.check();
                 TrackedTask<Result> tracked = new TrackedTask<>(() -> {
                     try (CancellationScope scope = CancellationScope.open(cancellation);
-                         OperationContext.Scope diagnosticScope = OperationContext.restore(diagnostics)) {
+                         OperationContext.Scope diagnosticScope = OperationContext.restore(diagnostics);
+                         DiagnosticContext.Scope logScope = DiagnosticContext.open(logOptions)) {
                         try {
                             CancellationScope.check();
                             Result result = task.call();
