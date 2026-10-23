@@ -43,7 +43,7 @@ For development, document every new Java class, record, enum and interface at ty
 
 The project name is `JTransient` and the current library version in `build.gradle` is `1.0.6`. SpacePixels retains its published 1.0.5 dependency until 1.0.6 is released and uses the new isolated-tuner capability when available.
 
-`check` also runs a legacy public-API consumer and bytecode dependency checks for the adopted `config`/`execution` boundaries. For binary compatibility, pass `-PcompatibilityBaselineJar=<path-to-previous-engine.jar>`: the consumer compiles against that previous JAR but executes against this engine. Without that property it is a current-source compatibility canary, not a binary comparison. See the sibling [staged pair workflow](../SpacePixels/docs/engine-compatibility.md) for old/new SpacePixels artifact validation with composites disabled. Local staging is not Maven Central certification or publication.
+`check` also compiles/runs a current-version `apiConsumer` and checks adopted config/execution/science bytecode boundaries. See the sibling [selected artifact workflow](../SpacePixels/docs/release-artifacts.md) for one pinned engine/solver/application combination without composites. Historical-JAR binary compatibility is not a release requirement; local staging is not public artifact availability.
 
 To prepare a Maven Central release bundle locally:
 

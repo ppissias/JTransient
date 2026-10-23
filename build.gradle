@@ -44,25 +44,18 @@ tasks.withType(JavaCompile).configureEach {
 }
 
 sourceSets {
-    compatibility {
+    consumer {
         compileClasspath = configurations.runtimeClasspath + sourceSets.main.output
         runtimeClasspath = output + sourceSets.main.output + configurations.runtimeClasspath
     }
 }
 
-def compatibilityBaselineJar = providers.gradleProperty('compatibilityBaselineJar')
-tasks.named('compileCompatibilityJava', JavaCompile) {
-    if (compatibilityBaselineJar.isPresent()) {
-        classpath = files(compatibilityBaselineJar.get()) + configurations.runtimeClasspath
-    }
-}
-
-tasks.register('legacyApiCompatibility', JavaExec) {
+tasks.register('apiConsumer', JavaExec) {
     group = 'verification'
-    description = 'Compiles an existing API consumer (optionally against a baseline JAR) and runs it on the current engine.'
-    dependsOn tasks.named('compatibilityClasses')
-    classpath = sourceSets.compatibility.runtimeClasspath
-    mainClass = 'io.github.ppissias.jtransient.compatibility.LegacyApiConsumer'
+    description = 'Compiles and runs a current-version standalone API consumer on Java 21.'
+    dependsOn tasks.named('consumerClasses')
+    classpath = sourceSets.consumer.runtimeClasspath
+    mainClass = 'io.github.ppissias.jtransient.consumer.ApiConsumer'
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
 }
 
@@ -97,7 +90,7 @@ tasks.register('verifyArchitecture') {
 }
 
 tasks.named('check') {
-    dependsOn tasks.named('legacyApiCompatibility'), tasks.named('verifyArchitecture')
+    dependsOn tasks.named('apiConsumer'), tasks.named('verifyArchitecture')
 }
 
 tasks.withType(Javadoc).configureEach {

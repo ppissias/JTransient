@@ -1,4 +1,4 @@
-package io.github.ppissias.jtransient.compatibility;
+package io.github.ppissias.jtransient.consumer;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.MasterMapGenerator;
@@ -16,9 +16,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-/** Standalone source/binary canary compiled against legacy public types and executed only on the current engine. */
-public final class LegacyApiConsumer {
-    /** Exercises public constructors, nested types, legacy fallback aliases, stack encoding and engine entry points. */
+/** Standalone consumer compiled and executed against the selected current engine API. */
+public final class ApiConsumer {
+    /** Exercises current public types, detached tuning settings, stack encoding and sequential engine reuse. */
     public static void main(String[] args) throws Exception {
         try (var input = new DataInputStream(JTransientEngine.class.getResourceAsStream("JTransientEngine.class"))) {
             require(input.readInt() == 0xCAFEBABE, "Invalid classfile");
@@ -34,24 +34,23 @@ public final class LegacyApiConsumer {
 
         List<ImageFrame> frames = frames();
         var profile = JTransientAutoTuner.AutoTuneProfile.MEDIUM;
-        var legacy = JTransientAutoTuner.tune(frames.subList(0, 4), config, profile, null);
-        var calibrated = CalibratedAutoTuner.tune(frames.subList(0, 4), config, profile, null);
-        require(!legacy.success && legacy.optimizedConfig == config, "Legacy fallback alias changed");
-        require(!calibrated.success && calibrated.optimizedConfig == config, "Calibrated fallback alias changed");
+        var legacy = JTransientAutoTuner.tuneSnapshot(frames.subList(0, 4), config, profile, null);
+        var calibrated = CalibratedAutoTuner.tuneSnapshot(frames.subList(0, 4), config, profile, null);
+        require(!legacy.success && legacy.optimizedConfig != config, "Legacy tuning must detach fallback settings");
+        require(!calibrated.success && calibrated.optimizedConfig != config, "Calibrated tuning must detach fallback settings");
         var detached = JTransientAutoTuner.tuneSnapshot(frames.subList(0, 4), config, profile, null);
         require(detached.optimizedConfig != config, "Snapshot fallback aliases caller settings");
-        require(new com.google.gson.Gson().toJson(detached).contains("optimizedConfig"), "Result JSON compatibility changed");
+        require(new com.google.gson.Gson().toJson(detached).contains("optimizedConfig"), "Result JSON missing settings");
         require(PixelEncoding.toShiftedPositiveInt(MasterMapGenerator.createMedianMasterStack(frames)[5][5]) == 1000,
                 "Median pixel encoding changed");
 
         try (JTransientEngine engine = new JTransientEngine()) {
             PipelineResult result = engine.runPipeline(frames, config, null);
             require(result.tracks != null && result.telemetry != null && result.masterStackData != null,
-                    "Legacy result fields missing");
-            require(frames.get(0).sequenceIndex == 0, "Legacy in-place sorting changed");
+                    "Result fields missing");
             require(engine.generateMasterStack(new ArrayList<>(frames), config, null) != null, "Sequential reuse failed");
         }
-        System.out.println("Legacy public API consumer passed on Java 21.");
+        System.out.println("Current public API consumer passed on Java 21.");
     }
 
     /** Builds small valid mono16 descriptors in reverse order without sharing mutable frame containers. */

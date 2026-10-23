@@ -12,6 +12,12 @@ Contents:
 - [Completed and retired findings](#completed-and-retired-findings)
 - [Review of the plan, with answered questions](#review)
 
+## Coordinated cleanup: selected artifacts and direct tuning (2026-10-23)
+
+Removed the previous-JAR binary baseline and historical engine matrix. `apiConsumer` now compiles/runs the current engine contract, retaining Java 21, identity, encoding and sequential reuse checks without historical constructor/fallback requirements. SpacePixels calls the current available-sample tuner API directly; reflective version detection and the locked static-mutation fallback are removed. Development coordinates now match current sources, with both engine and solver versions explicitly selectable/verified for release-artifact validation. `Verify-ReleaseArtifacts.ps1` checks one selected source-built combination and both consumer metadata modes. Local validation JAR output is isolated from active IDE JARs after a Windows lock exposed the need; no ignored configuration is changed or artifacts published to Central.
+
+Validation and commit IDs are recorded in the feature commit body. Final public versions are still a release decision; current-source packaging does not certify public artifact availability.
+
 ## JA-01 configuration snapshots and shared rules (2026-10-22)
 
 **Implemented with SpacePixels, incorporating its [107-field rule review](../../../SpacePixels/docs/detection-settings-rule-review.md#implementation-decisions-ja-01-2026-10-22).** `DetectionConfig` remains the mutable primitive compatibility DTO. Each public engine operation, both tuners and direct calibration capture a private copy before progress/workers, then derive stage-local copies. Later caller edits cannot affect the operation; concurrent multi-field edits during capture still need caller synchronization. Frame/pixel ownership and static tuning/debug options are unchanged.
