@@ -1,5 +1,7 @@
 # Design improvements: closed items, October 2026
 
+> **Policy clarification, 2026-10-23:** historical requirements below to preserve old Java APIs or support one SpacePixels build with old/new engine versions are superseded by the [coordinated development/release policy and implementation review](../../DESIGN-IMPROVEMENTS.md#maintainer-questions-and-release-model-clarification-2026-10-23). Develop the three repositories together, then pin and validate one release combination. Scientific, ownership and user-data decisions are not automatically revoked. The records below describe what was implemented/tested at the time; compatibility-only adapters/gates still exist until their documented cleanup is implemented.
+
 > Historical record, archived 2026-10-21. These sections were moved out of [DESIGN-IMPROVEMENTS.md](../../DESIGN-IMPROVEMENTS.md) so that it holds only pending work and open decisions. They are kept as written, including statements that later changes superseded: the assessment of the 2026-10-20 architecture review, the decisions to keep current behaviour, the completed and retired findings, and the review of the plan with its answered questions. The decisions from that review were folded into the JA items when this was archived. Do not re-propose a declined item without new evidence.
 
 Contents:
