@@ -186,6 +186,15 @@ Do not combine these changes with new detection gates, altered association order
 | JA-09 | Typed stage progress/outcomes and callback guarantees | In progress |
 | JA-10 | Reference provenance for actual reuse consumers | Accepted / pending |
 | JA-11 | Final selected-release repository/artifact validation | In progress |
+| JA-12 | Remove unused execution surface and deprecated adapters (post-implementation review) | Proposed |
+
+**Post-implementation review (2026-10-23).** The value of each pending item was weighed against its complexity; the item notes say what changed. In short:
+
+- **JA-09** is the item a user will notice: it is needed for SpacePixels F10 slice 2, which shows findings during detection.
+- **JA-11** is small and needed for release.
+- **JA-12** removes code that nothing calls.
+- **JA-06, JA-07 and JA-08** are structural, and none changes what a user sees. Narrow them to the parts named in their notes, or do them only when a scientific change needs the seam.
+- **JA-10** has one consumer and no planned cache. It belongs with the deferred items.
 
 ### JA-06. Separate tracking stages and make detection assignment explicit
 
@@ -196,6 +205,8 @@ Do not combine these changes with new detection gates, altered association order
 Make the current assignment sequence explicit: a detection may be visible in several review views, but accepted classification and removals must follow the existing rules. Preserve reference identity, tie order, greedy behavior, empty-frame slots and stage ordering. Do not add value-based equality or new association gates during extraction. This proposal does not reopen PT-6 or the declined streak/linker decisions.
 
 **Acceptance.** Compare stage populations and final membership, not only counts: tracks, anomalies, camera/common-motion groups, all transients and leftovers. Use the existing streak consolidation, rescue, camera-fixed and export tests, plus deterministic ambiguous-assignment controls. Real-data outputs must remain equivalent for a structural refactor.
+
+**Review note (2026-10-23).** This is a structural refactor of the most order-sensitive science code (greedy claims, tie order, shared detection identity), and nothing changes that a user can see. Do it as the first step of a tracking change that needs the seam, for example PT-2, PT-6 or ST-5, and extract only the seam that change needs. Do not schedule it as a standalone item.
 
 ### JA-07. Give public models, mutable work state and shared buffers clear boundaries
 
@@ -210,6 +221,13 @@ As a touched boundary needs it, put shared frame/detection/track and diagnostic 
 
 **Acceptance.** Test intended aliases, container ownership, repeat viewers reading one result, grouped/legacy consistency and preservation of detection identity. Compile existing SpacePixels consumers. Measure retained heap and runtime before adding copies or changing output retention; a read-only wrapper alone is not deep immutability.
 
+**Review note (2026-10-23).** The value is in two pieces:
+
+- top-level shared `DetectedObject` and `Track` models, instead of types nested in `SourceExtractor` and `TrackLinker`;
+- a builder for `PipelineResult`, instead of positional constructors.
+
+The full target layout is more structure than the library needs: 14 packages for about 66 classes, where `execution` alone already has 13. Every move also reaches SpacePixels: 49 of its files import `jtransient.core` types today, mostly `SourceExtractor.DetectedObject` and `TrackLinker.Track`. Narrow JA-07 to the two pieces above. Keep the package table as orientation for where new code goes, not as a migration target.
+
 ### JA-08. Separate Auto-Tune measurement, policy and presentation
 
 **Evidence.** Both tuners contain crop preparation, extraction, evaluation, selection and report construction. The calibrated tuner already offers the useful `calibrate`/`configFor` split, but `Calibration` combines a mutable sweep, profile-ordinal arrays, chosen settings and compact tradeoff data. `tune` discards the full sweep through `discardSweep`, whereas direct `calibrate` retains it. Its public return type and profile enum belong to the legacy `JTransientAutoTuner`. The shared result's `bestTransientRatio` is a legacy ratio for one tuner and a per-megapixel-frame noise rate for the calibrated tuner.
@@ -219,6 +237,8 @@ As a touched boundary needs it, put shared frame/detection/track and diagnostic 
 Retain measurement provenance: effective base settings, tuning options, sample/crop identity and random seed where used. Make full-sweep retention versus compact summary an explicit option and update the application caller explicitly. A selected measurement is valid only for its documented assumptions; applying it to another base config needs an explicit rule. Replace ambiguous result/profile types and migrate SpacePixels directly; old result/profile adapters are not required. Keep the distinct legacy tuning algorithm unless a separate algorithm-removal decision is made.
 
 **Acceptance.** Replay selection and report generation from a frozen measurement without rereading images. Verify profile ordering, budgets, tradeoff choices and selected settings against controls; verify summary/full-sweep retention behavior and field units. Default calibrated results must remain unchanged. This is not a proposal to alter false-positive calibration or its deferred limitations.
+
+**Review note (2026-10-23).** The part shaped like a defect is `bestTransientRatio`. It means a legacy ratio for one tuner and a per-megapixel-frame noise rate for the other, so a caller can misread it. Fix that first, with separate, named fields per tuner. Nothing asks yet for each tuner to be split into preparer, measurer, policy and formatter classes; do that when a tuner change needs it.
 
 ### JA-09. Make progress, stage outcomes and diagnostics consistent
 
@@ -230,6 +250,24 @@ Keep numerical diagnostics in structured results; text formatting should consume
 
 **Acceptance.** Exercise each optional branch on/off, insufficient evidence, zero findings, task failure, cancellation and a throwing/slow listener. Verify stage order, callback guarantees, terminal outcomes and timing inclusion. Migrate text/percentage consumers together with the new stage contract; retaining a second old callback contract is optional, not a release requirement.
 
+**F10 requirement: stage products for a live view (2026-10-23).** SpacePixels F10 slice 2 shows findings while the engine runs. That needs the reference, the star mask, slow movers, tracks, streaks, anomalies, rescue candidates and variable stars as each stage finishes them. Add this to the stage contract:
+
+- **Passed explicitly.** The observer is an optional parameter of the run: a field of the run options or an overload parameter. It is not a `ThreadLocal` scope, and nothing is parsed from progress text. Without an observer, there is no extra work and no allocation.
+- **When it is called.** Once per completed major stage, on the orchestration thread, after that stage's products are final.
+- **What it receives.** The stage ID, the outcome (disabled, completed empty, or completed with findings), and read-only access to the stage's products:
+  - median reference after `MEDIAN_STACK`;
+  - star mask after `MASTER_REFERENCE`;
+  - maximum stack and slow-mover candidates after `SLOW_MOVERS`;
+  - tracks, streak tracks and anomalies after `TRACKING`;
+  - removed groups after `COMMON_MOTION`;
+  - rescue candidates and activity clusters after `RESIDUAL_ANALYSIS`;
+  - the variable-star analysis after `PHOTOMETRY`.
+
+  These are the objects that end up in `PipelineResult`, not copies.
+- **Which products can still change.** For each product, document whether a later stage of the run can still change it; common-motion filtering, for example, removes findings after tracking. The observer copies whatever it keeps beyond the callback and never mutates anything.
+- **Observer failures are isolated.** An exception from the observer is caught, reported through diagnostics and ignored. It never fails or cancels the run, and it delays the run only by the callback's own duration. This differs from today's progress listener, whose exception fails the run as `LISTENER`. Cancellation stays with `CancellationScope`.
+- **Acceptance.** `PipelineResult` and SpacePixels' report outputs are byte-identical with no observer, a no-op observer and a throwing observer. Events arrive in stage order, a disabled branch reports disabled, and no event follows the operation's terminal outcome.
+
 ### JA-10. Carry reference provenance without introducing unsafe caching
 
 **Evidence.** `generateMasterStackWithDetails` returns pixels, kept indices and rejection records, but the pipeline reuse overload accepts only a `short[][]`. `InputRules` checks dimensions. The full and transient-only paths still repeat extraction, QC and master-star preparation when a stack is supplied, as [PIPELINE.md](PIPELINE.md#what-changes-when-you-pass-providedmasterstack) documents. SpacePixels [IterativeDetectionPipelineService](../SpacePixels/src/main/java/eu/startales/spacepixels/util/IterativeDetectionPipelineService.java) intentionally builds a full-session reference and supplies it to subset runs.
@@ -240,11 +278,27 @@ Before caching master stars, masks or full preparation, define invalidation sepa
 
 **Acceptance.** Verify same-run reuse, intentional full-session/subset reuse, a foreign same-size reference, changed master-extraction settings and changed frame rejection. Compare cached and uncached results where caching is later introduced. Report actual saved work and retained heap before expanding the reuse API.
 
+**Review note (2026-10-23).** There is one consumer, SpacePixels' iterative run, which passes a full-session reference to each pass, and no cache is planned. Provenance would protect against a mistake no caller makes today. Move JA-10 to the deferred table, and revisit it when a cache or a second consumer appears.
+
 ### JA-11. Validate the final selected release artifacts
 
 **Status: in progress; final release gate.** Java 21, current-version consumer checks, adopted bytecode boundaries and the one-selected-combination staging workflow are implemented. At SpacePixels release time, select/pin the intended JTransient/JPlateSolve versions, make those actual artifacts available through the final distribution repository, and run application/consumer checks with both composites disabled and without the local validation repository. Verify actual resolved versions, metadata/resources and headless/desktop separation. Local staging is packaging evidence, not public artifact availability. No historical binary/version compatibility gate remains.
 
 **Acceptance:** the exact released application/engine/solver combination passes the [selected-artifact workflow](../SpacePixels/docs/release-artifacts.md) against the intended repository. Do not publish unused historical coordinates merely to satisfy an old matrix.
+
+### JA-12. Remove unused execution surface and deprecated adapters
+
+**Status: proposed 2026-10-23 (post-implementation review).** Under the coordinated policy, public API without a consumer is cost without value. A check of both repositories on 2026-10-23 found:
+
+| Code | Callers today | Proposal |
+|---|---|---|
+| `OperationOutcome` and public `OperationContext.capture` | Only `OperationContext.execute`; no engine method returns an outcome, and SpacePixels does not use it | Make `capture` private or fold it into `execute`, and drop the public type, unless JA-09 adopts it for terminal stage outcomes. |
+| `JTransientEngine(ExecutionPolicy, ExecutorService)`, `JTransientEngine(ExecutionSession)` and `ExecutionSession.borrowed` | Tests only; SpacePixels calls `new JTransientEngine()` three times | Remove them, together with the owned/borrowed split and the "same borrowed executor's worker" guard, until a caller needs a shared pool. |
+| `CommonMotionRejector.apply` (`@Deprecated`; recomputes residual analysis) | `CommonMotionRejectorTest` only | Remove. This also settles the text under "Current dependencies" and "Target package layout and allowed dependencies" that says to keep it. |
+
+**Noted, no change proposed.** Four scopes are bound to a thread: `CancellationScope`, `OperationContext`, `DiagnosticContext` and the `ExecutionSession` context. `CancellableTasks` and `ExecutionSession` capture and restore each of them separately on every worker. They work and are tested. One per-operation context, propagated once, would be simpler, but that is not worth a change on its own. Do it only if execution is reworked anyway, and do not add a fifth scope: JA-09's observer is passed explicitly.
+
+**Acceptance.** JTransient `test`, `apiConsumer` and `verifyArchitecture` pass, and SpacePixels compiles and passes its tests against the composite build. No science code changes, so no reference-data run is needed.
 
 
 ## Deferred and experimental findings
@@ -277,7 +331,6 @@ These are not an implementation authorization. Keep the existing algorithms unti
 | VS-9 | Deferred | The nominal selected-star minimum differs from check B's counted linear-range minimum. With the default 50 required references and a 90% faint bound, an ideal sample needs at least 55 before further exclusions. Improve cap validation and distinguish insufficient samples from measured nonlinearity. |
 | VS-10 | Deferred | In a frame a streak track skips, photometry flags the stars along one piece's length around a position interpolated between two pieces, not along the streak's predicted path in that frame. On klangwolke-2 a satellite's path in its missing frame 3 (x about 7270-7750) was only partly flagged, and which part depended on the order of the pieces. Flagging the whole predicted path must be weighed against losing good measurements when a flashing satellite left no trail in that frame. |
 | SM-F1 | Proposed | Three-bin temporal stacks or a measured slow-mover path, described in the old design, are not implemented. Compare real-mover recovery, false positives and runtime before introducing either; current frame-support/stationarity screens do not establish motion. |
-| SM-F1 | Proposed | Three-bin temporal stacks or a measured slow-mover path, described in the old design, are not implemented. Compare real-mover recovery, false positives and runtime before introducing either; current frame-support/stationarity screens do not establish motion. |
 
 ## Verification and maintenance
 
@@ -300,6 +353,7 @@ Statuses describe the current decision, not a new priority. Partial items retain
 | JA-09 | Typed stage progress/outcomes | In progress |
 | JA-10 | Reusable reference provenance | Accepted / pending |
 | JA-11 | Selected release artifact verification | In progress |
+| JA-12 | Unused execution surface and deprecated adapters | Proposed |
 | IN-1 | Isolated settings for manual inspection | Implemented |
 | IN-2 | Consistent engine/tuner input and timestamp rules | Implemented |
 | IN-3 | Tracking with fewer than three retained frames | Declined |
