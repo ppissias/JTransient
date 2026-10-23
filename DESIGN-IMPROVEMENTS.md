@@ -34,7 +34,7 @@ Statuses distinguish proposals from work already started. High priority means to
 | ID | Priority | Status | Design improvement | First useful result |
 |---|---|---|---|---|
 | JA-04 | High | In progress; tuner options complete, core diagnostic propagation remains | Replace mutable global tuning options with operation options | Two tunings can use independent options without changing each other's settings. |
-| JA-05 | Medium | Accepted (2026-10-22) | Make prepared-frame context and identity coherent | Frames, metrics, detections and registrations remain associated through QC and subset runs. |
+| JA-05 | Medium | In progress; prepared associations implemented, public alignment adapters remain | Make prepared-frame context and identity coherent | Frames, metrics, detections and registrations remain associated through QC and subset runs. |
 | JA-06 | Medium | Accepted (2026-10-22) | Separate tracking responsibilities while retaining its facade | Vetoing, point linking, streak assembly and classification have explicit inputs and ownership. |
 | JA-07 | Medium | Accepted (2026-10-22) | Stabilize public results and dependency direction | Public models and shared buffers have clear contracts independent of implementation helpers. |
 | JA-08 | Medium | Accepted (2026-10-22) | Separate tuning measurement, selection and presentation | Measurements can explain a choice without depending on report construction or ambiguous legacy fields. |
@@ -67,6 +67,10 @@ Pass an optional per-run diagnostic sink or diagnostic options through the execu
 **Acceptance.** Interleave tunings with different sample counts, grids and budgets and compare each with its isolated control. Mutate arrays supplied when constructing options and verify isolation. Verify default library use remains silent. Remove SpacePixels' documented concurrency restriction only after both its integration and the engine contract support doing so.
 
 ### JA-05. Represent prepared frames and their identities together
+
+**Implemented slice (2026-10-23).** Internal `PreparedFrame` carries the borrowed descriptor, optional extraction, quality metrics and registration together through worker completion and selection. Full/transient-only preparation derives its aligned views from retained associations; master-only preparation uses the same association/selection contract without full extraction. Empty detection slots and original non-contiguous sequence IDs survive middle rejection. `ImageFrame` now explicitly documents borrowed mutable pixels rather than claiming immutable payloads. See the [validation record](docs/archive/design-improvements-closed-2026-10.md#ja-05-prepared-frame-associations-slice-2026-10-23).
+
+**Remaining.** Explicit identity mapping for legacy tracker retained-position telemetry, validated public photometry inputs, and new copy-sorting entry points remain. Existing engine/outcome entry points retain their documented in-place sorting behavior; no public collection is frozen by this internal refactor.
 
 **Evidence.** [ExtractedFramesContext](src/main/java/io/github/ppissias/jtransient/engine/ExtractedFramesContext.java) already gives full and transient-only runs a shared preparation result. It holds parallel lists of frames, extraction results and quality metrics, plus separate registrations. `generateMasterStackWithDetails` repeats the surrounding drift/measurement/selection orchestration while sharing the rejection function. [VariableStarAnalyzer.Input](src/main/java/io/github/ppissias/jtransient/photometry/VariableStarAnalyzer.java) is a public field bag with lists required to have matching order. Engine methods sort the caller's frame list in place, as currently documented. Tracker veto telemetry assigns `frameIndex = i`, while engine frame telemetry records `sequenceIndex`; these describe different index spaces after rejection or subsetting.
 

@@ -10,17 +10,19 @@
 package io.github.ppissias.jtransient.engine;
 
 /**
- * Immutable image payload consumed by the pipeline.
+ * Stable frame metadata with a borrowed, mutable pixel matrix consumed by the pipeline.
  *
  * <p>{@link JTransientEngine} orders frames by {@link #sequenceIndex}. Timestamps and exposure
- * durations are optional, but when present they enable the time-aware tracking logic.</p>
+ * durations are optional, but when present they enable the time-aware tracking logic.
+ * No pixels are copied: callers must not mutate the matrix or its rows until all borrowing
+ * operations have returned, including joined cancellation. Final fields do not make pixels immutable.</p>
  */
 public class ImageFrame {
     /** Monotonic frame order used to restore chronological processing. */
     public final int sequenceIndex;
     /** Human-readable frame identifier, usually the source filename. */
     public final String filename;
-    /** Raw pixel matrix in signed-short sensor units. */
+    /** Borrowed raw pixel matrix in signed-short sensor units; shared read-only during processing. */
     public final short[][] pixelData;
     /** Capture timestamp in milliseconds, or {@code -1} when unknown. */
     public final long timestamp;
@@ -32,7 +34,7 @@ public class ImageFrame {
      *
      * @param sequenceIndex chronological index used by the engine
      * @param filename source label for diagnostics and output
-     * @param pixelData raw pixel matrix
+     * @param pixelData borrowed raw pixel matrix; not cloned
      * @param timestamp capture timestamp in milliseconds, or {@code -1} if unavailable
      * @param exposureDuration exposure duration in milliseconds, or {@code -1} if unavailable
      */

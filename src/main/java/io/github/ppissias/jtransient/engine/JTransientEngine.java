@@ -188,23 +188,6 @@ public class JTransientEngine implements AutoCloseable {
     }
 
     /**
-     * Internal concurrent work product for one frame.
-     */
-    private static final class FrameExtractionResult {
-        public final int frameIndex;
-        public final SourceExtractor.ExtractionResult extractionResult;
-        public final FrameQualityAnalyzer.FrameMetrics metrics;
-
-        private FrameExtractionResult(int frameIndex,
-                                      SourceExtractor.ExtractionResult extractionResult,
-                                      FrameQualityAnalyzer.FrameMetrics metrics) {
-            this.frameIndex = frameIndex;
-            this.extractionResult = extractionResult;
-            this.metrics = metrics;
-        }
-    }
-
-    /**
      * Generates the Master Stack independently so it can be reused across iterative pipeline runs.
      * Highly optimized: Skips transient extraction and only runs quality analysis to drop outliers.
      *
@@ -270,8 +253,9 @@ public class JTransientEngine implements AutoCloseable {
         inputFrames.sort(Comparator.comparingInt(f -> f.sequenceIndex));
         FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = analyzeDitherAndDrift(inputFrames, config, null, telemetry);
         QualityArea quality = qualityArea(driftAnalysis.frameCoverages, telemetry);
+        Map<Integer, FrameRegistration> registrations = registrationsBySequence(driftAnalysis);
 
-        List<Callable<FrameExtractionResult>> tasks = new ArrayList<>();
+        List<Callable<PreparedFrame>> tasks = new ArrayList<>();
 
         int totalFrames = inputFrames.size();
         AtomicInteger framesCompleted = new AtomicInteger(0);
@@ -290,40 +274,35 @@ public class JTransientEngine implements AutoCloseable {
                     }
                 }
 
-                return new FrameExtractionResult(frame.sequenceIndex, null, metrics);
+                return new PreparedFrame(frame, null, metrics, registrations.get(frame.sequenceIndex));
             }));
         }
 
-        List<FrameExtractionResult> completedResults = new ArrayList<>();
-        List<Future<FrameExtractionResult>> futures = CancellableTasks.invokeAll(executor, tasks);
-        for (Future<FrameExtractionResult> future : futures) {
+        List<PreparedFrame> completedResults = new ArrayList<>();
+        List<Future<PreparedFrame>> futures = CancellableTasks.invokeAll(executor, tasks);
+        for (Future<PreparedFrame> future : futures) {
             completedResults.add(future.get());
         }
-        completedResults.sort(Comparator.comparingInt(r -> r.frameIndex));
-
-        List<FrameQualityAnalyzer.FrameMetrics> sessionMetrics = new ArrayList<>();
-        for (FrameExtractionResult result : completedResults) {
-            sessionMetrics.add(result.metrics);
-        }
+        completedResults.sort(Comparator.comparingInt(prepared -> prepared.frame().sequenceIndex));
 
         if (listener != null) {
             OperationContext.notify(listener::onProgressUpdate, 55, "Filtering outlier frames...");
         }
 
         OperationContext.compute(StageId.FRAME_SELECTION, null,
-                () -> rejectUnusableFrames(sessionMetrics, inputFrames, telemetry.driftExcludedFrames, quality.coverageOutliers, config));
+                () -> rejectUnusableFrames(completedResults, telemetry.driftExcludedFrames, quality.coverageOutliers, config));
 
-        List<ImageFrame> cleanFrames = new ArrayList<>();
+        List<ImageFrame> cleanFrames = PreparedFrame.retained(completedResults).stream().map(PreparedFrame::frame).toList();
         List<Integer> keptFrames = new ArrayList<>();
         List<PipelineTelemetry.FrameRejectionStat> rejectedFrames = new ArrayList<>();
         for (int i = 0; i < completedResults.size(); i++) {
-            FrameQualityAnalyzer.FrameMetrics metrics = sessionMetrics.get(i);
+            PreparedFrame prepared = completedResults.get(i);
+            FrameQualityAnalyzer.FrameMetrics metrics = prepared.metrics();
             if (!metrics.isRejected) {
-                cleanFrames.add(inputFrames.get(i));
-                keptFrames.add(inputFrames.get(i).sequenceIndex);
+                keptFrames.add(prepared.frame().sequenceIndex);
             } else {
                 PipelineTelemetry.FrameRejectionStat rejected = new PipelineTelemetry.FrameRejectionStat();
-                rejected.frameIndex = inputFrames.get(i).sequenceIndex;
+                rejected.frameIndex = prepared.frame().sequenceIndex;
                 rejected.filename = metrics.filename;
                 rejected.reason = metrics.rejectionReason;
                 rejected.medianEccentricity = metrics.medianEccentricity;
@@ -478,10 +457,11 @@ public class JTransientEngine implements AutoCloseable {
         FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = analyzeDitherAndDrift(inputFrames, config, listener, telemetry);
         List<SourceExtractor.Pixel> driftPoints = new ArrayList<>(driftAnalysis.driftPoints);
         QualityArea quality = qualityArea(driftAnalysis.frameCoverages, telemetry);
+        Map<Integer, FrameRegistration> registrations = registrationsBySequence(driftAnalysis);
         telemetry.recordStage(PipelineTelemetry.Stage.DRIFT_ANALYSIS, stageStartedNanos);
         stageStartedNanos = System.nanoTime();
 
-        List<Callable<FrameExtractionResult>> tasks = new ArrayList<>();
+        List<Callable<PreparedFrame>> tasks = new ArrayList<>();
 
         // Ensure input frames are sorted chronologically before processing
         inputFrames.sort(Comparator.comparingInt(f -> f.sequenceIndex));
@@ -526,37 +506,31 @@ public class JTransientEngine implements AutoCloseable {
                     }
                 }
 
-                return new FrameExtractionResult(frame.sequenceIndex, extResult, metrics);
+                return new PreparedFrame(frame, extResult, metrics, registrations.get(frame.sequenceIndex));
             }));
         }
 
         // Execute parallel extraction
-        List<FrameExtractionResult> completedResults = new ArrayList<>();
-        List<Future<FrameExtractionResult>> futures = CancellableTasks.invokeAll(executor, tasks);
-        for (Future<FrameExtractionResult> future : futures) {
+        List<PreparedFrame> completedResults = new ArrayList<>();
+        List<Future<PreparedFrame>> futures = CancellableTasks.invokeAll(executor, tasks);
+        for (Future<PreparedFrame> future : futures) {
             completedResults.add(future.get());
         }
-        completedResults.sort(Comparator.comparingInt(r -> r.frameIndex));
+        completedResults.sort(Comparator.comparingInt(prepared -> prepared.frame().sequenceIndex));
 
         // Unpack results & update Telemetry
-        List<SourceExtractor.ExtractionResult> rawExtractedFrames = new ArrayList<>();
-        List<FrameQualityAnalyzer.FrameMetrics> sessionMetrics = new ArrayList<>();
-
-        for (FrameExtractionResult result : completedResults) {
-            rawExtractedFrames.add(result.extractionResult);
-            sessionMetrics.add(result.metrics);
-
-            telemetry.totalRawObjectsExtracted += result.extractionResult.objects.size();
+        for (PreparedFrame result : completedResults) {
+            telemetry.totalRawObjectsExtracted += result.extractionResult().objects.size();
             PipelineTelemetry.FrameExtractionStat stat = new PipelineTelemetry.FrameExtractionStat();
-            stat.frameIndex = result.frameIndex;
-            stat.filename = result.metrics.filename;
-            stat.objectCount = result.extractionResult.objects.size();
-            if (result.extractionResult.backgroundMetrics != null) {
-                stat.bgMedian = result.extractionResult.backgroundMetrics.median;
-                stat.bgSigma = result.extractionResult.backgroundMetrics.sigma;
+            stat.frameIndex = result.frame().sequenceIndex;
+            stat.filename = result.metrics().filename;
+            stat.objectCount = result.extractionResult().objects.size();
+            if (result.extractionResult().backgroundMetrics != null) {
+                stat.bgMedian = result.extractionResult().backgroundMetrics.median;
+                stat.bgSigma = result.extractionResult().backgroundMetrics.sigma;
             }
-            stat.seedThreshold = result.extractionResult.seedThreshold;
-            stat.growThreshold = result.extractionResult.growThreshold;
+            stat.seedThreshold = result.extractionResult().seedThreshold;
+            stat.growThreshold = result.extractionResult().growThreshold;
             telemetry.frameExtractionStats.add(stat);
         }
 
@@ -573,7 +547,7 @@ public class JTransientEngine implements AutoCloseable {
         // Pass the config down to the evaluator
         SessionEvaluator.SessionThresholds sessionThresholds =
                 OperationContext.compute(StageId.FRAME_SELECTION, null,
-                        () -> rejectUnusableFrames(sessionMetrics, inputFrames, telemetry.driftExcludedFrames, quality.coverageOutliers, config));
+                        () -> rejectUnusableFrames(completedResults, telemetry.driftExcludedFrames, quality.coverageOutliers, config));
         telemetry.qualityThresholds.available = sessionThresholds.available;
         telemetry.qualityThresholds.minAllowedStarCount = sessionThresholds.minAllowedStarCount;
         telemetry.qualityThresholds.maxAllowedFwhm = sessionThresholds.maxAllowedFwhm;
@@ -584,14 +558,16 @@ public class JTransientEngine implements AutoCloseable {
         telemetry.qualityThresholds.minAllowedBackgroundMedian = sessionThresholds.minAllowedBackgroundMedian;
         telemetry.qualityThresholds.maxAllowedBackgroundMedian = sessionThresholds.maxAllowedBackgroundMedian;
 
-        List<SourceExtractor.ExtractionResult> cleanFramesData = new ArrayList<>();
-        List<ImageFrame> cleanFrames = new ArrayList<>(); // Track the raw images that passed the quality check
-        List<FrameQualityAnalyzer.FrameMetrics> cleanFrameMetrics = new ArrayList<>();
+        List<PreparedFrame> retainedFrames = PreparedFrame.retained(completedResults);
+        List<ImageFrame> cleanFrames = retainedFrames.stream().map(PreparedFrame::frame).toList();
+        List<SourceExtractor.ExtractionResult> cleanFramesData = retainedFrames.stream()
+                .map(PreparedFrame::extractionResult).toList();
 
-        for (int i = 0; i < rawExtractedFrames.size(); i++) {
-            FrameQualityAnalyzer.FrameMetrics metrics = sessionMetrics.get(i);
+        for (int i = 0; i < completedResults.size(); i++) {
+            PreparedFrame prepared = completedResults.get(i);
+            FrameQualityAnalyzer.FrameMetrics metrics = prepared.metrics();
             PipelineTelemetry.FrameQualityStat qualityStat = new PipelineTelemetry.FrameQualityStat();
-            qualityStat.frameIndex = inputFrames.get(i).sequenceIndex;
+            qualityStat.frameIndex = prepared.frame().sequenceIndex;
             qualityStat.filename = metrics.filename;
             qualityStat.backgroundMedian = metrics.backgroundMedian;
             qualityStat.backgroundNoise = metrics.backgroundNoise;
@@ -609,7 +585,7 @@ public class JTransientEngine implements AutoCloseable {
             if (metrics.isRejected) {
                 telemetry.totalFramesRejected++;
                 PipelineTelemetry.FrameRejectionStat rejStat = new PipelineTelemetry.FrameRejectionStat();
-                rejStat.frameIndex = inputFrames.get(i).sequenceIndex;
+                rejStat.frameIndex = prepared.frame().sequenceIndex;
                 rejStat.filename = metrics.filename;
                 rejStat.reason = metrics.rejectionReason;
                 rejStat.medianEccentricity = metrics.medianEccentricity;
@@ -618,9 +594,6 @@ public class JTransientEngine implements AutoCloseable {
                 telemetry.rejectedFrames.add(rejStat);
             } else {
                 telemetry.totalFramesKept++;
-                cleanFramesData.add(rawExtractedFrames.get(i));
-                cleanFrames.add(inputFrames.get(i)); // Keep the actual frame for the Master Stack
-                cleanFrameMetrics.add(metrics);
             }
         }
 
@@ -633,14 +606,12 @@ public class JTransientEngine implements AutoCloseable {
         }
         telemetry.recordStage(PipelineTelemetry.Stage.QUALITY_FILTERING, stageStartedNanos);
         return new ExtractedFramesContext(
-                cleanFramesData,
-                cleanFrames,
-                cleanFrameMetrics,
+                retainedFrames,
                 telemetry,
                 startNanos,
                 driftPoints,
                 dataArea,
-                registrationsBySequence(driftAnalysis)
+                registrations
         );
     }
 
@@ -658,21 +629,20 @@ public class JTransientEngine implements AutoCloseable {
      * and the frames that alone shrink the common data area a lot, as rejected. The last two reasons take precedence:
      * they are the cause when such a frame also fails the session statistics.
      *
-     * @param sessionMetrics per-frame quality metrics, in the order of {@code inputFrames}; updated in place
-     * @param inputFrames the frames, sorted by sequence index
+     * @param preparedFrames associated preparation products, sorted by original sequence index; metrics updated in place
      * @param driftExcludedFrames sequence indices of blank or failed-registration frames
      * @param coverageOutliers rejection reasons of the frames that alone shrink the common data area, by sequence index
      * @return the session thresholds used for the outlier rejection
      */
-    private static SessionEvaluator.SessionThresholds rejectUnusableFrames(List<FrameQualityAnalyzer.FrameMetrics> sessionMetrics,
-                                                                          List<ImageFrame> inputFrames,
+    private static SessionEvaluator.SessionThresholds rejectUnusableFrames(List<PreparedFrame> preparedFrames,
                                                                           Collection<Integer> driftExcludedFrames,
                                                                           Map<Integer, String> coverageOutliers,
                                                                           DetectionConfig config) {
+        List<FrameQualityAnalyzer.FrameMetrics> sessionMetrics = preparedFrames.stream().map(PreparedFrame::metrics).toList();
         SessionEvaluator.SessionThresholds thresholds = SessionEvaluator.rejectOutlierFrames(sessionMetrics, config);
-        for (int i = 0; i < sessionMetrics.size(); i++) {
-            FrameQualityAnalyzer.FrameMetrics metrics = sessionMetrics.get(i);
-            int sequenceIndex = inputFrames.get(i).sequenceIndex;
+        for (PreparedFrame prepared : preparedFrames) {
+            FrameQualityAnalyzer.FrameMetrics metrics = prepared.metrics();
+            int sequenceIndex = prepared.frame().sequenceIndex;
             if (driftExcludedFrames.contains(sequenceIndex)) {
                 // A partly blank frame can keep enough stars to pass the session statistics, but its sky does
                 // not match the other frames.

@@ -22,6 +22,45 @@ public class MasterStackConsistencyTest {
 
     private static final int SIZE = 220;
 
+    /** Unsorted, non-contiguous IDs and a rejected middle frame remain aligned in all engine entry points. */
+    @Test
+    public void originalIdentitiesSurviveSortingAndMiddleRejection() throws Exception {
+        List<ImageFrame> frames = new ArrayList<>();
+        for (ImageFrame original : createFrames()) {
+            int sequenceIndex = original.sequenceIndex == 6 ? 35 : 10 + original.sequenceIndex * 10;
+            frames.add(new ImageFrame(sequenceIndex, "sequence-" + sequenceIndex, original.pixelData,
+                    1_760_000_000_000L + sequenceIndex * 120_000L, original.exposureDuration));
+        }
+        Collections.reverse(frames);
+        DetectionConfig config = new DetectionConfig();
+        config.enableVariableStarDetection = true;
+        try (JTransientEngine engine = new JTransientEngine()) {
+            PipelineResult pipeline = engine.runPipeline(frames, config, null);
+            JTransientEngine.MasterStackResult standalone = engine.generateMasterStackWithDetails(new ArrayList<>(frames), config, null);
+            List<FrameTransients> transients = engine.detectTransients(new ArrayList<>(frames), config, null, null);
+            List<Integer> expected = List.of(10, 20, 30, 40, 50, 60);
+            assertEquals(expected, standalone.keptFrames);
+            assertEquals(List.of(35), standalone.rejectedFrames.stream().map(stat -> stat.frameIndex).toList());
+            assertEquals(expected, pipeline.variableStarAnalysis.frames.stream().map(stat -> stat.frameIndex).toList());
+            assertEquals(expected.stream().map(index -> "sequence-" + index).toList(),
+                    transients.stream().map(frame -> frame.filename).toList());
+            assertEquals(List.of(10, 20, 30, 35, 40, 50, 60),
+                    pipeline.telemetry.frameQualityStats.stream().map(stat -> stat.frameIndex).toList());
+            assertEquals(6, pipeline.allTransients.size());
+            for (int position = 0; position < transients.size(); position++) {
+                FrameTransients frame = transients.get(position);
+                for (SourceExtractor.DetectedObject object : frame.extractionResult.objects) {
+                    assertEquals(expected.get(position).intValue(), object.sourceFrameIndex);
+                    assertEquals(frame.filename, object.sourceFilename);
+                }
+            }
+            for (int row = 0; row < standalone.masterStack.length; row++) {
+                assertArrayEquals(pipeline.masterStackData[row], standalone.masterStack[row]);
+            }
+            assertEquals(List.of(10, 20, 30, 35, 40, 50, 60), frames.stream().map(frame -> frame.sequenceIndex).toList());
+        }
+    }
+
     @Test
     public void generateMasterStackMatchesThePipelineAndLeavesOutABlankFrame() throws Exception {
         DetectionConfig config = new DetectionConfig();

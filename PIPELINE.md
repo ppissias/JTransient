@@ -12,6 +12,12 @@ The public surface is split into three layers:
 
 `runPipeline(...)` executes the complete analysis. `generateMasterStack(...)` shares registration/quality selection but returns only a median stack. `detectTransients(...)` adds extraction and stationary-star/streak filtering, then stops before point linking. Tuners search configurations on sampled crops; `SourceExtractor` works on one image. The [algorithm flow](ALGORITHM.md#high-level-flow) defines stage ordering.
 
+### Prepared-frame associations (1.0.6)
+
+Engine preparation retains each descriptor, quality measurement, optional extraction and registration as one internal association. Selection removes whole associations, not independent parallel-list entries. The retained order includes empty extraction results; its zero-based positions are not original `ImageFrame.sequenceIndex` values. Full and transient-only runs derive aligned frame/metric/detection views from the same retained associations. Master-only work omits full transient extraction and shares the selection policy.
+
+`ImageFrame` has stable metadata but borrows the mutable pixel matrix and its rows without copying. Do not mutate them until all borrowing operations have returned, including joined cancellation. This internal container stabilization changes neither public result mutability/detection aliases nor legacy in-place input-list sorting. Photometry light-curve arrays remain aligned with `VariableStarAnalysis.frames`, whose telemetry `frameIndex` identifies the original sequence; tracker veto telemetry's legacy `frameIndex` still means retained position, not original identity.
+
 ## Per-operation tuner options (1.0.6)
 
 Both tuner facades expose immutable `Options`, `Options.builder()`, `Options.captureDefaults()` and `toBuilder()`. Builders are caller-owned and mutable; build and array accessors copy all arrays. Options validate finite/positive grids and counts before work. Explicit `tuneSnapshot(frames, config, options, profile, listener[, cancellation])` overloads never edit process-wide knobs. Calibrated measurement also accepts `calibrate(frames, config, options, listener)`. Pixel arrays remain borrowed until the joined operation returns.
