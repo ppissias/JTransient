@@ -2,7 +2,7 @@
 
 This is the API contract reference: signatures, input rules, entrypoint scope, result fields, ownership and progress. Algorithm details live in [ALGORITHM.md](ALGORITHM.md); `DetectionConfig` defaults live in [CONFIG.md](CONFIG.md).
 
-**Release policy (2026-10-23):** this documents current behavior, not a promise to preserve these Java signatures across library versions. SpacePixels/JTransient/JPlateSolve develop together and pin one exact combination for each application release. Historical engine entry-point/version/debug adapters have been removed; see the [policy and review](DESIGN-IMPROVEMENTS.md#maintainer-questions-and-release-model-clarification-2026-10-23). Input snapshots, scientific behavior, ownership and persisted user data have separate contracts from historical API compatibility.
+**Release policy (2026-10-23):** this documents current behavior, not a promise to preserve these Java signatures across library versions. SpacePixels/JTransient/JPlateSolve develop together and pin one exact combination for each application release. Historical engine entry-point/version/debug adapters have been removed; see the [policy and review](docs/archive/architecture-clarifications-2026-10-23.md#maintainer-questions-and-release-model-clarification-2026-10-23). Input snapshots, scientific behavior, ownership and persisted user data have separate contracts from historical API compatibility.
 
 The public surface is split into three layers:
 
