@@ -719,15 +719,39 @@ public class JTransientEngine implements AutoCloseable {
      * @throws io.github.ppissias.jtransient.execution.OperationFailedException if extraction, tracking, or residual analysis fails
      */
     public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) {
+        return runPipeline(inputFrames, config, listener, providedMasterStack, null);
+    }
+
+    /**
+     * {@link #runPipeline(List, DetectionConfig, TransientEngineProgressListener, short[][])} that also hands each
+     * finished stage to {@code observer}, for example to show findings while the run continues. The observer cannot
+     * change the result: it gets the run's products to read, and its exceptions are reported and ignored.
+     *
+     * @param observer called on this thread once per finished stage, in order; null for none
+     */
+    public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener,
+                                      short[][] providedMasterStack, PipelineStageObserver observer) {
         List<ImageFrame> operationFrames = copyFrameList(inputFrames);
         return executeOperation(() -> runPipelineInternal(operationFrames,
                 OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.PIPELINE,
                         operationFrames != null && operationFrames.stream().anyMatch(frame -> frame != null && frame.timestamp != -1L)
                                 ? DetectionConfigRules.Timing.AVAILABLE : DetectionConfigRules.Timing.MISSING)),
-                listener, providedMasterStack));
+                listener, providedMasterStack, observer));
     }
 
-    private PipelineResult runPipelineInternal(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
+    /** Hands a finished stage to the observer; its failure is reported through the diagnostics and ignored. */
+    private static void notifyObserver(PipelineStageObserver observer, PipelineStage stage) {
+        try {
+            observer.stageFinished(stage);
+        } catch (RuntimeException failure) {
+            if (DiagnosticContext.enabled()) {
+                DiagnosticContext.println("DEBUG: The pipeline stage observer failed; the run continues: " + failure);
+            }
+        }
+    }
+
+    private PipelineResult runPipelineInternal(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener,
+                                               short[][] providedMasterStack, PipelineStageObserver observer) throws Exception {
         ensureOpen();
         OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkPipelineInput(inputFrames, providedMasterStack));
         ExtractedFramesContext context = extractSourcesFromFrames(inputFrames, config, listener);
@@ -783,6 +807,9 @@ public class JTransientEngine implements AutoCloseable {
         // =================================================================
 
         telemetry.recordStage(PipelineTelemetry.Stage.MASTER_REFERENCE, stageStartedNanos);
+        if (observer != null) {
+            notifyObserver(observer, new PipelineStage.MasterReference(masterStackData, masterStars));
+        }
         // Build once for both the detector and PipelineResult.maximumStackData.
         stageStartedNanos = System.nanoTime();
         short[][] maximumStackData = OperationContext.compute(StageId.MAXIMUM_STACK, null, () -> MasterMapGenerator.createMaximumMasterStack(cleanFrames));
@@ -856,6 +883,10 @@ public class JTransientEngine implements AutoCloseable {
         if (config.enableSlowMoverDetection) {
             telemetry.recordStage(PipelineTelemetry.Stage.SLOW_MOVERS, stageStartedNanos);
         }
+        if (observer != null) {
+            notifyObserver(observer, new PipelineStage.SlowMovers(config.enableSlowMoverDetection, maximumStackData,
+                    slowMoverAnalysis.candidates));
+        }
 
         // =================================================================
         // PHASE 4 (Track Linking)
@@ -917,6 +948,9 @@ public class JTransientEngine implements AutoCloseable {
         telemetry.totalAnomaliesFound = trackResult.anomalies.size();
         telemetry.trackerTelemetry = trackResult.telemetry;
         telemetry.slowMoverTelemetry = smTelemetry;
+        if (observer != null) {
+            notifyObserver(observer, new PipelineStage.Tracking(trackResult.tracks, trackResult.anomalies, trackResult.masterVetoMask));
+        }
 
         List<ResidualTransientAnalysis.CommonMotionGroup> commonMotionGroups = List.of();
         if (config.enableCommonMotionRejection) {
@@ -928,6 +962,9 @@ public class JTransientEngine implements AutoCloseable {
                     () -> CommonMotionRejector.reject(trackResult.unclassifiedTransients, config));
             telemetry.recordStage(PipelineTelemetry.Stage.COMMON_MOTION, stageStartedNanos);
         }
+        if (observer != null) {
+            notifyObserver(observer, new PipelineStage.CommonMotion(config.enableCommonMotionRejection, commonMotionGroups));
+        }
         ResidualTransientAnalysis residual = ResidualTransientAnalysis.empty();
         if (config.enableResidualTransientAnalysis) {
             stageStartedNanos = System.nanoTime();
@@ -936,6 +973,9 @@ public class JTransientEngine implements AutoCloseable {
             }
             residual = OperationContext.compute(StageId.RESIDUAL_ANALYSIS, null, () -> ResidualTransientAnalyzer.analyze(trackResult.unclassifiedTransients, config));
             telemetry.recordStage(PipelineTelemetry.Stage.RESIDUAL_ANALYSIS, stageStartedNanos);
+        }
+        if (observer != null) {
+            notifyObserver(observer, new PipelineStage.ResidualAnalysis(config.enableResidualTransientAnalysis, residual));
         }
         ResidualTransientAnalysis residualTransientAnalysis = new ResidualTransientAnalysis(
                 residual.localRescueCandidates, residual.localActivityClusters, commonMotionGroups);
@@ -969,6 +1009,9 @@ public class JTransientEngine implements AutoCloseable {
             variableStarAnalysis = OperationContext.call(StageId.PHOTOMETRY, null, () -> VariableStarAnalyzer.analyze(photometryInput, config));
             telemetry.photometryTelemetry = variableStarAnalysis.telemetry;
             telemetry.recordStage(PipelineTelemetry.Stage.PHOTOMETRY, stageStartedNanos);
+        }
+        if (observer != null) {
+            notifyObserver(observer, new PipelineStage.Photometry(config.enableVariableStarDetection, variableStarAnalysis));
         }
 
         if (listener != null) {

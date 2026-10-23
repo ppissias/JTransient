@@ -409,3 +409,38 @@ Validation: engine `check jar javadoc` passed all **240 tests**. Five new option
 | klangwolde-2 | 1,034–1,427 | 1,036–1,287 |
 
 The first (warm-up) run after the change was slower on klangwolke-1 (315 ms against 244–249 ms) and on klangwolde-2 (2.9 s against 1.2 s); the runs after it were not. That is one after-pass, taken while the machine was short of memory. The second after-pass, which would show whether it repeats, was stopped for low memory and has not been run again.
+
+## JA-09 stage observer for the live view (2026-10-23)
+
+**Decision.** The maintainer asked for the part of JA-09 that SpacePixels F10 slice 2 needs: an observer that receives each stage's finished products while the run continues. The progress-callback part of JA-09 stays a proposal in the plan.
+
+**What changed.**
+
+- `runPipeline(frames, config, listener, providedMasterStack, observer)` is a new overload; the four-argument one passes no observer. `PipelineStageObserver.stageFinished(PipelineStage)` is a functional interface.
+- `PipelineStage` is a sealed interface with one record per major stage, in run order: `MasterReference` (median stack, master stars), `SlowMovers` (enabled, maximum stack, candidates), `Tracking` (tracks, anomalies, star mask), `CommonMotion` (enabled, removed groups), `ResidualAnalysis` (enabled, analysis) and `Photometry` (enabled, variable-star analysis). A switched-off stage still arrives, marked off, with empty products.
+- The products are the run's own objects, not copies; the engine changes none of them after their stage, which the Javadoc and PIPELINE.md state. Common-motion filtering and residual analysis only use the detections that no track or anomaly took.
+- The engine calls the observer on the orchestration thread, after the stage's products are final. An exception from it is caught, written to the run's diagnostics and ignored. Without an observer nothing is allocated.
+
+**Differences from the requirement.** The star mask arrives with `Tracking`, because the tracking stage builds it, not after the master reference. The outcome is an `enabled` flag plus the products, from which "completed empty" follows; there is no separate outcome enum. Rescue candidates and activity clusters arrive in `ResidualAnalysis`. The streak tracks are among `Tracking.tracks()` (`isStreakTrack`).
+
+**Validation.** `PipelineStageObserverTest` checks the order, that the products are the result's own objects, that switched-off stages arrive marked off, and that no observer, a no-op observer and a throwing observer give the same result. JTransient `check` passes (262 tests) and `apiConsumer` passes. Full `PipelineResult` snapshots (variable stars on, stacks and masks hashed) are byte-identical with no observer, a no-op observer and a throwing observer on Eagle-noisy, dc-reg, klangwolke-1 and klangwolde-2, and equal to the JA-06 snapshots. On klangwolde-2 the pipeline took 97.0 s without an observer and 97.6 s with a throwing one, in separate JVMs.
+
+### The requirement as specified
+
+**F10 requirement: stage products for a live view (2026-10-23).** SpacePixels F10 slice 2 shows findings while the engine runs. That needs the reference, the star mask, slow movers, tracks, streaks, anomalies, rescue candidates and variable stars as each stage finishes them. Add this to the stage contract:
+
+- **Passed explicitly.** The observer is an optional parameter of the run: a field of the run options or an overload parameter. It is not a `ThreadLocal` scope, and nothing is parsed from progress text. Without an observer, there is no extra work and no allocation.
+- **When it is called.** Once per completed major stage, on the orchestration thread, after that stage's products are final.
+- **What it receives.** The stage ID, the outcome (disabled, completed empty, or completed with findings), and read-only access to the stage's products:
+  - median reference after `MEDIAN_STACK`;
+  - star mask after `MASTER_REFERENCE`;
+  - maximum stack and slow-mover candidates after `SLOW_MOVERS`;
+  - tracks, streak tracks and anomalies after `TRACKING`;
+  - removed groups after `COMMON_MOTION`;
+  - rescue candidates and activity clusters after `RESIDUAL_ANALYSIS`;
+  - the variable-star analysis after `PHOTOMETRY`.
+
+  These are the objects that end up in `PipelineResult`, not copies.
+- **Which products can still change.** For each product, document whether a later stage of the run can still change it; common-motion filtering, for example, removes findings after tracking. The observer copies whatever it keeps beyond the callback and never mutates anything.
+- **Observer failures are isolated.** An exception from the observer is caught, reported through diagnostics and ignored. It never fails or cancels the run, and it delays the run only by the callback's own duration. This differs from today's progress listener, whose exception fails the run as `LISTENER`. Cancellation stays with `CancellationScope`.
+- **Acceptance.** `PipelineResult` and SpacePixels' report outputs are byte-identical with no observer, a no-op observer and a throwing observer. Events arrive in stage order, a disabled branch reports disabled, and no event follows the operation's terminal outcome.

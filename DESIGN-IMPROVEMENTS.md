@@ -163,7 +163,7 @@ flowchart TD
 
 ### Delivery order
 
-JA-09's stage observer for SpacePixels F10 slice 2 is next (JA-06 is done). Each slice migrates its SpacePixels callers in the same change. JA-11 checks the selected artifact combination at release; completed foundations are not queued again.
+JA-06 and JA-09's stage observer are done. JA-11 is the release gate; the rest of JA-09 waits for a need. Each slice migrates its SpacePixels callers in the same change. JA-11 checks the selected artifact combination at release; completed foundations are not queued again.
 
 ### Verification and coordination with SpacePixels
 
@@ -179,7 +179,7 @@ Do not combine these changes with new detection gates, altered association order
 
 | ID | Scope | Status |
 |---|---|---|
-| JA-09 | Typed stage progress/outcomes and callback guarantees | In progress |
+| JA-09 | Typed progress events and outcomes for the progress listener | Stage observer done 2026-10-23; the rest is not scheduled |
 | JA-11 | Final selected-release repository/artifact validation | In progress |
 
 **Post-implementation review and decisions (2026-10-23).** The maintainer decided:
@@ -201,23 +201,7 @@ Keep numerical diagnostics in structured results; text formatting should consume
 
 **Acceptance.** Exercise each optional branch on/off, insufficient evidence, zero findings, task failure, cancellation and a throwing/slow listener. Verify stage order, callback guarantees, terminal outcomes and timing inclusion. Migrate text/percentage consumers together with the new stage contract; retaining a second old callback contract is optional, not a release requirement.
 
-**F10 requirement: stage products for a live view (2026-10-23).** SpacePixels F10 slice 2 shows findings while the engine runs. That needs the reference, the star mask, slow movers, tracks, streaks, anomalies, rescue candidates and variable stars as each stage finishes them. Add this to the stage contract:
-
-- **Passed explicitly.** The observer is an optional parameter of the run: a field of the run options or an overload parameter. It is not a `ThreadLocal` scope, and nothing is parsed from progress text. Without an observer, there is no extra work and no allocation.
-- **When it is called.** Once per completed major stage, on the orchestration thread, after that stage's products are final.
-- **What it receives.** The stage ID, the outcome (disabled, completed empty, or completed with findings), and read-only access to the stage's products:
-  - median reference after `MEDIAN_STACK`;
-  - star mask after `MASTER_REFERENCE`;
-  - maximum stack and slow-mover candidates after `SLOW_MOVERS`;
-  - tracks, streak tracks and anomalies after `TRACKING`;
-  - removed groups after `COMMON_MOTION`;
-  - rescue candidates and activity clusters after `RESIDUAL_ANALYSIS`;
-  - the variable-star analysis after `PHOTOMETRY`.
-
-  These are the objects that end up in `PipelineResult`, not copies.
-- **Which products can still change.** For each product, document whether a later stage of the run can still change it; common-motion filtering, for example, removes findings after tracking. The observer copies whatever it keeps beyond the callback and never mutates anything.
-- **Observer failures are isolated.** An exception from the observer is caught, reported through diagnostics and ignored. It never fails or cancels the run, and it delays the run only by the callback's own duration. This differs from today's progress listener, whose exception fails the run as `LISTENER`. Cancellation stays with `CancellationScope`.
-- **Acceptance.** `PipelineResult` and SpacePixels' report outputs are byte-identical with no observer, a no-op observer and a throwing observer. Events arrive in stage order, a disabled branch reports disabled, and no event follows the operation's terminal outcome.
+**Status (2026-10-23).** The stage observer that SpacePixels F10 slice 2 needed is implemented; see the [completion record](docs/archive/design-improvements-closed-2026-10.md#ja-09-stage-observer-for-the-live-view-2026-10-23). The progress-callback part above (stage events adapted to today's percentage callback, outcome kinds, callback guarantees for the progress listener) is not scheduled; it waits for a need.
 
 
 ### JA-11. Validate the final selected release artifacts
@@ -275,7 +259,7 @@ Statuses describe the current decision, not a new priority. Partial items retain
 | JA-06 | Tracking responsibility separation | Implemented 2026-10-23: `TrackLinker` orchestrates stage classes; results and timings unchanged |
 | JA-07 | Coherent results/models and shared buffers | Implemented 2026-10-23 (narrowed): top-level `model` types and a `PipelineResult` builder |
 | JA-08 | Tuner measurement, selection and presentation | Implemented 2026-10-23: legacy tuner retired, calibrated measurement named |
-| JA-09 | Typed stage progress/outcomes | In progress |
+| JA-09 | Typed stage progress/outcomes | Stage observer implemented 2026-10-23; progress events not scheduled |
 | JA-10 | Reusable reference provenance | Closed 2026-10-23: one consumer, no cache; reopen if a need appears |
 | JA-11 | Selected release artifact verification | In progress |
 | JA-12 | Unused execution surface and deprecated adapters | Implemented 2026-10-23: one worker pool per engine, unused execution API removed |

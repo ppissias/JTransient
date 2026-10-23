@@ -2,6 +2,8 @@
 
 ## 1.0.6 (unreleased)
 
+- **Stage observer (JA-09).** A new `runPipeline(frames, config, listener, providedMasterStack, observer)` overload hands each finished stage (`PipelineStage`: master reference, slow movers, tracking, common motion, residual analysis, photometry) to a `PipelineStageObserver` with that stage's own products. The observer is called on the pipeline thread; its exceptions are reported and ignored. Results are unchanged with or without one.
+- **Track linker split into stage classes (JA-06).** `TrackLinker` now orchestrates package-private stage classes; its public results and the detection results are unchanged.
 - **The legacy score-based tuner is removed (JA-08).** `JTransientAutoTuner`, its options, the `LEGACY_TUNING` stage ID and the `AUTO_TUNE` rules scope are gone; `CalibratedAutoTuner` is the only tuner. `AutoTuneProfile` and `AutoTunerResult` are now top-level types in `engine`. `AutoTunerResult.bestTransientRatio` is renamed `noisePerMpixFrame`, and the fields only the legacy tuner filled (`bestStarCount`, `finalValidationTelemetry`, `effectiveOptions`) are removed.
 - **Structured failures.** Engine and tuner calls throw `OperationFailedException`, which names the stage and the original frame where the failure happened, apart from completed empty or insufficient-evidence results and from joined cancellation. Stage IDs and frame identities are carried through worker batches, listeners, photometry and tuning. Interruption retains its flag; fatal errors propagate. Per-stage progress/outcome events remain separate JA-09 work.
 

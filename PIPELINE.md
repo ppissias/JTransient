@@ -123,6 +123,7 @@ Non-finite consumed values are errors; finite out-of-domain or cross-field findi
 | `JTransientEngine.detectTransients(..., providedMasterStack)` | Full frame sequence | Uses a provided median master stack | No | Same as above, but skip stacking |
 | `JTransientEngine.runPipeline(...)` | Full frame sequence | Generates a median master stack | Yes | Full detection run |
 | `JTransientEngine.runPipeline(..., providedMasterStack)` | Full frame sequence | Uses a provided median master stack | Yes | Full detection run without restacking |
+| `JTransientEngine.runPipeline(..., providedMasterStack, observer)` | Full frame sequence | Generates one, or uses the provided one (may be null) | Yes | Full detection run that hands each finished stage to an observer |
 
 ## `SourceExtractor.extractSources(...)`
 
@@ -266,6 +267,14 @@ PipelineResult runPipeline(
         TransientEngineProgressListener listener,
         short[][] providedMasterStack
 )
+
+PipelineResult runPipeline(
+        List<ImageFrame> inputFrames,
+        DetectionConfig config,
+        TransientEngineProgressListener listener,
+        short[][] providedMasterStack,          // null: build the median stack
+        PipelineStageObserver observer          // null: none
+)
 ```
 
 This is the full engine entrypoint. It executes the [complete algorithm](ALGORITHM.md#high-level-flow), including camera-fixed rejection, common-motion filtering and the enabled slow-mover/residual/photometry branches.
@@ -364,6 +373,23 @@ Tune once and pass `optimizedConfig` to `runPipeline(...)` for a complete run. P
 | 100% | complete |
 
 `detectTransients(...)` reports extraction and frame rejection up to 42%, the master stack at 45-48% and the stationary-star veto at 60-100%.
+
+## Stage observer (1.0.6)
+
+The five-argument `runPipeline(...)` hands each finished stage to a `PipelineStageObserver`, for example to show findings while the run continues. Each call receives one `PipelineStage` record, in this order:
+
+| Record | After | Products |
+| --- | --- | --- |
+| `MasterReference` | master reference | median stack, master stars |
+| `SlowMovers` | slow-mover analysis | `enabled`, maximum stack, slow-mover candidates |
+| `Tracking` | track linking and anomaly rescue | tracks (point and streak), anomalies, the star mask the tracking applied |
+| `CommonMotion` | common-motion filtering | `enabled`, the removed groups |
+| `ResidualAnalysis` | residual analysis | `enabled`, local rescue candidates and activity clusters |
+| `Photometry` | variable-star photometry | `enabled`, the variable-star analysis |
+
+A switched-off stage still arrives, with `enabled` false and empty products. The products are the objects and arrays the `PipelineResult` will hold, not copies, and no later stage changes them: common-motion filtering and residual analysis work on the detections no track or anomaly took. Treat them as read-only and copy what you keep after the call.
+
+The observer runs on the thread that runs the pipeline, once per stage; the run waits for it. An exception from it is caught, written to the run's diagnostics and ignored: it never fails or cancels the run, unlike a progress listener's. Nothing is called after the run returns or throws. Without an observer nothing is allocated. Results are identical with no observer, a no-op observer and a throwing one.
 
 ## Related Documents
 
