@@ -11,13 +11,12 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 ## What The Library Exposes
 
 - `CalibratedAutoTuner.tune(...)`: derives a `DetectionConfig` for a session by measuring false positives and sensitivity on its own frames, within the false-positive budget of a profile (low, medium, high, maximum)
-- `JTransientAutoTuner.tune(...)`: the original, score-based auto-tuner, kept for comparison
 - `JTransientEngine.runPipeline(...)`: full extraction, quality filtering, master-stack masking, slow-mover candidate detection, track linking, and optional variable-star detection
 - `JTransientEngine.detectTransients(...)`: same early pipeline, but stops after the stationary-star veto and returns per-frame transients
 - `JTransientEngine.generateMasterStack(...)`: precomputes a reusable median master stack
 - `SourceExtractor.extractSources(...)`: standalone single-frame object extraction
 - `DetectionConfigRules`: shared, operation-scoped validation/metadata and explicit copy-based alignment; engine operations capture settings before processing
-- `CalibratedAutoTuner.tune(...)` / `JTransientAutoTuner.tune(...)`: detached tuning results, including unsuccessful fallback configs; legacy `tune(...)` retains fallback alias compatibility
+- `CalibratedAutoTuner.tune(...)`: detached tuning results, including unsuccessful fallback configs
 - `OperationOutcome` and engine/tuner `...Outcome(...)` entry points: additive completed/failed/cancelled results with stable stage/original-frame failure context, without changing legacy exception objects or scientific readiness/fallback behavior
 
 ## Documentation
@@ -227,9 +226,10 @@ The readiness verdict decides whether stars are scored:
 
 ```java
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.engine.AutoTuneProfile;
+import io.github.ppissias.jtransient.engine.AutoTunerResult;
 import io.github.ppissias.jtransient.engine.CalibratedAutoTuner;
 import io.github.ppissias.jtransient.engine.ImageFrame;
-import io.github.ppissias.jtransient.engine.JTransientAutoTuner;
 import java.util.List;
 
 public final class AutoTuneExample {
@@ -237,10 +237,10 @@ public final class AutoTuneExample {
         List<ImageFrame> frames = loadFrames();
         DetectionConfig baseConfig = new DetectionConfig();
 
-        JTransientAutoTuner.AutoTunerResult tuning = CalibratedAutoTuner.tune(
+        AutoTunerResult tuning = CalibratedAutoTuner.tune(
                 frames,
                 baseConfig,
-                JTransientAutoTuner.AutoTuneProfile.MEDIUM,
+                AutoTuneProfile.MEDIUM,
                 (percent, message) -> System.out.printf("%3d%% %s%n", percent, message)
         );
 
@@ -258,7 +258,7 @@ public final class AutoTuneExample {
 
 Profiles: `LOW` (fewest false detections), `MEDIUM`, `HIGH` (close to the noise level) and `MAXIMUM` (as sensitive as possible; on large sensors it leaves many candidates to review, so it is meant for small sensors or targeted searches for a faint object).
 
-The legacy tuner has the same signature: `JTransientAutoTuner.tune(frames, baseConfig, profile, listener)`; its three-argument overload defaults to `MEDIUM`. It treats `MAXIMUM` like `HIGH`. See [Auto-tuning](ALGORITHM.md#auto-tuning) for both.
+See [Auto-tuning](ALGORITHM.md#auto-tuning) for what the tuner measures and how a profile picks its settings.
 
 Per-operation options (introduced in 1.0.6) avoid changing static knobs:
 
@@ -267,10 +267,10 @@ var policy = CalibratedAutoTuner.Options.builder();
 policy.sigmasToTest = new double[] {3.0, 4.0, 5.0};
 policy.falsePositiveBudgetPerMpixFrame = new double[] {0.05, 0.4, 1.5, 3.5};
 var result = CalibratedAutoTuner.tune(frames, config, policy.build(),
-        JTransientAutoTuner.AutoTuneProfile.MEDIUM, listener);
+        AutoTuneProfile.MEDIUM, listener);
 ```
 
-All arrays are snapshotted; legacy static entry points remain compatibility adapters. See [option ownership and diagnostics](PIPELINE.md#per-operation-tuner-options-106).
+All arrays are snapshotted. See [option ownership and diagnostics](PIPELINE.md#per-operation-tuner-options-106).
 
 ### 4. Reuse a precomputed master stack
 

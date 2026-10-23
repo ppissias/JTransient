@@ -16,19 +16,14 @@ import static org.junit.Assert.*;
 
 /** Verifies per-operation grid, sample, budget and diagnostics ownership without changing process-wide tuning state. */
 public class AutoTunerOptionsTest {
-    /** Both tuning facades propagate caller core diagnostics through owned and borrowed scientific workers. */
+    /** The tuner propagates caller core diagnostics through its scientific workers. */
     @Test
-    public void bothTunersInheritCoreDiagnosticsWithoutEnablingLegacyTunerText() {
+    public void tunerInheritsCoreDiagnostics() {
         List<String> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
         var policy = io.github.ppissias.jtransient.execution.ExecutionPolicy.bounded(1);
         try (var scope = io.github.ppissias.jtransient.execution.DiagnosticContext.open(
                 new io.github.ppissias.jtransient.execution.DiagnosticOptions(true, messages::add));
              var session = io.github.ppissias.jtransient.execution.ExecutionSession.owned(policy)) {
-            var legacy = JTransientAutoTuner.tune(frames(), new DetectionConfig(), legacyOptions(5, 4),
-                    session, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
-            assertTrue(legacy.success);
-            assertTrue(messages.stream().anyMatch(message -> message.contains("BACKGROUND STATS")));
-            messages.clear();
             var calibrated = CalibratedAutoTuner.calibrate(frames(), new DetectionConfig(), calibratedOptions(4, 1), session, null);
             assertTrue(calibrated.failureReason, calibrated.success);
             assertTrue(messages.stream().anyMatch(message -> message.contains("BACKGROUND STATS")));
@@ -36,58 +31,23 @@ public class AutoTunerOptionsTest {
         }
     }
 
-    /** Keeps caller-owned runtime sinks out of JSON provenance while preserving captured scientific grids and limits. */
-    @Test
-    public void diagnosticSinkIsNotSerializedAsMeasurementProvenance() {
-        String json = new com.google.gson.GsonBuilder().serializeNulls().create().toJson(legacyOptions(5, 4));
-        assertFalse(json.contains("diagnosticSink"));
-        assertTrue(json.contains("sampleSize"));
-        assertTrue(json.contains("sigmasToTest"));
-    }
-
-    /** Verifies both tuner facades borrow a reusable session and record its actual resource policy in their results. */
+    /** Verifies the tuner borrows a reusable session and records its actual resource policy in its result. */
     @Test
     public void borrowedSessionPolicyAndOwnershipArePreserved() {
         var policy = io.github.ppissias.jtransient.execution.ExecutionPolicy.bounded(1);
         try (var session = io.github.ppissias.jtransient.execution.ExecutionSession.owned(policy)) {
-            var legacy = JTransientAutoTuner.tune(frames(), new DetectionConfig(), legacyOptions(5, 4),
-                    session, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
             var measured = CalibratedAutoTuner.calibrate(frames(), new DetectionConfig(), calibratedOptions(4, 1), session, null);
-            assertTrue(legacy.success);
             assertTrue(measured.failureReason, measured.success);
-            assertEquals(policy, legacy.effectiveOptions.executionPolicy());
             assertEquals(policy, measured.options.executionPolicy());
             assertFalse(session.isClosed());
             assertFalse(session.executor().isShutdown());
         }
     }
 
-    /** Mutates both builder arrays and accessor copies and verifies neither changes the immutable snapshots. */
+    /** Mutates builder arrays and accessor copies and verifies neither changes the immutable snapshot. */
     @Test
     public void defensivelyCopiesAllSearchGrids() throws Exception {
-        assertArrayOwnership(JTransientAutoTuner.Options.builder());
         assertArrayOwnership(CalibratedAutoTuner.Options.builder());
-    }
-
-    /** Runs legacy policies with different sample sizes and grids concurrently and compares their isolated results. */
-    @Test
-    public void concurrentLegacyRunsMatchIsolatedRuns() throws Exception {
-        List<ImageFrame> frames = frames();
-        var first = legacyOptions(4, 4);
-        var second = legacyOptions(5, 5);
-        var isolatedFirst = legacy(frames, first, null);
-        var isolatedSecond = legacy(frames, second, null);
-        var barrier = new CyclicBarrier(2);
-        try (var executor = Executors.newFixedThreadPool(2)) {
-            var firstRun = executor.submit(() -> legacy(frames, first, barrier));
-            var secondRun = executor.submit(() -> legacy(frames, second, barrier));
-            assertLegacyResult(isolatedFirst, firstRun.get(30, TimeUnit.SECONDS));
-            assertLegacyResult(isolatedSecond, secondRun.get(30, TimeUnit.SECONDS));
-        }
-        assertTrue(isolatedFirst.success);
-        assertTrue(isolatedSecond.success);
-        assertEquals(4, isolatedFirst.effectiveOptions.sampleSize());
-        assertEquals(5, isolatedSecond.effectiveOptions.sampleSize());
     }
 
     /** Runs independent calibrated grids and profile budgets concurrently, including replay after measurement. */
@@ -113,19 +73,18 @@ public class AutoTunerOptionsTest {
         assertEquals(5, isolatedSecond.options.sigmasToTest()[0], 0);
     }
 
-    /** Routes verbose legacy diagnostics only to the enabled operation's caller-owned sink. */
+    /** Routes verbose diagnostics only to the enabled operation's caller-owned sink. */
     @Test
     public void diagnosticsArePerRunAndSilentByDefault() {
-        List<String> messages = new ArrayList<>();
-        var builder = legacyOptions(5, 4).toBuilder();
+        List<String> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
         try (var scope = io.github.ppissias.jtransient.execution.DiagnosticContext.open(
                 new io.github.ppissias.jtransient.execution.DiagnosticOptions(false, messages::add))) {
-            legacy(frames(), builder.build(), null);
+            calibrated(frames(), calibratedOptions(4, 1), null);
         }
         assertTrue(messages.isEmpty());
         try (var scope = io.github.ppissias.jtransient.execution.DiagnosticContext.open(
                 new io.github.ppissias.jtransient.execution.DiagnosticOptions(true, messages::add))) {
-            legacy(frames(), builder.build(), null);
+            calibrated(frames(), calibratedOptions(4, 1), null);
         }
         assertFalse(messages.isEmpty());
     }
@@ -133,10 +92,10 @@ public class AutoTunerOptionsTest {
     /** Rejects malformed budgets and empty search grids before any images or listeners are consumed. */
     @Test
     public void validatesPoliciesAtConstruction() {
-        var legacy = JTransientAutoTuner.Options.builder();
-        legacy.sigmasToTest = new double[0];
-        assertThrows(IllegalArgumentException.class, legacy::build);
         var calibrated = CalibratedAutoTuner.Options.builder();
+        calibrated.sigmasToTest = new double[0];
+        assertThrows(IllegalArgumentException.class, calibrated::build);
+        calibrated = CalibratedAutoTuner.Options.builder();
         calibrated.falsePositiveBudgetPerMpixFrame = new double[]{1};
         assertThrows(IllegalArgumentException.class, calibrated::build);
         calibrated.falsePositiveBudgetPerMpixFrame = new double[]{1, 1, Double.NaN, 1};
@@ -164,24 +123,6 @@ public class AutoTunerOptionsTest {
         }
     }
 
-    /** Captures a small legacy sweep with a caller-selected sample count and threshold in background-sigma units. */
-    private static JTransientAutoTuner.Options legacyOptions(int sampleSize, double sigma) {
-        var builder = JTransientAutoTuner.Options.builder();
-        builder.sampleSize = sampleSize;
-        builder.cropCount = 1;
-        builder.borderMargin = 8;
-        builder.preferredCropSizeLarge = 144;
-        builder.preferredCropSizeSmall = 144;
-        builder.minCropSize = 64;
-        builder.minStableStars = 2;
-        builder.minTotalExtractedObjects = 1;
-        builder.sigmasToTest = new double[]{sigma};
-        builder.minPixelsToTest = new int[]{3};
-        builder.growDeltasToTest = new double[]{1.25};
-        builder.maskOverlapToTest = new double[]{0.7};
-        return builder.build();
-    }
-
     /** Captures a small calibrated sweep with independently chosen noise budgets in detections per megapixel-frame. */
     private static CalibratedAutoTuner.Options calibratedOptions(double sigma, double budget) {
         var builder = CalibratedAutoTuner.Options.builder();
@@ -200,13 +141,6 @@ public class AutoTunerOptionsTest {
         builder.minCropBorderMargin = 20;
         builder.cropPaddingClearance = 20;
         return builder.build();
-    }
-
-    /** Tunes borrowed synthetic frames, rendezvousing at the first callback to ensure runs overlap. */
-    private static JTransientAutoTuner.AutoTunerResult legacy(List<ImageFrame> frames, JTransientAutoTuner.Options options,
-                                                            CyclicBarrier barrier) {
-        return JTransientAutoTuner.tune(frames, new DetectionConfig(), options,
-                JTransientAutoTuner.AutoTuneProfile.MEDIUM, listener(barrier));
     }
 
     /** Measures borrowed synthetic frames under one immutable calibrated policy. */
@@ -228,15 +162,6 @@ public class AutoTunerOptionsTest {
                 throw new AssertionError(failure);
             }
         };
-    }
-
-    /** Compares scientific legacy outputs and full deterministic reports, excluding caller-owned sink identity. */
-    private static void assertLegacyResult(JTransientAutoTuner.AutoTunerResult expected, JTransientAutoTuner.AutoTunerResult actual) {
-        Gson gson = new com.google.gson.GsonBuilder().serializeSpecialFloatingPointValues().create();
-        assertEquals(expected.success, actual.success);
-        assertEquals(gson.toJson(expected.optimizedConfig), gson.toJson(actual.optimizedConfig));
-        assertEquals(expected.telemetryReport, actual.telemetryReport);
-        assertEquals(gson.toJson(expected.finalValidationTelemetry), gson.toJson(actual.finalValidationTelemetry));
     }
 
     /** Compares full candidate measurements, selection and tradeoff data, allowing runtime to vary. */

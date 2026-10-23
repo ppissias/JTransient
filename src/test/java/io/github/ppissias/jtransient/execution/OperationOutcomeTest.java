@@ -4,7 +4,8 @@ import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.PixelEncoding;
 import io.github.ppissias.jtransient.engine.CalibratedAutoTuner;
 import io.github.ppissias.jtransient.engine.ImageFrame;
-import io.github.ppissias.jtransient.engine.JTransientAutoTuner;
+import io.github.ppissias.jtransient.engine.AutoTuneProfile;
+import io.github.ppissias.jtransient.engine.AutoTunerResult;
 import io.github.ppissias.jtransient.engine.JTransientEngine;
 import org.junit.Test;
 
@@ -116,16 +117,12 @@ public class OperationOutcomeTest {
     @Test
     public void tunerFallbackIsNotAnExecutionFailure() {
         DetectionConfig config = new DetectionConfig();
-        var legacy = OperationContext.capture(StageId.OPERATION, () -> JTransientAutoTuner.tune(frames().subList(0, 4), config,
-                JTransientAutoTuner.Options.defaults(), JTransientAutoTuner.AutoTuneProfile.MEDIUM, null, CancellationToken.NONE));
-        assertTrue(legacy instanceof OperationOutcome.Completed<?>);
-        assertFalse(((OperationOutcome.Completed<JTransientAutoTuner.AutoTunerResult>) legacy).value().success);
         var calibrated = OperationContext.capture(StageId.OPERATION, () -> CalibratedAutoTuner.tune(frames().subList(0, 4), config,
-                CalibratedAutoTuner.Options.defaults(), JTransientAutoTuner.AutoTuneProfile.MEDIUM, null, CancellationToken.NONE));
+                CalibratedAutoTuner.Options.defaults(), AutoTuneProfile.MEDIUM, null, CancellationToken.NONE));
         assertTrue(calibrated instanceof OperationOutcome.Completed<?>);
-        assertFalse(((OperationOutcome.Completed<JTransientAutoTuner.AutoTunerResult>) calibrated).value().success);
-        var cancelled = OperationContext.capture(StageId.OPERATION, () -> JTransientAutoTuner.tune(null, config, JTransientAutoTuner.Options.defaults(),
-                JTransientAutoTuner.AutoTuneProfile.MEDIUM, null, () -> true));
+        assertFalse(((OperationOutcome.Completed<AutoTunerResult>) calibrated).value().success);
+        var cancelled = OperationContext.capture(StageId.OPERATION, () -> CalibratedAutoTuner.tune(null, config, CalibratedAutoTuner.Options.defaults(),
+                AutoTuneProfile.MEDIUM, null, () -> true));
         assertTrue(cancelled instanceof OperationOutcome.Cancelled<?>);
     }
 

@@ -23,8 +23,8 @@ import java.util.Set;
 public final class DetectionConfigRules {
     /** Minimum usable reference-star count required by the photometry ensemble solver. */
     public static final int MIN_ENSEMBLE_STARS = 10;
-    /** Selects the read set; CONFIGURATION checks persistence, AUTO_TUNE legacy tuning, and CALIBRATION calibrated tuning. */
-    public enum Operation { CONFIGURATION, PIPELINE, TRANSIENTS, MASTER_STACK, AUTO_TUNE, CALIBRATION, EXTRACTION }
+    /** Selects the read set; CONFIGURATION checks persistence and CALIBRATION the auto-tuner. */
+    public enum Operation { CONFIGURATION, PIPELINE, TRANSIENTS, MASTER_STACK, CALIBRATION, EXTRACTION }
     /** Timestamp availability used to scope geometric-linking advice; UNKNOWN retains conditional diagnostics. */
     public enum Timing { UNKNOWN, AVAILABLE, MISSING }
     /** Engine responsibility associated with a setting or diagnostic, independent of GUI page layout. */
@@ -160,9 +160,6 @@ public final class DetectionConfigRules {
     private static final Map<String, FieldMetadata> METADATA = metadataDefinitions();
     private static final Set<String> CALIBRATION_FIELDS = Set.of("bgClippingIterations", "bgClippingFactor",
             "streakMinElongation", "streakMinPixels", "minDetectionPixels", "masterSigmaMultiplier", "masterMinDetectionPixels");
-    private static final Set<String> TUNING_QUALITY_FIELDS = Set.of("qualitySigmaMultiplier", "qualityGrowSigmaMultiplier",
-            "qualityMinDetectionPixels", "qualityBrightStarMinStars", "qualityBrightStarPeakSigmaOffset",
-            "qualityMaxElongationForFwhm", "errorFallbackValue");
     private static final List<Pair> PAIRS = List.of(
             new Pair(RuleId.GROW_SIGMA, "growSigmaMultiplier", "detectionSigmaMultiplier", Direction.LOWER, Stage.EXTRACTION, true),
             new Pair(RuleId.MASTER_GROW_SIGMA, "masterGrowSigmaMultiplier", "masterSigmaMultiplier", Direction.LOWER, Stage.REFERENCE, true),
@@ -358,8 +355,6 @@ public final class DetectionConfigRules {
     /** Resolves a field's actual read scope, including tuner overrides, optional branches and timestamp availability. */
     private static boolean active(FieldMetadata metadata, DetectionConfig config, Operation operation, Timing timing) {
         if (operation == Operation.CALIBRATION) return CALIBRATION_FIELDS.contains(metadata.id());
-        if (operation == Operation.AUTO_TUNE) return (CALIBRATION_FIELDS.contains(metadata.id())
-                && !metadata.id().equals("minDetectionPixels")) || TUNING_QUALITY_FIELDS.contains(metadata.id());
         if (operation == Operation.MASTER_STACK && metadata.stage() == Stage.EXTRACTION) {
             return metadata.id().equals("streakMinElongation") || metadata.id().equals("streakMinPixels");
         }
@@ -383,7 +378,7 @@ public final class DetectionConfigRules {
             case EXTRACTION -> operation != Operation.MASTER_STACK;
             case QUALITY -> operation != Operation.EXTRACTION;
             case REFERENCE -> operation == Operation.CONFIGURATION || operation == Operation.PIPELINE
-                    || operation == Operation.TRANSIENTS || operation == Operation.AUTO_TUNE;
+                    || operation == Operation.TRANSIENTS;
             case SLOW_MOVERS -> config.enableSlowMoverDetection && (operation == Operation.CONFIGURATION || operation == Operation.PIPELINE);
             case TRACKING -> operation == Operation.CONFIGURATION || operation == Operation.PIPELINE;
             case RESIDUAL -> config.enableResidualTransientAnalysis && (operation == Operation.CONFIGURATION || operation == Operation.PIPELINE);

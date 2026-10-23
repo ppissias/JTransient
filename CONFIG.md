@@ -7,13 +7,13 @@ All fields are public and mutable. A few implementation details matter when you 
 - engine operations capture and validate a private primitive snapshot at entry, so later caller edits do not change an active run; callers must synchronize edits during capture
 - the engine never changes the caller's config object; registration fill is handled by the session data area, not by a setting
 - the engine uses stage-local config overrides for master-star and slow-mover extraction so the caller's config object is not left mutated afterward
-- both tuners expose `tune(...)`: success and fallback configurations are detached from the caller; compatibility `tune(...)` returns the original base reference on unsuccessful results
+- `CalibratedAutoTuner.tune(...)` returns success and fallback configurations detached from the caller
 
 ## Shared rules and compatibility
 
 `DetectionConfigRules.metadata()` covers all 107 primitive fields with stable names, types, defaults, stages and recommended domains. `validate(config, operation[, timing])` returns immutable structured issues; it does not change the DTO. `snapshot` clones then rejects error-level issues. `align` returns an independent copy plus changes identifying the rule, field, related fields, old/new values and direction. No engine operation implicitly aligns scientific settings.
 
-Non-finite values read by an operation are errors. `CONFIGURATION` checks every numeric field for finite serialization, even disabled settings. Other scopes follow actual consumers: master-stack quality, transient extraction, the full pipeline and enabled stages, standalone extraction, legacy tuning (`AUTO_TUNE`) and calibrated tuning (`CALIBRATION`). The calibrated tuner does not consume the quality settings; both tuners replace several detection settings during their searches. See [PIPELINE.md](PIPELINE.md#configuration-snapshots-and-shared-rules).
+Non-finite values read by an operation are errors. `CONFIGURATION` checks every numeric field for finite serialization, even disabled settings. Other scopes follow actual consumers: master-stack quality, transient extraction, the full pipeline and enabled stages, standalone extraction and tuning (`CALIBRATION`). The tuner does not consume the quality settings, and it replaces several detection settings during its search. See [PIPELINE.md](PIPELINE.md#configuration-snapshots-and-shared-rules).
 
 Finite values outside recommended domains remain warnings, not new rejection limits. Preserve master-grow <= 0 (automatic), nonpositive photometry caps (uncapped), nonpositive shape/brightness ratios (disabled), and nonpositive track-count defaults. Positive ratios below 1 warn. Relative tolerances may exceed 1; signed split-half correlation spans -1 to 1. Independent images' sigma/minimum-pixel thresholds are not ordered. Persistence may exceed the minimum measurement count; actual data governs readiness.
 
@@ -135,7 +135,7 @@ Seed threshold for extracting stationary objects from the median master stack.
 - the seed of the first master pass, with one sky level for the whole stack; a second pass against the local sky (`SkyBackground`) seeds at 5 sigma or this value if higher, and adds the faint stars a sky gradient hides from the first pass (`ALGORITHM.md`, section 7)
 - usually lower than the main detection sigma
 - used with `masterMinDetectionPixels`
-- the calibrated auto-tuner searches this field; the legacy tuner preserves it
+- the auto-tuner searches this field
 - master stars are grown at `masterGrowSigmaMultiplier` (`0` = the master sigma itself)
 
 ### `masterMinDetectionPixels` (default `3`)
@@ -144,7 +144,7 @@ Minimum size for master-stack objects.
 
 - lower values produce a more complete stationary-star map
 - can also increase mask density if set too low
-- the calibrated auto-tuner searches this field; the legacy tuner preserves it
+- the auto-tuner searches this field
 
 ### `masterGrowSigmaMultiplier` (default `0.0`)
 
@@ -153,7 +153,7 @@ Hysteresis threshold used to grow master-map stars after they are seeded at `mas
 - `0` uses the master sigma itself (the previous behaviour, no hysteresis)
 - a lower value extends star footprints into their faint wings without seeding new noise islands
 - values above `masterSigmaMultiplier` are capped to it
-- the calibrated auto-tuner searches this field; the legacy tuner preserves it
+- the auto-tuner searches this field
 
 ### `enableSlowMoverDetection` (default `true`)
 
@@ -725,6 +725,6 @@ Fields outside the tuned set retain their base values. Auto-Tune does not set th
 If you do not have strong prior knowledge of the dataset:
 
 1. start from `new DetectionConfig()`
-2. run `CalibratedAutoTuner.tune(...)` (or the legacy `JTransientAutoTuner.tune(...)`)
+2. run `CalibratedAutoTuner.tune(...)`
 3. use the returned `optimizedConfig` with `runPipeline(...)`
 4. only hand-tune fields like `enableSlowMoverDetection`, `strictExposureKinematics`, `maxJumpPixels`, or anomaly thresholds after reviewing telemetry

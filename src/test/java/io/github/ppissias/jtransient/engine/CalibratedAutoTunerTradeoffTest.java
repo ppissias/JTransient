@@ -4,7 +4,7 @@ import io.github.ppissias.jtransient.engine.CalibratedAutoTuner.Calibration;
 import io.github.ppissias.jtransient.engine.CalibratedAutoTuner.Candidate;
 import io.github.ppissias.jtransient.engine.CalibratedAutoTuner.SigmaChoice;
 import io.github.ppissias.jtransient.engine.CalibratedAutoTuner.Tradeoff;
-import io.github.ppissias.jtransient.engine.JTransientAutoTuner.AutoTuneProfile;
+import io.github.ppissias.jtransient.engine.AutoTuneProfile;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;

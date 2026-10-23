@@ -1,6 +1,6 @@
 # JTransient Algorithms
 
-This is the current algorithm reference for detection, slow movers, variable-star photometry and both auto-tuners. Reviewed against the implementation on 2026-10-19. [PIPELINE.md](PIPELINE.md) owns API signatures/result contracts, [CONFIG.md](CONFIG.md) owns `DetectionConfig` fields/defaults, and [DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md) owns proposed work and decisions.
+This is the current algorithm reference for detection, slow movers, variable-star photometry and the auto-tuner. Reviewed against the implementation on 2026-10-19. [PIPELINE.md](PIPELINE.md) owns API signatures/result contracts, [CONFIG.md](CONFIG.md) owns `DetectionConfig` fields/defaults, and [DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md) owns proposed work and decisions.
 
 | Topic | Sections |
 |---|---|
@@ -8,7 +8,7 @@ This is the current algorithm reference for detection, slow movers, variable-sta
 | Slow-mover candidates | [Maximum-stack method, geometry and frame evidence](#slow-movers) |
 | Tracks, instrumental patterns and residuals | [Veto/streaks/camera-fixed sources](#9-stationary-star-veto-filtering-and-streak-linking), [timed linking](#10-time-based-point-linking), [geometric linking](#11-geometric-point-linking), [anomalies](#13-faint-fragments-and-anomaly-rescue), [common motion](#14-common-motion-filtering), [residual analysis](#15-residual-transient-analysis) |
 | Variable stars | [Photometry](#variable-star-photometry), [readiness](#photometry-8), [ensemble](#photometry-9), [scores and gates](#photometry-11), [limitations](#photometry-14) |
-| Auto-Tune | [Calibrated tuner](#calibrated-auto-tuning), [legacy tuner](#legacy-auto-tuning) |
+| Auto-Tune | [Calibrated tuner](#calibrated-auto-tuning) |
 
 ## Input Assumptions
 
@@ -1056,7 +1056,7 @@ The engine records non-overlapping elapsed wall time for major phases, plus trac
 <a id="auto-tuning"></a>
 ## 19. Auto-Tuning
 
-JTransient supplies a measured/calibrated tuner (`CalibratedAutoTuner`) and a legacy score-based tuner (`JTransientAutoTuner`). SpacePixels defaults to calibrated tuning. Both take a base config and a profile, and return an `AutoTunerResult`; signatures, reusable calibration and fallback contracts are in [PIPELINE.md](PIPELINE.md#calibratedautotunertune).
+JTransient supplies a measured, calibrated tuner (`CalibratedAutoTuner`). It takes a base config and a profile, and returns an `AutoTunerResult`; signatures, reusable calibration and fallback contracts are in [PIPELINE.md](PIPELINE.md#calibratedautotunertune). The earlier score-based tuner was removed on 2026-10-23.
 
 Profiles are `LOW`, `MEDIUM`, `HIGH` and `MAXIMUM`. `AutoTuneProfile.parse(...)` also accepts conservative, balanced and aggressive as aliases for the first three. The current methods are described here; the configurable detection fields/defaults are documented once in [CONFIG.md](CONFIG.md).
 
@@ -1126,97 +1126,9 @@ The telemetry report lists the measurement area, the star FWHM and jitter, skipp
 - Diffuse objects such as comets are not represented by the injected stars, so the cost of a deep mask for them is underestimated.
 - Runtime depends on image dimensions, crop/frame counts, the search grid and hardware; old session timings are not a performance guarantee.
 
-<a id="legacy-auto-tuning"></a>
-### 19.2 Legacy score-based tuning
+### 19.2 Limits and intended use
 
-The legacy tuner searches proxy scores on fixed crops rather than measuring final false-track probabilities. It sweeps per-frame sigma/grow/minimum pixels and mask overlap, measures jitter, and preserves the base master settings. `MAXIMUM` uses the same legacy limits/weights as `HIGH`. The [API guide](PIPELINE.md#jtransientautotunertune-legacy) defines fallback and final-validation fields.
-
-#### Sampling and crops
-
-At least `AUTO_TUNE_SAMPLE_SIZE` frames (default 5) are needed. Frames are ranked by `backgroundNoise * medianFWHM`, lower first, using the dedicated quality sigma/grow/minimum-pixel and shape thresholds plus background-clipping/streak-classification settings. The sample combines up to three best frames with median-quality/fill-in frames, then sorts by sequence index. Detection-side sigma, grow, minimum pixels, overlap and incoming jitter do not control this quality pass.
-
-The sample is cropped once and cached: three interior regions (upper-left, centre, lower-right), a target border margin of 200 px, preferred sizes 1024 or 768 px and a minimum of 384 px. Extraction keeps the crop search margin; the sweep reuses the same arrays rather than selecting a different sample for every combination.
-
-#### Jitter before the sweep
-
-Each crop's median stars are matched to stars extracted from its sampled frames at sigma 4, grow 3 and minimum 5 pixels. Usable stars have at least 5 pixels and elongation no greater than 2.5. Matches must be reciprocal nearest neighbours within 4 px. At least eight matches are required; the estimate is `max(1, 2 * P90(distances))` px, with a 1.5 px fallback. The measured jitter is used consistently in sweep and replay, not inherited from the input guess.
-
-#### Search and crop evaluation
-
-| Parameter | Legacy grid |
-|---|---|
-| Detection sigma | 3.5, 4, 5, 6, 7 |
-| Minimum pixels | 3, 5, 7, 9, 12 |
-| Grow delta | 0.75, 1.25, 1.75 |
-| Mask overlap | 0.65, 0.70, 0.75 |
-
-Grow is `max(1, sigma - growDelta, masterSigmaMultiplier + 0.5)`; combinations with grow at or above seed are skipped. For every combination:
-
-1. Clone the base config and apply the grid values and measured jitter.
-2. Build each crop's median stack and extract master stars through the global/local-sky passes. Legacy evaluation temporarily grows at `masterSigmaMultiplier`; it does not apply the calibrated tuner's configurable master hysteresis. Keep master stars to the crop edge.
-3. Build the raw-pixel veto mask and grow it by `max(1, round(jitter / 2))`. Reject a crop with no master stars or more than 25% mask coverage.
-4. Extract every crop-frame. Ignore streaks for stable/transient scoring; a point is stable when its mask overlap is at least the tested overlap, otherwise transient.
-5. Reject combinations with fewer than 10 or more than 500,000 total objects, fewer than 15 stable stars, or a transient ratio above the profile limit.
-
-#### Proxy score
-
-Let `cropFrameCount = selectedFrames * cropRegions`. Stable/transient yields are divided by this count, `transientRatio = totalTransients / totalObjects`, and `stableCv`/`transientCv` are the coefficients of variation of their crop-frame counts. The score maximizes:
-
-```text
-  stableWeight * stableYieldScore
-- overflowWeight * transientOverflowPenalty
-- sweetSpotWeight * transientSweetSpotPenalty
-- varianceWeight * variancePenalty
-- maskWeight * maskCoveragePenalty
-- harshnessWeight * harshnessPenalty
-- guardWeight * lowSigmaMinPixGuardPenalty
-```
-
-| Term | Definition or effect |
-|---|---|
-| Stable yield | `clamp01(avgStableStars / 100)`; saturates at the optimal-star anchor |
-| Transient overflow | `clamp01(transientRatio / profile.maxTransientRatio)` |
-| Sweet spot | Penalizes yields outside the profile band and favours its target; zero leakage is not the only objective |
-| Variance | `0.6 * clamp01(stableCv / 0.25) + 0.4 * clamp01(transientCv / 0.75)` |
-| Mask | Linear soft penalty above 8% coverage; rejection at 25% |
-| Harshness | Normalized sigma, minimum-pixel and grow-delta harshness with profile weights |
-| Low-sigma guard | Below sigma 4, penalizes minimum-pixel choices that are too small for the sigma |
-
-##### Legacy profile limits
-
-| Profile | Max transient ratio | Target transients per crop-frame | Sweet-spot band | Main bias |
-| --- | --- | --- | --- | --- |
-| `LOW` | `0.05` | `0.20` | `0.05` to `0.50` | Strongly suppress leakage |
-| `MEDIUM` | `0.05` | `0.35` | `0.15` to `0.80` | Middle ground |
-| `HIGH` | `0.12` | `1.00` | `0.40` to `2.00` | Allows more leakage to preserve sensitivity |
-
-##### Legacy score weights
-
-| Profile | Stable | Overflow | Sweet spot | Variance | Mask | Harshness | Low-sigma guard |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| `LOW` | `100` | `120` | `20` | `60` | `50` | `22` | `10` |
-| `MEDIUM` | `100` | `120` | `25` | `60` | `50` | `20` | `18` |
-| `HIGH` | `100` | `70` | `35` | `50` | `50` | `34` | `22` |
-
-##### Legacy harshness weights
-
-| Profile | Sigma weight | Min-pixel weight | Grow-delta weight |
-| --- | --- | --- | --- |
-| `LOW` | `0.40` | `0.35` | `0.25` |
-| `MEDIUM` | `0.55` | `0.20` | `0.25` |
-| `HIGH` | `0.90` | `0.00` | `0.15` |
-
-Near-tie selection may favour lower sigma, particularly for HIGH/MAXIMUM. These tables describe the current proxy objective, not a false-positive budget interchangeable with calibrated tuning.
-
-#### Final replay, telemetry and repeatability
-
-The winner is replayed on the same frozen crops: rebuild stacks/stars/masks and recompute counts, ratios, coverage and CVs with the returned config. Validation can pass, complete with a hard-gate warning, or abort on a crop such as one with no stars or excessive mask coverage. Inspect `finalValidationTelemetry` as well as `success`.
-
-The text report records the input-config snapshot, frame order, effective sampling thresholds, selected frames/crops, jitter matches, sweep entries/skips, winning config and replay result. These explain changes caused by quality/background/streak settings, image order in quality ties, or new input frames. Removed edge/void settings are not repeatability inputs. A previous detection-grow result does not feed back into quality sampling. Repeatedly tuning a tuned config is not an instruction to keep improving indefinitely.
-
-#### Limits and intended use
-
-Both tuners provide a starting extraction configuration for a subsequent full pipeline run. They do not link tracks, run slow movers or photometry, export `PipelineResult`, or guarantee an optimum for every frame/downstream stage. Review telemetry and downstream results. AT-3/AT-4 and proposed slow-mover tuning remain in [DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md).
+The tuner provides a starting extraction configuration for a subsequent full pipeline run. They do not link tracks, run slow movers or photometry, export `PipelineResult`, or guarantee an optimum for every frame/downstream stage. Review telemetry and downstream results. AT-3/AT-4 and proposed slow-mover tuning remain in [DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md).
 
 ## 20. Design Decisions And Future Work
 

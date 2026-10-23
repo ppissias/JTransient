@@ -38,7 +38,7 @@ public class CalibratedAutoTunerTest {
 
     @Test
     public void everyProfileStaysWithinItsBudgets() {
-        for (int p = 0; p < JTransientAutoTuner.AutoTuneProfile.values().length; p++) {
+        for (int p = 0; p < AutoTuneProfile.values().length; p++) {
             CalibratedAutoTuner.Candidate c = calibration.chosen[p];
             assertTrue("profile " + p + " within budget", calibration.withinBudget[p]);
             assertTrue(c.falsePositivesPerMpixFrame <= CalibratedAutoTuner.Options.defaults().falsePositiveBudgetPerMpixFrame()[p]
@@ -120,8 +120,8 @@ public class CalibratedAutoTunerTest {
     public void tuneReturnsTheChosenSettings() {
         DetectionConfig base = new DetectionConfig();
         DetectionConfig original = base.clone();
-        JTransientAutoTuner.AutoTunerResult result = CalibratedAutoTuner.tune(createFrames(), base,
-                JTransientAutoTuner.AutoTuneProfile.MEDIUM, (percent, message) -> base.qualitySigmaMultiplier = 17);
+        AutoTunerResult result = CalibratedAutoTuner.tune(createFrames(), base,
+                AutoTuneProfile.MEDIUM, (percent, message) -> base.qualitySigmaMultiplier = 17);
         assertTrue(result.telemetryReport, result.success);
         assertTrue(result.summary.contains("Medium profile"));
         assertTrue(result.optimizedConfig.growSigmaMultiplier < result.optimizedConfig.detectionSigmaMultiplier);
@@ -136,14 +136,14 @@ public class CalibratedAutoTunerTest {
 
     @Test
     public void profileNamesParseIncludingTheNamesOfEarlierVersions() {
-        assertEquals(JTransientAutoTuner.AutoTuneProfile.HIGH, JTransientAutoTuner.AutoTuneProfile.parse("high"));
-        assertEquals(JTransientAutoTuner.AutoTuneProfile.MAXIMUM, JTransientAutoTuner.AutoTuneProfile.parse(" Maximum "));
-        assertEquals(JTransientAutoTuner.AutoTuneProfile.LOW, JTransientAutoTuner.AutoTuneProfile.parse("conservative"));
-        assertEquals(JTransientAutoTuner.AutoTuneProfile.MEDIUM, JTransientAutoTuner.AutoTuneProfile.parse("BALANCED"));
-        assertEquals(JTransientAutoTuner.AutoTuneProfile.HIGH, JTransientAutoTuner.AutoTuneProfile.parse("aggressive"));
-        assertEquals("Medium", JTransientAutoTuner.AutoTuneProfile.MEDIUM.displayName());
-        assertEquals(0.4, CalibratedAutoTuner.Options.defaults().falsePositiveBudgetPerMpixFrame()[JTransientAutoTuner.AutoTuneProfile.MEDIUM.ordinal()], 1e-12);
-        assertEquals(1.5, CalibratedAutoTuner.Options.defaults().falsePositiveBudgetPerMpixFrame()[JTransientAutoTuner.AutoTuneProfile.HIGH.ordinal()], 1e-12);
+        assertEquals(AutoTuneProfile.HIGH, AutoTuneProfile.parse("high"));
+        assertEquals(AutoTuneProfile.MAXIMUM, AutoTuneProfile.parse(" Maximum "));
+        assertEquals(AutoTuneProfile.LOW, AutoTuneProfile.parse("conservative"));
+        assertEquals(AutoTuneProfile.MEDIUM, AutoTuneProfile.parse("BALANCED"));
+        assertEquals(AutoTuneProfile.HIGH, AutoTuneProfile.parse("aggressive"));
+        assertEquals("Medium", AutoTuneProfile.MEDIUM.displayName());
+        assertEquals(0.4, CalibratedAutoTuner.Options.defaults().falsePositiveBudgetPerMpixFrame()[AutoTuneProfile.MEDIUM.ordinal()], 1e-12);
+        assertEquals(1.5, CalibratedAutoTuner.Options.defaults().falsePositiveBudgetPerMpixFrame()[AutoTuneProfile.HIGH.ordinal()], 1e-12);
     }
 
     @Test
@@ -166,7 +166,7 @@ public class CalibratedAutoTunerTest {
     @Test
     public void configForAppliesEachProfilesChoice() {
         DetectionConfig base = new DetectionConfig();
-        for (JTransientAutoTuner.AutoTuneProfile profile : JTransientAutoTuner.AutoTuneProfile.values()) {
+        for (AutoTuneProfile profile : AutoTuneProfile.values()) {
             CalibratedAutoTuner.Candidate chosen = calibration.chosen[profile.ordinal()];
             DetectionConfig tuned = CalibratedAutoTuner.configFor(calibration, base, profile);
             assertEquals(chosen.sigma, tuned.detectionSigmaMultiplier, 1e-12);
@@ -177,7 +177,7 @@ public class CalibratedAutoTunerTest {
         assertEquals("the base configuration is not modified", new DetectionConfig().detectionSigmaMultiplier, base.detectionSigmaMultiplier, 1e-12);
         CalibratedAutoTuner.Calibration failed = new CalibratedAutoTuner.Calibration();
         assertEquals("a failed calibration leaves the settings unchanged", base.detectionSigmaMultiplier,
-                CalibratedAutoTuner.configFor(failed, base, JTransientAutoTuner.AutoTuneProfile.MEDIUM).detectionSigmaMultiplier, 1e-12);
+                CalibratedAutoTuner.configFor(failed, base, AutoTuneProfile.MEDIUM).detectionSigmaMultiplier, 1e-12);
     }
 
     /** Six aligned frames: isolated Gaussian stars of 3 px FWHM over a flat sky with Poisson-like noise. */

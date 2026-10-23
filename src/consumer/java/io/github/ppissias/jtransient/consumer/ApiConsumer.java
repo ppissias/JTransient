@@ -5,9 +5,10 @@ import io.github.ppissias.jtransient.core.MasterMapGenerator;
 import io.github.ppissias.jtransient.core.PixelEncoding;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.core.TrackLinker;
+import io.github.ppissias.jtransient.engine.AutoTuneProfile;
+import io.github.ppissias.jtransient.engine.AutoTunerResult;
 import io.github.ppissias.jtransient.engine.CalibratedAutoTuner;
 import io.github.ppissias.jtransient.engine.ImageFrame;
-import io.github.ppissias.jtransient.engine.JTransientAutoTuner;
 import io.github.ppissias.jtransient.engine.JTransientEngine;
 import io.github.ppissias.jtransient.engine.PipelineResult;
 
@@ -33,14 +34,9 @@ public final class ApiConsumer {
         require(track.points.get(0) == object, "Detection identity changed");
 
         List<ImageFrame> frames = frames();
-        var profile = JTransientAutoTuner.AutoTuneProfile.MEDIUM;
-        var legacy = JTransientAutoTuner.tune(frames.subList(0, 4), config, profile, null);
-        var calibrated = CalibratedAutoTuner.tune(frames.subList(0, 4), config, profile, null);
-        require(!legacy.success && legacy.optimizedConfig != config, "Legacy tuning must detach fallback settings");
+        AutoTunerResult calibrated = CalibratedAutoTuner.tune(frames.subList(0, 4), config, AutoTuneProfile.MEDIUM, null);
         require(!calibrated.success && calibrated.optimizedConfig != config, "Calibrated tuning must detach fallback settings");
-        var detached = JTransientAutoTuner.tune(frames.subList(0, 4), config, profile, null);
-        require(detached.optimizedConfig != config, "Snapshot fallback aliases caller settings");
-        require(new com.google.gson.Gson().toJson(detached).contains("optimizedConfig"), "Result JSON missing settings");
+        require(new com.google.gson.Gson().toJson(calibrated).contains("optimizedConfig"), "Result JSON missing settings");
         require(PixelEncoding.toShiftedPositiveInt(MasterMapGenerator.createMedianMasterStack(frames)[5][5]) == 1000,
                 "Median pixel encoding changed");
 

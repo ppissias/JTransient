@@ -50,7 +50,7 @@ public class DetectionConfigRulesTest {
         config.rhythmAllowedVariance = Double.POSITIVE_INFINITY;
         snapshot(config, Operation.TRANSIENTS);
         snapshot(config, Operation.MASTER_STACK);
-        snapshot(config, Operation.AUTO_TUNE);
+        snapshot(config, Operation.CALIBRATION);
         config.rhythmAllowedVariance = 8;
         snapshot(config, Operation.PIPELINE);
         assertThrows(InvalidConfigurationException.class, () -> snapshot(config, Operation.CONFIGURATION));
@@ -179,7 +179,6 @@ public class DetectionConfigRulesTest {
         snapshot(config, Operation.EXTRACTION);
         snapshot(config, Operation.TRANSIENTS);
         snapshot(config, Operation.MASTER_STACK);
-        snapshot(config, Operation.AUTO_TUNE);
         snapshot(config, Operation.CALIBRATION);
         assertThrows(InvalidConfigurationException.class, () -> snapshot(config, Operation.PIPELINE));
         config.singleStreakMinPeakSigma = 7;
@@ -189,12 +188,9 @@ public class DetectionConfigRulesTest {
         config.maxStarJitter = Double.NaN;
         config.maxMaskOverlapFraction = Double.NaN;
         config.minBackgroundDeviationADU = Double.NaN;
-        snapshot(config, Operation.AUTO_TUNE);
         snapshot(config, Operation.CALIBRATION);
         config.qualityGrowSigmaMultiplier = Double.NaN;
         snapshot(config, Operation.CALIBRATION);
-        var failure = assertThrows(InvalidConfigurationException.class, () -> snapshot(config, Operation.AUTO_TUNE));
-        assertEquals(java.util.List.of("qualityGrowSigmaMultiplier"), failure.issues().getFirst().fields());
         config.masterSigmaMultiplier = Double.NaN;
         assertThrows(InvalidConfigurationException.class, () -> snapshot(config, Operation.CALIBRATION));
     }

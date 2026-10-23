@@ -42,7 +42,7 @@ All names are beneath `io.github.ppissias.jtransient`. The dependencies column n
 | `residual` | `ResidualTransientAnalyzer` and local-rescue/activity-cluster results over final leftovers. | `model`, `image`, `config`, `execution`. |
 | `slowmover` | Maximum-stack morphology/evidence analysis, candidates, diagnostics and its result bundle. | `model`, `image`, `config`, `execution`, `extraction`, `reference`. |
 | `photometry` | Existing photometry stage/helpers/results plus its own input and frame/diagnostic contracts. | `model`, `image`, `config`, `execution`, `extraction`, `quality` (measurement contracts only). |
-| `tuning` | Calibrated and legacy tuner facades, options, sampling, measurements, selection policies, summaries and text formatters. | `model`, `image`, `config`, `execution`, `extraction`, `quality`, `reference`. |
+| `tuning` | The calibrated tuner facade, options, sampling, measurements, selection policy, summaries and text formatters. | `model`, `image`, `config`, `execution`, `extraction`, `quality`, `reference`. |
 | `telemetry` | Pipeline diagnostic aggregation and text formatting, including compatibility projections of feature diagnostics. | `model`, `image`, `config`, `execution`; diagnostic/result contracts from `extraction`, `quality`, `reference`, `tracking`, `residual`, `slowmover`, `photometry`, `tuning`. |
 | `engine` | Public pipeline facade/results, private preparation and pipeline orchestration, and adapters for existing engine entry points. | All listed packages as needed; no canonical stage depends on `engine`. |
 
@@ -77,7 +77,6 @@ These are concrete destinations for responsibilities, not a requirement to creat
 | Anomaly rescue, private same-frame groups and final review exports | Package-private `AnomalyRescuer`, private/package-private `AnomalyGroup`, and `TrackingExports`; reuse `StreakConsolidator` and the existing faint-fragment helper. | A group is an internal consolidation input. Final exports preserve the current categories, shared detection graph and empty-frame positions. |
 | Camera/common-motion results nested under unrelated stage models | `tracking.CameraFixedGroup`, `CommonMotionGroup`, `TrackingResult`, `TransientFilterResult` and `TrackingDiagnostics`; rejectors remain separate components. | Keep removed groups available for review. A common-motion result is available independently of enabling residual analysis. |
 | Calibrated tuning from sample preparation through formatted explanation | `tuning.CalibratedAutoTuner` coordinates package-private `CalibrationSamplePreparer`, `CalibrationMeasurer`, `CalibratedSelectionPolicy` and `CalibratedTuningReportFormatter`. `Calibration` and `CalibrationSummary` distinguish full measurements from compact retained output. | Measurements are immutable after publication. Choosing settings or formatting a report does not mutate the measured sweep. Keep `calibrate`/`configFor` reuse. |
-| Legacy tuning sweep, selection and report construction | `tuning.LegacyAutoTuner` coordinates package-private `LegacySampleSelector`, `LegacySweepEvaluator`, `LegacySelectionPolicy` and `LegacyTuningReportFormatter`. A top-level `AutoTuneProfile` and tuner-specific results replace ownership by a legacy implementation class. | Preserve legacy scoring separately from calibrated budgets. Share only proven equivalent crop/mask mechanics; retain explicit units in each result. |
 | Photometry orchestration with crossing geometry and pipeline-owned records | Keep `photometry.VariableStarAnalyzer` as stage coordinator. Add `PhotometryInput`, `PhotometryFrameStat` and `PhotometryDiagnostics` in the same package. Extract package-private `TrackCrossingFlagger` around `flagCrossings`/`flagTrack` and related interpolation/segment code. | Its input has validated frame associations and shared model tracks. Keep existing selection/measurement/readiness/ensemble/scoring helpers; no automatic split of every remaining private method. |
 | Stage counters converted into pipeline containers and text | Stage-owned diagnostic builders are private/package-private. `telemetry.PipelineTelemetry` holds completed stage summaries; package-private `PipelineTelemetryFormatter` builds the text. Tuner formatters stay with their own package-private measurement details. | Stages never call formatters to determine results. Legacy conversion belongs to aggregation/adapters, including `SlowMoverSummaryTelemetry.toLegacyTelemetry`. |
 
@@ -123,7 +122,7 @@ Paths below are relative to `src/main/java/io/github/ppissias/jtransient/`. This
 | `engine/InputRules`, `ExtractedFramesContext` | Sequence validation goes to `image.FrameSequenceValidator`; engine context becomes private `PreparedFrame`/`PreparedSequence` associations. | JA-01/05 |
 | `engine/ImageFrame`, `FrameTransients`, `TransientEngineProgressListener` | Canonical frame data goes to `model`; keep pipeline frame export in `engine`; new progress contract goes to `execution`, with the old callback adapted. | JA-05/07/09 |
 | `engine/PipelineResult` | Keep pipeline result in `engine`; build coherent groups from stage-owned results and migrate consumers to coherent result construction instead of retaining obsolete positional constructors/duplicate fields. | JA-07/10 |
-| `engine/JTransientAutoTuner`, `CalibratedAutoTuner` | Canonical implementation in `tuning.LegacyAutoTuner` and `tuning.CalibratedAutoTuner`; migrate facade/profile/result consumers directly; preserve both distinct algorithms, not old names for their own sake. | JA-02/03/04/08 |
+| `engine/CalibratedAutoTuner`, `AutoTuneProfile`, `AutoTunerResult` | Canonical implementation in `tuning.CalibratedAutoTuner`; migrate facade/profile/result consumers directly. The legacy tuner was removed under JA-08. | JA-02/03/04/08 |
 | `core/PixelEncoding`, `FrameCoverage`, `FrameRegistration`, `DataArea` | Canonical home `image`; retain their distinct purposes and numerical behavior; update imports instead of retaining compatibility names. | JA-05/07 |
 | `core/FrameDriftAnalyzer` | Canonical home `image`; consume `model.ImageFrame` without an engine dependency. | JA-05/07 |
 | `core/SkyBackground`, `SourceExtractor`, `SpatialGrid` | Sky transformation and shared spatial lookup go to `image`; extraction service/results go to `extraction`; shared detection/pixel data goes to `model`. | JA-01/03/07 |
@@ -164,7 +163,7 @@ flowchart TD
 
 ### Delivery order
 
-First the removals (JA-08, JA-12), then JA-07, then JA-06, then JA-09's stage observer for SpacePixels F10 slice 2. Each slice migrates its SpacePixels callers in the same change. JA-11 checks the selected artifact combination at release; completed foundations are not queued again.
+First the remaining removals (JA-12), then JA-07, then JA-06, then JA-09's stage observer for SpacePixels F10 slice 2. Each slice migrates its SpacePixels callers in the same change. JA-11 checks the selected artifact combination at release; completed foundations are not queued again.
 
 ### Verification and coordination with SpacePixels
 
@@ -182,7 +181,6 @@ Do not combine these changes with new detection gates, altered association order
 |---|---|---|
 | JA-06 | Clean track-linker design without changing assignment/science, with before/after timings | Accepted |
 | JA-07 | Top-level detection/track models and a `PipelineResult` builder | Accepted (narrowed) |
-| JA-08 | Retire the legacy tuner; name the calibrated measurement | Accepted |
 | JA-09 | Typed stage progress/outcomes and callback guarantees | In progress |
 | JA-11 | Final selected-release repository/artifact validation | In progress |
 | JA-12 | Reduce the execution layer to what SpacePixels uses | Accepted |
@@ -224,19 +222,6 @@ The package table under "Target package layout and allowed dependencies" stays a
 Earlier evidence and proposal (ownership contracts, frozen collections, output-retention policy) are in git history; they are not planned.
 
 Decision: Agreed with the review note. Please also re-formulate this issue accordingly. 
-
-### JA-08. Retire the legacy tuner and name the calibrated tuner's measurements
-
-**Scope (reformulated 2026-10-23 after the maintainer's decision).**
-
-1. **Remove the legacy score-based tuner** (`JTransientAutoTuner`) from JTransient and from SpacePixels. The calibrated tuner has replaced it. Its result and profile types (`AutoTunerResult`, `AutoTuneProfile`) move to the calibrated tuner, which already returns them. Everything only the legacy tuner used goes with it: its options, its stage ID, its tests and its documentation. SpacePixels loses the tuner choice in the GUI, the Java API and the batch tool.
-2. **Name the measurement.** The shared result's `bestTransientRatio` meant a ratio for the legacy tuner and a noise rate per megapixel per frame for the calibrated tuner. With one tuner left, it is renamed after what it holds.
-
-Splitting the calibrated tuner into preparer, measurer, policy and formatter classes is not planned; do that when a tuner change needs it.
-
-**Acceptance.** Calibrated tuning results (selected settings, summary and report text) are unchanged on klangwolke-1 and klangwolde-2. A saved profile or session that names the legacy tuner still loads. JTransient and SpacePixels tests pass.
-
-Decision: Please retire completely the legacy tuner both from SpacePixels and JTransient. The new tuner has proven its value and is working well. Other than that, agreed with the rest of the comments in the review note. 
 
 ### JA-09. Make progress, stage outcomes and diagnostics consistent
 
@@ -337,7 +322,7 @@ Statuses describe the current decision, not a new priority. Partial items retain
 | JA-05 | Prepared frame identity and input ownership | Implemented |
 | JA-06 | Tracking responsibility separation | Accepted |
 | JA-07 | Coherent results/models and shared buffers | Accepted; narrowed to top-level models and a result builder |
-| JA-08 | Tuner measurement, selection and presentation | Accepted; legacy tuner retired |
+| JA-08 | Tuner measurement, selection and presentation | Implemented 2026-10-23: legacy tuner retired, calibrated measurement named |
 | JA-09 | Typed stage progress/outcomes | In progress |
 | JA-10 | Reusable reference provenance | Closed 2026-10-23: one consumer, no cache; reopen if a need appears |
 | JA-11 | Selected release artifact verification | In progress |

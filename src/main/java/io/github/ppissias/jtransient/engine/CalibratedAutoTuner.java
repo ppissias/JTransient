@@ -62,8 +62,7 @@ import java.util.concurrent.Future;
  * </ul>
  * <p>A profile is a false-positive budget per megapixel per frame (noise plus leakage, or the real-frame excess
  * if larger). Within the budget the tuner picks the settings that recover the most synthetic sources, so a
- * more permissive profile is never less sensitive. The legacy {@link JTransientAutoTuner} is kept for
- * comparison.</p>
+ * more permissive profile is never less sensitive.</p>
  */
 public final class CalibratedAutoTuner {
 
@@ -73,7 +72,7 @@ public final class CalibratedAutoTuner {
      * many candidates on a large sensor; it is meant for small sensors and targeted searches.
      */
     private static final double[] FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME = {0.05, 0.4, 1.5, 3.5};
-    private static final int PROFILE_COUNT = JTransientAutoTuner.AutoTuneProfile.values().length;
+    private static final int PROFILE_COUNT = AutoTuneProfile.values().length;
 
     private static final double[] SIGMAS_TO_TEST = {2.5, 2.75, 3.0, 3.25, 3.5, 4.0, 4.5, 5.0, 6.0};
     private static final double[] GROW_DELTAS_TO_TEST = {0.75, 1.25};
@@ -607,7 +606,7 @@ public final class CalibratedAutoTuner {
 
     /** Full measurement of one session: every evaluated candidate and the choice for each profile. */
     public static final class Calibration {
-        /** Immutable policy captured for measurement, selection and later tradeoff formatting; null in legacy hand-built data. */
+        /** Immutable policy captured for measurement, selection and later tradeoff formatting; null in hand-built data. */
         public Options options;
         /** Whether the measurement completed. */
         public boolean success;
@@ -636,7 +635,7 @@ public final class CalibratedAutoTuner {
         public final boolean[] budgetVerifiable = new boolean[PROFILE_COUNT];
         /** Every evaluated combination. */
         public final List<Candidate> candidates = new ArrayList<>();
-        /** Chosen candidate per profile, indexed by {@link JTransientAutoTuner.AutoTuneProfile#ordinal()}. */
+        /** Chosen candidate per profile, indexed by {@link AutoTuneProfile#ordinal()}. */
         public final Candidate[] chosen = new Candidate[PROFILE_COUNT];
         /** Whether the chosen candidate met the profile's budgets (otherwise the cleanest candidate was used). */
         public final boolean[] withinBudget = new boolean[PROFILE_COUNT];
@@ -653,7 +652,7 @@ public final class CalibratedAutoTuner {
         public double[] sigmas;
         /** Peak signal-to-noise levels of the synthetic-star curve, matching {@link Candidate#completeness}. */
         public double[] peakSnr;
-        /** One entry per profile, indexed by {@link JTransientAutoTuner.AutoTuneProfile#ordinal()}. */
+        /** One entry per profile, indexed by {@link AutoTuneProfile#ordinal()}. */
         public ProfileTradeoff[] profiles;
     }
 
@@ -687,7 +686,7 @@ public final class CalibratedAutoTuner {
      */
     public static DetectionConfig configFor(Calibration calibration,
                                             DetectionConfig baseConfig,
-                                            JTransientAutoTuner.AutoTuneProfile profile) {
+                                            AutoTuneProfile profile) {
         DetectionConfig tuned = baseConfig.clone();
         Candidate best = calibration == null || !calibration.success ? null : calibration.chosen[profile.ordinal()];
         if (best == null) {
@@ -717,12 +716,12 @@ public final class CalibratedAutoTuner {
      * @throws io.github.ppissias.jtransient.execution.OperationFailedException for invalid settings or execution failures, retaining stage/frame and cause
      * @throws java.util.concurrent.CancellationException if cancellation is requested
      */
-    public static JTransientAutoTuner.AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
-            JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener,
+    public static AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+            AutoTuneProfile profile, TransientEngineProgressListener listener,
             io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
         try (CancellationScope scope = CancellationScope.open(cancellation)) {
             CancellationScope.check();
-            JTransientAutoTuner.AutoTunerResult result = tune(poolFrames, baseConfig, profile, listener);
+            AutoTunerResult result = tune(poolFrames, baseConfig, profile, listener);
             CancellationScope.check();
             return result;
         }
@@ -740,16 +739,16 @@ public final class CalibratedAutoTuner {
      * @throws io.github.ppissias.jtransient.execution.OperationFailedException for invalid settings or execution failures, retaining stage/frame and cause
      * @throws java.util.concurrent.CancellationException if the inherited scope is cancelled
      */
-    public static JTransientAutoTuner.AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
-            JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener) {
+    public static AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+            AutoTuneProfile profile, TransientEngineProgressListener listener) {
         CancellationScope.check();
         return tune(poolFrames, baseConfig, Options.defaults(), profile, listener);
     }
 
 
     /** Tunes with detached configuration and immutable options, borrowing frame pixels until the joined operation returns. */
-    public static JTransientAutoTuner.AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
-            Options options, JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener) {
+    public static AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+            Options options, AutoTuneProfile profile, TransientEngineProgressListener listener) {
         CancellationScope.check();
         java.util.Objects.requireNonNull(options, "options");
         try (ExecutionSession execution = ExecutionSession.owned(options.executionPolicy)) {
@@ -758,8 +757,8 @@ public final class CalibratedAutoTuner {
     }
 
     /** Tunes with a borrowed session, preserving its policy/ownership and inheriting cooperative cancellation. */
-    public static JTransientAutoTuner.AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
-            Options options, ExecutionSession execution, JTransientAutoTuner.AutoTuneProfile profile,
+    public static AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+            Options options, ExecutionSession execution, AutoTuneProfile profile,
             TransientEngineProgressListener listener) {
         CancellationScope.check();
         java.util.Objects.requireNonNull(options, "options");
@@ -771,21 +770,21 @@ public final class CalibratedAutoTuner {
     }
 
     /** Tunes with independent options and explicit cancellation; no process-wide tuner state is changed. */
-    public static JTransientAutoTuner.AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
-            Options options, JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener,
+    public static AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+            Options options, AutoTuneProfile profile, TransientEngineProgressListener listener,
             io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
         try (CancellationScope scope = CancellationScope.open(cancellation)) {
             CancellationScope.check();
-            JTransientAutoTuner.AutoTunerResult result = tune(poolFrames, baseConfig, options, profile, listener);
+            AutoTunerResult result = tune(poolFrames, baseConfig, options, profile, listener);
             CancellationScope.check();
             return result;
         }
     }
 
     /** Measures and selects a profile using the validated private settings copy supplied by the entry point. */
-    private static JTransientAutoTuner.AutoTunerResult tuneCaptured(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
-            JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener, Options options) {
-        JTransientAutoTuner.AutoTunerResult result = new JTransientAutoTuner.AutoTunerResult();
+    private static AutoTunerResult tuneCaptured(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+            AutoTuneProfile profile, TransientEngineProgressListener listener, Options options) {
+        AutoTunerResult result = new AutoTunerResult();
         result.optimizedConfig = baseConfig;
         Calibration calibration = calibrateCaptured(poolFrames, baseConfig, listener, options);
         result.calibration = calibration;
@@ -804,7 +803,7 @@ public final class CalibratedAutoTuner {
 
         result.optimizedConfig = configFor(calibration, baseConfig, profile);
         result.success = true;
-        result.bestTransientRatio = best.noisePerMpixFrame;
+        result.noisePerMpixFrame = best.noisePerMpixFrame;
         result.summary = String.format(Locale.US,
                 "%s profile%s%n%n" +
                         "Detection sigma %.2f, grow %.2f, min pixels %d%n" +
@@ -1174,7 +1173,7 @@ public final class CalibratedAutoTuner {
                 calibration.poolFrames, calibration.measurementFrames, calibration.crops, calibration.cropSize, calibration.cropSize));
         report.append(String.format(Locale.US, "Measured star FWHM: %.2f px | residual jitter: %.2f px%n", calibration.fwhm, calibration.jitter));
         report.append(String.format(Locale.US, "Evaluated %d combinations in %.1f s.%n%n", calibration.candidates.size(), calibration.elapsedSeconds));
-        JTransientAutoTuner.AutoTuneProfile[] names = JTransientAutoTuner.AutoTuneProfile.values();
+        AutoTuneProfile[] names = AutoTuneProfile.values();
         report.append(String.format(Locale.US, "Noise and leakage measured over %.1f megapixel-frames.%n", calibration.measuredMpixFrames));
         if (calibration.skippedFrameSettings > 0) {
             report.append(String.format(Locale.US, "Skipped %d detection settings that were far too noisy for any budget.%n", calibration.skippedFrameSettings));
@@ -1662,7 +1661,7 @@ public final class CalibratedAutoTuner {
 
     /**
      * Residual registration jitter: 2 x the 90th percentile of reciprocal nearest-neighbour distances
-     * between master-stack stars and frame stars (same rule as the legacy tuner), at least 1 px.
+     * between master-stack stars and frame stars, at least 1 px.
      */
     private static double measureJitter(List<short[][]> images, List<Integer> cropOfImage, List<short[][]> masters,
                                         DetectionConfig base) {

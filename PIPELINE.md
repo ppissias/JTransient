@@ -8,7 +8,7 @@ The public surface is split into three layers:
 
 - standalone single-frame extraction via `SourceExtractor`
 - sequence-level utilities and tracking via `JTransientEngine`
-- configuration search via `CalibratedAutoTuner` (and the legacy `JTransientAutoTuner`)
+- configuration search via `CalibratedAutoTuner`
 
 ## Pipeline Scope
 
@@ -24,7 +24,7 @@ Photometry's ordinary `analyze` captures/validates aligned containers and a conf
 
 ## Per-operation tuner options (1.0.6)
 
-Both tuners expose immutable `Options`, `Options.builder()`, `Options.defaults()` and `toBuilder()`. Builders copy fixed private defaults; build and array accessors defensively copy grids. Explicit options control sample/crop/search/budget/jitter policy without mutable global knobs. Results retain the effective policy. Pixels remain borrowed until joined completion. Available-sample tuning caps only its private sample request; ordinary options preserve their requested sample/evidence requirements.
+`CalibratedAutoTuner` exposes immutable `Options`, `Options.builder()`, `Options.defaults()` and `toBuilder()`. Builders copy fixed private defaults; build and array accessors defensively copy grids. Explicit options control crop/search/budget policy without mutable global knobs. The calibration retains the effective policy. Pixels remain borrowed until joined completion.
 
 ## Per-operation diagnostics (1.0.6)
 
@@ -63,7 +63,7 @@ An engine admits one operation at a time. An overlapping operation, or `shutdown
 
 Extraction, stack rows, calibrated measurement and photometry all route cancellation-aware batches through the active session. Submission is bounded by the operation's configured CPU/scratch limit; returned futures preserve input-task order. Nested batches on its managed workers run inline instead of submitting and waiting for the same bounded pool. Without a session, standalone stage calls retain their existing executor behavior, including common-pool stack rows. Standalone callers can opt into a session with `try (var scope = session.open())` and `session.configureForWork(workCount, pixelsPerWork)` before invoking stages; scopes are thread-confined and close in reverse order.
 
-Both tuners' options include `executionPolicy` for their default owned session. Explicit-options overloads can instead borrow a session: `tune(frames, config, options, session, profile, listener)` and calibrated `calibrate(frames, config, options, session, listener)`. These inherit cancellation and never close the borrowed session. Effective result options record the borrowed session's actual policy. Calibrated scratch admission counts three crop images per work item; its retained preparations are outside that heuristic. The legacy scientific sweep remains caller-thread work.
+The tuner's options include `executionPolicy` for its default owned session. Explicit-options overloads can instead borrow a session: `tune(frames, config, options, session, profile, listener)` and calibrated `calibrate(frames, config, options, session, listener)`. These inherit cancellation and never close the borrowed session. Effective result options record the borrowed session's actual policy. Scratch admission counts three crop images per work item; its retained preparations are outside that heuristic.
 
 Each engine admits one active operation; this does not limit all engines or tuners in the JVM. Explicitly sharing a bounded executor provides an aggregate execution ceiling, but individual sessions' heap estimates are not additive reservations. Applications still own admission control and dataset retention.
 
@@ -110,13 +110,12 @@ Timestamps are taken as exposure starts. The linker compares them directly; Spac
 | `MASTER_STACK` | Background, extraction shape classification shared by quality, quality metrics and session rejection; not ordinary detection/master-reference thresholds. |
 | `TRANSIENTS` | Shared preparation, frame extraction, master-reference extraction/veto; not downstream linking, optional slow movers, residual analysis or photometry. |
 | `PIPELINE` | Shared preparation/extraction/reference plus linking and enabled optional stages. Timing scopes geometric-branch diagnostics. |
-| `AUTO_TUNE` | Legacy tuner's quality sample, background/shape settings and master seed/minimum; ignores replaced detection/grow/jitter/mask settings and unused session-rejection preferences. |
-| `CALIBRATION` | Calibrated tuner's background/shape settings, master seed/minimum and the base pixel minimum used for streak corridors; no quality or downstream-stage settings. |
+| `CALIBRATION` | The tuner's background/shape settings, master seed/minimum and the base pixel minimum used for streak corridors; no quality or downstream-stage settings. |
 | `EXTRACTION` | Standalone background, extraction and shape settings. Low-level helpers do not automatically capture/validate on every call; direct users can request this scope explicitly. |
 
 Non-finite consumed values are errors; finite out-of-domain or cross-field findings remain warnings/information for legacy compatibility. `LEGACY_GUI` retains the original six pair adjustment directions. `REVIEWED_CONSISTENCY` adds quality-grow and limited-amplitude policies and excludes rhythm/jump, which is not universally bounded after pruning. Neither policy invents a jitter/cap choice or persists resolved annulus factors. See [CONFIG.md](CONFIG.md#shared-rules-and-compatibility).
 
-Both tuners add `tune(frames, base, profile, listener[, cancellation])`, returning independent successful **and fallback** configs. Existing `tune` overloads preserve their original-base reference on unsuccessful results; inspect `success`. Direct `CalibratedAutoTuner.calibrate` also uses captured settings. Cancellation remains distinct from fallback. These APIs first appear in the unreleased `1.0.5` source line; a published dependency pair is not certified by the local composite tests.
+`CalibratedAutoTuner.tune(frames, base, profile, listener[, cancellation])` returns independent successful **and fallback** configs; inspect `success`. Direct `CalibratedAutoTuner.calibrate` also uses captured settings. Cancellation remains distinct from fallback. These APIs first appear in the unreleased `1.0.5` source line; a published dependency pair is not certified by the local composite tests.
 
 ## Entry Point Summary
 
@@ -124,7 +123,6 @@ Both tuners add `tune(frames, base, profile, listener[, cancellation])`, returni
 | --- | --- | --- | --- | --- |
 | `SourceExtractor.extractSources(...)` | One frame | No | No | Standalone object detection |
 | `CalibratedAutoTuner.tune(...)` | Crops of a sample of frames | Internal cropped master stacks | No | Measure false positives and sensitivity, pick the most sensitive settings within a profile budget |
-| `JTransientAutoTuner.tune(...)` (legacy) | Representative sample of frames | Internal cropped master stacks | No | Score-based configuration search |
 | `JTransientEngine.generateMasterStack(...)` | Full frame sequence | Generates a median master stack | No | Reuse the stack across repeated runs |
 | `JTransientEngine.detectTransients(...)` | Full frame sequence | Generates a median master stack | No | Export per-frame transients after stationary-star filtering |
 | `JTransientEngine.detectTransients(..., providedMasterStack)` | Full frame sequence | Uses a provided median master stack | No | Same as above, but skip stacking |
@@ -175,10 +173,10 @@ The four-argument overload measures the sky over the whole image; it does not in
 Signatures:
 
 ```java
-JTransientAutoTuner.AutoTunerResult CalibratedAutoTuner.tune(
+AutoTunerResult CalibratedAutoTuner.tune(
         List<ImageFrame> frames,
         DetectionConfig baseConfig,
-        JTransientAutoTuner.AutoTuneProfile profile,
+        AutoTuneProfile profile,
         TransientEngineProgressListener listener
 )
 
@@ -189,7 +187,7 @@ CalibratedAutoTuner.Calibration CalibratedAutoTuner.calibrate(
 )
 ```
 
-`tune(...)` measures all profile choices and returns the requested optimized config plus `success`, `summary`, `telemetryReport` and the complete `calibration`. On early failure it returns a fallback/base configuration; inspect `success` before treating the result as tuned.
+`tune(...)` measures all profile choices and returns the requested optimized config plus `success`, `summary`, `telemetryReport`, `noisePerMpixFrame` (the chosen setting's measured noise detections per megapixel per frame) and the complete `calibration`. On early failure it returns a fallback/base configuration; inspect `success` before treating the result as tuned.
 
 `calibrate(...)` returns the measured candidates, FWHM, jitter, measured area and the per-profile `chosen`, `withinBudget` and `budgetVerifiable` arrays. Reuse it without repeating the measurement:
 
@@ -197,33 +195,10 @@ CalibratedAutoTuner.Calibration CalibratedAutoTuner.calibrate(
 DetectionConfig CalibratedAutoTuner.configFor(
         CalibratedAutoTuner.Calibration calibration,
         DetectionConfig baseConfig,
-        JTransientAutoTuner.AutoTuneProfile profile)
+        AutoTuneProfile profile)
 ```
 
 The result is a base-config clone with the selected values applied. The [calibrated algorithm](ALGORITHM.md#calibrated-auto-tuning) defines measurements, grids and profile budgets.
-
-## `JTransientAutoTuner.tune(...)` (legacy)
-
-Signatures:
-
-```java
-JTransientAutoTuner.AutoTunerResult tune(
-        List<ImageFrame> frames,
-        DetectionConfig baseConfig,
-        TransientEngineProgressListener listener
-)
-
-JTransientAutoTuner.AutoTunerResult tune(
-        List<ImageFrame> frames,
-        DetectionConfig baseConfig,
-        JTransientAutoTuner.AutoTuneProfile profile,
-        TransientEngineProgressListener listener
-)
-```
-
-The no-profile overload uses MEDIUM. Successful tuning returns an optimized clone; fallback paths may return the base config. Inspect `AutoTunerResult.success`, `optimizedConfig`, `telemetryReport`, `bestStarCount` and `bestTransientRatio`.
-
-`finalValidationTelemetry` records the winner's replay on frozen crops, or is null before a winner exists. It distinguishes execution, crop completion and hard-gate validity; reports object/stable/transient counts, coverage and variability metrics; and carries a status message and failed-crop label. A winning score alone does not guarantee every replay gate passed. This method does not return a full pipeline result. See the [legacy algorithm](ALGORITHM.md#legacy-auto-tuning).
 
 ## `JTransientEngine.generateMasterStack(...)`
 

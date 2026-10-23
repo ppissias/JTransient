@@ -53,7 +53,7 @@ public class JTransientCancellationTest {
     @Test
     public void calibratedTuningPropagatesListenerCancellationInsteadOfReturningFallback() {
         assertThrows(CancellationException.class, () -> CalibratedAutoTuner.tune(frames(5, 900), new DetectionConfig(),
-                JTransientAutoTuner.AutoTuneProfile.MEDIUM,
+                AutoTuneProfile.MEDIUM,
                 (percent, message) -> { throw new CancellationException("stop calibration"); }));
     }
 
@@ -75,7 +75,7 @@ public class JTransientCancellationTest {
         IllegalStateException problem = new IllegalStateException("injected calibration failure");
         var failure = assertThrows(io.github.ppissias.jtransient.execution.OperationFailedException.class,
                 () -> CalibratedAutoTuner.tune(frames(5, 900), new DetectionConfig(),
-                        JTransientAutoTuner.AutoTuneProfile.MEDIUM, (percent, message) -> { throw problem; }));
+                        AutoTuneProfile.MEDIUM, (percent, message) -> { throw problem; }));
         assertSame(problem, failure.getCause());
         assertEquals(io.github.ppissias.jtransient.execution.StageId.LISTENER, failure.failure().stage());
         String saved = new com.google.gson.Gson().toJson(failure.failure());
@@ -83,11 +83,9 @@ public class JTransientCancellationTest {
     }
 
     @Test
-    public void bothTunersHonorCancellationBeforeReadingInputs() {
+    public void tunerHonorsCancellationBeforeReadingInputs() {
         assertThrows(CancellationException.class, () -> CalibratedAutoTuner.tune(null, new DetectionConfig(),
-                JTransientAutoTuner.AutoTuneProfile.MEDIUM, null, () -> true));
-        assertThrows(CancellationException.class, () -> JTransientAutoTuner.tune(null, new DetectionConfig(),
-                JTransientAutoTuner.AutoTuneProfile.MEDIUM, null, () -> true));
+                AutoTuneProfile.MEDIUM, null, () -> true));
     }
 
     @Test

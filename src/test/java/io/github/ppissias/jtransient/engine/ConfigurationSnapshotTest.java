@@ -54,34 +54,20 @@ public class ConfigurationSnapshotTest {
         }
     }
 
-    /** Both canonical tuner APIs return independent fallback settings without aliases to caller state. */
+    /** The tuner returns independent fallback settings without aliases to caller state. */
     @Test
-    public void bothTunerFallbacksAreDetached() {
+    public void tunerFallbackIsDetached() {
         DetectionConfig base = new DetectionConfig();
         var frames = frames(2);
-        var legacy = JTransientAutoTuner.tune(frames, base, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
-        var snapshot = JTransientAutoTuner.tune(frames, base, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
-        assertFalse(legacy.success);
+        var first = CalibratedAutoTuner.tune(frames, base, AutoTuneProfile.MEDIUM, null);
+        var snapshot = CalibratedAutoTuner.tune(frames, base, AutoTuneProfile.MEDIUM, null);
+        assertFalse(first.success);
         assertFalse(snapshot.success);
-        assertNotSame(base, legacy.optimizedConfig);
+        assertNotSame(base, first.optimizedConfig);
         assertNotSame(base, snapshot.optimizedConfig);
-        var calibratedLegacy = CalibratedAutoTuner.tune(frames, base, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
-        var calibratedSnapshot = CalibratedAutoTuner.tune(frames, base, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
-        assertNotSame(base, calibratedLegacy.optimizedConfig);
-        assertNotSame(base, calibratedSnapshot.optimizedConfig);
+        assertNotSame(first.optimizedConfig, snapshot.optimizedConfig);
         base.qualitySigmaMultiplier = 13;
         assertEquals(5, snapshot.optimizedConfig.qualitySigmaMultiplier, 0);
-        assertEquals(5, calibratedSnapshot.optimizedConfig.qualitySigmaMultiplier, 0);
-    }
-
-    /** Shows that edits from a progress callback cannot leak into a previously captured fallback. */
-    @Test
-    public void tunerProgressCannotChangeTheCapturedFallbackValues() {
-        DetectionConfig base = new DetectionConfig();
-        var result = JTransientAutoTuner.tune(frames(2), base, JTransientAutoTuner.AutoTuneProfile.MEDIUM,
-                (percent, message) -> base.masterSigmaMultiplier = 17);
-        assertEquals(17, base.masterSigmaMultiplier, 0);
-        assertEquals(2.25, result.optimizedConfig.masterSigmaMultiplier, 0);
     }
 
     /** Ensures consumed invalid settings are rejected with field IDs before workers or progress callbacks start. */
@@ -100,20 +86,17 @@ public class ConfigurationSnapshotTest {
 
     /** Distinguishes invalid tuning inputs from inactive or sweep-overridden settings that tuning does not consume. */
     @Test
-    public void bothTunersRejectNonFiniteConsumedSettingsButIgnoreOverriddenAndInactiveOnes() {
+    public void tunerRejectsNonFiniteConsumedSettingsButIgnoresOverriddenAndInactiveOnes() {
         DetectionConfig config = new DetectionConfig();
         config.bgClippingFactor = Double.NaN;
         AtomicBoolean progressed = new AtomicBoolean();
-        assertThrows(io.github.ppissias.jtransient.execution.OperationFailedException.class, () -> JTransientAutoTuner.tune(
-                frames(5), config, JTransientAutoTuner.AutoTuneProfile.MEDIUM, (percent, message) -> progressed.set(true)));
         assertThrows(io.github.ppissias.jtransient.execution.OperationFailedException.class, () -> CalibratedAutoTuner.tune(
-                frames(5), config, JTransientAutoTuner.AutoTuneProfile.MEDIUM, (percent, message) -> progressed.set(true)));
+                frames(5), config, AutoTuneProfile.MEDIUM, (percent, message) -> progressed.set(true)));
         assertFalse(progressed.get());
         config.bgClippingFactor = 3;
         config.growSigmaMultiplier = Double.NaN;
         config.variableMinAmplitudeMag = Double.NaN;
-        assertFalse(JTransientAutoTuner.tune(frames(2), config, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null).success);
-        assertFalse(CalibratedAutoTuner.tune(frames(2), config, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null).success);
+        assertFalse(CalibratedAutoTuner.tune(frames(2), config, AutoTuneProfile.MEDIUM, null).success);
     }
 
     /** Creates deterministic, independent noisy frames with consistent timestamps/exposures for boundary tests. */
