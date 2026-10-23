@@ -343,7 +343,7 @@ There are no three-bin temporal stacks or fitted slow-mover motion paths. Propos
 
 This stage removes detections that overlap known stationary stars, separates streak-like objects from point-like objects, and links compatible streak detections.
 
-`TrackLinker.findMovingObjects(...)` starts by delegating to `TrackLinker.filterTransients(...)`.
+`TrackLinker.findMovingObjects(...)` runs the tracking stages in a fixed order (the `TrackLinker` class description lists them: veto, streak linking, camera-fixed rejection, the timed and geometric point linkers, faint streak fragments, anomaly rescue and the exports). It starts with `TrackLinker.filterTransients(...)`, which runs `TransientVeto` and `StreakLinker`.
 
 That function performs three important tasks before point-track linking begins.
 
@@ -559,7 +559,7 @@ The final returned categories are mutually exclusive:
 
 ### 13.3 Final streak consolidation
 
-After anomaly rescue, the tracker runs `consolidateStreakTracks(...)` over the confirmed streak tracks, the promoted single streaks and the anomaly groups.
+After anomaly rescue, the tracker runs `StreakConsolidator.consolidateStreakTracks(...)` over the confirmed streak tracks, the promoted single streaks and the anomaly groups.
 
 This pass:
 

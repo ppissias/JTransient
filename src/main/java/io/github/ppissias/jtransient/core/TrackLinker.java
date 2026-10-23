@@ -9,22 +9,18 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.engine.TransientEngineProgressListener;
+import io.github.ppissias.jtransient.execution.CancellationScope;
+import io.github.ppissias.jtransient.execution.DiagnosticContext;
 import io.github.ppissias.jtransient.model.AnomalyDetection;
 import io.github.ppissias.jtransient.model.AnomalyType;
 import io.github.ppissias.jtransient.model.DetectedObject;
-import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.model.Track;
-import io.github.ppissias.jtransient.execution.DiagnosticContext;
-
-import io.github.ppissias.jtransient.execution.CancellationScope;
-import io.github.ppissias.jtransient.config.DetectionConfig;
-import io.github.ppissias.jtransient.engine.TransientEngineProgressListener;
 import io.github.ppissias.jtransient.telemetry.TrackerTelemetry;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
-import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,9 +30,21 @@ import java.util.TreeSet;
 /**
  * Links per-frame transient detections into moving-object tracks.
  *
- * <p>This is the primary tracker implementation used by the engine. It combines
- * streak chaining, stationary-star vetoing, time-aware candidate ranking, and an
- * optional geometric linker that remains the fallback for sequences without usable timestamps.</p>
+ * <p>This is the tracking stage's entry point; it runs the stages in a fixed order and they share only what is passed
+ * between them:</p>
+ * <ol>
+ *   <li>{@link TransientVeto}: separates streaks from point sources and removes what overlaps the master stars;</li>
+ *   <li>{@link StreakLinker}: links fast-moving streaks;</li>
+ *   <li>camera-fixed rejection ({@link CameraFixedRejector}), when registrations are given;</li>
+ *   <li>{@link TimedPointLinker} when frames carry capture times, and {@link GeometricPointLinker} when they do not or
+ *       when geometric linking is enabled;</li>
+ *   <li>{@link FaintStreakFragmentGrouper}: faint same-frame pieces of streaks;</li>
+ *   <li>{@link AnomalyRescuer}: single-frame anomalies, and anomaly pieces that join a streak through
+ *       {@link StreakConsolidator};</li>
+ *   <li>{@link TrackingExports}: the per-frame exports.</li>
+ * </ol>
+ * <p>{@link DetectionAssignments} records which detections a stage has accepted, so each one is assigned at most
+ * once, in this order.</p>
  *
  * <p>Input frames must have uniform timestamp availability: either every frame has a capture
  * timestamp in milliseconds, or every frame has no timestamp. Each detection must carry its
@@ -48,23 +56,7 @@ public class TrackLinker {
 
     /** A point track needs at least this many points. */
     static final int MIN_TRACK_POINTS = 3;
-    /** Rescued anomalies of one frame within this distance of a line are offered to a streak as one group, in pixels. */
-    private static final double ANOMALY_GROUP_LINE_TOLERANCE = 6.0;
     private static final double DEFAULT_TRACK_MIN_FRAME_RATIO = new DetectionConfig().trackMinFrameRatio;
-
-    // =================================================================
-    // DATA MODELS
-    // =================================================================
-
-
-
-
-    /**
-     * A group of rescued same-frame anomalies, offered to the streak consolidation and never exported. A merge or
-     * copy of two such groups stays one; anything merged with a real track becomes an ordinary track.
-     */
-    private static final class AnomalyGroupTrack extends Track {
-    }
 
     /**
      * Output of the streak-separation and stationary-star veto stages.
@@ -124,72 +116,7 @@ public class TrackLinker {
     }
 
     /**
-     * Internal wrapper used to rank time-based track proposals before conflict resolution.
-     */
-    private static class RankedTrackCandidate {
-        private final Track track;
-        private final double score;
-
-        private RankedTrackCandidate(Track track, double score) {
-            this.track = track;
-            this.score = score;
-        }
-    }
-
-    /**
-     * One line through rescued anomalies of one frame, before it becomes a group.
-     */
-    private static class AnomalyLineCandidate {
-        private final List<DetectedObject> objects;
-        private final double span;
-
-        private AnomalyLineCandidate(List<DetectedObject> objects, double span) {
-            this.objects = objects;
-            this.span = span;
-        }
-    }
-
-    /**
-     * One frame-level centroid sample used to validate streak motion after same-frame fragments are merged.
-     */
-    private static class StreakFrameSample {
-        private final int frameIndex;
-        private final long timestamp;
-        private final double x;
-        private final double y;
-
-        private StreakFrameSample(int frameIndex, long timestamp, double x, double y) {
-            this.frameIndex = frameIndex;
-            this.timestamp = timestamp;
-            this.x = x;
-            this.y = y;
-        }
-    }
-
-    /**
-     * One candidate merge between two streak-like tracks.
-     */
-    private static class StreakMergeCandidate {
-        private final Track mergedTrack;
-        private final int frameGap;
-        private final double maxLineError;
-
-        private StreakMergeCandidate(Track mergedTrack,
-                                     int frameGap,
-                                     double maxLineError) {
-            this.mergedTrack = mergedTrack;
-            this.frameGap = frameGap;
-            this.maxLineError = maxLineError;
-        }
-    }
-
-    // =================================================================
-    // CORE TRACKING ENGINE
-    // =================================================================
-
-    /**
-     * Executes the pipeline up to Phase 3.
-     * Separates streaks, purges stationary defects, links fast streaks, and applies the Binary Veto Mask.
+     * Runs the stationary-star veto and the streak linking, the stages before point linking.
      *
      * @param allFrames extracted objects grouped by frame; timestamps must be available for every frame
      *                  or unavailable ({@code -1}) for every frame
@@ -208,218 +135,22 @@ public class TrackLinker {
             int sensorWidth,
             int sensorHeight) {
 
-        int numFrames = allFrames.size();
-        List<Track> confirmedStreakTracks = new ArrayList<>();
-        double angleToleranceRad = Math.toRadians(config.angleToleranceDegrees);
         TrackerTelemetry telemetry = new TrackerTelemetry();
 
-        // =================================================================
-        // PHASE 1: Separate Streaks
-        // =================================================================
-        List<DetectedObject> allStreaks = new ArrayList<>();
-        List<List<DetectedObject>> pointSourcesOnly = new ArrayList<>();
-
-        for (int i = 0; i < allFrames.size(); i++) {
-            CancellationScope.check();
-            pointSourcesOnly.add(new ArrayList<>());
-            for (DetectedObject obj : allFrames.get(i)) {
-                CancellationScope.check();
-                if (obj.isStreak) allStreaks.add(obj);
-                else pointSourcesOnly.get(i).add(obj);
-            }
-        }
-
-        if (listener != null) {
-            listener.onProgressUpdate(10, "Building Veto Mask...");
-        }
-
-        // =================================================================
-        // PHASE 2: BINARY MASK MASTER STAR MAP VETO
-        // =================================================================
-        if (DiagnosticContext.enabled()) DiagnosticContext.println("DEBUG: [PHASE 2] Building Binary Footprint Mask from Master Map...");
-
-        boolean[][] masterVetoMask = MasterVetoMask.build(masterStars, sensorWidth, sensorHeight, config.maxStarJitter);
-
-        // --- PHASE 2A: Veto Point Sources ---
-        List<List<DetectedObject>> transients = new ArrayList<>();
-        int totalTransientsFound = 0;
-
-        for (int i = 0; i < numFrames; i++) {
-            CancellationScope.check();
-            if (listener != null) {
-                int progress = 15 + (int) (((double) i / numFrames) * 10.0);
-                listener.onProgressUpdate(progress, "Vetoing stationary sources: Frame " + (i + 1) + " of " + numFrames);
-            }
-
-            List<DetectedObject> currentFrame = pointSourcesOnly.get(i);
-            List<DetectedObject> frameTransients = new ArrayList<>();
-            int purgedCount = 0;
-
-            for (DetectedObject candidateObj : currentFrame) {
-                CancellationScope.check();
-                double overlapFraction = computeMaskOverlapFraction(candidateObj, masterVetoMask);
-                if (overlapFraction > config.maxMaskOverlapFraction) {
-                    purgedCount++;
-                } else {
-                    frameTransients.add(candidateObj);
-                }
-            }
-
-            transients.add(frameTransients);
-            totalTransientsFound += frameTransients.size();
-            telemetry.totalStationaryStarsPurged += purgedCount;
-
-            TrackerTelemetry.FrameStarMapStat stat = new TrackerTelemetry.FrameStarMapStat();
-            stat.frameIndex = i;
-            stat.initialPointSources = currentFrame.size();
-            stat.survivingTransients = frameTransients.size();
-            stat.purgedStars = purgedCount;
-            telemetry.frameStarMapStats.add(stat);
-        }
-
-        // --- PHASE 2B: Veto Streaks ---
-        List<DetectedObject> validMovingStreaks = new ArrayList<>();
-        int purgedStreakCount = 0;
-        for (DetectedObject streak : allStreaks) {
-            CancellationScope.check();
-            double overlapFraction = computeMaskOverlapFraction(streak, masterVetoMask);
-            if (overlapFraction > config.maxMaskOverlapFraction) {
-                purgedStreakCount++;
-            } else {
-                validMovingStreaks.add(streak);
-            }
-        }
-        telemetry.totalStationaryStreaksPurged = purgedStreakCount;
-
-        if (DiagnosticContext.enabled()) {
-            DiagnosticContext.println("DEBUG: [PHASE 2] Completed. Total pure point transients: " + totalTransientsFound);
-            DiagnosticContext.println("DEBUG: [PHASE 2] Purged " + purgedStreakCount + " stationary streaks. " + validMovingStreaks.size() + " remain.");
-        }
+        TransientVeto.Result veto = TransientVeto.apply(allFrames, masterStars, config, listener, sensorWidth, sensorHeight,
+                telemetry);
+        List<List<DetectedObject>> transients = veto.pointTransients;
+        List<DetectedObject> validMovingStreaks = veto.validMovingStreaks;
+        boolean[][] masterVetoMask = veto.masterVetoMask;
 
         if (listener != null) {
             listener.onProgressUpdate(25, "Linking fast-moving streaks...");
         }
 
-        // =================================================================
-        // PHASE 3: LINK FAST-MOVING STREAKS
-        // =================================================================
-        if (DiagnosticContext.enabled()) DiagnosticContext.println("DEBUG: [PHASE 3] Linking fast-moving streaks... Candidates: " + validMovingStreaks.size());
-        boolean[] streakMatched = new boolean[validMovingStreaks.size()];
-        List<DetectedObject> unmatchedSingleStreaks = new ArrayList<>();
-        int streakTracksFound = 0;
+        List<Track> confirmedStreakTracks = StreakLinker.link(validMovingStreaks, config, telemetry);
+        int streakTracksFound = confirmedStreakTracks.size();
 
-        for (int i = 0; i < validMovingStreaks.size(); i++) {
-            CancellationScope.check();
-            if (streakMatched[i]) continue;
-
-            DetectedObject baseStreak = validMovingStreaks.get(i);
-            Track continuousStreakTrack = new Track();
-            continuousStreakTrack.isStreakTrack = true;
-            continuousStreakTrack.addPoint(baseStreak);
-            streakMatched[i] = true;
-
-            DetectedObject currentAnchor = baseStreak;
-            boolean directionEstablished = false;
-            double forwardAngle = 0;
-
-            while (true) {
-                CancellationScope.check();
-                DetectedObject bestMatch = null;
-                int bestMatchIndex = -1;
-                int bestFrameGap = Integer.MAX_VALUE;
-                double shortestDistance = Double.MAX_VALUE;
-                double bestTrajectoryAngle = 0;
-
-                // Scan all available streaks and prefer nearby frames before larger chronological jumps.
-                for (int j = 0; j < validMovingStreaks.size(); j++) {
-                    if (streakMatched[j]) continue;
-
-                    DetectedObject candidateStreak = validMovingStreaks.get(j);
-
-                    // Ensure we only link chronologically forward (allowing same-frame fragmented streaks to merge)
-                    if (candidateStreak.sourceFrameIndex < currentAnchor.sourceFrameIndex) continue;
-
-                    if (anglesMatch(baseStreak.angle, candidateStreak.angle, angleToleranceRad)) {
-                        double dy = candidateStreak.y - currentAnchor.y;
-                        double dx = candidateStreak.x - currentAnchor.x;
-                        double trajectoryAngle = Math.atan2(dy, dx);
-
-                        boolean isDirectionValid = false;
-                        if (!directionEstablished) {
-                            // Establish forward trajectory from the first valid jump
-                            if (anglesMatch(baseStreak.angle, trajectoryAngle, angleToleranceRad)) {
-                                isDirectionValid = true;
-                            }
-                        } else {
-                            // Subsequent jumps must maintain the strictly established forward polarity
-                            if (isDirectionConsistent(forwardAngle, trajectoryAngle, angleToleranceRad)) {
-                                isDirectionValid = true;
-                            }
-                        }
-
-                        if (isDirectionValid) {
-                            List<DetectedObject> previewPoints = new ArrayList<>(continuousStreakTrack.points);
-                            previewPoints.add(candidateStreak);
-                            if (!passesStreakTimeConsistency(previewPoints, config)) {
-                                continue;
-                            }
-
-                            int frameGap = Math.max(0, candidateStreak.sourceFrameIndex - currentAnchor.sourceFrameIndex);
-                            double dist = distance(currentAnchor.x, currentAnchor.y, candidateStreak.x, candidateStreak.y);
-                            if (frameGap < bestFrameGap || (frameGap == bestFrameGap && dist < shortestDistance)) {
-                                bestFrameGap = frameGap;
-                                shortestDistance = dist;
-                                bestMatch = candidateStreak;
-                                bestMatchIndex = j;
-                                bestTrajectoryAngle = trajectoryAngle;
-                            }
-                        }
-                    }
-                }
-
-                if (bestMatch != null) {
-                    continuousStreakTrack.addPoint(bestMatch);
-                    streakMatched[bestMatchIndex] = true;
-                    currentAnchor = bestMatch;
-
-                    if (!directionEstablished) {
-                        forwardAngle = bestTrajectoryAngle;
-                        directionEstablished = true;
-                    }
-                } else {
-                    // No more valid streaks can be linked to this track
-                    break;
-                }
-            }
-
-            if (continuousStreakTrack.points.size() > 1 && passesStreakTimeConsistency(continuousStreakTrack.points, config)) {
-                confirmedStreakTracks.add(continuousStreakTrack);
-                streakTracksFound++;
-            } else {
-                unmatchedSingleStreaks.add(baseStreak);
-            }
-        }
-
-        for (DetectedObject singleStreak : unmatchedSingleStreaks) {
-            CancellationScope.check();
-            boolean rejectedByBinaryStarVeto = config.enableBinaryStarLikeStreakShapeVeto
-                    && SourceExtractor.isBinaryStarLikeStreakShape(singleStreak);
-
-            if (rejectedByBinaryStarVeto) {
-                telemetry.rejectedBinaryStarStreakShape++;
-            }
-
-            if (!rejectedByBinaryStarVeto && singleStreak.peakSigma >= config.singleStreakMinPeakSigma) {
-                Track singleStreakTrack = new Track();
-                singleStreakTrack.isStreakTrack = true;
-                singleStreakTrack.addPoint(singleStreak);
-                confirmedStreakTracks.add(singleStreakTrack);
-                streakTracksFound++;
-            }
-        }
-        if (DiagnosticContext.enabled()) DiagnosticContext.println("DEBUG: [PHASE 3] Completed. Found " + streakTracksFound + " streak track(s).");
-
-        List<List<DetectedObject>> allTransients = buildAllTransients(
+        List<List<DetectedObject>> allTransients = TrackingExports.buildAllTransients(
                 transients,
                 validMovingStreaks,
                 allFrames
@@ -501,269 +232,17 @@ public class TrackLinker {
         TrackerTelemetry telemetry = filterResult.telemetry;
         List<List<DetectedObject>> transients = filterResult.pointTransients;
 
-        // PHASE 2C: detections fixed on the camera (hot pixels, dust) leave every later stage.
-        List<CameraFixedRejector.Group> cameraFixedGroups = List.of();
-        if (config.enableCameraFixedRejection && registrations != null && !registrations.isEmpty()) {
-            cameraFixedGroups = CameraFixedRejector.reject(transients, registrations);
-            if (!cameraFixedGroups.isEmpty()) {
-                Set<DetectedObject> removed = Collections.newSetFromMap(new IdentityHashMap<>());
-                for (CameraFixedRejector.Group group : cameraFixedGroups) {
-                    removed.addAll(group.points);
-                }
-                for (List<DetectedObject> frame : filterResult.allTransients) {
-                    frame.removeIf(removed::contains);
-                }
-                telemetry.cameraFixedGroups = cameraFixedGroups.size();
-                telemetry.cameraFixedDetections = removed.size();
-            }
-        }
-        double angleToleranceRad = Math.toRadians(config.angleToleranceDegrees);
+        List<CameraFixedRejector.Group> cameraFixedGroups = removeCameraFixed(
+                transients, filterResult.allTransients, registrations, config, telemetry);
 
-        // =================================================================
-        // PHASE 4: GEOMETRIC COLLINEAR LINKING
-        // =================================================================
         int minPointsRequired = requiredTrackPoints(numFrames, config);
-
         List<Track> pointTracks = new ArrayList<>();
-        Set<DetectedObject> usedPoints = new HashSet<>();
-        int loopMax = numFrames - 2;
-        List<RankedTrackCandidate> timeTrackCandidates = new ArrayList<>();
+        DetectionAssignments assignments = new DetectionAssignments();
 
-        // =================================================================
-        // PHASE 3.5: TIME-BASED KINEMATIC LINKING (Velocity Vector Matching)
-        // =================================================================
-        boolean hasTimestamps = false;
-        for (List<DetectedObject> frame : allFrames) {
-            CancellationScope.check();
-            if (!frame.isEmpty() && frame.get(0).timestamp != -1) {
-                hasTimestamps = true;
-                break;
-            }
-        }
-
-        if (DiagnosticContext.enabled()) {
-            DiagnosticContext.println("DEBUG: [PHASE 3.5] Timestamp probe per frame:");
-            for (int i = 0; i < allFrames.size(); i++) {
-                CancellationScope.check();
-                List<DetectedObject> frame = allFrames.get(i);
-                if (frame.isEmpty()) {
-                    DiagnosticContext.printf("   Frame %d -> empty%n", i);
-                } else {
-                    DetectedObject sample = frame.get(0);
-                    DiagnosticContext.printf(
-                            "   Frame %d -> objects=%d sampleTimestamp=%d sampleExposure=%d%n",
-                            i,
-                            frame.size(),
-                            sample.timestamp,
-                            sample.exposureDuration
-                    );
-                }
-            }
-            DiagnosticContext.printf(
-                    "DEBUG: [PHASE 3.5] hasTimestamps=%s enableGeometricTrackLinking=%s%n",
-                    hasTimestamps,
-                    config.enableGeometricTrackLinking
-            );
-        }
-
+        boolean hasTimestamps = hasTimestamps(allFrames);
+        logTimestampProbe(allFrames, hasTimestamps, config);
         if (hasTimestamps) {
-            if (DiagnosticContext.enabled()) DiagnosticContext.println("DEBUG: [PHASE 3.5] Timestamps detected. Running Time-Based Velocity Linking...");
-            if (listener != null) listener.onProgressUpdate(50, "Analyzing precise velocity kinematics...");
-
-            int generatedTimeTracks = 0;
-
-            // Calculate total points to process for accurate progress reporting
-            int totalP1Candidates = 0;
-            for (int i = 0; i < loopMax; i++) {
-                CancellationScope.check();
-                totalP1Candidates += transients.get(i).size();
-            }
-            int p1Processed = 0;
-
-            for (int f1 = 0; f1 < loopMax; f1++) {
-                CancellationScope.check();
-                for (DetectedObject p1 : transients.get(f1)) {
-                    CancellationScope.check();
-                    
-                    p1Processed++;
-                    if (listener != null && (p1Processed % 50 == 0 || p1Processed == totalP1Candidates)) {
-                        int progress = 50 + (int) (((double) p1Processed / Math.max(1, totalP1Candidates)) * 10.0);
-                        listener.onProgressUpdate(progress, "Analyzing time-based kinematics: point " + p1Processed + " of " + totalP1Candidates);
-                    }
-
-                    if (usedPoints.contains(p1)) continue;
-
-                    for (int f2 = f1 + 1; f2 < numFrames - 1; f2++) {
-                        if (usedPoints.contains(p1)) break;
-                        for (DetectedObject p2 : transients.get(f2)) {
-                            CancellationScope.check();
-                            if (usedPoints.contains(p1)) break;
-                            if (usedPoints.contains(p2)) continue;
-
-                            double dt12 = p2.timestamp - p1.timestamp;
-                            if (dt12 <= 0) {
-                                telemetry.countBaselineNonPositiveDelta++;
-                                continue;
-                            }
-
-                            double dist12 = distance(p1.x, p1.y, p2.x, p2.y);
-                            if (dist12 < config.maxStarJitter) {
-                                telemetry.countBaselineJitter++;
-                                continue;
-                            }
-
-                            // Morphological profile check (maxJumpPixels explicitly bypassed for extreme speeds)
-                            if (!isProfileConsistent(p1, p2, config)) {
-                                telemetry.countBaselineSize++;
-                                continue;
-                            }
-
-                            // --- STRICT EXPOSURE KINEMATICS ---
-                            if (config.strictExposureKinematics && p1.timestamp != -1 && p2.timestamp != -1 && p1.exposureDuration > 0) {
-                                // If it didn't streak, it moved less than its diameter during the exposure
-                                double maxMovementInExposure = Math.sqrt(p1.pixelArea) + config.maxStarJitter;
-                                double maxVelocity = maxMovementInExposure / p1.exposureDuration; // px per ms
-                                double maxAllowedJump = (maxVelocity * dt12) * 1.5 + config.maxStarJitter; // 50% safety buffer
-
-                                if (dist12 > maxAllowedJump) {
-                                    telemetry.countBaselineJump++;
-                                    continue;
-                                }
-                            }
-
-                            double v12 = dist12 / dt12; // Velocity in pixels per ms
-                            double expectedAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-
-                            Track currentTrack = new Track();
-                            currentTrack.addPoint(p1);
-                            currentTrack.addPoint(p2);
-
-                            DetectedObject currentLineAnchor = p2;
-                            double currentVelocity = v12;
-
-                            for (int f3 = f2 + 1; f3 < numFrames; f3++) {
-                                DetectedObject bestMatch = null;
-                                double bestVError = Double.MAX_VALUE;
-
-                                for (DetectedObject p3 : transients.get(f3)) {
-                                    if (usedPoints.contains(p3)) continue;
-
-                                    double dt23 = p3.timestamp - currentLineAnchor.timestamp;
-                                    if (dt23 <= 0) {
-                                        telemetry.countP3NonPositiveDelta++;
-                                        continue;
-                                    }
-
-                                    double dist23 = distance(currentLineAnchor.x, currentLineAnchor.y, p3.x, p3.y);
-
-                                    // --- STRICT EXPOSURE KINEMATICS ---
-                                    if (config.strictExposureKinematics && currentLineAnchor.timestamp != -1 && p3.timestamp != -1 && currentLineAnchor.exposureDuration > 0) {
-                                        double maxMovementInExposure = Math.sqrt(currentLineAnchor.pixelArea) + config.maxStarJitter;
-                                        double maxVelocity = maxMovementInExposure / currentLineAnchor.exposureDuration;
-                                        double maxAllowedJump = (maxVelocity * dt23) * 1.5 + config.maxStarJitter;
-
-                                        if (dist23 > maxAllowedJump) {
-                                            telemetry.countP3Jump++;
-                                            continue;
-                                        }
-                                    }
-
-                                    // --- TRUE KINEMATIC VELOCITY & ANGLE MATCHING ---
-                                    double v23 = dist23 / dt23;
-                                    double vDiff = Math.abs(v23 - currentVelocity);
-
-                                    // Allowed variance is a combination of the percentage tolerance AND the physical sub-pixel seeing jitter
-                                    double allowedVDiff = (currentVelocity * config.timeBasedVelocityTolerance) + (config.maxStarJitter / dt23);
-
-                                    if (vDiff > allowedVDiff) {
-                                        telemetry.countP3VelocityMismatch++;
-                                        continue;
-                                    }
-
-                                    // Ensure the point physically lies on the exact trajectory line
-                                    double currentBaselineDist = distance(p1.x, p1.y, currentLineAnchor.x, currentLineAnchor.y);
-                                    double lineError = distanceToLineOptimized(p1, currentLineAnchor, p3, currentBaselineDist);
-
-                                    if (lineError > config.predictionTolerance) {
-                                        telemetry.countP3NotLine++;
-                                        continue;
-                                    }
-
-                                    double actualAngle = Math.atan2(p3.y - currentLineAnchor.y, p3.x - currentLineAnchor.x);
-                                    // Dynamically relax the angle tolerance for short jumps where sub-pixel jitter causes massive angular swings
-                                    double dynamicAngleTolerance = Math.max(angleToleranceRad, Math.atan2(config.maxStarJitter + 1.0, dist23));
-
-                                    if (!isDirectionConsistent(expectedAngle, actualAngle, dynamicAngleTolerance)) {
-                                        telemetry.countP3WrongDirection++;
-                                        continue;
-                                    }
-
-                                    if (!isProfileConsistent(currentLineAnchor, p3, config)) {
-                                        telemetry.countP3Size++;
-                                        continue;
-                                    }
-
-                                    // Prioritize the point that best matches the expected velocity
-                                    if (vDiff < bestVError) {
-                                        bestVError = vDiff;
-                                        bestMatch = p3;
-                                    }
-                                }
-
-                                if (bestMatch != null) {
-                                    currentTrack.addPoint(bestMatch);
-
-                                    // UPDATE PROGRESSIVE VECTOR: Anchor to Point 1 to prevent "drunk" jitter accumulation!
-                                    double totalDt = bestMatch.timestamp - p1.timestamp;
-                                    double totalDist = distance(p1.x, p1.y, bestMatch.x, bestMatch.y);
-                                    currentVelocity = totalDist / totalDt;
-                                    expectedAngle = Math.atan2(bestMatch.y - p1.y, bestMatch.x - p1.x);
-
-                                    currentLineAnchor = bestMatch;
-                                }
-                            }
-
-                            if (currentTrack.points.size() >= minPointsRequired) {
-                                currentTrack.isTimeBasedTrack = true;
-                                timeTrackCandidates.add(new RankedTrackCandidate(
-                                        currentTrack,
-                                        scoreTimeBasedTrackCandidate(currentTrack)));
-                                generatedTimeTracks++;
-                            } else {
-                                telemetry.countTrackTooShort++;
-                            }
-                        }
-                    }
-                }
-            }
-
-            timeTrackCandidates.sort(TrackLinker::compareRankedTimeTrackCandidates);
-
-            int timeTracksFound = 0;
-            for (RankedTrackCandidate candidate : timeTrackCandidates) {
-                CancellationScope.check();
-                if (conflictsWithUsedPoints(usedPoints, candidate.track)) {
-                    telemetry.countTrackDuplicate++;
-                    continue;
-                }
-
-                pointTracks.add(candidate.track);
-                usedPoints.addAll(candidate.track.points);
-                timeTracksFound++;
-                if (DiagnosticContext.enabled()) {
-                    DiagnosticContext.printf(
-                            "DEBUG: [PHASE 3.5] Accepted time-based point track -> points=%d startFrame=%d endFrame=%d%n",
-                            candidate.track.points.size(),
-                            candidate.track.points.get(0).sourceFrameIndex,
-                            candidate.track.points.get(candidate.track.points.size() - 1).sourceFrameIndex
-                    );
-                }
-            }
-
-            if (DiagnosticContext.enabled()) {
-                DiagnosticContext.println("DEBUG: [PHASE 3.5] Completed. Generated " + generatedTimeTracks
-                        + " precise time-based track candidate(s), accepted " + timeTracksFound + " after ranking.");
-            }
+            TimedPointLinker.link(transients, minPointsRequired, config, telemetry, assignments, pointTracks, listener);
         }
 
         boolean runGeometricTrackLinking = config.enableGeometricTrackLinking || !hasTimestamps;
@@ -775,196 +254,9 @@ public class TrackLinker {
                     hasTimestamps
             );
         }
-
-        // =================================================================
-        // PHASE 4: GEOMETRIC COLLINEAR LINKING (Optional / Timestamp Fallback)
-        // =================================================================
         if (runGeometricTrackLinking) {
-            if (DiagnosticContext.enabled()) {
-                String mode = hasTimestamps
-                        ? "optional geometric fallback enabled"
-                        : "forced geometric fallback because timestamps are unavailable";
-                DiagnosticContext.println("DEBUG: [PHASE 4] Applying time-agnostic geometric linker (" + mode + ")...");
-                DiagnosticContext.println("  -> Track confirmation threshold: " + minPointsRequired + " points.");
-            }
-
-            for (int f1 = 0; f1 < loopMax; f1++) {
-                CancellationScope.check();
-
-                // --- SMOOTH PROGRESS TRACKING FOR PHASE 4 (50% to 90%) ---
-                if (listener != null) {
-                    int progress = 60 + (int) (((double) f1 / loopMax) * 30.0);
-                    listener.onProgressUpdate(progress, "Analyzing kinematics: Frame " + (f1 + 1) + " of " + loopMax);
-                }
-
-                for (DetectedObject p1 : transients.get(f1)) {
-                    CancellationScope.check();
-                    if (usedPoints.contains(p1)) continue;
-
-                    for (int f2 = f1 + 1; f2 < numFrames - 1; f2++) {
-
-                        if (usedPoints.contains(p1)) break;
-
-                        for (DetectedObject p2 : transients.get(f2)) {
-                            CancellationScope.check();
-
-                            if (usedPoints.contains(p1)) break;
-                            if (usedPoints.contains(p2)) continue;
-
-                            double dist12 = distance(p1.x, p1.y, p2.x, p2.y);
-
-                            // Baseline Filter Gates
-                            if (dist12 < config.maxStarJitter) { telemetry.countBaselineJitter++; continue; }
-                            if (dist12 > config.maxJumpPixels) { telemetry.countBaselineJump++; continue; }
-                            if (!isProfileConsistent(p1, p2, config)) { telemetry.countBaselineSize++; continue; }
-
-                            Track currentTrack = new Track();
-                            currentTrack.addPoint(p1);
-                            currentTrack.addPoint(p2);
-
-                            DetectedObject lastPoint = p2;
-                            double expectedAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-
-                            // PROGRESSIVE VECTOR VARIABLES
-                            DetectedObject currentLineAnchor = p2;
-                            double currentBaselineDist = dist12;
-
-                            // Find subsequent points (p3, p4, etc.)
-                            for (int f3 = f2 + 1; f3 < numFrames; f3++) {
-                                DetectedObject bestMatch = null;
-                                double bestError = Double.MAX_VALUE;
-
-                                for (DetectedObject p3 : transients.get(f3)) {
-                                    if (usedPoints.contains(p3)) continue;
-
-                                    double jumpDist = distance(lastPoint.x, lastPoint.y, p3.x, p3.y);
-
-                                    if (jumpDist > config.maxJumpPixels) {
-                                        telemetry.countP3Jump++;
-                                        continue;
-                                    }
-
-                                    double lineError = distanceToLineOptimized(p1, currentLineAnchor, p3, currentBaselineDist);
-
-                                    if (lineError <= config.predictionTolerance) {
-                                        double actualAngle = Math.atan2(p3.y - lastPoint.y, p3.x - lastPoint.x);
-                                        if (isDirectionConsistent(expectedAngle, actualAngle, angleToleranceRad)) {
-                                            if (!isProfileConsistent(lastPoint, p3, config)) {
-                                                telemetry.countP3Size++;
-                                            } else {
-                                                if (lineError < bestError) {
-                                                    bestError = lineError;
-                                                    bestMatch = p3;
-                                                }
-                                            }
-                                        } else {
-                                            telemetry.countP3WrongDirection++;
-                                        }
-                                    } else {
-                                        telemetry.countP3NotLine++;
-                                    }
-                                }
-
-                                if (bestMatch != null) {
-                                    currentTrack.addPoint(bestMatch);
-                                    lastPoint = bestMatch;
-
-                                    // UPDATE THE PROGRESSIVE VECTOR
-                                    currentLineAnchor = bestMatch;
-                                    currentBaselineDist = distance(p1.x, p1.y, currentLineAnchor.x, currentLineAnchor.y);
-                                    expectedAngle = Math.atan2(currentLineAnchor.y - p1.y, currentLineAnchor.x - p1.x);
-                                }
-                            }
-
-                            // Final Track Verification
-                            if (currentTrack.points.size() >= minPointsRequired) {
-
-                                // --- SMART POINT PRUNING (Anti-Hijack Filter) ---
-                                List<DetectedObject> prunedPoints = new ArrayList<>();
-                                prunedPoints.add(currentTrack.points.get(0));
-
-                                for (int i = 1; i < currentTrack.points.size(); i++) {
-                                    DetectedObject pA = prunedPoints.get(prunedPoints.size() - 1);
-                                    DetectedObject pB = currentTrack.points.get(i);
-
-                                    double stepDist = distance(pA.x, pA.y, pB.x, pB.y);
-
-                                    if (stepDist > config.maxStarJitter) {
-                                        prunedPoints.add(pB);
-                                    } else {
-                                        //if (JTransientEngine.DEBUG) {
-                                        //System.out.printf("         *** PRUNING: Dropped hijacked point at frame %d. (Stalled segment: %.2f px) ***%n",
-                                        //        pB.sourceFrameIndex, stepDist);
-                                        //}
-                                    }
-                                }
-
-                                currentTrack.points = prunedPoints;
-
-                                // --- RE-EVALUATE AFTER PRUNING ---
-                                if (currentTrack.points.size() >= minPointsRequired) {
-
-                                    if (DiagnosticContext.enabled()) {
-                                        DetectedObject trackStart = currentTrack.points.get(0);
-                                        DetectedObject trackEnd = currentTrack.points.get(currentTrack.points.size() - 1);
-                                        double totalDistanceMoved = distance(trackStart.x, trackStart.y, trackEnd.x, trackEnd.y);
-
-                                        //System.out.printf("      -> [EVALUATING TRACK] %d clean points formed a line. Total distance moved: %.2f pixels. (Start: %.1f,%.1f)%n",
-                                        //        currentTrack.points.size(), totalDistanceMoved, trackStart.x, trackStart.y);
-                                    }
-
-                                    if (hasSteadyRhythm(currentTrack, config.rhythmAllowedVariance, config.rhythmStationaryThreshold, config.rhythmMinConsistencyRatio)) {
-
-                                        if (!isTrackAlreadyFound(pointTracks, currentTrack)) {
-                                            pointTracks.add(currentTrack);
-                                            usedPoints.addAll(currentTrack.points);
-                                            if (DiagnosticContext.enabled()) {
-                                                DiagnosticContext.printf(
-                                                        "DEBUG: [PHASE 4] Accepted geometric point track -> points=%d startFrame=%d endFrame=%d enableGeometricTrackLinking=%s hasTimestamps=%s%n",
-                                                        currentTrack.points.size(),
-                                                        currentTrack.points.get(0).sourceFrameIndex,
-                                                        currentTrack.points.get(currentTrack.points.size() - 1).sourceFrameIndex,
-                                                        config.enableGeometricTrackLinking,
-                                                        hasTimestamps
-                                                );
-                                                if (hasTimestamps && !config.enableGeometricTrackLinking) {
-                                                    DiagnosticContext.println("DEBUG: [PHASE 4] INVARIANT WARNING: geometric point track accepted even though timestamps are available and geometric linking is disabled.");
-                                                }
-                                            }
-
-                                            if (DiagnosticContext.enabled()) {
-                                                DetectedObject trackStart = currentTrack.points.get(0);
-                                                SpatialGrid masterGridForDebug = new SpatialGrid(masterStars, 30.0);
-                                                double distToMaster = masterGridForDebug.getNearestDistance(trackStart.x, trackStart.y, 30.0);
-
-                                                //System.out.printf("         [SUCCESS] Track formed at X:%.1f, Y:%.1f (Length: %d points)%n",
-                                                //        trackStart.x, trackStart.y, currentTrack.points.size());
-
-                                                if (distToMaster > 0) {
-                                                    //    System.out.printf("            -> DIAGNOSTIC: Nearest Master Centroid is %.2f pixels away. (Veto radius was %.2f)%n",
-                                                    //            distToMaster, expandedStarJitter);
-                                                } else {
-                                                    //   System.out.println("            -> DIAGNOSTIC: NO Master Centroid found within 30 pixels!");
-                                                }
-                                            }
-                                        } else {
-                                            telemetry.countTrackDuplicate++;
-                                        }
-                                    } else {
-                                        telemetry.countTrackErraticRhythm++;
-                                        //if (JTransientEngine.DEBUG) System.out.println("         [REJECTED] Failed steady rhythm check.");
-                                    }
-                                } else {
-                                    telemetry.countTrackTooShort++;
-                                    //if (JTransientEngine.DEBUG) System.out.println("         [REJECTED] Track became too short after pruning hijacked points.");
-                                }
-                            } else {
-                                telemetry.countTrackTooShort++;
-                            }
-                        }
-                    }
-                }
-            }
+            GeometricPointLinker.link(transients, minPointsRequired, config, telemetry, assignments, pointTracks, listener,
+                    hasTimestamps);
         } else if (DiagnosticContext.enabled()) {
             DiagnosticContext.println("DEBUG: [PHASE 4] Skipping geometric linker because timestamps are available and enableGeometricTrackLinking=false.");
         }
@@ -980,71 +272,115 @@ public class TrackLinker {
                     confirmedTracks,
                     transients,
                     filterResult.validMovingStreaks,
-                    usedPoints,
+                    assignments.claimed(),
                     config);
             telemetry.faintStreakFragmentTimeMs = (System.nanoTime() - fragmentStartedNanos) / 1_000_000L;
         }
 
-        // =================================================================
-        // PHASE 5: HIGH-ENERGY ANOMALY RESCUE (GLINTS & FLASHES)
-        // =================================================================
-        List<AnomalyDetection> anomalies = new ArrayList<>();
-        List<List<DetectedObject>> anomalyCandidates = buildPhase5AnomalyCandidates(
+        List<List<DetectedObject>> anomalyCandidates = TrackingExports.buildPhase5AnomalyCandidates(
                 filterResult.allTransients,
                 confirmedTracks,
                 pointTracks
         );
-        if (config.enableAnomalyRescue) {
-            if (DiagnosticContext.enabled()) {
-                DiagnosticContext.println("DEBUG: [PHASE 5] Scanning merged transients for High-Energy Anomalies...");
-            }
+        List<AnomalyDetection> anomalies = AnomalyRescuer.rescue(anomalyCandidates, assignments, config);
+        confirmedTracks = AnomalyRescuer.joinStreakPieces(confirmedTracks, anomalies, config);
 
-            for (int i = 0; i < numFrames; i++) {
-                CancellationScope.check();
-                for (DetectedObject orphan : anomalyCandidates.get(i)) {
-                    if (!usedPoints.contains(orphan)) {
+        recordCounts(confirmedTracks, pointTracks, anomalies, telemetry);
+        logRejectionStatistics(telemetry);
 
-                        // Rescue either a sharp glint or a broader high-energy flash.
-                        AnomalyType anomalyType = classifyAnomalyRescue(orphan, config);
-                        if (anomalyType != null) {
-                            anomalies.add(new AnomalyDetection(orphan, anomalyType));
-                            usedPoints.add(orphan);
-                        }
-                    }
+        if (listener != null) {
+            listener.onProgressUpdate(100, "Finalizing track telemetry...");
+        }
+
+        confirmedTracks.addAll(pointTracks);
+        logFinalSummary(confirmedTracks);
+        List<List<DetectedObject>> allTransients = filterResult.allTransients;
+        List<List<DetectedObject>> unclassifiedTransients = TrackingExports.buildUnclassifiedTransients(
+                allTransients,
+                confirmedTracks,
+                anomalies
+        );
+        TrackingResult result = new TrackingResult(
+                confirmedTracks,
+                anomalies,
+                telemetry,
+                allTransients,
+                unclassifiedTransients,
+                filterResult.masterVetoMask
+        );
+        result.cameraFixedGroups = cameraFixedGroups;
+        return result;
+    }
+
+    /**
+     * Removes detections fixed on the camera (hot pixels, dust) from the point transients and from the exported
+     * transients, so they leave every later stage; skipped when the switch is off or there are no registrations.
+     */
+    private static List<CameraFixedRejector.Group> removeCameraFixed(List<List<DetectedObject>> transients,
+                                                                    List<List<DetectedObject>> allTransients,
+                                                                    Map<Integer, FrameRegistration> registrations,
+                                                                    DetectionConfig config,
+                                                                    TrackerTelemetry telemetry) {
+        List<CameraFixedRejector.Group> cameraFixedGroups = List.of();
+        if (config.enableCameraFixedRejection && registrations != null && !registrations.isEmpty()) {
+            cameraFixedGroups = CameraFixedRejector.reject(transients, registrations);
+            if (!cameraFixedGroups.isEmpty()) {
+                Set<DetectedObject> removed = Collections.newSetFromMap(new IdentityHashMap<>());
+                for (CameraFixedRejector.Group group : cameraFixedGroups) {
+                    removed.addAll(group.points);
                 }
+                for (List<DetectedObject> frame : allTransients) {
+                    frame.removeIf(removed::contains);
+                }
+                telemetry.cameraFixedGroups = cameraFixedGroups.size();
+                telemetry.cameraFixedDetections = removed.size();
             }
         }
+        return cameraFixedGroups;
+    }
 
-        // A streak can break into pieces that are rescued as anomalies. Collinear anomalies of one frame are offered
-        // to the streak consolidation as a group; a group that joins no confirmed streak track stays as anomalies.
-        List<Track> anomalyGroups = groupSameFrameAnomalies(anomalies);
-        confirmedTracks = consolidateStreakTracks(confirmedTracks, anomalyGroups, config);
-        confirmedTracks.removeIf(track -> track instanceof AnomalyGroupTrack);
-        if (!anomalyGroups.isEmpty()) {
-            Set<DetectedObject> joinedStreaks = new HashSet<>();
-            for (Track track : confirmedTracks) {
-                CancellationScope.check();
-                joinedStreaks.addAll(track.points);
-            }
-            anomalies.removeIf(anomaly -> joinedStreaks.contains(anomaly.object));
-        }
-
-        // A streak through a star, or a satellite's flash, is rescued as an anomaly. On the path of a confirmed streak,
-        // in its own frame or where the streak's motion puts it in another frame, it is a piece of that streak.
-        List<DetectedObject> rescued = new ArrayList<>();
-        for (AnomalyDetection anomaly : anomalies) {
+    /** Whether the frames carry capture times, judged by the first detection of each non-empty frame. */
+    private static boolean hasTimestamps(List<List<DetectedObject>> allFrames) {
+        for (List<DetectedObject> frame : allFrames) {
             CancellationScope.check();
-            rescued.add(anomaly.object);
-        }
-        Set<DetectedObject> onStreakPaths = FaintStreakFragmentGrouper.joinAnomaliesOnStreakPaths(confirmedTracks, rescued);
-        if (!onStreakPaths.isEmpty()) {
-            anomalies.removeIf(anomaly -> onStreakPaths.contains(anomaly.object));
-            for (Track track : confirmedTracks) {
-                CancellationScope.check();
-                normalizeStreakTrackOrder(track);
+            if (!frame.isEmpty() && frame.get(0).timestamp != -1) {
+                return true;
             }
         }
+        return false;
+    }
 
+    private static void logTimestampProbe(List<List<DetectedObject>> allFrames, boolean hasTimestamps, DetectionConfig config) {
+        if (!DiagnosticContext.enabled()) {
+            return;
+        }
+        DiagnosticContext.println("DEBUG: [PHASE 3.5] Timestamp probe per frame:");
+        for (int i = 0; i < allFrames.size(); i++) {
+            CancellationScope.check();
+            List<DetectedObject> frame = allFrames.get(i);
+            if (frame.isEmpty()) {
+                DiagnosticContext.printf("   Frame %d -> empty%n", i);
+            } else {
+                DetectedObject sample = frame.get(0);
+                DiagnosticContext.printf(
+                        "   Frame %d -> objects=%d sampleTimestamp=%d sampleExposure=%d%n",
+                        i,
+                        frame.size(),
+                        sample.timestamp,
+                        sample.exposureDuration
+                );
+            }
+        }
+        DiagnosticContext.printf(
+                "DEBUG: [PHASE 3.5] hasTimestamps=%s enableGeometricTrackLinking=%s%n",
+                hasTimestamps,
+                config.enableGeometricTrackLinking
+        );
+    }
+
+    /** Records the returned streak tracks, point tracks and anomalies in the tracker telemetry. */
+    private static void recordCounts(List<Track> confirmedTracks, List<Track> pointTracks, List<AnomalyDetection> anomalies,
+                                     TrackerTelemetry telemetry) {
         int integratedSigmaAnomaliesRescued = 0;
         for (AnomalyDetection anomaly : anomalies) {
             CancellationScope.check();
@@ -1065,86 +401,71 @@ public class TrackLinker {
         telemetry.pointTracksFound = pointTracks.size();
         telemetry.anomaliesFound = anomalies.size();
         telemetry.integratedSigmaAnomaliesFound = integratedSigmaAnomaliesRescued;
+    }
 
-        if (DiagnosticContext.enabled()) {
-            DiagnosticContext.println("\n--------------------------------------------------");
-            DiagnosticContext.println(" PHASE 4 TELEMETRY: FILTER REJECTION STATISTICS   ");
-            DiagnosticContext.println("--------------------------------------------------");
-            DiagnosticContext.println("1. Baseline Generation (p1 -> p2) Rejections:");
-            DiagnosticContext.println("   - Stationary / Jitter           : " + telemetry.countBaselineJitter);
-            DiagnosticContext.println("   - Non-Positive Time Delta       : " + telemetry.countBaselineNonPositiveDelta);
-            DiagnosticContext.println("   - Exceeded Max Jump Velocity    : " + telemetry.countBaselineJump);
-            DiagnosticContext.println("   - Morphological Profile Mismatch: " + telemetry.countBaselineSize);
-
-            DiagnosticContext.println("\n2. Point 3+ (p3, p4...) Search Rejections:");
-            DiagnosticContext.println("   - Non-Positive Time Delta       : " + telemetry.countP3NonPositiveDelta);
-            DiagnosticContext.println("   - Velocity Mismatch             : " + telemetry.countP3VelocityMismatch);
-            DiagnosticContext.println("   - Not Collinear (Off-line)      : " + telemetry.countP3NotLine);
-            DiagnosticContext.println("   - Wrong Direction / Angle       : " + telemetry.countP3WrongDirection);
-            DiagnosticContext.println("   - Exceeded Max Jump Velocity    : " + telemetry.countP3Jump);
-            DiagnosticContext.println("   - Morphological Profile Mismatch: " + telemetry.countP3Size);
-
-            DiagnosticContext.println("\n3. Final Track Rejections:");
-            DiagnosticContext.println("   - Insufficient track length     : " + telemetry.countTrackTooShort);
-            DiagnosticContext.println("   - Erratic kinematic rhythm      : " + telemetry.countTrackErraticRhythm);
-            DiagnosticContext.println("   - Duplicate track (Ignored)     : " + telemetry.countTrackDuplicate);
-            DiagnosticContext.println("--------------------------------------------------\n");
-
-            DiagnosticContext.println("\n4. Valid Tracks Confirmed:");
-            DiagnosticContext.println("   - Returned Confirmed Streaks    : " + telemetry.streakTracksFound);
-            DiagnosticContext.println("   - Binary-Star Streak Rejects    : " + telemetry.rejectedBinaryStarStreakShape);
-            DiagnosticContext.println("   - Slow Point Tracks (Phase 4)   : " + telemetry.pointTracksFound);
-            DiagnosticContext.println("   - TOTAL RETURNED TRACKS         : "
-                    + (telemetry.streakTracksFound + telemetry.pointTracksFound));
-            DiagnosticContext.println("   - Single-Frame Anomalies        : " + telemetry.anomaliesFound);
-            DiagnosticContext.println("      -> Integrated-Sigma Rescue   : " + telemetry.integratedSigmaAnomaliesFound);
-            DiagnosticContext.println("--------------------------------------------------\n");
+    private static void logRejectionStatistics(TrackerTelemetry telemetry) {
+        if (!DiagnosticContext.enabled()) {
+            return;
         }
+        DiagnosticContext.println("\n--------------------------------------------------");
+        DiagnosticContext.println(" PHASE 4 TELEMETRY: FILTER REJECTION STATISTICS   ");
+        DiagnosticContext.println("--------------------------------------------------");
+        DiagnosticContext.println("1. Baseline Generation (p1 -> p2) Rejections:");
+        DiagnosticContext.println("   - Stationary / Jitter           : " + telemetry.countBaselineJitter);
+        DiagnosticContext.println("   - Non-Positive Time Delta       : " + telemetry.countBaselineNonPositiveDelta);
+        DiagnosticContext.println("   - Exceeded Max Jump Velocity    : " + telemetry.countBaselineJump);
+        DiagnosticContext.println("   - Morphological Profile Mismatch: " + telemetry.countBaselineSize);
 
-        if (listener != null) {
-            listener.onProgressUpdate(100, "Finalizing track telemetry...");
+        DiagnosticContext.println("\n2. Point 3+ (p3, p4...) Search Rejections:");
+        DiagnosticContext.println("   - Non-Positive Time Delta       : " + telemetry.countP3NonPositiveDelta);
+        DiagnosticContext.println("   - Velocity Mismatch             : " + telemetry.countP3VelocityMismatch);
+        DiagnosticContext.println("   - Not Collinear (Off-line)      : " + telemetry.countP3NotLine);
+        DiagnosticContext.println("   - Wrong Direction / Angle       : " + telemetry.countP3WrongDirection);
+        DiagnosticContext.println("   - Exceeded Max Jump Velocity    : " + telemetry.countP3Jump);
+        DiagnosticContext.println("   - Morphological Profile Mismatch: " + telemetry.countP3Size);
+
+        DiagnosticContext.println("\n3. Final Track Rejections:");
+        DiagnosticContext.println("   - Insufficient track length     : " + telemetry.countTrackTooShort);
+        DiagnosticContext.println("   - Erratic kinematic rhythm      : " + telemetry.countTrackErraticRhythm);
+        DiagnosticContext.println("   - Duplicate track (Ignored)     : " + telemetry.countTrackDuplicate);
+        DiagnosticContext.println("--------------------------------------------------\n");
+
+        DiagnosticContext.println("\n4. Valid Tracks Confirmed:");
+        DiagnosticContext.println("   - Returned Confirmed Streaks    : " + telemetry.streakTracksFound);
+        DiagnosticContext.println("   - Binary-Star Streak Rejects    : " + telemetry.rejectedBinaryStarStreakShape);
+        DiagnosticContext.println("   - Slow Point Tracks (Phase 4)   : " + telemetry.pointTracksFound);
+        DiagnosticContext.println("   - TOTAL RETURNED TRACKS         : "
+                + (telemetry.streakTracksFound + telemetry.pointTracksFound));
+        DiagnosticContext.println("   - Single-Frame Anomalies        : " + telemetry.anomaliesFound);
+        DiagnosticContext.println("      -> Integrated-Sigma Rescue   : " + telemetry.integratedSigmaAnomaliesFound);
+        DiagnosticContext.println("--------------------------------------------------\n");
+    }
+
+    private static void logFinalSummary(List<Track> confirmedTracks) {
+        if (!DiagnosticContext.enabled()) {
+            return;
         }
+        int finalStreakTracks = 0;
+        int finalTimeBasedPointTracks = 0;
+        int finalGeometricPointTracks = 0;
 
-        confirmedTracks.addAll(pointTracks);
-        if (DiagnosticContext.enabled()) {
-            int finalStreakTracks = 0;
-            int finalTimeBasedPointTracks = 0;
-            int finalGeometricPointTracks = 0;
-
-            for (Track track : confirmedTracks) {
-                CancellationScope.check();
-                if (track.isStreakTrack) {
-                    finalStreakTracks++;
-                } else if (track.isTimeBasedTrack) {
-                    finalTimeBasedPointTracks++;
-                } else {
-                    finalGeometricPointTracks++;
-                }
+        for (Track track : confirmedTracks) {
+            CancellationScope.check();
+            if (track.isStreakTrack) {
+                finalStreakTracks++;
+            } else if (track.isTimeBasedTrack) {
+                finalTimeBasedPointTracks++;
+            } else {
+                finalGeometricPointTracks++;
             }
-
-            DiagnosticContext.printf(
-                    "DEBUG: [FINAL TRACK SUMMARY] streak=%d timeBasedPoint=%d geometricPoint=%d%n",
-                    finalStreakTracks,
-                    finalTimeBasedPointTracks,
-                    finalGeometricPointTracks
-            );
         }
-        List<List<DetectedObject>> allTransients = filterResult.allTransients;
-        List<List<DetectedObject>> unclassifiedTransients = buildUnclassifiedTransients(
-                allTransients,
-                confirmedTracks,
-                anomalies
+
+        DiagnosticContext.printf(
+                "DEBUG: [FINAL TRACK SUMMARY] streak=%d timeBasedPoint=%d geometricPoint=%d%n",
+                finalStreakTracks,
+                finalTimeBasedPointTracks,
+                finalGeometricPointTracks
         );
-        TrackingResult result = new TrackingResult(
-                confirmedTracks,
-                anomalies,
-                telemetry,
-                allTransients,
-                unclassifiedTransients,
-                filterResult.masterVetoMask
-        );
-        result.cameraFixedGroups = cameraFixedGroups;
-        return result;
     }
 
     /**
@@ -1177,1139 +498,6 @@ public class TrackLinker {
         double ratio = config.trackMinFrameRatio > 0.0 ? config.trackMinFrameRatio : DEFAULT_TRACK_MIN_FRAME_RATIO;
         int required = Math.min((int) Math.ceil(frameCount / ratio), config.absoluteMaxPointsRequired);
         return Math.max(MIN_TRACK_POINTS, required);
-    }
-
-    /**
-     * Accepts either a sharp single-frame glint or a broader anomaly with enough integrated energy.
-     */
-    static boolean qualifiesForAnomalyRescue(DetectedObject orphan, DetectionConfig config) {
-        return classifyAnomalyRescue(orphan, config) != null;
-    }
-
-    /**
-     * Classifies anomaly rescue so single-frame anomalies can be exported separately from tracks.
-     */
-    static AnomalyType classifyAnomalyRescue(DetectedObject orphan, DetectionConfig config) {
-        if (orphan.pixelArea < config.anomalyMinPixels) {
-            return null;
-        }
-
-        if (orphan.peakSigma >= config.anomalyMinPeakSigma) {
-            return AnomalyType.PEAK_SIGMA;
-        }
-
-        if (orphan.pixelArea >= config.anomalyMinIntegratedPixels
-                && orphan.integratedSigma >= config.anomalyMinIntegratedSigma
-                && orphan.peakSigma >= config.anomalyMinPeakSigmaFloor) {
-            return AnomalyType.INTEGRATED_SIGMA;
-        }
-
-        return null;
-    }
-
-    /**
-     * Groups the rescued anomalies of each frame that lie on a line (at least three within
-     * {@link #ANOMALY_GROUP_LINE_TOLERANCE}). A group never links across frames, and is only a candidate piece of a
-     * streak: it is kept when the consolidation merges it into a confirmed streak track.
-     */
-    private static List<Track> groupSameFrameAnomalies(List<AnomalyDetection> anomalies) {
-        Map<Integer, List<DetectedObject>> byFrame = new java.util.TreeMap<>();
-        for (AnomalyDetection anomaly : anomalies) {
-            CancellationScope.check();
-            if (anomaly.object.sourceFrameIndex >= 0) {
-                byFrame.computeIfAbsent(anomaly.object.sourceFrameIndex, frame -> new ArrayList<>()).add(anomaly.object);
-            }
-        }
-        List<Track> groups = new ArrayList<>();
-        for (List<DetectedObject> frameObjects : byFrame.values()) {
-            CancellationScope.check();
-            List<DetectedObject> remainingObjects = new ArrayList<>(frameObjects);
-            while (remainingObjects.size() >= 3) {
-                CancellationScope.check();
-                AnomalyLineCandidate bestLine = bestAnomalyLine(remainingObjects);
-                if (bestLine == null) {
-                    break;
-                }
-                Track group = new AnomalyGroupTrack();
-                group.points.addAll(bestLine.objects);
-                groups.add(group);
-                remainingObjects.removeAll(bestLine.objects);
-            }
-        }
-        return groups;
-    }
-
-    /**
-     * The line through the most anomalies of one frame, the longest one among equals; null when no line holds three.
-     */
-    private static AnomalyLineCandidate bestAnomalyLine(List<DetectedObject> frameObjects) {
-        AnomalyLineCandidate bestLine = null;
-        for (int i = 0; i < frameObjects.size() - 1; i++) {
-            CancellationScope.check();
-            for (int j = i + 1; j < frameObjects.size(); j++) {
-                CancellationScope.check();
-                DetectedObject start = frameObjects.get(i);
-                DetectedObject end = frameObjects.get(j);
-                double baselineDistance = distance(start.x, start.y, end.x, end.y);
-                if (baselineDistance < 1.0) {
-                    continue;
-                }
-                List<DetectedObject> collinearObjects = new ArrayList<>();
-                for (DetectedObject candidate : frameObjects) {
-                    if (distanceToLineOptimized(start, end, candidate, baselineDistance) <= ANOMALY_GROUP_LINE_TOLERANCE) {
-                        collinearObjects.add(candidate);
-                    }
-                }
-                if (collinearObjects.size() < 3) {
-                    continue;
-                }
-                double dx = end.x - start.x;
-                double dy = end.y - start.y;
-                collinearObjects.sort((left, right) -> Double.compare(
-                        projectionAlongLine(left, start.x, start.y, dx, dy),
-                        projectionAlongLine(right, start.x, start.y, dx, dy)));
-                DetectedObject first = collinearObjects.get(0);
-                DetectedObject last = collinearObjects.get(collinearObjects.size() - 1);
-                AnomalyLineCandidate currentLine = new AnomalyLineCandidate(collinearObjects,
-                        distance(first.x, first.y, last.x, last.y));
-                if (bestLine == null || currentLine.objects.size() > bestLine.objects.size()
-                        || (currentLine.objects.size() == bestLine.objects.size() && currentLine.span > bestLine.span + 1e-6)) {
-                    bestLine = currentLine;
-                }
-            }
-        }
-        return bestLine;
-    }
-
-    /**
-     * Runs one final reconciliation pass over confirmed streaks, promoted single streaks and the groups of
-     * same-frame anomalies, so nearby fragments collapse into one streak history.
-     */
-    private static List<Track> consolidateStreakTracks(List<Track> confirmedStreakTracks,
-                                                       List<Track> anomalyGroups,
-                                                       DetectionConfig config) {
-        List<Track> orderedTracks = new ArrayList<>();
-
-        if (confirmedStreakTracks != null) {
-            List<Track> orderedConfirmedTracks = new ArrayList<>();
-            for (Track track : confirmedStreakTracks) {
-                CancellationScope.check();
-                if (isStreakLike(track)) {
-                    orderedConfirmedTracks.add(copyTrack(track));
-                }
-            }
-            orderedConfirmedTracks.sort(TrackLinker::compareStreakConsolidationPriority);
-            orderedTracks.addAll(orderedConfirmedTracks);
-        }
-
-        if (anomalyGroups != null) {
-            List<Track> orderedGroups = new ArrayList<>();
-            for (Track track : anomalyGroups) {
-                CancellationScope.check();
-                if (isStreakLike(track)) {
-                    orderedGroups.add(copyTrack(track));
-                }
-            }
-            orderedGroups.sort(TrackLinker::compareStreakConsolidationPriority);
-            orderedTracks.addAll(orderedGroups);
-        }
-
-        if (orderedTracks.isEmpty()) {
-            return new ArrayList<>();
-        }
-
-        List<Track> consolidatedTracks = new ArrayList<>();
-        for (Track track : orderedTracks) {
-            CancellationScope.check();
-            normalizeStreakTrackOrder(track);
-
-            int bestIndex = -1;
-            StreakMergeCandidate bestCandidate = null;
-            for (int i = 0; i < consolidatedTracks.size(); i++) {
-                CancellationScope.check();
-                StreakMergeCandidate currentCandidate = evaluateStreakMerge(consolidatedTracks.get(i), track, config);
-                if (isBetterStreakMergeCandidate(currentCandidate, bestCandidate)) {
-                    bestCandidate = currentCandidate;
-                    bestIndex = i;
-                }
-            }
-
-            if (bestIndex >= 0) {
-                consolidatedTracks.set(bestIndex, bestCandidate.mergedTrack);
-            } else {
-                consolidatedTracks.add(track);
-            }
-        }
-
-        consolidatedTracks.sort(TrackLinker::compareStreakConsolidationPriority);
-        return consolidatedTracks;
-    }
-
-    /**
-     * Returns whether a track participates in the streak-only consolidation pass.
-     */
-    private static boolean isStreakLike(Track track) {
-        return track != null
-                && track.points != null
-                && !track.points.isEmpty()
-                && (track.isStreakTrack || track instanceof AnomalyGroupTrack);
-    }
-
-    /**
-     * Creates a shallow copy of a track while preserving the original detection references.
-     */
-    private static Track copyTrack(Track source) {
-        Track copy = source instanceof AnomalyGroupTrack ? new AnomalyGroupTrack() : new Track();
-        copy.isStreakTrack = source.isStreakTrack;
-        copy.isTimeBasedTrack = source.isTimeBasedTrack;
-        copy.points.addAll(source.points);
-        return copy;
-    }
-
-    /**
-     * Orders streak points chronologically and, within each frame, along the best-fit streak axis.
-     */
-    private static void normalizeStreakTrackOrder(Track track) {
-        if (track == null || track.points == null || track.points.size() < 2) {
-            return;
-        }
-
-        DetectedObject[] endpoints = determineStreakLineEndpoints(track.points);
-        if (endpoints == null) {
-            return;
-        }
-
-        double dx = endpoints[1].x - endpoints[0].x;
-        double dy = endpoints[1].y - endpoints[0].y;
-        track.points.sort((left, right) -> {
-            int byFrame = Integer.compare(left.sourceFrameIndex, right.sourceFrameIndex);
-            if (byFrame != 0) {
-                return byFrame;
-            }
-            return Double.compare(
-                    projectionAlongLine(left, endpoints[0].x, endpoints[0].y, dx, dy),
-                    projectionAlongLine(right, endpoints[0].x, endpoints[0].y, dx, dy)
-            );
-        });
-    }
-
-    /**
-     * Ranks confirmed streaks ahead of anomaly groups, then streaks seen in more frames, then with more points, then
-     * brighter ones first, so they absorb later inputs.
-     */
-    private static int compareStreakConsolidationPriority(Track left, Track right) {
-        int byConfirmed = Boolean.compare(right.isStreakTrack, left.isStreakTrack);
-        if (byConfirmed != 0) {
-            return byConfirmed;
-        }
-
-        int byFrames = Integer.compare(countUniqueFrames(right), countUniqueFrames(left));
-        if (byFrames != 0) {
-            return byFrames;
-        }
-
-        int byPoints = Integer.compare(right.points.size(), left.points.size());
-        if (byPoints != 0) {
-            return byPoints;
-        }
-
-        return Double.compare(maxTrackPeakSigma(right), maxTrackPeakSigma(left));
-    }
-
-    /**
-     * Evaluates whether two streak-like tracks can be merged into one physically plausible streak history.
-     */
-    private static StreakMergeCandidate evaluateStreakMerge(Track existingTrack,
-                                                            Track candidateTrack,
-                                                            DetectionConfig config) {
-        if (!isStreakLike(existingTrack) || !isStreakLike(candidateTrack)) {
-            return null;
-        }
-
-        int frameGap = computeStreakFrameGap(existingTrack, candidateTrack);
-        if (!passesStreakFrameGapGate(existingTrack, candidateTrack, frameGap)) {
-            return null;
-        }
-
-        List<DetectedObject> combinedPoints = combineTrackPoints(existingTrack, candidateTrack);
-        DetectedObject[] endpoints = determineStreakLineEndpoints(combinedPoints);
-        if (endpoints == null) {
-            return null;
-        }
-
-        double baselineDistance = distance(endpoints[0].x, endpoints[0].y, endpoints[1].x, endpoints[1].y);
-        if (baselineDistance < 1.0) {
-            return null;
-        }
-
-        double mergedAngle = Math.atan2(endpoints[1].y - endpoints[0].y, endpoints[1].x - endpoints[0].x);
-        double angleTolerance = getStreakConsolidationAngleTolerance(existingTrack, candidateTrack, config);
-
-        double existingAngle = estimateTrackOrientation(existingTrack);
-        if (!Double.isNaN(existingAngle) && !anglesMatch(existingAngle, mergedAngle, angleTolerance)) {
-            return null;
-        }
-
-        double candidateAngle = estimateTrackOrientation(candidateTrack);
-        if (!Double.isNaN(candidateAngle) && !anglesMatch(candidateAngle, mergedAngle, angleTolerance)) {
-            return null;
-        }
-
-        double maxLineError = 0.0;
-        double maxAllowedLineError = getStreakConsolidationLineTolerance(config);
-        for (DetectedObject point : combinedPoints) {
-            CancellationScope.check();
-            double lineError = distanceToLineOptimized(endpoints[0], endpoints[1], point, baselineDistance);
-            maxLineError = Math.max(maxLineError, lineError);
-            if (lineError > maxAllowedLineError) {
-                return null;
-            }
-        }
-
-        if (!hasConsistentStreakMotion(combinedPoints, endpoints[0], endpoints[1], config)) {
-            return null;
-        }
-
-        Track mergedTrack = buildMergedStreakTrack(existingTrack, candidateTrack, combinedPoints);
-        return new StreakMergeCandidate(mergedTrack, frameGap, maxLineError);
-    }
-
-    /**
-     * Prefers same-frame or adjacent-frame reconciliations, then the tighter common line fit.
-     */
-    private static boolean isBetterStreakMergeCandidate(StreakMergeCandidate currentCandidate,
-                                                        StreakMergeCandidate bestCandidate) {
-        if (currentCandidate == null) {
-            return false;
-        }
-        if (bestCandidate == null) {
-            return true;
-        }
-        if (currentCandidate.frameGap != bestCandidate.frameGap) {
-            return currentCandidate.frameGap < bestCandidate.frameGap;
-        }
-        if (Math.abs(currentCandidate.maxLineError - bestCandidate.maxLineError) > 1e-6) {
-            return currentCandidate.maxLineError < bestCandidate.maxLineError;
-        }
-        return currentCandidate.mergedTrack.points.size() > bestCandidate.mergedTrack.points.size();
-    }
-
-    /**
-     * Builds the merged track and promotes it to a confirmed streak once a real streak or cross-frame motion exists.
-     */
-    private static Track buildMergedStreakTrack(Track left,
-                                                Track right,
-                                                List<DetectedObject> combinedPoints) {
-        Track mergedTrack = left instanceof AnomalyGroupTrack && right instanceof AnomalyGroupTrack
-                ? new AnomalyGroupTrack() : new Track();
-        boolean spansMultipleFrames = countUniqueFrames(combinedPoints) > 1;
-        mergedTrack.isStreakTrack = left.isStreakTrack || right.isStreakTrack || spansMultipleFrames;
-        mergedTrack.points.addAll(combinedPoints);
-        normalizeStreakTrackOrder(mergedTrack);
-        return mergedTrack;
-    }
-
-    /**
-     * Collects one centroid sample per frame so streak motion can be checked without treating same-frame fragments
-     * as separate time steps.
-     */
-    private static List<StreakFrameSample> buildStreakFrameSamples(List<DetectedObject> points) {
-        List<DetectedObject> orderedPoints = new ArrayList<>(points);
-        orderedPoints.sort((left, right) -> {
-            int byFrame = Integer.compare(left.sourceFrameIndex, right.sourceFrameIndex);
-            if (byFrame != 0) {
-                return byFrame;
-            }
-            return Long.compare(left.timestamp, right.timestamp);
-        });
-
-        List<StreakFrameSample> frameSamples = new ArrayList<>();
-        int currentFrame = Integer.MIN_VALUE;
-        double sumX = 0.0;
-        double sumY = 0.0;
-        int count = 0;
-        long timestamp = -1L;
-
-        for (DetectedObject point : orderedPoints) {
-            CancellationScope.check();
-            if (count > 0 && point.sourceFrameIndex != currentFrame) {
-                frameSamples.add(new StreakFrameSample(currentFrame, timestamp, sumX / count, sumY / count));
-                sumX = 0.0;
-                sumY = 0.0;
-                count = 0;
-                timestamp = -1L;
-            }
-
-            currentFrame = point.sourceFrameIndex;
-            sumX += point.x;
-            sumY += point.y;
-            count++;
-            if (point.timestamp != -1L && point.exposureDuration > 0L) {
-                timestamp = timestamp == -1L ? point.timestamp : Math.min(timestamp, point.timestamp);
-            }
-        }
-
-        if (count > 0) {
-            frameSamples.add(new StreakFrameSample(currentFrame, timestamp, sumX / count, sumY / count));
-        }
-
-        return frameSamples;
-    }
-
-    /**
-     * Enforces monotonic forward motion and a loose timestamp-aware speed check before two streak fragments merge.
-     */
-    private static boolean hasConsistentStreakMotion(List<DetectedObject> points,
-                                                     DetectedObject lineStart,
-                                                     DetectedObject lineEnd,
-                                                     DetectionConfig config) {
-        List<StreakFrameSample> frameSamples = buildStreakFrameSamples(points);
-        if (frameSamples.size() <= 1) {
-            return true;
-        }
-
-        // A unit axis, so the projected steps are in pixels like the minimum step.
-        double axisLength = Math.hypot(lineEnd.x - lineStart.x, lineEnd.y - lineStart.y);
-        if (!(axisLength > 0.0)) {
-            return false;
-        }
-        double dx = (lineEnd.x - lineStart.x) / axisLength;
-        double dy = (lineEnd.y - lineStart.y) / axisLength;
-        double minimumProjectedStep = Math.max(0.5, config.maxStarJitter * 0.5);
-        double directionSign = 0.0;
-        List<Double> projectedSpeeds = new ArrayList<>();
-        boolean hasTimestamps = false;
-
-        double previousProjection = projectionAlongLine(
-                frameSamples.get(0).x,
-                frameSamples.get(0).y,
-                lineStart.x,
-                lineStart.y,
-                dx,
-                dy
-        );
-
-        for (int i = 1; i < frameSamples.size(); i++) {
-            CancellationScope.check();
-            StreakFrameSample previous = frameSamples.get(i - 1);
-            StreakFrameSample current = frameSamples.get(i);
-
-            double currentProjection = projectionAlongLine(current.x, current.y, lineStart.x, lineStart.y, dx, dy);
-            double projectedStep = currentProjection - previousProjection;
-
-            if (Math.abs(projectedStep) < minimumProjectedStep) {
-                return false;
-            }
-
-            double currentDirection = Math.signum(projectedStep);
-            if (directionSign == 0.0) {
-                directionSign = currentDirection;
-            } else if (currentDirection != directionSign) {
-                return false;
-            }
-
-            if (previous.timestamp != -1L && current.timestamp != -1L) {
-                long dt = current.timestamp - previous.timestamp;
-                if (dt <= 0L) {
-                    return false;
-                }
-                projectedSpeeds.add(Math.abs(projectedStep) / dt);
-                hasTimestamps = true;
-            }
-
-            previousProjection = currentProjection;
-        }
-
-        if (hasTimestamps && projectedSpeeds.size() >= 2) {
-            List<Double> sortedSpeeds = new ArrayList<>(projectedSpeeds);
-            sortedSpeeds.sort(Double::compareTo);
-            double medianSpeed = sortedSpeeds.get(sortedSpeeds.size() / 2);
-            if (medianSpeed <= 0.0) {
-                return false;
-            }
-
-            int consistentSegments = 0;
-            for (double speed : projectedSpeeds) {
-                CancellationScope.check();
-                if (Math.abs(speed - medianSpeed) <= (medianSpeed * getStreakTimeConsistencyTolerance(config))) {
-                    consistentSegments++;
-                }
-            }
-            double consistencyRatio = (double) consistentSegments / projectedSpeeds.size();
-            return consistencyRatio >= config.rhythmMinConsistencyRatio;
-        }
-
-        if (!hasTimestamps && frameSamples.size() >= 3) {
-            Track representativeTrack = new Track();
-            for (StreakFrameSample sample : frameSamples) {
-                CancellationScope.check();
-                DetectedObject point = createSyntheticPoint(sample.x, sample.y);
-                point.sourceFrameIndex = sample.frameIndex;
-                representativeTrack.addPoint(point);
-            }
-            return hasSteadyRhythm(
-                    representativeTrack,
-                    config.rhythmAllowedVariance,
-                    config.rhythmStationaryThreshold,
-                    config.rhythmMinConsistencyRatio
-            );
-        }
-
-        return true;
-    }
-
-    /**
-     * Validates timestamp consistency for a streak candidate using one aggregated sample per frame.
-     */
-    private static boolean passesStreakTimeConsistency(List<DetectedObject> points,
-                                                       DetectionConfig config) {
-        if (points == null || points.size() < 2) {
-            return true;
-        }
-
-        DetectedObject[] endpoints = determineStreakLineEndpoints(points);
-        if (endpoints == null) {
-            // No line can be measured: same-frame fragments are fine, but streaks in several frames that did not
-            // move are not a moving object.
-            return countUniqueFrames(points) <= 1;
-        }
-
-        return hasConsistentStreakMotion(points, endpoints[0], endpoints[1], config);
-    }
-
-    /**
-     * Uses a slightly looser angular tolerance than the initial linker so near-identical same-frame fragments can merge.
-     */
-    private static double getStreakConsolidationAngleTolerance(Track left,
-                                                               Track right,
-                                                               DetectionConfig config) {
-        double baseTolerance = Math.toRadians(config.angleToleranceDegrees);
-        double minimumDegrees = tracksShareFrame(left, right) ? 5.0 : 4.0;
-        return Math.max(baseTolerance, Math.toRadians(minimumDegrees));
-    }
-
-    /**
-     * Line tolerance of the final streak consolidation: twice the prediction tolerance, and at least the tolerance of
-     * the anomaly groups.
-     */
-    private static double getStreakConsolidationLineTolerance(DetectionConfig config) {
-        return Math.max(ANOMALY_GROUP_LINE_TOLERANCE, config.predictionTolerance * 2.0);
-    }
-
-    /**
-     * Returns the generous relative speed tolerance used for timestamp-aware streak validation.
-     */
-    private static double getStreakTimeConsistencyTolerance(DetectionConfig config) {
-        return Math.max(0.0, config.streakTimeConsistencyTolerance);
-    }
-
-    /**
-     * Returns the minimum frame separation between two tracks, or zero if they overlap in time.
-     */
-    private static int computeStreakFrameGap(Track left, Track right) {
-        int leftStart = getMinFrameIndex(left.points);
-        int leftEnd = getMaxFrameIndex(left.points);
-        int rightStart = getMinFrameIndex(right.points);
-        int rightEnd = getMaxFrameIndex(right.points);
-
-        if (leftEnd < rightStart) {
-            return rightStart - leftEnd;
-        }
-        if (rightEnd < leftStart) {
-            return leftStart - rightEnd;
-        }
-        return 0;
-    }
-
-    /**
-     * Prevents the consolidation pass from bridging large unsupported gaps with too little evidence.
-     */
-    private static boolean passesStreakFrameGapGate(Track left,
-                                                    Track right,
-                                                    int frameGap) {
-        if (frameGap == 0) {
-            return true;
-        }
-
-        if (countUniqueFrames(left) == 1 && countUniqueFrames(right) == 1) {
-            return frameGap <= 1;
-        }
-
-        return frameGap <= 2;
-    }
-
-    /**
-     * Returns the dominant orientation of a track using its frame endpoints when available.
-     */
-    private static double estimateTrackOrientation(Track track) {
-        if (track == null || track.points == null || track.points.isEmpty()) {
-            return Double.NaN;
-        }
-        if (track.points.size() == 1) {
-            return track.points.get(0).angle;
-        }
-
-        DetectedObject[] endpoints = determineStreakLineEndpoints(track.points);
-        if (endpoints == null) {
-            return track.points.get(0).angle;
-        }
-        return Math.atan2(endpoints[1].y - endpoints[0].y, endpoints[1].x - endpoints[0].x);
-    }
-
-    /**
-     * Chooses a stable line definition for ordering and consolidation from either frame endpoints or the longest span.
-     */
-    private static DetectedObject[] determineStreakLineEndpoints(List<DetectedObject> points) {
-        List<StreakFrameSample> frameSamples = buildStreakFrameSamples(points);
-        if (frameSamples.size() >= 2) {
-            StreakFrameSample startSample = frameSamples.get(0);
-            StreakFrameSample endSample = frameSamples.get(frameSamples.size() - 1);
-            if (distance(startSample.x, startSample.y, endSample.x, endSample.y) >= 1.0) {
-                return new DetectedObject[]{
-                        createSyntheticPoint(startSample.x, startSample.y),
-                        createSyntheticPoint(endSample.x, endSample.y)
-                };
-            }
-        }
-
-        DetectedObject[] farthestPair = findFarthestPair(points);
-        if (farthestPair == null) {
-            return null;
-        }
-
-        if (distance(farthestPair[0].x, farthestPair[0].y, farthestPair[1].x, farthestPair[1].y) < 1.0) {
-            return null;
-        }
-        return farthestPair;
-    }
-
-    /**
-     * Finds the two detections with the largest separation inside one track.
-     */
-    private static DetectedObject[] findFarthestPair(List<DetectedObject> points) {
-        if (points == null || points.size() < 2) {
-            return null;
-        }
-
-        DetectedObject bestStart = null;
-        DetectedObject bestEnd = null;
-        double maxDistance = -1.0;
-        for (int i = 0; i < points.size() - 1; i++) {
-            CancellationScope.check();
-            for (int j = i + 1; j < points.size(); j++) {
-                CancellationScope.check();
-                DetectedObject left = points.get(i);
-                DetectedObject right = points.get(j);
-                double span = distance(left.x, left.y, right.x, right.y);
-                if (span > maxDistance) {
-                    maxDistance = span;
-                    bestStart = left;
-                    bestEnd = right;
-                }
-            }
-        }
-
-        if (bestStart == null || bestEnd == null) {
-            return null;
-        }
-        return new DetectedObject[]{bestStart, bestEnd};
-    }
-
-    /**
-     * Merges the unique detections from two tracks while preserving the original detection identities.
-     */
-    private static List<DetectedObject> combineTrackPoints(Track left, Track right) {
-        List<DetectedObject> combinedPoints = new ArrayList<>();
-        Set<DetectedObject> seenPoints = new HashSet<>();
-        for (DetectedObject point : left.points) {
-            CancellationScope.check();
-            if (seenPoints.add(point)) {
-                combinedPoints.add(point);
-            }
-        }
-        for (DetectedObject point : right.points) {
-            CancellationScope.check();
-            if (seenPoints.add(point)) {
-                combinedPoints.add(point);
-            }
-        }
-        return combinedPoints;
-    }
-
-    /**
-     * Returns whether two tracks share at least one frame.
-     */
-    private static boolean tracksShareFrame(Track left, Track right) {
-        Set<Integer> frames = new HashSet<>();
-        for (DetectedObject point : left.points) {
-            CancellationScope.check();
-            frames.add(point.sourceFrameIndex);
-        }
-        for (DetectedObject point : right.points) {
-            CancellationScope.check();
-            if (frames.contains(point.sourceFrameIndex)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Counts the unique frames represented by a track.
-     */
-    private static int countUniqueFrames(Track track) {
-        return countUniqueFrames(track.points);
-    }
-
-    /**
-     * Counts the unique frames represented by a list of detections.
-     */
-    private static int countUniqueFrames(List<DetectedObject> points) {
-        Set<Integer> frames = new HashSet<>();
-        for (DetectedObject point : points) {
-            CancellationScope.check();
-            frames.add(point.sourceFrameIndex);
-        }
-        return frames.size();
-    }
-
-    /**
-     * Returns the strongest peak sigma inside a track so stable tracks sort ahead of weak fragments.
-     */
-    private static double maxTrackPeakSigma(Track track) {
-        double maxPeakSigma = Double.NEGATIVE_INFINITY;
-        for (DetectedObject point : track.points) {
-            CancellationScope.check();
-            maxPeakSigma = Math.max(maxPeakSigma, point.peakSigma);
-        }
-        return maxPeakSigma;
-    }
-
-    /**
-     * Returns the earliest frame index represented by the supplied detections.
-     */
-    private static int getMinFrameIndex(List<DetectedObject> points) {
-        int minFrameIndex = Integer.MAX_VALUE;
-        for (DetectedObject point : points) {
-            CancellationScope.check();
-            minFrameIndex = Math.min(minFrameIndex, point.sourceFrameIndex);
-        }
-        return minFrameIndex == Integer.MAX_VALUE ? -1 : minFrameIndex;
-    }
-
-    /**
-     * Returns the latest frame index represented by the supplied detections.
-     */
-    private static int getMaxFrameIndex(List<DetectedObject> points) {
-        int maxFrameIndex = Integer.MIN_VALUE;
-        for (DetectedObject point : points) {
-            CancellationScope.check();
-            maxFrameIndex = Math.max(maxFrameIndex, point.sourceFrameIndex);
-        }
-        return maxFrameIndex == Integer.MIN_VALUE ? -1 : maxFrameIndex;
-    }
-
-    /**
-     * Creates a lightweight synthetic point for frame-level motion checks and ordering.
-     */
-    private static DetectedObject createSyntheticPoint(double x, double y) {
-        return new DetectedObject(x, y, 0.0, 1);
-    }
-
-    /**
-     * Removes any detection already consumed by an accepted track before Phase 5 anomaly rescue.
-     */
-    static List<List<DetectedObject>> buildPhase5AnomalyCandidates(
-            List<List<DetectedObject>> allTransients,
-            List<Track> streakTracks,
-            List<Track> pointTracks) {
-        Set<DetectedObject> trackedObjects = new HashSet<>();
-        for (Track track : streakTracks) {
-            CancellationScope.check();
-            trackedObjects.addAll(track.points);
-        }
-        for (Track track : pointTracks) {
-            CancellationScope.check();
-            trackedObjects.addAll(track.points);
-        }
-
-        List<List<DetectedObject>> anomalyCandidates = new ArrayList<>(allTransients.size());
-        for (List<DetectedObject> frameObjects : allTransients) {
-            CancellationScope.check();
-            List<DetectedObject> filteredFrame = new ArrayList<>();
-            for (DetectedObject object : frameObjects) {
-                CancellationScope.check();
-                if (!trackedObjects.contains(object)) {
-                    filteredFrame.add(object);
-                }
-            }
-            anomalyCandidates.add(filteredFrame);
-        }
-        return anomalyCandidates;
-    }
-
-    /**
-     * Builds the full post-veto transient population per frame from point transients and mobile streaks.
-     */
-    static List<List<DetectedObject>> buildAllTransients(
-            List<List<DetectedObject>> pointTransients,
-            List<DetectedObject> validMovingStreaks,
-            List<List<DetectedObject>> retainedFrames) {
-        int numFrames = retainedFrames.size();
-        Map<Integer, Integer> retainedPositions = new HashMap<>();
-        List<List<DetectedObject>> allTransients = new ArrayList<>(numFrames);
-        for (int i = 0; i < numFrames; i++) {
-            CancellationScope.check();
-            for (DetectedObject object : retainedFrames.get(i)) {
-                CancellationScope.check();
-                retainedPositions.put(object.sourceFrameIndex, i);
-            }
-            List<DetectedObject> frameObjects = new ArrayList<>();
-            if (pointTransients != null && i < pointTransients.size() && pointTransients.get(i) != null) {
-                frameObjects.addAll(pointTransients.get(i));
-            }
-            allTransients.add(frameObjects);
-        }
-
-        if (validMovingStreaks != null) {
-            for (DetectedObject streak : validMovingStreaks) {
-                CancellationScope.check();
-                Integer position = streak == null ? null : retainedPositions.get(streak.sourceFrameIndex);
-                if (position == null) {
-                    continue;
-                }
-                allTransients.get(position).add(streak);
-            }
-        }
-        return allTransients;
-    }
-
-    /**
-     * Removes all detections that were consumed by accepted tracks or surviving standalone anomalies.
-     */
-    static List<List<DetectedObject>> buildUnclassifiedTransients(
-            List<List<DetectedObject>> allTransients,
-            List<Track> tracks,
-            List<AnomalyDetection> anomalies) {
-        Set<DetectedObject> classifiedObjects = new HashSet<>();
-        if (tracks != null) {
-            for (Track track : tracks) {
-                CancellationScope.check();
-                if (track != null && track.points != null) {
-                    classifiedObjects.addAll(track.points);
-                }
-            }
-        }
-        if (anomalies != null) {
-            for (AnomalyDetection anomaly : anomalies) {
-                CancellationScope.check();
-                if (anomaly != null && anomaly.object != null) {
-                    classifiedObjects.add(anomaly.object);
-                }
-            }
-        }
-
-        List<List<DetectedObject>> unclassifiedTransients = new ArrayList<>(allTransients.size());
-        for (List<DetectedObject> frameObjects : allTransients) {
-            CancellationScope.check();
-            List<DetectedObject> frameUnclassified = new ArrayList<>();
-            if (frameObjects != null) {
-                for (DetectedObject object : frameObjects) {
-                    if (!classifiedObjects.contains(object)) {
-                        frameUnclassified.add(object);
-                    }
-                }
-            }
-            unclassifiedTransients.add(frameUnclassified);
-        }
-        return unclassifiedTransients;
-    }
-
-    // =================================================================
-    // HELPER METHODS
-    // =================================================================
-
-    /**
-     * Measures what fraction of an object's footprint overlaps a precomputed boolean mask.
-     */
-    private static double computeMaskOverlapFraction(DetectedObject obj, boolean[][] mask) {
-        if (obj.rawPixels == null || obj.rawPixels.isEmpty()) {
-            return 0.0;
-        }
-
-        int overlapCount = 0;
-        int sensorHeight = mask.length;
-        int sensorWidth = sensorHeight > 0 ? mask[0].length : 0;
-        for (Pixel p : obj.rawPixels) {
-            CancellationScope.check();
-            if (p.x >= 0 && p.x < sensorWidth && p.y >= 0 && p.y < sensorHeight && mask[p.y][p.x]) {
-                overlapCount++;
-            }
-        }
-        return (double) overlapCount / obj.rawPixels.size();
-    }
-
-    /**
-     * Scores time-based track candidates so that longer, straighter, and more uniformly paced tracks rank first.
-     */
-    private static double scoreTimeBasedTrackCandidate(Track track) {
-        if (track.points.size() < 2) {
-            return Double.NEGATIVE_INFINITY;
-        }
-
-        DetectedObject start = track.points.get(0);
-        DetectedObject end = track.points.get(track.points.size() - 1);
-
-        double frameSpan = Math.max(1, end.sourceFrameIndex - start.sourceFrameIndex);
-        double coverageRatio = (double) track.points.size() / (frameSpan + 1.0);
-        double totalDistance = distance(start.x, start.y, end.x, end.y);
-        double baselineDistance = Math.max(totalDistance, 0.0001);
-        double expectedAngle = Math.atan2(end.y - start.y, end.x - start.x);
-        double expectedDelta = Math.max(getTrackDelta(start, end), 0.0001);
-        double expectedSpeed = totalDistance / expectedDelta;
-
-        double totalLineError = 0.0;
-        int lineSamples = 0;
-        for (int i = 1; i < track.points.size() - 1; i++) {
-            CancellationScope.check();
-            totalLineError += distanceToLineOptimized(start, end, track.points.get(i), baselineDistance);
-            lineSamples++;
-        }
-
-        double totalAngleError = 0.0;
-        double totalSpeedError = 0.0;
-        int segmentSamples = 0;
-        for (int i = 0; i < track.points.size() - 1; i++) {
-            CancellationScope.check();
-            DetectedObject p1 = track.points.get(i);
-            DetectedObject p2 = track.points.get(i + 1);
-
-            double segmentDelta = getTrackDelta(p1, p2);
-            if (segmentDelta <= 0) {
-                continue;
-            }
-
-            double segmentDistance = distance(p1.x, p1.y, p2.x, p2.y);
-            double segmentSpeed = segmentDistance / segmentDelta;
-            double segmentAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-
-            totalAngleError += angularDifference(expectedAngle, segmentAngle);
-            if (expectedSpeed > 0.0) {
-                totalSpeedError += Math.abs(segmentSpeed - expectedSpeed) / expectedSpeed;
-            }
-            segmentSamples++;
-        }
-
-        double averageLineError = lineSamples == 0 ? 0.0 : totalLineError / lineSamples;
-        double averageAngleError = segmentSamples == 0 ? 0.0 : totalAngleError / segmentSamples;
-        double averageSpeedError = segmentSamples == 0 ? 0.0 : totalSpeedError / segmentSamples;
-
-        return (track.points.size() * 1000.0)
-                + (coverageRatio * 250.0)
-                + (frameSpan * 50.0)
-                + (totalDistance * 5.0)
-                - (averageLineError * 150.0)
-                - (averageAngleError * 250.0)
-                - (averageSpeedError * 400.0);
-    }
-
-    /**
-     * Orders ranked time-based candidates by track length, then by score, then by start frame.
-     */
-    private static int compareRankedTimeTrackCandidates(RankedTrackCandidate left, RankedTrackCandidate right) {
-        int byLength = Integer.compare(right.track.points.size(), left.track.points.size());
-        if (byLength != 0) {
-            return byLength;
-        }
-
-        int byScore = Double.compare(right.score, left.score);
-        if (byScore != 0) {
-            return byScore;
-        }
-
-        DetectedObject leftStart = left.track.points.get(0);
-        DetectedObject rightStart = right.track.points.get(0);
-        return Integer.compare(leftStart.sourceFrameIndex, rightStart.sourceFrameIndex);
-    }
-
-    /**
-     * Checks whether any point in the candidate track has already been consumed by a higher-ranked track.
-     */
-    private static boolean conflictsWithUsedPoints(Set<DetectedObject> usedPoints, Track track) {
-        for (DetectedObject point : track.points) {
-            CancellationScope.check();
-            if (usedPoints.contains(point)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Returns the time delta when timestamps are available, otherwise the frame-index delta.
-     */
-    private static double getTrackDelta(DetectedObject from, DetectedObject to) {
-        if (from.timestamp != -1 && to.timestamp != -1) {
-            double delta = to.timestamp - from.timestamp;
-            if (delta > 0) {
-                return delta;
-            }
-        }
-        return Math.max(1, to.sourceFrameIndex - from.sourceFrameIndex);
-    }
-
-
-    /**
-     * Applies morphology consistency checks between two candidate points.
-     */
-    private static boolean isProfileConsistent(DetectedObject obj1, DetectedObject obj2, DetectionConfig config) {
-        // 1. FWHM Consistency (Optics fingerprint)
-        if (config.maxFwhmRatio > 0.0) {
-            double fwhm1 = Math.max(obj1.fwhm, 0.1);
-            double fwhm2 = Math.max(obj2.fwhm, 0.1);
-            double fwhmRatio = Math.max(fwhm1, fwhm2) / Math.min(fwhm1, fwhm2);
-            if (fwhmRatio > config.maxFwhmRatio) return false;
-        }
-
-        // 2. Surface Brightness Consistency (Density of the light)
-        if (config.maxSurfaceBrightnessRatio > 0.0) {
-            double sb1 = obj1.totalFlux / Math.max(obj1.pixelArea, 1.0);
-            double sb2 = obj2.totalFlux / Math.max(obj2.pixelArea, 1.0);
-            double sbRatio = Math.max(sb1, sb2) / Math.min(sb1, sb2);
-            if (sbRatio > config.maxSurfaceBrightnessRatio) return false;
-        }
-        return true;
-    }
-
-    /**
-     * Returns Euclidean distance between two points.
-     */
-    private static double distance(double x1, double y1, double x2, double y2) {
-        double dx = x2 - x1;
-        double dy = y2 - y1;
-        return Math.sqrt(dx * dx + dy * dy);
-    }
-
-    /**
-     * Compares two orientation angles while treating 180-degree flips as equivalent streak directions.
-     */
-    private static boolean anglesMatch(double a1, double a2, double tolerance) {
-        double diff = Math.abs(a1 - a2) % Math.PI;
-        return diff <= tolerance || Math.PI - diff <= tolerance;
-    }
-
-    /**
-     * Returns whether an observed motion vector stays within the expected directional cone.
-     */
-    private static boolean isDirectionConsistent(double expectedAngle, double actualAngle, double tolerance) {
-        double diff = Math.abs(expectedAngle - actualAngle);
-        if (diff > Math.PI) diff = (2.0 * Math.PI) - diff;
-        return diff <= tolerance;
-    }
-
-    /**
-     * Computes the smallest unsigned angular distance between two directions.
-     */
-    private static double angularDifference(double a1, double a2) {
-        double diff = Math.abs(a1 - a2);
-        if (diff > Math.PI) {
-            diff = (2.0 * Math.PI) - diff;
-        }
-        return diff;
-    }
-
-    /**
-     * Projects one object onto a candidate same-frame line for stable ordering.
-     */
-    private static double projectionAlongLine(DetectedObject object,
-                                              double originX,
-                                              double originY,
-                                              double dx,
-                                              double dy) {
-        return projectionAlongLine(object.x, object.y, originX, originY, dx, dy);
-    }
-
-    /**
-     * Projects one coordinate pair onto a candidate line for frame-level streak motion checks.
-     */
-    private static double projectionAlongLine(double x,
-                                              double y,
-                                              double originX,
-                                              double originY,
-                                              double dx,
-                                              double dy) {
-        return ((x - originX) * dx) + ((y - originY) * dy);
-    }
-
-    /**
-     * Computes perpendicular distance from {@code p3} to the line defined by {@code p1 -> p2}.
-     */
-    private static double distanceToLineOptimized(DetectedObject p1,
-                                                  DetectedObject p2,
-                                                  DetectedObject p3,
-                                                  double precalculatedDenominator) {
-
-        if (precalculatedDenominator == 0) return Double.MAX_VALUE;
-        double numerator = Math.abs((p2.x - p1.x) * (p1.y - p3.y) - (p1.x - p3.x) * (p2.y - p1.y));
-        return numerator / precalculatedDenominator;
-    }
-
-    /**
-     * Treats tracks that share two or more detections as duplicates.
-     */
-    private static boolean isTrackAlreadyFound(List<Track> existingTracks, Track newTrack) {
-        for (Track existing : existingTracks) {
-            CancellationScope.check();
-            int sharedPoints = 0;
-            for (DetectedObject pt : newTrack.points) {
-                CancellationScope.check();
-                if (existing.points.contains(pt)) {
-                    sharedPoints++;
-                }
-            }
-            if (sharedPoints >= 2) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * Validates that the step sizes in a track follow a mostly steady rhythm after allowing for skipped frames.
-     */
-    public static boolean hasSteadyRhythm(Track track, double rhythmAllowedVariance, double rhythmStationaryThreshold, double rhythmMinConsistencyRatio) {
-        if (track.points.size() < 3) return true;
-
-        List<Double> jumps = new ArrayList<>();
-        for (int i = 0; i < track.points.size() - 1; i++) {
-            CancellationScope.check();
-            DetectedObject p1 = track.points.get(i);
-            DetectedObject p2 = track.points.get(i + 1);
-            jumps.add(distance(p1.x, p1.y, p2.x, p2.y));
-        }
-
-        List<Double> sortedJumps = new ArrayList<>(jumps);
-        sortedJumps.sort(Double::compareTo);
-        double medianJump = sortedJumps.get(sortedJumps.size() / 2);
-
-        if (medianJump < rhythmStationaryThreshold) return false;
-
-        int consistentJumps = 0;
-
-        for (double jump : jumps) {
-            CancellationScope.check();
-            long multiplier = Math.round(jump / medianJump);
-            if (multiplier == 0) continue;
-
-            double expectedJump = multiplier * medianJump;
-
-            if (Math.abs(jump - expectedJump) <= (rhythmAllowedVariance * multiplier)) {
-                consistentJumps++;
-            }
-        }
-
-        double consistencyRatio = (double) consistentJumps / jumps.size();
-        return consistencyRatio >= rhythmMinConsistencyRatio;
     }
 
 }

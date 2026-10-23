@@ -379,3 +379,33 @@ Validation: engine `check jar javadoc` passed all **240 tests**. Five new option
 - `PipelineResult`'s five positional constructors are replaced by `PipelineResult.builder()` and `toBuilder()`. Fields, defaults (an unset slow-mover or variable-star analysis is empty, unset camera-fixed groups none) and shared object identity are unchanged. The engine, SpacePixels' late-phase suppression and seven test fixtures use it.
 
 **Validation.** JTransient `check` passes (259 tests, architecture check) and `apiConsumer` passes; SpacePixels passes its tests (453, 4 skipped). Full `PipelineResult` snapshots are byte-identical before and after on Eagle-noisy, dc-reg, M81-kumar, klangwolke-1 and klangwolde-2, once the old snapshots' `"anomalyGroup":false` entries (the removed private field Gson used to serialize) are taken out.
+
+## JA-06 track linker split into stages (2026-10-23)
+
+**Decision.** The review note proposed extracting only the seam a future tracking change needs. The maintainer asked for the whole design instead: "The goal is to have a good overall consistent clean design and stages and clean collaboration between stages where needed", with performance compared before and after as well as correctness.
+
+**What changed.** `TrackLinker` went from 2,315 lines to about 500. It is now the orchestrator: `findMovingObjects` runs the stages in a fixed order, and its class documentation lists them. Each stage is a package-private class in `core` that receives what it needs and returns its result:
+
+- `TransientVeto`: separates streaks from point sources and removes what overlaps the master stars (the old `filterTransients` body).
+- `StreakLinker`: links fast-moving streaks into streak tracks.
+- `TimedPointLinker` and `GeometricPointLinker`: point tracks from capture times, and from geometry when frames have no times or geometric linking is on.
+- `AnomalyRescuer`: single-frame anomalies, and same-frame anomaly groups that join a streak; `StreakConsolidator` merges streak pieces.
+- `TrackingExports`: the per-frame exports and the anomaly candidates.
+- `TrackGeometry`: shared geometry (line distance, direction, steady rhythm).
+- `DetectionAssignments`: the detections a stage has accepted, by reference identity, so each detection is assigned at most once and in stage order. It replaces the `usedPoints` set that the point linkers and the fragment grouper shared.
+- `AnomalyGroupTrack`: the rescued same-frame anomaly group, now its own package-private type instead of a nested class.
+
+`FaintStreakFragmentGrouper`, `CameraFixedRejector` and the public results (`TrackingResult`, `TransientsFilterResult`) are unchanged. Order, greedy claims, tie order and reference identity are as before; no association rule changed. Debug code that could never run was removed from the geometric linker. Two sentences of ALGORITHM.md name the new classes. Tests that called moved helpers now call them on their new class.
+
+**Validation.** JTransient `check` passes (259 tests, architecture check); SpacePixels compiles and passes its tests against the composite build. Full `PipelineResult` snapshots (variable stars on, stacks and masks hashed, timings excluded) are byte-identical before and after on Eagle-noisy, dc-reg, M81-kumar, klangwolke-1 and klangwolde-2.
+
+**Performance.** The tracking stage was timed alone (`TRACKING` stage time, five pipeline runs per JVM, the first a warm-up), before and after in alternating passes on the same frames. Steady-state times are the same within run-to-run variation:
+
+| Dataset | Before (ms) | After (ms) |
+|---|---|---|
+| Eagle-noisy | 28–43 | 32–43 |
+| whynot-nocalibration-wrongdrift | 37–55 | 38–54 |
+| klangwolke-1 | 168–256 | 167–186 |
+| klangwolde-2 | 1,034–1,427 | 1,036–1,287 |
+
+The first (warm-up) run after the change was slower on klangwolke-1 (315 ms against 244–249 ms) and on klangwolde-2 (2.9 s against 1.2 s); the runs after it were not. That is one after-pass, taken while the machine was short of memory. The second after-pass, which would show whether it repeats, was stopped for low memory and has not been run again.

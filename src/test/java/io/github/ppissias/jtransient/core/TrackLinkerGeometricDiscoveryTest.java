@@ -165,7 +165,7 @@ public class TrackLinkerGeometricDiscoveryTest {
         assertEquals(1, result.tracks.size());
         var track = result.tracks.getFirst();
         assertEquals(List.of(0, 1, 3), track.points.stream().map(point -> point.sourceFrameIndex).toList());
-        assertTrue(TrackLinker.hasSteadyRhythm(track, config.rhythmAllowedVariance,
+        assertTrue(TrackGeometry.hasSteadyRhythm(track, config.rhythmAllowedVariance,
                 config.rhythmStationaryThreshold, config.rhythmMinConsistencyRatio));
         assertEquals(1.5, track.points.get(2).x - track.points.get(1).x, 1e-9);
         assertEquals(1.2, config.rhythmStationaryThreshold, 0);

@@ -163,7 +163,7 @@ flowchart TD
 
 ### Delivery order
 
-First JA-06, then JA-09's stage observer for SpacePixels F10 slice 2. Each slice migrates its SpacePixels callers in the same change. JA-11 checks the selected artifact combination at release; completed foundations are not queued again.
+JA-09's stage observer for SpacePixels F10 slice 2 is next (JA-06 is done). Each slice migrates its SpacePixels callers in the same change. JA-11 checks the selected artifact combination at release; completed foundations are not queued again.
 
 ### Verification and coordination with SpacePixels
 
@@ -179,7 +179,6 @@ Do not combine these changes with new detection gates, altered association order
 
 | ID | Scope | Status |
 |---|---|---|
-| JA-06 | Clean track-linker design without changing assignment/science, with before/after timings | Accepted |
 | JA-09 | Typed stage progress/outcomes and callback guarantees | In progress |
 | JA-11 | Final selected-release repository/artifact validation | In progress |
 
@@ -191,20 +190,6 @@ Do not combine these changes with new detection gates, altered association order
 - **JA-09:** add the stage observer that SpacePixels F10 slice 2 needs.
 - **JA-10:** closed.
 - **JA-12:** reduce the execution layer to what SpacePixels uses, with a good design.
-
-### JA-06. Separate tracking stages and make detection assignment explicit
-
-**Evidence.** [TrackLinker.filterTransients](src/main/java/io/github/ppissias/jtransient/core/TrackLinker.java) builds the master veto, separates populations and links streaks. `findMovingObjects` adds camera-fixed removal, timed and geometric point linking, conflict resolution, anomaly rescue, streak consolidation and export construction. Private same-frame anomaly groups use the same `Track` type with a private flag. [FaintStreakFragmentGrouper](src/main/java/io/github/ppissias/jtransient/core/FaintStreakFragmentGrouper.java) is already separate, but mutates track membership. Camera-fixed removal updates both the point population and the full transient export; common-motion removal later changes the unclassified population.
-
-**Risk and proposal.** The issue is several ownership rules in one orchestration path, not its line count. Extract cohesive internal collaborators in small steps: veto/population preparation, streak assembly/consolidation, timed point proposals, geometric point proposals, assignment/rescue, and export assembly. Move or simplify `TrackLinker` and its nested models with coordinated SpacePixels caller updates; retaining old facades is not required. Keep temporary existing model types only where that reduces refactor risk, not as a permanent compatibility obligation. Use a private anomaly-group input type when that seam is extracted, preserving the absence of a public suspected-streak category.
-
-Make the current assignment sequence explicit: a detection may be visible in several review views, but accepted classification and removals must follow the existing rules. Preserve reference identity, tie order, greedy behavior, empty-frame slots and stage ordering. Do not add value-based equality or new association gates during extraction. This proposal does not reopen PT-6 or the declined streak/linker decisions.
-
-**Acceptance.** Compare stage populations and final membership, not only counts: tracks, anomalies, camera/common-motion groups, all transients and leftovers. Use the existing streak consolidation, rescue, camera-fixed and export tests, plus deterministic ambiguous-assignment controls. Real-data outputs must remain equivalent for a structural refactor.
-
-**Review note (2026-10-23).** This is a structural refactor of the most order-sensitive science code (greedy claims, tie order, shared detection identity), and nothing changes that a user can see. Do it as the first step of a tracking change that needs the seam, for example PT-2, PT-6 or ST-5, and extract only the seam that change needs. Do not schedule it as a standalone item.
-
-Decision: I would like to have clean design in the track linker so this change is desirable. The goal is to have a good overall consistent clean design and stages and clean collaboration beteen stages where needed. We should also evaluate before / after performance impact, besides confirming correctness.  
 
 ### JA-09. Make progress, stage outcomes and diagnostics consistent
 
@@ -287,7 +272,7 @@ Statuses describe the current decision, not a new priority. Partial items retain
 | JA-03 | Structured failures and cancellation | Implemented |
 | JA-04 | Immutable tuning policy and scoped diagnostics | Implemented |
 | JA-05 | Prepared frame identity and input ownership | Implemented |
-| JA-06 | Tracking responsibility separation | Accepted |
+| JA-06 | Tracking responsibility separation | Implemented 2026-10-23: `TrackLinker` orchestrates stage classes; results and timings unchanged |
 | JA-07 | Coherent results/models and shared buffers | Implemented 2026-10-23 (narrowed): top-level `model` types and a `PipelineResult` builder |
 | JA-08 | Tuner measurement, selection and presentation | Implemented 2026-10-23: legacy tuner retired, calibrated measurement named |
 | JA-09 | Typed stage progress/outcomes | In progress |

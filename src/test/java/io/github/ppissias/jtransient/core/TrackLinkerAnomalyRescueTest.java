@@ -30,7 +30,7 @@ public class TrackLinkerAnomalyRescueTest {
         DetectionConfig config = new DetectionConfig();
         DetectedObject obj = createAnomaly(20, 9.0, 6.0);
 
-        assertTrue(TrackLinker.qualifiesForAnomalyRescue(obj, config));
+        assertTrue(AnomalyRescuer.qualifiesForAnomalyRescue(obj, config));
     }
 
     /**
@@ -41,7 +41,7 @@ public class TrackLinkerAnomalyRescueTest {
         DetectionConfig config = new DetectionConfig();
         DetectedObject obj = createAnomaly(30, 4.0, 14.0);
 
-        assertTrue(TrackLinker.qualifiesForAnomalyRescue(obj, config));
+        assertTrue(AnomalyRescuer.qualifiesForAnomalyRescue(obj, config));
     }
 
     /**
@@ -52,7 +52,7 @@ public class TrackLinkerAnomalyRescueTest {
         DetectionConfig config = new DetectionConfig();
         DetectedObject obj = createAnomaly(30, 2.5, 14.0);
 
-        assertFalse(TrackLinker.qualifiesForAnomalyRescue(obj, config));
+        assertFalse(AnomalyRescuer.qualifiesForAnomalyRescue(obj, config));
     }
 
     /**
@@ -63,7 +63,7 @@ public class TrackLinkerAnomalyRescueTest {
         DetectionConfig config = new DetectionConfig();
         DetectedObject obj = createAnomaly(20, 4.0, 14.0);
 
-        assertFalse(TrackLinker.qualifiesForAnomalyRescue(obj, config));
+        assertFalse(AnomalyRescuer.qualifiesForAnomalyRescue(obj, config));
     }
 
     /**
@@ -74,7 +74,7 @@ public class TrackLinkerAnomalyRescueTest {
         DetectionConfig config = new DetectionConfig();
         DetectedObject obj = createAnomaly(8, 9.0, 20.0);
 
-        assertFalse(TrackLinker.qualifiesForAnomalyRescue(obj, config));
+        assertFalse(AnomalyRescuer.qualifiesForAnomalyRescue(obj, config));
     }
 
     /**
@@ -88,9 +88,9 @@ public class TrackLinkerAnomalyRescueTest {
         DetectedObject integratedAnomaly = createAnomaly(30, 4.0, 14.0);
         DetectedObject rejectedBlob = createAnomaly(30, 2.5, 14.0);
 
-        assertEquals(AnomalyType.PEAK_SIGMA, TrackLinker.classifyAnomalyRescue(peakAnomaly, config));
-        assertEquals(AnomalyType.INTEGRATED_SIGMA, TrackLinker.classifyAnomalyRescue(integratedAnomaly, config));
-        assertNull(TrackLinker.classifyAnomalyRescue(rejectedBlob, config));
+        assertEquals(AnomalyType.PEAK_SIGMA, AnomalyRescuer.classifyAnomalyRescue(peakAnomaly, config));
+        assertEquals(AnomalyType.INTEGRATED_SIGMA, AnomalyRescuer.classifyAnomalyRescue(integratedAnomaly, config));
+        assertNull(AnomalyRescuer.classifyAnomalyRescue(rejectedBlob, config));
     }
 
     /**
@@ -140,7 +140,7 @@ public class TrackLinkerAnomalyRescueTest {
         List<List<DetectedObject>> remainingTransients = new ArrayList<>();
         remainingTransients.add(List.of(trackedStreak, trackedPoint, leftover));
 
-        List<List<DetectedObject>> result = TrackLinker.buildPhase5AnomalyCandidates(
+        List<List<DetectedObject>> result = TrackingExports.buildPhase5AnomalyCandidates(
                 remainingTransients,
                 List.of(streakTrack),
                 List.of(pointTrack)
