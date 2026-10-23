@@ -208,6 +208,8 @@ Make the current assignment sequence explicit: a detection may be visible in sev
 
 **Review note (2026-10-23).** This is a structural refactor of the most order-sensitive science code (greedy claims, tie order, shared detection identity), and nothing changes that a user can see. Do it as the first step of a tracking change that needs the seam, for example PT-2, PT-6 or ST-5, and extract only the seam that change needs. Do not schedule it as a standalone item.
 
+Decision: I would like to have clean design in the track linker so this change is desirable. The goal is to have a good overall consistent clean design and stages and clean collaboration beteen stages where needed. We should also evaluate before / after performance impact, besides confirming correctness.  
+
 ### JA-07. Give public models, mutable work state and shared buffers clear boundaries
 
 **Evidence.** [PipelineResult](src/main/java/io/github/ppissias/jtransient/engine/PipelineResult.java) has a growing set of positional constructors and directly retains most lists and arrays. Its older constructors permit legacy fields without corresponding grouped slow-mover data. [ImageFrame](src/main/java/io/github/ppissias/jtransient/engine/ImageFrame.java) has final fields but exposes a caller-owned mutable pixel matrix. `SourceExtractor.DetectedObject`, `TrackLinker.Track`, telemetry and `StarLightCurve` remain mutable. Some analysis types copy list containers, but their elements remain shared; `VariableStarAnalysis.frames` is an unmodifiable view of a mutable telemetry list.
@@ -228,6 +230,8 @@ As a touched boundary needs it, put shared frame/detection/track and diagnostic 
 
 The full target layout is more structure than the library needs: 14 packages for about 66 classes, where `execution` alone already has 13. Every move also reaches SpacePixels: 49 of its files import `jtransient.core` types today, mostly `SourceExtractor.DetectedObject` and `TrackLinker.Track`. Narrow JA-07 to the two pieces above. Keep the package table as orientation for where new code goes, not as a migration target.
 
+Decision: Agreed with the review note. Please also re-formulate this issue accordingly. 
+
 ### JA-08. Separate Auto-Tune measurement, policy and presentation
 
 **Evidence.** Both tuners contain crop preparation, extraction, evaluation, selection and report construction. The calibrated tuner already offers the useful `calibrate`/`configFor` split, but `Calibration` combines a mutable sweep, profile-ordinal arrays, chosen settings and compact tradeoff data. `tune` discards the full sweep through `discardSweep`, whereas direct `calibrate` retains it. Its public return type and profile enum belong to the legacy `JTransientAutoTuner`. The shared result's `bestTransientRatio` is a legacy ratio for one tuner and a per-megapixel-frame noise rate for the calibrated tuner.
@@ -239,6 +243,8 @@ Retain measurement provenance: effective base settings, tuning options, sample/c
 **Acceptance.** Replay selection and report generation from a frozen measurement without rereading images. Verify profile ordering, budgets, tradeoff choices and selected settings against controls; verify summary/full-sweep retention behavior and field units. Default calibrated results must remain unchanged. This is not a proposal to alter false-positive calibration or its deferred limitations.
 
 **Review note (2026-10-23).** The part shaped like a defect is `bestTransientRatio`. It means a legacy ratio for one tuner and a per-megapixel-frame noise rate for the other, so a caller can misread it. Fix that first, with separate, named fields per tuner. Nothing asks yet for each tuner to be split into preparer, measurer, policy and formatter classes; do that when a tuner change needs it.
+
+Decision: Please retire completely the legacy tuner both from SpacePixels and JTransient. The new tuner has proven its value and is working well. Other than that, agreed with the rest of the comments in the review note. 
 
 ### JA-09. Make progress, stage outcomes and diagnostics consistent
 
@@ -268,6 +274,7 @@ Keep numerical diagnostics in structured results; text formatting should consume
 - **Observer failures are isolated.** An exception from the observer is caught, reported through diagnostics and ignored. It never fails or cancels the run, and it delays the run only by the callback's own duration. This differs from today's progress listener, whose exception fails the run as `LISTENER`. Cancellation stays with `CancellationScope`.
 - **Acceptance.** `PipelineResult` and SpacePixels' report outputs are byte-identical with no observer, a no-op observer and a throwing observer. Events arrive in stage order, a disabled branch reports disabled, and no event follows the operation's terminal outcome.
 
+
 ### JA-10. Carry reference provenance without introducing unsafe caching
 
 **Evidence.** `generateMasterStackWithDetails` returns pixels, kept indices and rejection records, but the pipeline reuse overload accepts only a `short[][]`. `InputRules` checks dimensions. The full and transient-only paths still repeat extraction, QC and master-star preparation when a stack is supplied, as [PIPELINE.md](PIPELINE.md#what-changes-when-you-pass-providedmasterstack) documents. SpacePixels [IterativeDetectionPipelineService](../SpacePixels/src/main/java/eu/startales/spacepixels/util/IterativeDetectionPipelineService.java) intentionally builds a full-session reference and supplies it to subset runs.
@@ -279,6 +286,8 @@ Before caching master stars, masks or full preparation, define invalidation sepa
 **Acceptance.** Verify same-run reuse, intentional full-session/subset reuse, a foreign same-size reference, changed master-extraction settings and changed frame rejection. Compare cached and uncached results where caching is later introduced. Report actual saved work and retained heap before expanding the reuse API.
 
 **Review note (2026-10-23).** There is one consumer, SpacePixels' iterative run, which passes a full-session reference to each pass, and no cache is planned. Provenance would protect against a mistake no caller makes today. Move JA-10 to the deferred table, and revisit it when a cache or a second consumer appears.
+
+Decision: Agreed per the review note. Moreover, please close this issue not just defer it. We can evaluate it if there is a need in the future. 
 
 ### JA-11. Validate the final selected release artifacts
 
@@ -300,6 +309,7 @@ Before caching master stars, masks or full preparation, define invalidation sepa
 
 **Acceptance.** JTransient `test`, `apiConsumer` and `verifyArchitecture` pass, and SpacePixels compiles and passes its tests against the composite build. No science code changes, so no reference-data run is needed.
 
+Decision: I do not want to have over complicated concepts that we do not use in SpacePixels. So please simplify the approach to cover , with a good design the existing needs of SpacePixels. 
 
 ## Deferred and experimental findings
 
