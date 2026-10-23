@@ -16,31 +16,17 @@ import static org.junit.Assert.*;
 
 /** Verifies per-operation grid, sample, budget and diagnostics ownership without changing process-wide tuning state. */
 public class AutoTunerOptionsTest {
-    /** The tuner propagates caller core diagnostics through its scientific workers. */
+    /** The tuner propagates caller core diagnostics through its scientific workers and records its options. */
     @Test
     public void tunerInheritsCoreDiagnostics() {
         List<String> messages = new java.util.concurrent.CopyOnWriteArrayList<>();
-        var policy = io.github.ppissias.jtransient.execution.ExecutionPolicy.bounded(1);
+        var options = calibratedOptions(4, 1);
         try (var scope = io.github.ppissias.jtransient.execution.DiagnosticContext.open(
-                new io.github.ppissias.jtransient.execution.DiagnosticOptions(true, messages::add));
-             var session = io.github.ppissias.jtransient.execution.ExecutionSession.owned(policy)) {
-            var calibrated = CalibratedAutoTuner.calibrate(frames(), new DetectionConfig(), calibratedOptions(4, 1), session, null);
+                new io.github.ppissias.jtransient.execution.DiagnosticOptions(true, messages::add))) {
+            var calibrated = CalibratedAutoTuner.calibrate(frames(), new DetectionConfig(), options, null);
             assertTrue(calibrated.failureReason, calibrated.success);
+            assertSame(options, calibrated.options);
             assertTrue(messages.stream().anyMatch(message -> message.contains("BACKGROUND STATS")));
-            assertFalse(session.isClosed());
-        }
-    }
-
-    /** Verifies the tuner borrows a reusable session and records its actual resource policy in its result. */
-    @Test
-    public void borrowedSessionPolicyAndOwnershipArePreserved() {
-        var policy = io.github.ppissias.jtransient.execution.ExecutionPolicy.bounded(1);
-        try (var session = io.github.ppissias.jtransient.execution.ExecutionSession.owned(policy)) {
-            var measured = CalibratedAutoTuner.calibrate(frames(), new DetectionConfig(), calibratedOptions(4, 1), session, null);
-            assertTrue(measured.failureReason, measured.success);
-            assertEquals(policy, measured.options.executionPolicy());
-            assertFalse(session.isClosed());
-            assertFalse(session.executor().isShutdown());
         }
     }
 

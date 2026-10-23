@@ -15,7 +15,7 @@ import io.github.ppissias.jtransient.execution.OperationContext;
 import io.github.ppissias.jtransient.execution.FrameIdentity;
 import io.github.ppissias.jtransient.execution.StageId;
 
-import io.github.ppissias.jtransient.execution.CancellableTasks;
+import io.github.ppissias.jtransient.execution.WorkerPool;
 import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.config.PhotometryGeometry;
@@ -34,8 +34,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -167,16 +165,15 @@ public final class VariableStarAnalyzer {
      *
      * @param input frames and products of the earlier pipeline stages
      * @param config pipeline configuration
-     * @param executor optional executor used to measure frames in parallel; null runs sequentially
      * @return analysis result; never null
      */
-    public static VariableStarAnalysis analyze(Input input, DetectionConfig config, ExecutorService executor) throws Exception {
+    public static VariableStarAnalysis analyze(Input input, DetectionConfig config) throws Exception {
         if (input == null) throw new IllegalArgumentException("Photometry input is null.");
-        return analyzePrepared(input.snapshot(), config.clone(), executor);
+        return analyzePrepared(input.snapshot(), config.clone());
     }
 
     /** Measures already captured/validated associations without changing their frame order or borrowing contract. */
-    private static VariableStarAnalysis analyzePrepared(Input input, DetectionConfig config, ExecutorService executor) throws Exception {
+    private static VariableStarAnalysis analyzePrepared(Input input, DetectionConfig config) throws Exception {
         long start = System.nanoTime();
         PipelineTelemetry.PhotometryTelemetry telemetry = new PipelineTelemetry.PhotometryTelemetry();
         PhotometricReadiness readiness = new PhotometricReadiness();
@@ -256,7 +253,7 @@ public final class VariableStarAnalyzer {
         // --- Forced aperture photometry on every frame ---
         report(input, 0, "Photometry: measuring " + selected.size() + " stars in every frame...");
         ApertureMeasurer.FrameMeasurement[] measurements = measureFrames(
-                input, selected, skyMask, frameFwhm, saturationThreshold, config, executor);
+                input, selected, skyMask, frameFwhm, saturationThreshold, config);
         report(input, MEASURING_PROGRESS_SHARE, "Photometry: readiness checks and ensemble solution...");
         flagCrossings(input, selected, photometryStars, measurements, config);
 
@@ -711,8 +708,7 @@ public final class VariableStarAnalyzer {
                                                                      boolean[][] skyMask,
                                                                      double[] frameFwhm,
                                                                      double saturationThreshold,
-                                                                     DetectionConfig config,
-                                                                     ExecutorService executor) throws Exception {
+                                                                     DetectionConfig config) throws Exception {
         int nFrames = input.frames.size();
         ApertureMeasurer.FrameMeasurement[] out = new ApertureMeasurer.FrameMeasurement[nFrames];
         List<Callable<ApertureMeasurer.FrameMeasurement>> tasks = new ArrayList<>(nFrames);
@@ -737,17 +733,9 @@ public final class VariableStarAnalyzer {
                 return m;
             }));
         }
-        if (executor == null) {
-            for (int j = 0; j < nFrames; j++) {
-                CancellationScope.check();
-                out[j] = tasks.get(j).call();
-            }
-        } else {
-            List<Future<ApertureMeasurer.FrameMeasurement>> futures = CancellableTasks.invokeAll(executor, tasks);
-            for (int j = 0; j < nFrames; j++) {
-                CancellationScope.check();
-                out[j] = futures.get(j).get();
-            }
+        List<ApertureMeasurer.FrameMeasurement> results = WorkerPool.invokeAll(tasks);
+        for (int j = 0; j < nFrames; j++) {
+            out[j] = results.get(j);
         }
         return out;
     }

@@ -8,28 +8,9 @@ import java.util.ArrayList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
-/** Verifies observable lifecycle and the compatibility memory heuristic without depending on pool implementation details. */
+/** Verifies the observable engine lifecycle; WorkerPoolTest covers the worker-count heuristic. */
 public class JTransientEngineConcurrencyTest {
 
-    private static final long GIBIBYTE = 1024L * 1024L * 1024L;
-
-    @Test
-    public void workerCountIsBoundedByCpuAndFrameCount() {
-        assertEquals(4, JTransientEngine.frameWorkerCount(100, 100, 4, 8 * GIBIBYTE, 0));
-        assertEquals(2, JTransientEngine.frameWorkerCount(2, 100, 16, 8 * GIBIBYTE, 0));
-    }
-
-    @Test
-    public void largeFramesReduceConcurrencyUsingTheHeapBudget() {
-        assertEquals(2, JTransientEngine.frameWorkerCount(100, 61_000_000, 16, 8 * GIBIBYTE, 0));
-        assertEquals(1, JTransientEngine.frameWorkerCount(100, 61_000_000, 16,
-                8 * GIBIBYTE, 7 * GIBIBYTE));
-    }
-
-    @Test
-    public void exhaustedHeapStillUsesAtMostOneWorker() {
-        assertEquals(1, JTransientEngine.frameWorkerCount(100, 61_000_000, 16, GIBIBYTE, GIBIBYTE));
-    }
 
     @Test
     public void closeShutsDownThePoolAndRejectsFurtherRuns() throws Exception {

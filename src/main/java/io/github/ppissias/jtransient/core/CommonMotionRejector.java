@@ -81,29 +81,6 @@ public final class CommonMotionRejector {
         return List.copyOf(exported);
     }
 
-    /**
-     * Compatibility entry point for callers that already performed residual analysis.
-     * The source input is exclusively unclassified; rescues are never added as duplicate sources.
-     * When observations are removed, rescues and clusters are recomputed from the remaining input.
-     * Prefer reject before ResidualTransientAnalyzer.analyze to avoid computing residuals twice.
-     */
-    @Deprecated
-    public static ResidualTransientAnalysis apply(ResidualTransientAnalysis residual,
-                                                  List<List<SourceExtractor.DetectedObject>> unclassified,
-                                                  DetectionConfig config) {
-        List<ResidualTransientAnalysis.CommonMotionGroup> groups = reject(unclassified, config);
-        if (groups.isEmpty()) {
-            return residual == null ? ResidualTransientAnalysis.empty() : residual;
-        }
-        ResidualTransientAnalysis remaining = ResidualTransientAnalyzer.analyze(unclassified, config);
-        List<ResidualTransientAnalysis.CommonMotionGroup> allGroups = new ArrayList<>();
-        if (residual != null) {
-            allGroups.addAll(residual.commonMotionGroups);
-        }
-        allGroups.addAll(groups);
-        return new ResidualTransientAnalysis(remaining.localRescueCandidates, remaining.localActivityClusters, allGroups);
-    }
-
     private static List<Source> sourcesFromUnclassified(List<List<SourceExtractor.DetectedObject>> unclassified) {
         List<Source> sources = new ArrayList<>();
         if (unclassified == null) {

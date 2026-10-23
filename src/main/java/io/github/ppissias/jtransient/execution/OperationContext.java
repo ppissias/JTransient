@@ -10,8 +10,8 @@ import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
 /**
- * Thread-scoped additive failure capture, propagated explicitly into managed batches.
- * Canonical engine/tuner calls throw structured OperationFailedException; generic capture also supports terminal values.
+ * Thread-scoped stage and frame labels for failures, carried into worker batches by {@link WorkerPool}. This is a
+ * library-internal class; it is public only so that the engine, stage and tuner packages can share it.
  * Concurrent failures retain the first recorded ordinary failure, not a deterministic choice among racing failures.
  */
 public final class OperationContext {
@@ -20,35 +20,31 @@ public final class OperationContext {
     /** Prevents construction of the scoped operation utility. */
     private OperationContext() { }
 
-    /** Captures completed/failed/cancelled work without changing scientific result semantics or catching fatal VM errors. */
-    public static <Result> OperationOutcome<Result> capture(StageId defaultStage, Callable<Result> operation) {
+    /**
+     * Runs an operation and turns an ordinary failure into an {@link OperationFailedException} that names the stage
+     * and frame where it happened. Cancellation and interruption end as {@link CancellationException}; fatal VM
+     * errors propagate unchanged.
+     */
+    public static <Result> Result execute(StageId defaultStage, Callable<Result> operation) {
         Snapshot context = new Snapshot(defaultStage, null, new AtomicReference<>());
         try (Scope scope = restore(context)) {
             try {
-                return new OperationOutcome.Completed<>(operation.call());
+                return operation.call();
             } catch (Exception failure) {
                 Throwable original = unwrap(failure);
                 if (original instanceof Error error) throw error;
-                if (original instanceof OperationFailedException failed) return new OperationOutcome.Failed<>(failed.failure());
+                if (original instanceof OperationFailedException failed) throw failed;
                 if (original instanceof InterruptedException) {
                     Thread.currentThread().interrupt();
                     CancellationException cancelled = new CancellationException("JTransient operation interrupted.");
                     cancelled.initCause(original);
-                    return new OperationOutcome.Cancelled<>(cancelled);
+                    throw cancelled;
                 }
-                if (original instanceof CancellationException cancelled) return new OperationOutcome.Cancelled<>(cancelled);
+                if (original instanceof CancellationException cancelled) throw cancelled;
                 context.record(original);
-                return new OperationOutcome.Failed<>(context.failure.get());
+                throw new OperationFailedException(context.failure.get());
             }
         }
-    }
-
-    /** Executes an operation using the canonical throwing contract; cancellation and fatal errors remain distinct. */
-    public static <Result> Result execute(StageId defaultStage, Callable<Result> operation) {
-        OperationOutcome<Result> outcome = capture(defaultStage, operation);
-        if (outcome instanceof OperationOutcome.Completed<Result> completed) return completed.value();
-        if (outcome instanceof OperationOutcome.Cancelled<Result> cancelled) throw cancelled.cause();
-        throw new OperationFailedException(((OperationOutcome.Failed<Result>) outcome).failure());
     }
 
     /** Runs checked stage work, inheriting frame identity when null, and records/rethrows the same original exception. */

@@ -13,14 +13,11 @@ import io.github.ppissias.jtransient.execution.DiagnosticContext;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.config.DetectionConfigRules;
-import io.github.ppissias.jtransient.execution.CancellableTasks;
 import io.github.ppissias.jtransient.execution.CancellationScope;
-import io.github.ppissias.jtransient.execution.CancellationToken;
-import io.github.ppissias.jtransient.execution.ExecutionPolicy;
-import io.github.ppissias.jtransient.execution.ExecutionSession;
 import io.github.ppissias.jtransient.execution.FrameIdentity;
 import io.github.ppissias.jtransient.execution.OperationContext;
 import io.github.ppissias.jtransient.execution.StageId;
+import io.github.ppissias.jtransient.execution.WorkerPool;
 import io.github.ppissias.jtransient.core.CommonMotionRejector;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.FrameCoverage;
@@ -50,16 +47,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Orchestrates the full JTransient processing pipeline from extraction through track linking.
  *
- * <p>The default engine owns reusable workers for concurrent stages. Constructors can instead borrow
- * an executor or shared execution session. Reuse the same instance sequentially when practical and
- * call {@link #shutdown()} when no longer needed; borrowed resources remain caller-owned.</p>
+ * <p>An engine owns its worker threads and runs one operation at a time. Reuse the same instance sequentially when
+ * practical and call {@link #shutdown()} when no longer needed. To cancel an operation, run it inside a
+ * {@link io.github.ppissias.jtransient.execution.CancellationScope}.</p>
  *
  * <p>Every entry point checks its input first and throws {@link io.github.ppissias.jtransient.execution.OperationFailedException}, retaining validation causes and naming the frames, when
  * the list is empty, the frames differ in size or share a sequence index, some frames have a timestamp and others
@@ -75,14 +70,15 @@ public class JTransientEngine implements AutoCloseable {
      */
     static final double MAX_SINGLE_FRAME_AREA_LOSS = 0.05;
 
-    private final ExecutionSession execution;
-    private final boolean ownsSession;
-    private final ExecutorService executor;
+    private final WorkerPool workers;
     private boolean running;
     private boolean closed;
 
-    /** Exclusively leases this facade and scopes all nested scientific batches to its owned or borrowed workers. */
-    private <Result> Result executeOperation(CancellationToken cancellation, Callable<Result> operation) {
+    /**
+     * Runs one operation at a time on this engine's workers. Cancellation comes from the caller's
+     * {@link CancellationScope}; diagnostics from the caller's {@link DiagnosticContext}.
+     */
+    private <Result> Result executeOperation(Callable<Result> operation) {
         synchronized (this) {
             ensureOpen();
             if (running) {
@@ -90,8 +86,7 @@ public class JTransientEngine implements AutoCloseable {
             }
             running = true;
         }
-        try (CancellationScope scope = CancellationScope.open(cancellation);
-             ExecutionSession.Scope executionScope = execution.open();
+        try (WorkerPool.Scope workerScope = workers.open();
              DiagnosticContext.Scope diagnosticScope = DiagnosticContext.openDefaults()) {
             CancellationScope.check();
             Result result = OperationContext.execute(StageId.OPERATION, operation);
@@ -105,10 +100,16 @@ public class JTransientEngine implements AutoCloseable {
     }
 
     /**
-     * Creates a new engine instance backed by its own worker pool.
+     * Creates an engine with one worker thread per available processor; how many work at once also depends on the
+     * frame size and the free heap.
      */
     public JTransientEngine() {
-        this(ExecutionPolicy.defaults());
+        this(Runtime.getRuntime().availableProcessors());
+    }
+
+    /** Creates an engine with at most {@code maxWorkers} worker threads; tests use one for a deterministic order. */
+    JTransientEngine(int maxWorkers) {
+        this.workers = new WorkerPool(maxWorkers);
     }
 
 
@@ -118,49 +119,22 @@ public class JTransientEngine implements AutoCloseable {
     }
 
 
-    /** Creates an engine with owned workers and explicit per-operation CPU/scratch-estimation limits. */
-    public JTransientEngine(ExecutionPolicy policy) {
-        this(ExecutionSession.owned(policy), true);
-    }
-
-    /** Borrows caller-owned workers; closing this facade does not shut down that executor. */
-    public JTransientEngine(ExecutionPolicy policy, ExecutorService borrowedExecutor) {
-        this(ExecutionSession.borrowed(policy, borrowedExecutor), true);
-    }
-
-    /** Borrows a shared session; the caller closes it only after every borrowing engine has finished. */
-    public JTransientEngine(ExecutionSession execution) {
-        this(execution, false);
-    }
-
-    /** Captures resource ownership without allocating, copying or retaining any frame pixels. */
-    private JTransientEngine(ExecutionSession execution, boolean ownsSession) {
-        this.execution = java.util.Objects.requireNonNull(execution, "execution");
-        this.ownsSession = ownsSession;
-        this.executor = execution.executor();
-    }
-
-    /** Rejects work after facade/session closure, including premature shutdown of borrowed workers. */
+    /** Rejects work after {@link #close()}. */
     private void ensureOpen() {
-        if (closed || execution.isClosed()) {
+        if (closed) {
             throw new IllegalStateException("JTransientEngine has been closed.");
         }
     }
 
-    /** Applies the operation budget to extraction, stacking and photometry without resizing borrowed resources. */
-    private void configureFrameExecutor(List<ImageFrame> frames) {
+    /** Limits the operation's parallel extraction, stacking and photometry by the frame count and size. */
+    private void limitWorkToFrames(List<ImageFrame> frames) {
         ensureOpen();
         long largestFramePixels = 1L;
         for (ImageFrame frame : frames) {
             largestFramePixels = Math.max(largestFramePixels,
                     (long) frame.pixelData.length * frame.pixelData[0].length);
         }
-        execution.configureForWork(frames.size(), largestFramePixels);
-    }
-
-    /** Retains the existing deterministic worker heuristic for compatibility tests and diagnostics. */
-    static int frameWorkerCount(int frameCount, long pixelCount, int processors, long maximumHeap, long usedHeap) {
-        return ExecutionPolicy.bounded(Math.max(1, processors)).workerCount(frameCount, pixelCount, maximumHeap, usedHeap);
+        workers.limitWork(frames.size(), largestFramePixels);
     }
 
     /**
@@ -203,13 +177,8 @@ public class JTransientEngine implements AutoCloseable {
      */
     public MasterStackResult generateMasterStackWithDetails(List<ImageFrame> inputFrames, DetectionConfig config,
                                                             TransientEngineProgressListener listener) {
-        return generateMasterStackWithDetails(inputFrames, config, listener, CancellationScope.current());
-    }
-
-    public MasterStackResult generateMasterStackWithDetails(List<ImageFrame> inputFrames, DetectionConfig config,
-                                                            TransientEngineProgressListener listener, CancellationToken cancellation) {
         List<ImageFrame> operationFrames = copyFrameList(inputFrames);
-        return executeOperation(cancellation, () -> generateMasterStackWithDetailsInternal(operationFrames,
+        return executeOperation(() -> generateMasterStackWithDetailsInternal(operationFrames,
                 OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.MASTER_STACK)), listener));
     }
 
@@ -217,7 +186,7 @@ public class JTransientEngine implements AutoCloseable {
                                                             TransientEngineProgressListener listener) throws Exception {
         ensureOpen();
         OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkPipelineInput(inputFrames, null));
-        configureFrameExecutor(inputFrames);
+        limitWorkToFrames(inputFrames);
         if (listener != null) {
             OperationContext.notify(listener::onProgressUpdate, 0, "Evaluating frames for Master Stack...");
         }
@@ -256,10 +225,7 @@ public class JTransientEngine implements AutoCloseable {
         }
 
         List<PreparedFrame> completedResults = new ArrayList<>();
-        List<Future<PreparedFrame>> futures = CancellableTasks.invokeAll(executor, tasks);
-        for (Future<PreparedFrame> future : futures) {
-            completedResults.add(future.get());
-        }
+        completedResults.addAll(WorkerPool.invokeAll(tasks));
         completedResults.sort(Comparator.comparingInt(prepared -> prepared.frame().sequenceIndex));
 
         if (listener != null) {
@@ -345,12 +311,8 @@ public class JTransientEngine implements AutoCloseable {
      * @throws io.github.ppissias.jtransient.execution.OperationFailedException if extraction or vetoing fails
      */
     public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) {
-        return detectTransients(inputFrames, config, listener, providedMasterStack, CancellationScope.current());
-    }
-
-    public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack, CancellationToken cancellation) {
         List<ImageFrame> operationFrames = copyFrameList(inputFrames);
-        return executeOperation(cancellation, () -> detectTransientsInternal(operationFrames,
+        return executeOperation(() -> detectTransientsInternal(operationFrames,
                 OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.TRANSIENTS)), listener, providedMasterStack));
     }
 
@@ -417,7 +379,7 @@ public class JTransientEngine implements AutoCloseable {
      */
     private ExtractedFramesContext extractSourcesFromFrames(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
         long startNanos = System.nanoTime();
-        configureFrameExecutor(inputFrames);
+        limitWorkToFrames(inputFrames);
         PipelineTelemetry telemetry = new PipelineTelemetry();
         telemetry.totalFramesLoaded = inputFrames.size();
 
@@ -491,10 +453,7 @@ public class JTransientEngine implements AutoCloseable {
 
         // Execute parallel extraction
         List<PreparedFrame> completedResults = new ArrayList<>();
-        List<Future<PreparedFrame>> futures = CancellableTasks.invokeAll(executor, tasks);
-        for (Future<PreparedFrame> future : futures) {
-            completedResults.add(future.get());
-        }
+        completedResults.addAll(WorkerPool.invokeAll(tasks));
         completedResults.sort(Comparator.comparingInt(prepared -> prepared.frame().sequenceIndex));
 
         // Unpack results & update Telemetry
@@ -758,12 +717,8 @@ public class JTransientEngine implements AutoCloseable {
      * @throws io.github.ppissias.jtransient.execution.OperationFailedException if extraction, tracking, or residual analysis fails
      */
     public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) {
-        return runPipeline(inputFrames, config, listener, providedMasterStack, CancellationScope.current());
-    }
-
-    public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack, CancellationToken cancellation) {
         List<ImageFrame> operationFrames = copyFrameList(inputFrames);
-        return executeOperation(cancellation, () -> runPipelineInternal(operationFrames,
+        return executeOperation(() -> runPipelineInternal(operationFrames,
                 OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.PIPELINE,
                         operationFrames != null && operationFrames.stream().anyMatch(frame -> frame != null && frame.timestamp != -1L)
                                 ? DetectionConfigRules.Timing.AVAILABLE : DetectionConfigRules.Timing.MISSING)),
@@ -1009,7 +964,7 @@ public class JTransientEngine implements AutoCloseable {
                 // Photometry 0-100% maps to 93-99%.
                 photometryInput.progress = (percentage, message) -> OperationContext.notify(listener::onProgressUpdate, 93 + (int) (percentage * 0.06), message);
             }
-            variableStarAnalysis = OperationContext.call(StageId.PHOTOMETRY, null, () -> VariableStarAnalyzer.analyze(photometryInput, config, executor));
+            variableStarAnalysis = OperationContext.call(StageId.PHOTOMETRY, null, () -> VariableStarAnalyzer.analyze(photometryInput, config));
             telemetry.photometryTelemetry = variableStarAnalysis.telemetry;
             telemetry.recordStage(PipelineTelemetry.Stage.PHOTOMETRY, stageStartedNanos);
         }
@@ -1032,8 +987,8 @@ public class JTransientEngine implements AutoCloseable {
     }
 
     /**
-     * Closes an idle facade and joins its owned workers. Borrowed executors and sessions remain caller-owned.
-     * An active operation must first be cancelled and awaited; overlapping work and active close are rejected.
+     * Closes an idle engine and waits for its worker threads to end. An active operation must first be cancelled and
+     * awaited; closing during an operation is rejected.
      */
     public void shutdown() {
         synchronized (this) {
@@ -1042,7 +997,7 @@ public class JTransientEngine implements AutoCloseable {
             }
             closed = true;
         }
-        if (ownsSession) execution.close();
+        workers.close();
     }
 
     @Override

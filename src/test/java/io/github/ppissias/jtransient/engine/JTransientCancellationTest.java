@@ -32,14 +32,16 @@ public class JTransientCancellationTest {
         AtomicInteger extracted = new AtomicInteger();
         AtomicBoolean completed = new AtomicBoolean();
         try (JTransientEngine engine = new JTransientEngine()) {
-            assertThrows(CancellationException.class, () -> engine.runPipeline(frames(8, 80), new DetectionConfig(),
-                    (percent, message) -> {
-                        if (message.startsWith("Extracting features")) {
-                            extracted.incrementAndGet();
-                            cancelled.set(true);
-                        }
-                        if (percent == 100) completed.set(true);
-                    }, null, cancelled::get));
+            try (CancellationScope scope = CancellationScope.open(cancelled::get)) {
+                assertThrows(CancellationException.class, () -> engine.runPipeline(frames(8, 80), new DetectionConfig(),
+                        (percent, message) -> {
+                            if (message.startsWith("Extracting features")) {
+                                extracted.incrementAndGet();
+                                cancelled.set(true);
+                            }
+                            if (percent == 100) completed.set(true);
+                        }));
+            }
             int progressAtReturn = extracted.get();
             assertTrue(progressAtReturn > 0);
             assertFalse(completed.get());
@@ -84,8 +86,10 @@ public class JTransientCancellationTest {
 
     @Test
     public void tunerHonorsCancellationBeforeReadingInputs() {
-        assertThrows(CancellationException.class, () -> CalibratedAutoTuner.tune(null, new DetectionConfig(),
-                AutoTuneProfile.MEDIUM, null, () -> true));
+        try (CancellationScope scope = CancellationScope.open(() -> true)) {
+            assertThrows(CancellationException.class, () -> CalibratedAutoTuner.tune(null, new DetectionConfig(),
+                    AutoTuneProfile.MEDIUM, null));
+        }
     }
 
     @Test
@@ -104,16 +108,20 @@ public class JTransientCancellationTest {
         ExecutorService caller = Executors.newSingleThreadExecutor();
         JTransientEngine engine = new JTransientEngine();
         try {
-            Future<?> operation = caller.submit(() -> engine.runPipeline(frames(5, 80), new DetectionConfig(),
-                    (percent, message) -> {
-                        started.countDown();
-                        try {
-                            if (!proceed.await(5, TimeUnit.SECONDS)) throw new AssertionError("test did not release operation");
-                        } catch (InterruptedException interrupted) {
-                            Thread.currentThread().interrupt();
-                            throw new CancellationException();
-                        }
-                    }, null, cancelled::get));
+            Future<?> operation = caller.submit(() -> {
+                try (CancellationScope scope = CancellationScope.open(cancelled::get)) {
+                    return engine.runPipeline(frames(5, 80), new DetectionConfig(),
+                            (percent, message) -> {
+                                started.countDown();
+                                try {
+                                    if (!proceed.await(5, TimeUnit.SECONDS)) throw new AssertionError("test did not release operation");
+                                } catch (InterruptedException interrupted) {
+                                    Thread.currentThread().interrupt();
+                                    throw new CancellationException();
+                                }
+                            });
+                }
+            });
             assertTrue(started.await(5, TimeUnit.SECONDS));
             assertThrows(IllegalStateException.class, () -> engine.runPipeline(frames(5, 80), new DetectionConfig(), null));
             assertThrows(IllegalStateException.class, engine::close);

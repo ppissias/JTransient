@@ -15,10 +15,8 @@ import io.github.ppissias.jtransient.execution.OperationContext;
 import io.github.ppissias.jtransient.execution.FrameIdentity;
 import io.github.ppissias.jtransient.execution.StageId;
 
-import io.github.ppissias.jtransient.execution.CancellableTasks;
 import io.github.ppissias.jtransient.execution.CancellationScope;
-import io.github.ppissias.jtransient.execution.ExecutionPolicy;
-import io.github.ppissias.jtransient.execution.ExecutionSession;
+import io.github.ppissias.jtransient.execution.WorkerPool;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.config.DetectionConfigRules;
 import io.github.ppissias.jtransient.core.DataArea;
@@ -39,8 +37,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
 
 /**
  * Auto-tuner that measures noise and sensitivity directly instead of scoring proxies.
@@ -146,7 +142,6 @@ public final class CalibratedAutoTuner {
      * Defaults are private constants; per-run tuning policy is captured by immutable options.
      */
     public static final class Options {
-        private final ExecutionPolicy executionPolicy;
         private final double[] falsePositiveBudgetPerMpixFrame;
         private final double[] sigmasToTest;
         private final double[] growDeltasToTest;
@@ -169,7 +164,6 @@ public final class CalibratedAutoTuner {
 
         /** Copies and validates a builder before progress callbacks or scientific work can start. */
         private Options(Builder builder) {
-            executionPolicy = java.util.Objects.requireNonNull(builder.executionPolicy, "executionPolicy");
             falsePositiveBudgetPerMpixFrame = java.util.Objects.requireNonNull(builder.falsePositiveBudgetPerMpixFrame, "falsePositiveBudgetPerMpixFrame").clone();
             sigmasToTest = java.util.Objects.requireNonNull(builder.sigmasToTest, "sigmasToTest").clone();
             growDeltasToTest = java.util.Objects.requireNonNull(builder.growDeltasToTest, "growDeltasToTest").clone();
@@ -251,19 +245,6 @@ public final class CalibratedAutoTuner {
         /** Returns an independent builder, including detached copies of every search-grid array. */
         public Builder toBuilder() {
             return new Builder(this);
-        }
-
-        /** Returns the immutable per-operation CPU/scratch-estimation limits, excluding retained image buffers. */
-        public ExecutionPolicy executionPolicy() {
-            return executionPolicy;
-        }
-
-        /** Captures the actual borrowed-session policy in result provenance without changing scientific options. */
-        private Options withExecutionPolicy(ExecutionPolicy policy) {
-            if (executionPolicy.equals(policy)) return this;
-            Builder builder = toBuilder();
-            builder.executionPolicy = policy;
-            return builder.build();
         }
 
         /** Returns a detached copy of the falsePositiveBudgetPerMpixFrame grid. */
@@ -368,8 +349,6 @@ public final class CalibratedAutoTuner {
 
         /** Mutable caller-owned construction state; build snapshots arrays and never modifies this builder. */
         public static final class Builder {
-            /** Per-operation batch limits; borrowed sessions use their own resource policy instead. */
-            public ExecutionPolicy executionPolicy;
             /** falsePositiveBudgetPerMpixFrame policy; array values are copied by build(). */
             public double[] falsePositiveBudgetPerMpixFrame;
             /** sigmasToTest policy; array values are copied by build(). */
@@ -411,7 +390,6 @@ public final class CalibratedAutoTuner {
 
             /** Copies fixed default values and detaches their arrays into a caller-owned builder. */
             public Builder() {
-                executionPolicy = ExecutionPolicy.defaults();
                 falsePositiveBudgetPerMpixFrame = CalibratedAutoTuner.FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME.clone();
                 sigmasToTest = CalibratedAutoTuner.SIGMAS_TO_TEST.clone();
                 growDeltasToTest = CalibratedAutoTuner.GROW_DELTAS_TO_TEST.clone();
@@ -435,7 +413,6 @@ public final class CalibratedAutoTuner {
 
             /** Copies an immutable policy without consulting process-wide defaults. */
             private Builder(Options options) {
-                executionPolicy = options.executionPolicy;
                 falsePositiveBudgetPerMpixFrame = options.falsePositiveBudgetPerMpixFrame.clone();
                 sigmasToTest = options.sigmasToTest.clone();
                 growDeltasToTest = options.growDeltasToTest.clone();
@@ -705,31 +682,9 @@ public final class CalibratedAutoTuner {
 
 
     /**
-     * Tunes a captured configuration under explicit cancellation and keeps both success and fallback settings detached.
-     *
-     * @param poolFrames available calibration frames
-     * @param baseConfig caller-owned settings captured before measurement
-     * @param profile sensitivity/budget policy preset
-     * @param listener optional progress listener
-     * @param cancellation request checked before capture, during work and before return
-     * @return calibrated tuning outcome with an independent optimized or fallback configuration
-     * @throws io.github.ppissias.jtransient.execution.OperationFailedException for invalid settings or execution failures, retaining stage/frame and cause
-     * @throws java.util.concurrent.CancellationException if cancellation is requested
-     */
-    public static AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
-            AutoTuneProfile profile, TransientEngineProgressListener listener,
-            io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
-        try (CancellationScope scope = CancellationScope.open(cancellation)) {
-            CancellationScope.check();
-            AutoTunerResult result = tune(poolFrames, baseConfig, profile, listener);
-            CancellationScope.check();
-            return result;
-        }
-    }
-
-    /**
      * Captures calibrated-tuner inputs once and never exposes the caller's config as a fallback.
-     * Inherits an enclosing cancellation scope; insufficient evidence remains an ordinary unsuccessful result.
+     * Cancellation comes from the caller's {@link CancellationScope}; insufficient evidence remains an ordinary
+     * unsuccessful result.
      *
      * @param poolFrames available calibration frames
      * @param baseConfig caller-owned settings, never modified by tuning
@@ -737,7 +692,7 @@ public final class CalibratedAutoTuner {
      * @param listener optional progress listener
      * @return calibrated tuning outcome with detached successful or fallback settings
      * @throws io.github.ppissias.jtransient.execution.OperationFailedException for invalid settings or execution failures, retaining stage/frame and cause
-     * @throws java.util.concurrent.CancellationException if the inherited scope is cancelled
+     * @throws java.util.concurrent.CancellationException if the caller's scope is cancelled
      */
     public static AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
             AutoTuneProfile profile, TransientEngineProgressListener listener) {
@@ -746,47 +701,28 @@ public final class CalibratedAutoTuner {
     }
 
 
-    /** Tunes with detached configuration and immutable options, borrowing frame pixels until the joined operation returns. */
+    /**
+     * Tunes with detached configuration and immutable options on its own worker threads, borrowing frame pixels until
+     * it returns.
+     */
     public static AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
             Options options, AutoTuneProfile profile, TransientEngineProgressListener listener) {
         CancellationScope.check();
         java.util.Objects.requireNonNull(options, "options");
-        try (ExecutionSession execution = ExecutionSession.owned(options.executionPolicy)) {
-            return tune(poolFrames, baseConfig, options, execution, profile, listener);
-        }
-    }
-
-    /** Tunes with a borrowed session, preserving its policy/ownership and inheriting cooperative cancellation. */
-    public static AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
-            Options options, ExecutionSession execution, AutoTuneProfile profile,
-            TransientEngineProgressListener listener) {
-        CancellationScope.check();
-        java.util.Objects.requireNonNull(options, "options");
-        try (ExecutionSession.Scope scope = execution.open();
+        try (WorkerPool workers = WorkerPool.forAvailableProcessors();
+             WorkerPool.Scope workerScope = workers.open();
              DiagnosticContext.Scope diagnosticScope = DiagnosticContext.openDefaults()) {
             return OperationContext.execute(StageId.CALIBRATION, () -> tuneCaptured(poolFrames, OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION)),
-                    profile, listener, options.withExecutionPolicy(execution.policy())));
-        }
-    }
-
-    /** Tunes with independent options and explicit cancellation; no process-wide tuner state is changed. */
-    public static AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
-            Options options, AutoTuneProfile profile, TransientEngineProgressListener listener,
-            io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
-        try (CancellationScope scope = CancellationScope.open(cancellation)) {
-            CancellationScope.check();
-            AutoTunerResult result = tune(poolFrames, baseConfig, options, profile, listener);
-            CancellationScope.check();
-            return result;
+                    profile, listener, options, workers));
         }
     }
 
     /** Measures and selects a profile using the validated private settings copy supplied by the entry point. */
     private static AutoTunerResult tuneCaptured(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
-            AutoTuneProfile profile, TransientEngineProgressListener listener, Options options) {
+            AutoTuneProfile profile, TransientEngineProgressListener listener, Options options, WorkerPool workers) {
         AutoTunerResult result = new AutoTunerResult();
         result.optimizedConfig = baseConfig;
-        Calibration calibration = calibrateCaptured(poolFrames, baseConfig, listener, options);
+        Calibration calibration = calibrateCaptured(poolFrames, baseConfig, listener, options, workers);
         result.calibration = calibration;
         StringBuilder report = new StringBuilder("=== JTransient Calibrated Auto-Tuning Report ===\n");
         report.append("Profile: ").append(profile.displayName()).append("\n");
@@ -847,32 +783,26 @@ public final class CalibratedAutoTuner {
     }
 
 
-    /** Measures and selects all profiles with an immutable policy and detached settings, inheriting cancellation. */
+    /**
+     * Measures and selects all profiles with an immutable policy and detached settings on its own worker threads;
+     * cancellation comes from the caller's {@link CancellationScope}.
+     */
     public static Calibration calibrate(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
                                         Options options, TransientEngineProgressListener listener) {
         CancellationScope.check();
         java.util.Objects.requireNonNull(options, "options");
-        try (ExecutionSession execution = ExecutionSession.owned(options.executionPolicy)) {
-            return calibrate(poolFrames, baseConfig, options, execution, listener);
-        }
-    }
-
-    /** Measures with borrowed workers and session limits; returns only after all batches stop, without closing the session. */
-    public static Calibration calibrate(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
-                                        Options options, ExecutionSession execution, TransientEngineProgressListener listener) {
-        CancellationScope.check();
-        java.util.Objects.requireNonNull(options, "options");
-        try (ExecutionSession.Scope scope = execution.open();
+        try (WorkerPool workers = WorkerPool.forAvailableProcessors();
+             WorkerPool.Scope workerScope = workers.open();
              DiagnosticContext.Scope diagnosticScope = DiagnosticContext.openDefaults()) {
             return OperationContext.execute(StageId.CALIBRATION, () -> calibrateCaptured(poolFrames,
                     OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION)), listener,
-                    options.withExecutionPolicy(execution.policy())));
+                    options, workers));
         }
     }
 
-    /** Performs calibration against captured settings and joins every batch on the active owned or borrowed session. */
+    /** Performs calibration against captured settings and joins every batch on the operation's workers. */
     private static Calibration calibrateCaptured(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
-                                                 TransientEngineProgressListener listener, Options options) {
+                                                 TransientEngineProgressListener listener, Options options, WorkerPool workers) {
         CancellationScope.check();
         long start = System.currentTimeMillis();
         Calibration calibration = new Calibration();
@@ -882,8 +812,6 @@ public final class CalibratedAutoTuner {
             return calibration;
         }
         OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkFrames(poolFrames));
-        ExecutionSession execution = ExecutionSession.current();
-        ExecutorService executor = execution.executor();
         try {
             List<ImageFrame> pool = new ArrayList<>();
             for (ImageFrame f : poolFrames) {
@@ -928,7 +856,7 @@ public final class CalibratedAutoTuner {
                 }
             }
             int cropSize = crops.get(0)[2];
-            execution.configureForWork(Math.max(pool.size(), crops.size()), (long) cropSize * cropSize * 3);
+            workers.limitWork(Math.max(pool.size(), crops.size()), (long) cropSize * cropSize * 3);
             // On small frames the crops overlap; every pixel is counted in one crop only. Objects are found up to
             // DataArea.MARGIN px from a crop's edge, so the rates are per searchable pixel.
             BitSet[] owned = cropOwnership(crops, cropSize);
@@ -1046,10 +974,10 @@ public final class CalibratedAutoTuner {
                 BitSet starMask = masks[deepestMask][cf.crop];
                 streakTasks.add(() -> streakCorridor(cf.positive, starMask, nearStarRadius, baseConfig));
             }
-            List<Future<BitSet>> corridors = CancellableTasks.invokeAll(executor, streakTasks);
+            List<BitSet> corridors = WorkerPool.invokeAll(streakTasks);
             for (int i = 0; i < cropFrames.size(); i++) {
                 CancellationScope.check();
-                cropFrames.get(i).streakCorridor = corridors.get(i).get();
+                cropFrames.get(i).streakCorridor = corridors.get(i);
             }
 
             double measuredMpixFrames = 0;
@@ -1068,7 +996,7 @@ public final class CalibratedAutoTuner {
                 FrameSetting fs = frameSettings.get(s);
                 progress(listener, 20 + (int) (75.0 * s / frameSettings.size()),
                         String.format(Locale.US, "Measuring sigma %.2f, grow %.2f, minPix %d", fs.sigma, fs.grow, fs.minPixels));
-                List<Detection[][]> detections = extractAll(cropFrames, fs, baseConfig, executor, cropSize);
+                List<Detection[][]> detections = extractAll(cropFrames, fs, baseConfig, cropSize);
 
                 // Settings that already drown in noise before any veto can never meet a budget; skip the costly
                 // per-mask evaluation for them (noisy data at low thresholds produces huge detection counts).
@@ -1119,8 +1047,8 @@ public final class CalibratedAutoTuner {
                         return out;
                     });
                 }
-                for (Future<List<Candidate>> f : CancellableTasks.invokeAll(executor, masterTasks)) {
-                    calibration.candidates.addAll(f.get());
+                for (List<Candidate> candidates : WorkerPool.invokeAll(masterTasks)) {
+                    calibration.candidates.addAll(candidates);
                 }
             }
 
@@ -1432,7 +1360,7 @@ public final class CalibratedAutoTuner {
     }
 
     private static List<Detection[][]> extractAll(List<CropFrame> cropFrames, FrameSetting fs, DetectionConfig base,
-                                                  ExecutorService executor, int width) throws Exception {
+                                                  int width) throws Exception {
         DetectionConfig cfg = base.clone();
         cfg.detectionSigmaMultiplier = fs.sigma;
         cfg.growSigmaMultiplier = fs.grow;
@@ -1445,12 +1373,7 @@ public final class CalibratedAutoTuner {
                     extract(cf.negative, fs, cfg, width),
                     extract(cf.injected, fs, cfg, width)}));
         }
-        List<Detection[][]> out = new ArrayList<>();
-        for (Future<Detection[][]> f : CancellableTasks.invokeAll(executor, tasks)) {
-            CancellationScope.check();
-            out.add(f.get());
-        }
-        return out;
+        return WorkerPool.invokeAll(tasks);
     }
 
     private static Detection[] extract(short[][] image, FrameSetting fs, DetectionConfig cfg, int width) {

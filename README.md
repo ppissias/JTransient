@@ -17,7 +17,7 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 - `SourceExtractor.extractSources(...)`: standalone single-frame object extraction
 - `DetectionConfigRules`: shared, operation-scoped validation/metadata and explicit copy-based alignment; engine operations capture settings before processing
 - `CalibratedAutoTuner.tune(...)`: detached tuning results, including unsuccessful fallback configs
-- `OperationOutcome` and engine/tuner `...Outcome(...)` entry points: additive completed/failed/cancelled results with stable stage/original-frame failure context, without changing legacy exception objects or scientific readiness/fallback behavior
+- `OperationFailedException`: engine and tuner failures name the stage and the original frame where they happened; cancellation stays a `CancellationException`
 
 ## Documentation
 
@@ -84,10 +84,10 @@ This reduces concurrent allocation pressure; it does not guarantee that a large 
 memory. Reuse an engine sequentially, not for concurrent pipeline calls, and call `shutdown()`
 when finished, or use it in try-with-resources (`JTransientEngine` implements `AutoCloseable`).
 
-Operations support cooperative cancellation through a `CancellationToken` or an enclosing `CancellationScope`.
+Operations support cooperative cancellation through an enclosing `CancellationScope`.
 Cancelled worker batches finish their cleanup before the operation throws `CancellationException`; calibrated tuning
 also propagates cancellation. See the [cancellation and worker-lifetime contract](PIPELINE.md#cancellation-and-worker-lifetime)
-for overloads, standalone operations, interruption and sequential engine reuse. Closing an engine during a run is rejected;
+for standalone operations, interruption and sequential engine reuse. Closing an engine during a run is rejected;
 cancel and await the run first.
 
 The following examples are written as standalone skeletons. Any `load...()` helper

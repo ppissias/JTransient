@@ -38,34 +38,29 @@ SpacePixels captures `spacepixels.debug` through `DebugOutput.openEngineDiagnost
 
 Runtime diagnostic sinks are transient and excluded from serialized option provenance. Captured policy JSON is not a factory for restoring a live operation or callback; construct new validated options/builders for execution.
 
-The cancellation types live in `io.github.ppissias.jtransient.execution`. An operation can take a thread-safe `CancellationToken` through the final parameter of `runPipeline(..., providedMasterStack, cancellation)`, `detectTransients(..., providedMasterStack, cancellation)`, `generateMasterStackWithDetails(..., cancellation)` or either tuner's profile-based `tune(..., cancellation)` overload. Existing signatures remain available and inherit an enclosing cancellation scope, or use no requested cancellation when there is none.
+The cancellation types live in `io.github.ppissias.jtransient.execution`. To make an engine, tuner or standalone call cancellable, run it inside a cancellation scope on the calling thread:
 
 ```java
 AtomicBoolean cancelled = new AtomicBoolean();
-try (JTransientEngine engine = new JTransientEngine()) {
-    PipelineResult result = engine.runPipeline(frames, config, listener, null, cancelled::get);
+try (JTransientEngine engine = new JTransientEngine();
+     CancellationScope scope = CancellationScope.open(cancelled::get)) {
+    PipelineResult result = engine.runPipeline(frames, config, listener);
 }
 ```
 
-Another thread can set the flag. For standalone extraction, tracking, stacking or a sequence of library calls, wrap the operation in `try (CancellationScope scope = CancellationScope.open(cancelled::get)) { ... }`. Scopes belong to their opening thread, restore the previous token when closed, and are propagated explicitly into JTransient's worker batches. They do not change another operation's cancellation.
+Another thread can set the flag. Scopes belong to their opening thread, restore the previous token when closed, and are carried into JTransient's worker batches. They do not change another operation's cancellation. Without a scope, an operation cannot be cancelled.
 
 Cancellation throws `java.util.concurrent.CancellationException` and discards the partial scientific result. Extraction and image scans check between rows or bounded groups of pixels; tracking, tuning and photometry check their work loops. Waiting batches also poll cancellation. Interruption is treated as cancellation and the interrupt status is preserved. A blocking caller-supplied listener or an individual uninterruptible operation can still delay return; cancellation is cooperative, not a hard real-time guarantee.
 
 When cancellation or a worker/listener failure occurs, a batch stops queued work, requests that running siblings stop, and waits for their task bodies and cleanup to end before returning. Worker exceptions retain their original cause. Calibrated tuning propagates cancellation instead of translating it to unsuccessful calibration. Other calibration failures still return the existing unsuccessful result, with the original exception available as `Calibration.failureCause`; this runtime-only field is excluded from saved JSON. Insufficient evidence keeps its ordinary unsuccessful-calibration outcome.
 
-An engine admits one operation at a time. An overlapping operation, or `shutdown()`/`close()` during an active operation, throws `IllegalStateException`. Request cancellation and wait for the operation to return before closing it. The engine may be reused sequentially after cancellation or ordinary failure. Closing an idle engine waits for its owned worker pool to terminate and preserves interruption. Default tuner sessions likewise join owned workers; explicitly borrowed sessions remain caller-owned. A reported percentage, including 100%, is progress rather than a terminal outcome.
+An engine admits one operation at a time. An overlapping operation, or `shutdown()`/`close()` during an active operation, throws `IllegalStateException`. Request cancellation and wait for the operation to return before closing it. The engine may be reused sequentially after cancellation or ordinary failure. Closing an idle engine waits for its worker threads to end and preserves interruption. Each tuner call starts and stops its own workers. A reported percentage, including 100%, is progress rather than a terminal outcome.
 
-## Execution policy and resource ownership (1.0.6)
+## Worker threads (1.0.6)
 
-`ExecutionPolicy` specifies a worker ceiling and explicit scratch-estimation assumptions. Defaults retain 16 extra bytes per work-image pixel plus 1 MiB per worker, capped by the smaller of one-quarter maximum heap and half currently unused heap. It always allows at least one worker. This is neither a reservation nor a guarantee against exhausted heap; input/output buffers, retained crop/mask populations and unrelated JVM allocations are outside the estimate.
+Each engine owns a pool of worker threads, one per available processor; each tuner call has its own. An operation's batches (frame extraction and quality, stack rows, calibration crops and photometry frames) use at most the smaller of the pool size, the number of work items and a scratch-memory estimate: 16 bytes per image pixel plus 1 MiB per worker, within a quarter of the maximum heap and half of the heap now free. The estimate is not a reservation; input and output buffers, retained crop/mask populations and unrelated JVM allocations are outside it. Results keep the task order. A batch started on a worker runs inline on that worker, so nested batches never wait for a full pool. Called outside an engine or tuner operation, a standalone stage such as `MasterMapGenerator.createMedianMasterStack` or `VariableStarAnalyzer.analyze` runs its batch on the calling thread.
 
-`new JTransientEngine()` retains owned/reusable workers. `new JTransientEngine(policy)` selects explicit limits; `new JTransientEngine(policy, borrowedExecutor)` borrows a caller-owned pool. `new JTransientEngine(session)` borrows a reusable shared `ExecutionSession`. Engine close only closes owned sessions, and session close only shuts down/joins owned executors. Active close is rejected, not an implicit cancellation request. Borrowed pools/sessions must outlive every borrowing operation. Do not invoke public orchestration from a task already occupying the same borrowed executor; marked nested scientific batches execute inline, and independent marked re-entry on that same backing pool is rejected.
-
-Extraction, stack rows, calibrated measurement and photometry all route cancellation-aware batches through the active session. Submission is bounded by the operation's configured CPU/scratch limit; returned futures preserve input-task order. Nested batches on its managed workers run inline instead of submitting and waiting for the same bounded pool. Without a session, standalone stage calls retain their existing executor behavior, including common-pool stack rows. Standalone callers can opt into a session with `try (var scope = session.open())` and `session.configureForWork(workCount, pixelsPerWork)` before invoking stages; scopes are thread-confined and close in reverse order.
-
-The tuner's options include `executionPolicy` for its default owned session. Explicit-options overloads can instead borrow a session: `tune(frames, config, options, session, profile, listener)` and calibrated `calibrate(frames, config, options, session, listener)`. These inherit cancellation and never close the borrowed session. Effective result options record the borrowed session's actual policy. Scratch admission counts three crop images per work item; its retained preparations are outside that heuristic.
-
-Each engine admits one active operation; this does not limit all engines or tuners in the JVM. Explicitly sharing a bounded executor provides an aggregate execution ceiling, but individual sessions' heap estimates are not additive reservations. Applications still own admission control and dataset retention.
+`WorkerPool` and `OperationContext` are library-internal; they are public only so the library's own packages can share them. Each engine admits one active operation; this does not limit other engines or tuners in the JVM. Applications own admission control and dataset retention.
 
 ## Structured operation outcomes (1.0.6)
 
@@ -73,7 +68,7 @@ The canonical engine and tuner methods return scientific results or throw `Opera
 
 Cooperative cancellation/interruption remains `CancellationException`, after workers join; fatal errors propagate. Invalid consumed configuration is a structured `INPUT_VALIDATION` failure retaining the original rule issues in its cause. Engine admission/closed-instance errors and malformed option-builder arguments remain direct API-usage errors. Insufficient tuning evidence is a normal unsuccessful result with detached fallback settings, not an execution failure. Calibrated runtime failures throw instead of being hidden in a `failureCause` field.
 
-`OperationContext.execute` supplies that throwing boundary. Stage/frame scopes label work; managed workers propagate and restore context. Generic `OperationContext.capture(stage, callable)` remains available for callers preferring `Completed`, `Failed` or `Cancelled` values, including around ordinary methods, without duplicate `runPipelineOutcome`/`tuneOutcome` wrappers. Nested capture recognizes an already structured exception and retains its original metadata/cause rather than relabeling it. Outcome capture does not copy inputs or replace scientific readiness.
+`OperationContext.execute` supplies that throwing boundary. Stage/frame scopes label work, and the worker pool carries them into its threads. A nested operation recognizes an already structured exception and keeps its original metadata and cause rather than relabeling it.
 
 Progress callbacks remain synchronous and may fail even at 100%; progress is not a terminal success signal. Typed stage progress/outcome details remain JA-09.
 

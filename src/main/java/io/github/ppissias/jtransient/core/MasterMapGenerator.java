@@ -15,13 +15,12 @@ import io.github.ppissias.jtransient.engine.ImageFrame;
 
 import java.util.Arrays;
 import java.util.List;
-import io.github.ppissias.jtransient.execution.CancellableTasks;
+import io.github.ppissias.jtransient.execution.WorkerPool;
 import io.github.ppissias.jtransient.execution.CancellationScope;
 
 import java.util.ArrayList;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ForkJoinPool;
 import java.util.function.IntConsumer;
 
 /**
@@ -112,13 +111,6 @@ public class MasterMapGenerator {
 
     private static void forEachRow(int height, IntConsumer operation) {
         CancellationScope.check();
-        if (java.util.concurrent.ForkJoinTask.inForkJoinPool()) {
-            for (int row = 0; row < height; row++) {
-                CancellationScope.check();
-                operation.accept(row);
-            }
-            return;
-        }
         int rowsPerTask = Math.max(1, (height + Runtime.getRuntime().availableProcessors() - 1)
                 / Runtime.getRuntime().availableProcessors());
         List<Callable<Void>> tasks = new ArrayList<>();
@@ -134,7 +126,7 @@ public class MasterMapGenerator {
             });
         }
         try {
-            CancellableTasks.invokeAll(ForkJoinPool.commonPool(), tasks);
+            WorkerPool.invokeAll(tasks);
         } catch (ExecutionException failure) {
             throw new IllegalStateException("Master-stack row processing failed.", failure.getCause());
         }

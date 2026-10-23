@@ -29,7 +29,7 @@ public class PhotometryInputSnapshotTest {
         snapshot.frames.getFirst().pixelData[0][0] = 123;
         assertEquals(123, snapshot.frames.getFirst().pixelData[0][0]);
         assertThrows(UnsupportedOperationException.class, () -> snapshot.frames.clear());
-        VariableStarAnalysis result = VariableStarAnalyzer.analyze(snapshot, new DetectionConfig(), null);
+        VariableStarAnalysis result = VariableStarAnalyzer.analyze(snapshot, new DetectionConfig());
         assertEquals(List.of(10, 90), result.frames.stream().map(stat -> stat.frameIndex).toList());
         assertEquals(PhotometricReadiness.Verdict.NOT_READY, result.readiness.verdict);
     }
@@ -76,9 +76,9 @@ public class PhotometryInputSnapshotTest {
         assertNull(input.snapshot().frameDetections);
         input.frameMetrics = null;
         assertThrows(IllegalArgumentException.class,
-                () -> VariableStarAnalyzer.analyze(input, new DetectionConfig(), null));
+                () -> VariableStarAnalyzer.analyze(input, new DetectionConfig()));
         assertThrows(IllegalArgumentException.class,
-                () -> VariableStarAnalyzer.analyze(null, new DetectionConfig(), null));
+                () -> VariableStarAnalyzer.analyze(null, new DetectionConfig()));
     }
 
     /** Creates two aligned non-contiguous frames, one with no detections, using tiny caller-owned pixels. */

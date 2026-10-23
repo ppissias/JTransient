@@ -23,7 +23,7 @@ The graph is only partly layered: orchestration calls science services, while sh
 
 `core` contains extraction, image geometry, stacks, tracking, slow movers and residual analysis. Its classes often have useful responsibilities, but the package does not express those boundaries. Conversely, `photometry` already gives its helpers a coherent home and uses package-private implementation classes. Keep that pattern. `PipelineTelemetry` has no imports of the science packages today, but placing their frame records inside it makes those packages depend on a pipeline-level container; moving diagnostics must reverse that ownership carefully.
 
-There are also dependencies hidden by today's shared package: `TrackLinker` calls the streak-shape predicate on `SourceExtractor`, and deprecated `CommonMotionRejector.apply` recomputes residual analysis. The blueprint assigns the shape predicate to tracking with shared footprint geometry below it; the deprecated cross-stage operation remains a compatibility adapter. These are specific dependency changes to verify, not imports to rename mechanically.
+There are also dependencies hidden by today's shared package: `TrackLinker` calls the streak-shape predicate on `SourceExtractor`. The blueprint assigns the shape predicate to tracking with shared footprint geometry below it. These are specific dependency changes to verify, not imports to rename mechanically.
 
 ### Target package layout and allowed dependencies
 
@@ -33,7 +33,7 @@ All names are beneath `io.github.ppissias.jtransient`. The dependencies column n
 |---|---|---|
 | `model` | Shared frame/detection/track contracts: top-level `ImageFrame`, `DetectedObject`, `Pixel`, `Track`, `AnomalyDetection` and `AnomalyType`. Only data used across stages belongs here. | None. |
 | `config` | Existing `DetectionConfig` schema, shared `DetectionConfigRules`, field/range metadata, validation issues, alignment results and captured settings. | None; preserve the existing Gson annotation dependency. |
-| `execution` | `ExecutionPolicy`, `OperationContext`, cancellation/progress/diagnostic contracts, stage identity/outcomes and `ExecutionSession` for owned or borrowed resources. | None. |
+| `execution` | Cancellation scopes, diagnostic options, stage identity and structured failures, plus the library-internal `WorkerPool` and `OperationContext`. | None. |
 | `image` | Pixel encoding, coverage, registration, data areas, drift analysis, shared spatial lookup, `BlobGeometry`/`FootprintGeometry` and `FrameSequenceValidator`. `SkyBackground` remains an image transformation here. | `model`, `execution` (optional operation control for computations). |
 | `extraction` | Standalone `SourceExtractor`, extraction/background results and private component-growth/morphology helpers when needed. | `model`, `image`, `config`, `execution`. |
 | `quality` | `FrameQualityAnalyzer`, `SessionEvaluator`, top-level `FrameMetrics` and `SessionThresholds`; quality measurements and rejection decisions. | `model`, `image`, `config`, `execution`, `extraction`. |
@@ -54,7 +54,7 @@ The dependency rules have practical consequences:
 - Quality and reference construction use extraction independently. Neither calls the full engine, and neither depends on the other to perform QC orchestration. The engine selects frames, then requests references from that selection.
 - Tracking consumes extracted observations and a reference mask; it does not run extraction, slow movers or photometry. Put mask construction/overlap mechanics in `reference` when genuinely shared; preserve the distinct masks' scientific semantics.
 - Camera-fixed filtering stays inside tracking before point association. Common-motion filtering stays a separately invoked tracking operation after tracking and before residual analysis. The engine owns this order. Moving a class into `tracking` does not move its execution earlier.
-- The canonical common-motion rejector does not recompute residual analysis. Keep deprecated `CommonMotionRejector.apply` at the legacy boundary with its existing behavior, routing its two operations through the appropriate public component facades.
+- The common-motion rejector does not recompute residual analysis; its deprecated `apply` adapter was removed under JA-12.
 - Photometry receives canonical tracks and slow-mover detection footprints as data. It does not call either detector or depend on their implementation classes. Its own star extraction, selection and mask retain their current purpose.
 - Tuning calls lower-level image/extraction/quality/reference components, never `JTransientEngine.runPipeline`. Preserve its separate sample/measurement policies. Neither scientific stages nor shared profile validation depend on tuning.
 - Each stage owns its diagnostic types. `telemetry` aggregates them; it does not supply the types a stage must instantiate. Stages receive a narrow execution context instead of importing `PipelineTelemetry` or reading engine statics.
@@ -90,7 +90,7 @@ Use package-private top-level helpers and private nested temporary types by defa
 
 New shared `DetectedObject`, `Track` and related models are top-level contracts, independent of their producer. Publish stable membership views when compatible, and keep mutable builders inside the owner package. Preserve object identity and shared buffers explicitly. Do not implement value equality during migration or equate unmodifiable containers with immutable elements. Each reusable component should have explicit inputs and outputs, without global settings, implicit engine callbacks or application-specific state.
 
-Do not expose the executor field, the whole mutable `PipelineTelemetry`, Swing components, file paths for app workflows or every field of `PreparedSequence` merely to connect components. In the current implementation, `OperationContext` labels stage/frame failures, `DiagnosticContext` routes debug text, and `CancellationScope` carries cancellation. `ExecutionSession` exposes worker/resource policy and ownership without transferring executor shutdown rights to a stage. Keep these roles explicit rather than describing the existing `OperationContext` as a general bag for all concerns. Neither is a service locator for arbitrary pipeline products. Add interfaces for real substitution boundaries, such as cancellation/progress sinks or a controllable scheduler, while retaining concrete stateless analyzers elsewhere.
+Do not expose the executor field, the whole mutable `PipelineTelemetry`, Swing components, file paths for app workflows or every field of `PreparedSequence` merely to connect components. In the current implementation, `OperationContext` labels stage/frame failures, `DiagnosticContext` routes debug text, and `CancellationScope` carries cancellation. `WorkerPool` runs batches on the operation's own workers without giving a stage the right to shut them down. Keep these roles explicit rather than describing the existing `OperationContext` as a general bag for all concerns. Neither is a service locator for arbitrary pipeline products. Add interfaces for real substitution boundaries, such as cancellation/progress sinks or a controllable scheduler, while retaining concrete stateless analyzers elsewhere.
 
 ### Coordinated API and package migration
 
@@ -113,9 +113,9 @@ Paths below are relative to `src/main/java/io/github/ppissias/jtransient/`. This
 
 | Current files | Canonical destination and action | Findings |
 |---|---|---|
-| `execution/ExecutionPolicy`, `ExecutionSession`, `CancellableTasks`, `CancellationScope` | Current bounded execution, cancellation propagation and resource ownership; keep below orchestration. | JA-02/03 |
+| `execution/WorkerPool`, `CancellationScope` | Current bounded execution, cancellation propagation and worker ownership (one pool per engine or tuner call); keep below orchestration. | JA-02/03/12 |
 | `execution/DiagnosticOptions`, `DiagnosticContext` | Current immutable per-run diagnostic routing, inherited by managed workers; no facade globals. | JA-04 |
-| `execution/OperationContext`, `OperationFailure`, `OperationFailedException`, `OperationOutcome` | Current stage/frame-aware throwing boundary plus generic capture; no duplicate engine API families. | JA-03/09 |
+| `execution/OperationContext`, `OperationFailure`, `OperationFailedException` | Current stage/frame-aware throwing boundary; no duplicate engine API families. | JA-03/09/12 |
 | `engine/PreparedFrame`, `ExtractedFramesContext` | Current internal associated preparation products, including empty slots and original identities; pixels remain borrowed. | JA-05 |
 | `config/DetectionConfig` | Keep in `config`; add shared rules/metadata and captured settings without changing profile fields. | JA-01 |
 | `engine/JTransientEngine` | Keep in `engine`; extract private runner, preparation and result builder; delegate resource policy to `execution`. | JA-01/02/03/05/09 |
@@ -163,7 +163,7 @@ flowchart TD
 
 ### Delivery order
 
-First the remaining removals (JA-12), then JA-07, then JA-06, then JA-09's stage observer for SpacePixels F10 slice 2. Each slice migrates its SpacePixels callers in the same change. JA-11 checks the selected artifact combination at release; completed foundations are not queued again.
+First JA-07, then JA-06, then JA-09's stage observer for SpacePixels F10 slice 2. Each slice migrates its SpacePixels callers in the same change. JA-11 checks the selected artifact combination at release; completed foundations are not queued again.
 
 ### Verification and coordination with SpacePixels
 
@@ -183,7 +183,6 @@ Do not combine these changes with new detection gates, altered association order
 | JA-07 | Top-level detection/track models and a `PipelineResult` builder | Accepted (narrowed) |
 | JA-09 | Typed stage progress/outcomes and callback guarantees | In progress |
 | JA-11 | Final selected-release repository/artifact validation | In progress |
-| JA-12 | Reduce the execution layer to what SpacePixels uses | Accepted |
 
 **Post-implementation review and decisions (2026-10-23).** The maintainer decided:
 
@@ -258,22 +257,6 @@ Keep numerical diagnostics in structured results; text formatting should consume
 
 **Acceptance:** the exact released application/engine/solver combination passes the [selected-artifact workflow](../SpacePixels/docs/release-artifacts.md) against the intended repository. Do not publish unused historical coordinates merely to satisfy an old matrix.
 
-### JA-12. Remove unused execution surface and deprecated adapters
-
-**Status: proposed 2026-10-23 (post-implementation review).** Under the coordinated policy, public API without a consumer is cost without value. A check of both repositories on 2026-10-23 found:
-
-| Code | Callers today | Proposal |
-|---|---|---|
-| `OperationOutcome` and public `OperationContext.capture` | Only `OperationContext.execute`; no engine method returns an outcome, and SpacePixels does not use it | Make `capture` private or fold it into `execute`, and drop the public type, unless JA-09 adopts it for terminal stage outcomes. |
-| `JTransientEngine(ExecutionPolicy, ExecutorService)`, `JTransientEngine(ExecutionSession)` and `ExecutionSession.borrowed` | Tests only; SpacePixels calls `new JTransientEngine()` three times | Remove them, together with the owned/borrowed split and the "same borrowed executor's worker" guard, until a caller needs a shared pool. |
-| `CommonMotionRejector.apply` (`@Deprecated`; recomputes residual analysis) | `CommonMotionRejectorTest` only | Remove. This also settles the text under "Current dependencies" and "Target package layout and allowed dependencies" that says to keep it. |
-
-**Noted, no change proposed.** Four scopes are bound to a thread: `CancellationScope`, `OperationContext`, `DiagnosticContext` and the `ExecutionSession` context. `CancellableTasks` and `ExecutionSession` capture and restore each of them separately on every worker. They work and are tested. One per-operation context, propagated once, would be simpler, but that is not worth a change on its own. Do it only if execution is reworked anyway, and do not add a fifth scope: JA-09's observer is passed explicitly.
-
-**Acceptance.** JTransient `test`, `apiConsumer` and `verifyArchitecture` pass, and SpacePixels compiles and passes its tests against the composite build. No science code changes, so no reference-data run is needed.
-
-Decision: I do not want to have over complicated concepts that we do not use in SpacePixels. So please simplify the approach to cover , with a good design the existing needs of SpacePixels. 
-
 ## Deferred and experimental findings
 
 These are not an implementation authorization. Keep the existing algorithms until the stated evidence/decision is available. Proposed experiments must measure recovery, false positives and runtime before adoption.
@@ -326,7 +309,7 @@ Statuses describe the current decision, not a new priority. Partial items retain
 | JA-09 | Typed stage progress/outcomes | In progress |
 | JA-10 | Reusable reference provenance | Closed 2026-10-23: one consumer, no cache; reopen if a need appears |
 | JA-11 | Selected release artifact verification | In progress |
-| JA-12 | Unused execution surface and deprecated adapters | Accepted |
+| JA-12 | Unused execution surface and deprecated adapters | Implemented 2026-10-23: one worker pool per engine, unused execution API removed |
 | IN-1 | Isolated settings for manual inspection | Implemented |
 | IN-2 | Consistent engine/tuner input and timestamp rules | Implemented |
 | IN-3 | Tracking with fewer than three retained frames | Declined |

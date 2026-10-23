@@ -1,7 +1,6 @@
 package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
-import io.github.ppissias.jtransient.execution.CancellationToken;
 import io.github.ppissias.jtransient.core.MasterVetoMask;
 import io.github.ppissias.jtransient.core.PixelEncoding;
 import io.github.ppissias.jtransient.core.SourceExtractor;
@@ -38,9 +37,9 @@ public class MasterStackConsistencyTest {
         try (JTransientEngine engine = new JTransientEngine()) {
             List<Integer> originalOrder = frames.stream().map(frame -> frame.sequenceIndex).toList();
             List<ImageFrame> immutableInput = List.copyOf(frames);
-            PipelineResult pipeline = engine.runPipeline(immutableInput, config, null, null, CancellationToken.NONE);
-            JTransientEngine.MasterStackResult standalone = engine.generateMasterStackWithDetails(immutableInput, config, null, CancellationToken.NONE);
-            List<FrameTransients> transients = engine.detectTransients(immutableInput, config, null, null, CancellationToken.NONE);
+            PipelineResult pipeline = engine.runPipeline(immutableInput, config, null, null);
+            JTransientEngine.MasterStackResult standalone = engine.generateMasterStackWithDetails(immutableInput, config, null);
+            List<FrameTransients> transients = engine.detectTransients(immutableInput, config, null, null);
             assertEquals(originalOrder, immutableInput.stream().map(frame -> frame.sequenceIndex).toList());
             assertEquals(originalOrder, frames.stream().map(frame -> frame.sequenceIndex).toList());
             List<Integer> expected = List.of(10, 20, 30, 40, 50, 60);

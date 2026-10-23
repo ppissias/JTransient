@@ -43,21 +43,6 @@ public class CommonMotionRejectorTest {
     }
 
     @Test
-    public void compatibilityCallDoesNotExportRescuesTwiceAndRemovesTheirPoints() {
-        var a=path(100,100,new double[]{0,4,1},new double[]{0,0,0});
-        var b=path(800,600,new double[]{0,4,1},new double[]{0,0,0});
-        var residual=new ResidualTransientAnalysis(List.of(rescue(a),rescue(b)),List.of());
-        var frames=frames(a,b);
-        var result=CommonMotionRejector.apply(residual,frames,new DetectionConfig());
-        assertEquals(1,result.commonMotionGroups.size());
-        assertTrue(result.localRescueCandidates.isEmpty());
-        assertTrue(flat(frames).isEmpty());
-        var observations=Collections.newSetFromMap(new IdentityHashMap<SourceExtractor.DetectedObject,Boolean>());
-        for(var group:result.commonMotionGroups)for(var source:group.sources)for(var point:source)assertTrue(observations.add(point));
-        assertSame(result,CommonMotionRejector.apply(result,frames,new DetectionConfig()));
-    }
-
-    @Test
     public void commonMotionIsIndependentOfTheResidualAnalysisSwitch() {
         var config=new DetectionConfig();config.enableResidualTransientAnalysis=false;
         var frames=frames(path(100,100,new double[]{0,4,8},new double[]{0,0,0}),
@@ -137,10 +122,6 @@ public class CommonMotionRejectorTest {
     }
     private static List<SourceExtractor.DetectedObject> flat(List<List<SourceExtractor.DetectedObject>> frames) {
         return frames.stream().flatMap(List::stream).toList();
-    }
-    private static ResidualTransientAnalysis.LocalRescueCandidate rescue(List<SourceExtractor.DetectedObject> points) {
-        return new ResidualTransientAnalysis.LocalRescueCandidate(ResidualTransientAnalysis.LocalRescueKind.MICRO_DRIFT,points,
-            new ResidualTransientAnalysis.LocalTransientMetrics(points.size(),points.size(),points.size(),0,1,1,1,0,1,1,1,1,1),1);
     }
     private static SourceExtractor.DetectedObject point(double x,double y,int frame) {
         var p=new SourceExtractor.DetectedObject(x,y,8,8);p.pixelArea=8;p.elongation=1.3;p.peakSigma=6;p.sourceFrameIndex=frame;return p;
