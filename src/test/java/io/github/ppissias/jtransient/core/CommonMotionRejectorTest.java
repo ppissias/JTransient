@@ -1,5 +1,6 @@
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import org.junit.Test;
 import java.util.*;
@@ -17,7 +18,7 @@ public class CommonMotionRejectorTest {
         assertEquals(1,groups.size());
         assertEquals(2,groups.get(0).sources.size());
         assertEquals(3,groups.get(0).sharedFrameCount);
-        var expected = new HashSet<SourceExtractor.DetectedObject>();
+        var expected = new HashSet<DetectedObject>();
         expected.addAll(different); expected.addAll(two);
         assertEquals(expected,new HashSet<>(flat(frames)));
     }
@@ -34,7 +35,7 @@ public class CommonMotionRejectorTest {
 
     @Test
     public void keepsAmbiguousConvergingSourcesInsteadOfReusingTheirObservations() {
-        var frames = new ArrayList<List<SourceExtractor.DetectedObject>>();
+        var frames = new ArrayList<List<DetectedObject>>();
         frames.add(new ArrayList<>(List.of(point(100,100,0),point(120,100,0),point(600,100,0),point(1120,100,0))));
         frames.add(new ArrayList<>(List.of(point(110,100,1),point(610,100,1),point(1110,100,1))));
         frames.add(new ArrayList<>(List.of(point(135,100,2),point(635,100,2),point(1135,100,2))));
@@ -56,7 +57,7 @@ public class CommonMotionRejectorTest {
 
     @Test
     public void buildsTheIndependentActivityClusterFromFilteredLeftovers() {
-        var frames=new ArrayList<List<SourceExtractor.DetectedObject>>();
+        var frames=new ArrayList<List<DetectedObject>>();
         frames.add(new ArrayList<>(List.of(point(100,100,0),point(800,600,0),point(110,105,0))));
         frames.add(new ArrayList<>(List.of(point(104,100,1),point(804,600,1),point(112,109,1))));
         frames.add(new ArrayList<>(List.of(point(108,100,2),point(808,600,2),point(110,113,2))));
@@ -103,27 +104,27 @@ public class CommonMotionRejectorTest {
         assertEquals(6,flat(frames).size());
     }
 
-    private static List<SourceExtractor.DetectedObject> path(double x,double y,double[] dx,double[] dy) {
-        var out=new ArrayList<SourceExtractor.DetectedObject>();
+    private static List<DetectedObject> path(double x,double y,double[] dx,double[] dy) {
+        var out=new ArrayList<DetectedObject>();
         for(int j=0;j<dx.length;j++)out.add(point(x+dx[j],y+dy[j],j));
         return out;
     }
-    private static List<SourceExtractor.DetectedObject> sparse(double x,int... indices) {
-        var out=new ArrayList<SourceExtractor.DetectedObject>();
+    private static List<DetectedObject> sparse(double x,int... indices) {
+        var out=new ArrayList<DetectedObject>();
         for(int frame:indices)out.add(point(x,100,frame));return out;
     }
     @SafeVarargs
-    private static List<List<SourceExtractor.DetectedObject>> frames(List<SourceExtractor.DetectedObject>... sources) {
+    private static List<List<DetectedObject>> frames(List<DetectedObject>... sources) {
         int count=Arrays.stream(sources).flatMap(List::stream).mapToInt(p->p.sourceFrameIndex).max().orElse(-1)+1;
-        var out=new ArrayList<List<SourceExtractor.DetectedObject>>();
+        var out=new ArrayList<List<DetectedObject>>();
         for(int j=0;j<count;j++)out.add(new ArrayList<>());
         for(var source:sources)for(var p:source)out.get(p.sourceFrameIndex).add(p);
         return out;
     }
-    private static List<SourceExtractor.DetectedObject> flat(List<List<SourceExtractor.DetectedObject>> frames) {
+    private static List<DetectedObject> flat(List<List<DetectedObject>> frames) {
         return frames.stream().flatMap(List::stream).toList();
     }
-    private static SourceExtractor.DetectedObject point(double x,double y,int frame) {
-        var p=new SourceExtractor.DetectedObject(x,y,8,8);p.pixelArea=8;p.elongation=1.3;p.peakSigma=6;p.sourceFrameIndex=frame;return p;
+    private static DetectedObject point(double x,double y,int frame) {
+        var p=new DetectedObject(x,y,8,8);p.pixelArea=8;p.elongation=1.3;p.peakSigma=6;p.sourceFrameIndex=frame;return p;
     }
 }

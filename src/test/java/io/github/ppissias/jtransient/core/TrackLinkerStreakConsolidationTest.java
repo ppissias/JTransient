@@ -1,5 +1,9 @@
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.AnomalyDetection;
+import io.github.ppissias.jtransient.model.DetectedObject;
+import io.github.ppissias.jtransient.model.Pixel;
+import io.github.ppissias.jtransient.model.Track;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import org.junit.Test;
 
@@ -19,11 +23,11 @@ public class TrackLinkerStreakConsolidationTest {
     public void findMovingObjectsConsolidatesSameFrameSingleStreakIntoConfirmedTrack() {
         DetectionConfig config = new DetectionConfig();
 
-        SourceExtractor.DetectedObject start = createStreak(10.0, 10.0, 0, 0.0, 12.0, 0L);
-        SourceExtractor.DetectedObject end = createStreak(30.0, 10.0, 2, 0.0, 12.0, 240_000L);
-        SourceExtractor.DetectedObject sameFrameSingle = createStreak(25.0, 10.6, 2, Math.toRadians(3.5), 11.0, 240_000L);
+        DetectedObject start = createStreak(10.0, 10.0, 0, 0.0, 12.0, 0L);
+        DetectedObject end = createStreak(30.0, 10.0, 2, 0.0, 12.0, 240_000L);
+        DetectedObject sameFrameSingle = createStreak(25.0, 10.6, 2, Math.toRadians(3.5), 11.0, 240_000L);
 
-        List<List<SourceExtractor.DetectedObject>> frames = List.of(
+        List<List<DetectedObject>> frames = List.of(
                 List.of(start),
                 new ArrayList<>(),
                 List.of(end, sameFrameSingle)
@@ -41,7 +45,7 @@ public class TrackLinkerStreakConsolidationTest {
         assertEquals(1, result.tracks.size());
         assertEquals(1, result.telemetry.streakTracksFound);
 
-        TrackLinker.Track track = result.tracks.get(0);
+        Track track = result.tracks.get(0);
         assertTrue(track.isStreakTrack);
         assertEquals(3, track.points.size());
         assertTrue(track.points.contains(start));
@@ -53,14 +57,14 @@ public class TrackLinkerStreakConsolidationTest {
     public void findMovingObjectsAbsorbsSameFrameFragmentsOnTheStreakIntoTheTrack() {
         DetectionConfig config = new DetectionConfig();
 
-        SourceExtractor.DetectedObject start = createStreak(10.0, 10.0, 0, 0.0, 12.0, 0L);
-        SourceExtractor.DetectedObject end = createStreak(30.0, 10.0, 2, 0.0, 12.0, 240_000L);
+        DetectedObject start = createStreak(10.0, 10.0, 0, 0.0, 12.0, 0L);
+        DetectedObject end = createStreak(30.0, 10.0, 2, 0.0, 12.0, 240_000L);
 
-        SourceExtractor.DetectedObject anomaly1 = createIntegratedAnomaly(32.0, 10.1, 2, 240_000L);
-        SourceExtractor.DetectedObject anomaly2 = createIntegratedAnomaly(36.0, 10.0, 2, 240_000L);
-        SourceExtractor.DetectedObject anomaly3 = createIntegratedAnomaly(40.0, 10.2, 2, 240_000L);
+        DetectedObject anomaly1 = createIntegratedAnomaly(32.0, 10.1, 2, 240_000L);
+        DetectedObject anomaly2 = createIntegratedAnomaly(36.0, 10.0, 2, 240_000L);
+        DetectedObject anomaly3 = createIntegratedAnomaly(40.0, 10.2, 2, 240_000L);
 
-        List<List<SourceExtractor.DetectedObject>> frames = List.of(
+        List<List<DetectedObject>> frames = List.of(
                 List.of(start),
                 new ArrayList<>(),
                 List.of(end, anomaly1, anomaly2, anomaly3)
@@ -79,7 +83,7 @@ public class TrackLinkerStreakConsolidationTest {
         assertEquals(1, result.telemetry.streakTracksFound);
         assertTrue(result.anomalies.isEmpty());
 
-        TrackLinker.Track track = result.tracks.get(0);
+        Track track = result.tracks.get(0);
         assertTrue(track.isStreakTrack);
         assertEquals(5, track.points.size());
         assertTrue(track.points.contains(start));
@@ -93,11 +97,11 @@ public class TrackLinkerStreakConsolidationTest {
     public void findMovingObjectsRejectsBacktrackingStreakMergeEvenWhenGeometryMatches() {
         DetectionConfig config = new DetectionConfig();
 
-        SourceExtractor.DetectedObject start = createStreak(10.0, 10.0, 0, 0.0, 12.0, 0L);
-        SourceExtractor.DetectedObject backtrack = createStreak(5.0, 10.0, 1, 0.0, 12.0, 120_000L);
-        SourceExtractor.DetectedObject end = createStreak(30.0, 10.0, 2, 0.0, 12.0, 240_000L);
+        DetectedObject start = createStreak(10.0, 10.0, 0, 0.0, 12.0, 0L);
+        DetectedObject backtrack = createStreak(5.0, 10.0, 1, 0.0, 12.0, 120_000L);
+        DetectedObject end = createStreak(30.0, 10.0, 2, 0.0, 12.0, 240_000L);
 
-        List<List<SourceExtractor.DetectedObject>> frames = List.of(
+        List<List<DetectedObject>> frames = List.of(
                 List.of(start),
                 List.of(backtrack),
                 List.of(end)
@@ -122,11 +126,11 @@ public class TrackLinkerStreakConsolidationTest {
     public void findMovingObjectsRejectsStreakTrackWithLargeTimestampSpeedChange() {
         DetectionConfig config = new DetectionConfig();
 
-        SourceExtractor.DetectedObject frame0 = createStreak(0.0, 10.0, 0, 0.0, 12.0, 0L);
-        SourceExtractor.DetectedObject frame1 = createStreak(500.0, 10.0, 1, 0.0, 12.0, 120_000L);
-        SourceExtractor.DetectedObject frame20 = createStreak(1000.0, 10.0, 20, 0.0, 12.0, 2_400_000L);
+        DetectedObject frame0 = createStreak(0.0, 10.0, 0, 0.0, 12.0, 0L);
+        DetectedObject frame1 = createStreak(500.0, 10.0, 1, 0.0, 12.0, 120_000L);
+        DetectedObject frame20 = createStreak(1000.0, 10.0, 20, 0.0, 12.0, 2_400_000L);
 
-        List<List<SourceExtractor.DetectedObject>> frames = emptyFrameList(21);
+        List<List<DetectedObject>> frames = emptyFrameList(21);
         frames.get(0).add(frame0);
         frames.get(1).add(frame1);
         frames.get(20).add(frame20);
@@ -150,12 +154,12 @@ public class TrackLinkerStreakConsolidationTest {
     public void findMovingObjectsUsesOneTimeSamplePerFrameForMultiPartStreaks() {
         DetectionConfig config = new DetectionConfig();
 
-        SourceExtractor.DetectedObject frame0Part1 = createStreak(0.0, 10.0, 0, 0.0, 12.0, 0L);
-        SourceExtractor.DetectedObject frame0Part2 = createStreak(20.0, 10.0, 0, 0.0, 12.0, 0L);
-        SourceExtractor.DetectedObject frame1 = createStreak(100.0, 10.0, 1, 0.0, 12.0, 120_000L);
-        SourceExtractor.DetectedObject frame2 = createStreak(190.0, 10.0, 2, 0.0, 12.0, 240_000L);
+        DetectedObject frame0Part1 = createStreak(0.0, 10.0, 0, 0.0, 12.0, 0L);
+        DetectedObject frame0Part2 = createStreak(20.0, 10.0, 0, 0.0, 12.0, 0L);
+        DetectedObject frame1 = createStreak(100.0, 10.0, 1, 0.0, 12.0, 120_000L);
+        DetectedObject frame2 = createStreak(190.0, 10.0, 2, 0.0, 12.0, 240_000L);
 
-        List<List<SourceExtractor.DetectedObject>> frames = List.of(
+        List<List<DetectedObject>> frames = List.of(
                 List.of(frame0Part1, frame0Part2),
                 List.of(frame1),
                 List.of(frame2)
@@ -183,37 +187,37 @@ public class TrackLinkerStreakConsolidationTest {
     public void findMovingObjectsJoinsAnomalyGroupsToAStreakAndKeepsOtherGroupsAsAnomalies() {
         DetectionConfig config = new DetectionConfig();
 
-        SourceExtractor.DetectedObject start = createStreak(10.0, 10.0, 0, 0.0, 12.0, 0L);
-        SourceExtractor.DetectedObject end = createStreak(70.0, 10.0, 3, 0.0, 12.0, 360_000L);
-        List<SourceExtractor.DetectedObject> frame1Pieces = List.of(
+        DetectedObject start = createStreak(10.0, 10.0, 0, 0.0, 12.0, 0L);
+        DetectedObject end = createStreak(70.0, 10.0, 3, 0.0, 12.0, 360_000L);
+        List<DetectedObject> frame1Pieces = List.of(
                 createIntegratedAnomaly(22.0, 10.0, 1, 120_000L),
                 createIntegratedAnomaly(30.0, 10.1, 1, 120_000L),
                 createIntegratedAnomaly(38.0, 10.0, 1, 120_000L));
-        List<SourceExtractor.DetectedObject> frame2Pieces = List.of(
+        List<DetectedObject> frame2Pieces = List.of(
                 createIntegratedAnomaly(42.0, 10.1, 2, 240_000L),
                 createIntegratedAnomaly(50.0, 10.0, 2, 240_000L),
                 createIntegratedAnomaly(58.0, 10.1, 2, 240_000L));
-        List<SourceExtractor.DetectedObject> chanceLine = List.of(
+        List<DetectedObject> chanceLine = List.of(
                 createIntegratedAnomaly(20.0, 100.0, 1, 120_000L),
                 createIntegratedAnomaly(40.0, 120.0, 1, 120_000L),
                 createIntegratedAnomaly(60.0, 140.0, 1, 120_000L));
 
-        List<SourceExtractor.DetectedObject> frame1 = new ArrayList<>(frame1Pieces);
+        List<DetectedObject> frame1 = new ArrayList<>(frame1Pieces);
         frame1.addAll(chanceLine);
-        List<List<SourceExtractor.DetectedObject>> frames = List.of(
+        List<List<DetectedObject>> frames = List.of(
                 List.of(start), frame1, frame2Pieces, List.of(end));
 
         TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
                 frames, new ArrayList<>(), config, null, 160, 160);
 
         assertEquals(1, result.tracks.size());
-        TrackLinker.Track track = result.tracks.get(0);
+        Track track = result.tracks.get(0);
         assertTrue(track.isStreakTrack);
         assertEquals(8, track.points.size());
         assertTrue(track.points.containsAll(frame1Pieces));
         assertTrue(track.points.containsAll(frame2Pieces));
         assertEquals(3, result.anomalies.size());
-        for (TrackLinker.AnomalyDetection anomaly : result.anomalies) {
+        for (AnomalyDetection anomaly : result.anomalies) {
             assertTrue(chanceLine.contains(anomaly.object));
         }
     }
@@ -226,16 +230,16 @@ public class TrackLinkerStreakConsolidationTest {
     @Test
     public void findMovingObjectsDoesNotMergeAStreakThatBarelyMovesAlongTheAxis() {
         DetectionConfig config = new DetectionConfig();
-        SourceExtractor.DetectedObject left = createStreak(40.0, 40.0, 0, 0.0, 12.0, 0L);
-        SourceExtractor.DetectedObject right = createStreak(240.0, 40.0, 0, 0.0, 12.0, 0L);
-        SourceExtractor.DetectedObject unrelated = createStreak(140.1, 40.0, 1, 0.0, 12.0, 120_000L);
+        DetectedObject left = createStreak(40.0, 40.0, 0, 0.0, 12.0, 0L);
+        DetectedObject right = createStreak(240.0, 40.0, 0, 0.0, 12.0, 0L);
+        DetectedObject unrelated = createStreak(140.1, 40.0, 1, 0.0, 12.0, 120_000L);
 
-        List<List<SourceExtractor.DetectedObject>> frames = List.of(
+        List<List<DetectedObject>> frames = List.of(
                 List.of(left, right), List.of(unrelated), new ArrayList<>());
         TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
                 frames, new ArrayList<>(), config, null, 300, 100);
 
-        for (TrackLinker.Track track : result.tracks) {
+        for (Track track : result.tracks) {
             boolean hasFirstFrame = track.points.contains(left) || track.points.contains(right);
             assertFalse("the streak of frame 1 joined the fragments of frame 0",
                     hasFirstFrame && track.points.contains(unrelated));
@@ -249,16 +253,16 @@ public class TrackLinkerStreakConsolidationTest {
     @Test
     public void findMovingObjectsDoesNotLinkAStreakThatDoesNotMove() {
         DetectionConfig config = new DetectionConfig();
-        SourceExtractor.DetectedObject first = createStreak(40.0, 40.0, 0, 0.0, 12.0, 0L);
-        SourceExtractor.DetectedObject second = createStreak(40.0, 40.0, 1, 0.0, 12.0, 120_000L);
-        SourceExtractor.DetectedObject third = createStreak(40.0, 40.0, 2, 0.0, 12.0, 240_000L);
+        DetectedObject first = createStreak(40.0, 40.0, 0, 0.0, 12.0, 0L);
+        DetectedObject second = createStreak(40.0, 40.0, 1, 0.0, 12.0, 120_000L);
+        DetectedObject third = createStreak(40.0, 40.0, 2, 0.0, 12.0, 240_000L);
 
-        List<List<SourceExtractor.DetectedObject>> frames = List.of(List.of(first), List.of(second), List.of(third));
+        List<List<DetectedObject>> frames = List.of(List.of(first), List.of(second), List.of(third));
         TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
                 frames, new ArrayList<>(), config, null, 100, 100);
 
         int reported = 0;
-        for (TrackLinker.Track track : result.tracks) {
+        for (Track track : result.tracks) {
             assertTrue("a multi-frame track was formed from a stationary mark", countFrames(track) <= 1);
             reported += track.points.size();
         }
@@ -272,10 +276,10 @@ public class TrackLinkerStreakConsolidationTest {
         config.maxJumpPixels = 1;
         config.rhythmStationaryThreshold = 10;
         for (boolean timed : new boolean[]{true, false}) {
-            SourceExtractor.DetectedObject first = createStreak(20.0, 40.0, 0, 0.0, 12.0, timed ? 0 : -1);
-            SourceExtractor.DetectedObject second = createStreak(40.0, 40.0, 1, 0.0, 12.0, timed ? 120_000 : -1);
-            SourceExtractor.DetectedObject third = createStreak(60.0, 40.0, 2, 0.0, 12.0, timed ? 240_000 : -1);
-            List<List<SourceExtractor.DetectedObject>> frames = List.of(List.of(first), List.of(second), List.of(third));
+            DetectedObject first = createStreak(20.0, 40.0, 0, 0.0, 12.0, timed ? 0 : -1);
+            DetectedObject second = createStreak(40.0, 40.0, 1, 0.0, 12.0, timed ? 120_000 : -1);
+            DetectedObject third = createStreak(60.0, 40.0, 2, 0.0, 12.0, timed ? 240_000 : -1);
+            List<List<DetectedObject>> frames = List.of(List.of(first), List.of(second), List.of(third));
             TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
                     frames, new ArrayList<>(), config, null, 100, 100);
             assertEquals(1, result.tracks.size());
@@ -284,21 +288,21 @@ public class TrackLinkerStreakConsolidationTest {
         }
     }
 
-    private static int countFrames(TrackLinker.Track track) {
+    private static int countFrames(Track track) {
         java.util.Set<Integer> frames = new java.util.HashSet<>();
-        for (SourceExtractor.DetectedObject point : track.points) {
+        for (DetectedObject point : track.points) {
             frames.add(point.sourceFrameIndex);
         }
         return frames.size();
     }
 
-    private static SourceExtractor.DetectedObject createStreak(double x,
+    private static DetectedObject createStreak(double x,
                                                                double y,
                                                                int frameIndex,
                                                                double angle,
                                                                double peakSigma,
                                                                long timestamp) {
-        SourceExtractor.DetectedObject obj = new SourceExtractor.DetectedObject(x, y, 500.0, 20);
+        DetectedObject obj = new DetectedObject(x, y, 500.0, 20);
         obj.sourceFrameIndex = frameIndex;
         obj.sourceFilename = "frame_" + frameIndex + ".fit";
         obj.timestamp = timestamp;
@@ -311,15 +315,15 @@ public class TrackLinkerStreakConsolidationTest {
         obj.fwhm = 2.0;
         obj.elongation = 10.0;
         obj.rawPixels = new ArrayList<>();
-        obj.rawPixels.add(new SourceExtractor.Pixel((int) Math.round(x), (int) Math.round(y), 200));
+        obj.rawPixels.add(new Pixel((int) Math.round(x), (int) Math.round(y), 200));
         return obj;
     }
 
-    private static SourceExtractor.DetectedObject createIntegratedAnomaly(double x,
+    private static DetectedObject createIntegratedAnomaly(double x,
                                                                           double y,
                                                                           int frameIndex,
                                                                           long timestamp) {
-        SourceExtractor.DetectedObject obj = new SourceExtractor.DetectedObject(x, y, 150.0, 30);
+        DetectedObject obj = new DetectedObject(x, y, 150.0, 30);
         obj.sourceFrameIndex = frameIndex;
         obj.sourceFilename = "frame_" + frameIndex + ".fit";
         obj.timestamp = timestamp;
@@ -332,12 +336,12 @@ public class TrackLinkerStreakConsolidationTest {
         obj.fwhm = 2.0;
         obj.elongation = 2.0;
         obj.rawPixels = new ArrayList<>();
-        obj.rawPixels.add(new SourceExtractor.Pixel((int) Math.round(x), (int) Math.round(y), 120));
+        obj.rawPixels.add(new Pixel((int) Math.round(x), (int) Math.round(y), 120));
         return obj;
     }
 
-    private static List<List<SourceExtractor.DetectedObject>> emptyFrameList(int frameCount) {
-        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
+    private static List<List<DetectedObject>> emptyFrameList(int frameCount) {
+        List<List<DetectedObject>> frames = new ArrayList<>();
         for (int i = 0; i < frameCount; i++) {
             frames.add(new ArrayList<>());
         }

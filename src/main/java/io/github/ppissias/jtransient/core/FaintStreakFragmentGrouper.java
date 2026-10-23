@@ -9,6 +9,9 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
+import io.github.ppissias.jtransient.model.Pixel;
+import io.github.ppissias.jtransient.model.Track;
 import io.github.ppissias.jtransient.execution.CancellationScope;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
@@ -72,28 +75,28 @@ public final class FaintStreakFragmentGrouper {
      * @param usedPoints detections already consumed by a track; absorbed pieces are added
      * @param config pipeline configuration
      */
-    public static void assemble(List<TrackLinker.Track> streakTracks,
-                                List<List<SourceExtractor.DetectedObject>> pointTransients,
-                                List<SourceExtractor.DetectedObject> looseStreaks,
-                                Set<SourceExtractor.DetectedObject> usedPoints,
+    public static void assemble(List<Track> streakTracks,
+                                List<List<DetectedObject>> pointTransients,
+                                List<DetectedObject> looseStreaks,
+                                Set<DetectedObject> usedPoints,
                                 DetectionConfig config) {
         if (streakTracks == null || config == null || !config.enableFaintStreakFragments) {
             return;
         }
 
         double tolerance = Math.max(0.0, config.faintStreakLineTolerance);
-        Set<SourceExtractor.DetectedObject> onStreak = new HashSet<>();
-        for (TrackLinker.Track track : streakTracks) {
+        Set<DetectedObject> onStreak = new HashSet<>();
+        for (Track track : streakTracks) {
             CancellationScope.check();
             if (track != null && track.isStreakTrack && track.points != null) {
                 onStreak.addAll(track.points);
             }
         }
 
-        Map<Integer, List<SourceExtractor.DetectedObject>> byFrame = new HashMap<>();
+        Map<Integer, List<DetectedObject>> byFrame = new HashMap<>();
         collectCandidates(pointTransients, byFrame, usedPoints, onStreak);
         if (looseStreaks != null) {
-            for (SourceExtractor.DetectedObject streak : looseStreaks) {
+            for (DetectedObject streak : looseStreaks) {
                 CancellationScope.check();
                 addCandidate(byFrame, streak, usedPoints, onStreak);
             }
@@ -105,19 +108,19 @@ public final class FaintStreakFragmentGrouper {
         frames.sort(Comparator.naturalOrder());
         for (int frame : frames) {
             CancellationScope.check();
-            List<SourceExtractor.DetectedObject> pool = byFrame.get(frame);
+            List<DetectedObject> pool = byFrame.get(frame);
             if (pool == null) {
                 continue;
             }
             while (true) {
                 CancellationScope.check();
-                List<SourceExtractor.DetectedObject> line = bestNewLine(pool, tolerance);
+                List<DetectedObject> line = bestNewLine(pool, tolerance);
                 if (line == null) {
                     break;
                 }
-                TrackLinker.Track track = new TrackLinker.Track();
+                Track track = new Track();
                 track.isStreakTrack = true;
-                for (SourceExtractor.DetectedObject piece : line) {
+                for (DetectedObject piece : line) {
                     track.addPoint(piece);
                     usedPoints.add(piece);
                     onStreak.add(piece);
@@ -132,25 +135,25 @@ public final class FaintStreakFragmentGrouper {
         absorbExisting(streakTracks, byFrame, tolerance, usedPoints, onStreak);
     }
 
-    private static void absorbExisting(List<TrackLinker.Track> streakTracks,
-                                       Map<Integer, List<SourceExtractor.DetectedObject>> byFrame,
+    private static void absorbExisting(List<Track> streakTracks,
+                                       Map<Integer, List<DetectedObject>> byFrame,
                                        double tolerance,
-                                       Set<SourceExtractor.DetectedObject> usedPoints,
-                                       Set<SourceExtractor.DetectedObject> onStreak) {
-        for (TrackLinker.Track track : streakTracks) {
+                                       Set<DetectedObject> usedPoints,
+                                       Set<DetectedObject> onStreak) {
+        for (Track track : streakTracks) {
             CancellationScope.check();
             if (track == null || !track.isStreakTrack || track.points == null || track.points.isEmpty()) {
                 continue;
             }
-            Map<Integer, List<SourceExtractor.DetectedObject>> partsByFrame = new HashMap<>();
-            for (SourceExtractor.DetectedObject part : track.points) {
+            Map<Integer, List<DetectedObject>> partsByFrame = new HashMap<>();
+            for (DetectedObject part : track.points) {
                 CancellationScope.check();
                 if (part == null) {
                     continue;
                 }
                 partsByFrame.computeIfAbsent(part.sourceFrameIndex, key -> new ArrayList<>()).add(part);
             }
-            for (Map.Entry<Integer, List<SourceExtractor.DetectedObject>> entry : partsByFrame.entrySet()) {
+            for (Map.Entry<Integer, List<DetectedObject>> entry : partsByFrame.entrySet()) {
                 CancellationScope.check();
                 absorbOntoSegment(track, entry.getValue(), byFrame.get(entry.getKey()), tolerance, usedPoints, onStreak);
             }
@@ -173,9 +176,9 @@ public final class FaintStreakFragmentGrouper {
      * within {@link #ANOMALY_FOOTPRINT_TOLERANCE_PX}: a streak through a star pulls the centre off the line. Joining
      * repeats until nothing more joins, so a frame filled in helps place the next one.
      */
-    static Set<SourceExtractor.DetectedObject> joinAnomaliesOnStreakPaths(List<TrackLinker.Track> streakTracks,
-                                                                         List<SourceExtractor.DetectedObject> anomalies) {
-        Set<SourceExtractor.DetectedObject> joined = new HashSet<>();
+    static Set<DetectedObject> joinAnomaliesOnStreakPaths(List<Track> streakTracks,
+                                                                         List<DetectedObject> anomalies) {
+        Set<DetectedObject> joined = new HashSet<>();
         if (streakTracks == null || anomalies == null) {
             return joined;
         }
@@ -183,14 +186,14 @@ public final class FaintStreakFragmentGrouper {
         while (grew) {
             CancellationScope.check();
             grew = false;
-            for (SourceExtractor.DetectedObject anomaly : anomalies) {
+            for (DetectedObject anomaly : anomalies) {
                 CancellationScope.check();
                 if (anomaly == null || joined.contains(anomaly)) {
                     continue;
                 }
-                TrackLinker.Track best = null;
+                Track best = null;
                 double bestDistance = Double.POSITIVE_INFINITY;
-                for (TrackLinker.Track track : streakTracks) {
+                for (Track track : streakTracks) {
                     if (track == null || !track.isStreakTrack || track.points == null || track.points.isEmpty()) {
                         continue;
                     }
@@ -215,17 +218,17 @@ public final class FaintStreakFragmentGrouper {
      * Anomalies already joined count where the streak was in their frame, but a round anomaly has no reliable
      * direction, so they never draw a frame's line on their own.
      */
-    private static double pathDistance(TrackLinker.Track track, SourceExtractor.DetectedObject anomaly,
-                                       Set<SourceExtractor.DetectedObject> joined) {
-        Map<Integer, List<SourceExtractor.DetectedObject>> byFrame = new TreeMap<>();
-        for (SourceExtractor.DetectedObject part : track.points) {
+    private static double pathDistance(Track track, DetectedObject anomaly,
+                                       Set<DetectedObject> joined) {
+        Map<Integer, List<DetectedObject>> byFrame = new TreeMap<>();
+        for (DetectedObject part : track.points) {
             CancellationScope.check();
             if (part != null) {
                 byFrame.computeIfAbsent(part.sourceFrameIndex, key -> new ArrayList<>()).add(part);
             }
         }
         int frame = anomaly.sourceFrameIndex;
-        List<SourceExtractor.DetectedObject> own = streakParts(byFrame.getOrDefault(frame, List.of()), joined);
+        List<DetectedObject> own = streakParts(byFrame.getOrDefault(frame, List.of()), joined);
         double best = Double.POSITIVE_INFINITY;
         if (!own.isEmpty()) {
             double[] axis = lineAxis(own);
@@ -245,10 +248,10 @@ public final class FaintStreakFragmentGrouper {
      * For a streak seen in several frames: the distance from its line near the anomaly's frame when the anomaly lies
      * where the streak's motion puts it in that frame; infinite otherwise.
      */
-    private static double motionPathDistance(Map<Integer, List<SourceExtractor.DetectedObject>> byFrame,
-                                             SourceExtractor.DetectedObject anomaly,
-                                             Set<SourceExtractor.DetectedObject> joined) {
-        TreeMap<Integer, List<SourceExtractor.DetectedObject>> frames = new TreeMap<>(byFrame);
+    private static double motionPathDistance(Map<Integer, List<DetectedObject>> byFrame,
+                                             DetectedObject anomaly,
+                                             Set<DetectedObject> joined) {
+        TreeMap<Integer, List<DetectedObject>> frames = new TreeMap<>(byFrame);
         int frame = anomaly.sourceFrameIndex;
         Integer previous = frames.lowerKey(frame);
         Integer next = frames.higherKey(frame);
@@ -258,8 +261,8 @@ public final class FaintStreakFragmentGrouper {
             return Double.POSITIVE_INFINITY;
         }
 
-        List<SourceExtractor.DetectedObject> all = new ArrayList<>();
-        for (List<SourceExtractor.DetectedObject> parts : frames.values()) {
+        List<DetectedObject> all = new ArrayList<>();
+        for (List<DetectedObject> parts : frames.values()) {
             CancellationScope.check();
             all.addAll(parts);
         }
@@ -267,7 +270,7 @@ public final class FaintStreakFragmentGrouper {
         boolean timed = anomaly.timestamp != -1L;
         Map<Integer, double[]> ranges = new HashMap<>();
         Map<Integer, Double> times = new HashMap<>();
-        for (Map.Entry<Integer, List<SourceExtractor.DetectedObject>> entry : frames.entrySet()) {
+        for (Map.Entry<Integer, List<DetectedObject>> entry : frames.entrySet()) {
             CancellationScope.check();
             ranges.put(entry.getKey(), projectionRange(entry.getValue(), axis[0], axis[1], axis[2], axis[3]));
             long timestamp = entry.getValue().get(0).timestamp;
@@ -334,14 +337,14 @@ public final class FaintStreakFragmentGrouper {
         // anomaly's frame. A long path bends a little across the image, so the whole streak's line can miss a piece by
         // several pixels; joined anomalies are left out because a star pulls their centres off the line.
         List<Integer> nearest = new ArrayList<>();
-        for (Map.Entry<Integer, List<SourceExtractor.DetectedObject>> entry : frames.entrySet()) {
+        for (Map.Entry<Integer, List<DetectedObject>> entry : frames.entrySet()) {
             CancellationScope.check();
             if (entry.getKey() != frame && !streakParts(entry.getValue(), joined).isEmpty()) {
                 nearest.add(entry.getKey());
             }
         }
         nearest.sort(Comparator.comparingInt(key -> Math.abs(key - frame)));
-        List<SourceExtractor.DetectedObject> local = new ArrayList<>();
+        List<DetectedObject> local = new ArrayList<>();
         for (int i = 0; i < Math.min(2, nearest.size()); i++) {
             CancellationScope.check();
             local.addAll(streakParts(frames.get(nearest.get(i)), joined));
@@ -356,10 +359,10 @@ public final class FaintStreakFragmentGrouper {
     }
 
     /** The parts of a frame that belong to the streak itself, not anomalies joined to it. */
-    private static List<SourceExtractor.DetectedObject> streakParts(List<SourceExtractor.DetectedObject> parts,
-                                                                    Set<SourceExtractor.DetectedObject> joined) {
-        List<SourceExtractor.DetectedObject> own = new ArrayList<>();
-        for (SourceExtractor.DetectedObject part : parts) {
+    private static List<DetectedObject> streakParts(List<DetectedObject> parts,
+                                                                    Set<DetectedObject> joined) {
+        List<DetectedObject> own = new ArrayList<>();
+        for (DetectedObject part : parts) {
             CancellationScope.check();
             if (!joined.contains(part)) {
                 own.add(part);
@@ -381,13 +384,13 @@ public final class FaintStreakFragmentGrouper {
      * {@link #ANOMALY_PATH_TOLERANCE_PX}, or one of its pixels within {@link #ANOMALY_FOOTPRINT_TOLERANCE_PX}.
      * Infinite otherwise.
      */
-    private static double lineDistance(SourceExtractor.DetectedObject anomaly, double[] axis) {
+    private static double lineDistance(DetectedObject anomaly, double[] axis) {
         double centre = Math.abs(projection(anomaly.x, anomaly.y, axis[0], axis[1], axis[4], axis[5]));
         if (centre <= ANOMALY_PATH_TOLERANCE_PX) {
             return centre;
         }
         if (anomaly.rawPixels != null) {
-            for (SourceExtractor.Pixel pixel : anomaly.rawPixels) {
+            for (Pixel pixel : anomaly.rawPixels) {
                 CancellationScope.check();
                 if (Math.abs(projection(pixel.x, pixel.y, axis[0], axis[1], axis[4], axis[5])) <= ANOMALY_FOOTPRINT_TOLERANCE_PX) {
                     return centre;
@@ -397,20 +400,20 @@ public final class FaintStreakFragmentGrouper {
         return Double.POSITIVE_INFINITY;
     }
 
-    private static void collectCandidates(List<List<SourceExtractor.DetectedObject>> frames,
-                                          Map<Integer, List<SourceExtractor.DetectedObject>> byFrame,
-                                          Set<SourceExtractor.DetectedObject> usedPoints,
-                                          Set<SourceExtractor.DetectedObject> onStreak) {
+    private static void collectCandidates(List<List<DetectedObject>> frames,
+                                          Map<Integer, List<DetectedObject>> byFrame,
+                                          Set<DetectedObject> usedPoints,
+                                          Set<DetectedObject> onStreak) {
         if (frames == null) {
             return;
         }
         for (int frameIndex = 0; frameIndex < frames.size(); frameIndex++) {
             CancellationScope.check();
-            List<SourceExtractor.DetectedObject> frame = frames.get(frameIndex);
+            List<DetectedObject> frame = frames.get(frameIndex);
             if (frame == null) {
                 continue;
             }
-            for (SourceExtractor.DetectedObject object : frame) {
+            for (DetectedObject object : frame) {
                 CancellationScope.check();
                 if (object != null && object.sourceFrameIndex < 0) {
                     object.sourceFrameIndex = frameIndex;
@@ -420,10 +423,10 @@ public final class FaintStreakFragmentGrouper {
         }
     }
 
-    private static void addCandidate(Map<Integer, List<SourceExtractor.DetectedObject>> byFrame,
-                                     SourceExtractor.DetectedObject object,
-                                     Set<SourceExtractor.DetectedObject> usedPoints,
-                                     Set<SourceExtractor.DetectedObject> onStreak) {
+    private static void addCandidate(Map<Integer, List<DetectedObject>> byFrame,
+                                     DetectedObject object,
+                                     Set<DetectedObject> usedPoints,
+                                     Set<DetectedObject> onStreak) {
         if (!isFragment(object, usedPoints, onStreak)) {
             return;
         }
@@ -431,39 +434,39 @@ public final class FaintStreakFragmentGrouper {
     }
 
     /** A piece large enough to join a line. Round pieces qualify; the angle rules come later. */
-    private static boolean isFragment(SourceExtractor.DetectedObject object,
-                                      Set<SourceExtractor.DetectedObject> usedPoints,
-                                      Set<SourceExtractor.DetectedObject> onStreak) {
+    private static boolean isFragment(DetectedObject object,
+                                      Set<DetectedObject> usedPoints,
+                                      Set<DetectedObject> onStreak) {
         return object != null
                 && object.pixelArea >= SEED_MIN_PIXELS
                 && !usedPoints.contains(object)
                 && !onStreak.contains(object);
     }
 
-    private static boolean isElongated(SourceExtractor.DetectedObject object) {
+    private static boolean isElongated(DetectedObject object) {
         return object.elongation >= SEED_MIN_ELONGATION;
     }
 
-    private static void absorbOntoSegment(TrackLinker.Track track,
-                                          List<SourceExtractor.DetectedObject> parts,
-                                          List<SourceExtractor.DetectedObject> candidates,
+    private static void absorbOntoSegment(Track track,
+                                          List<DetectedObject> parts,
+                                          List<DetectedObject> candidates,
                                           double tolerance,
-                                          Set<SourceExtractor.DetectedObject> usedPoints,
-                                          Set<SourceExtractor.DetectedObject> onStreak) {
+                                          Set<DetectedObject> usedPoints,
+                                          Set<DetectedObject> onStreak) {
         if (candidates == null || candidates.isEmpty() || parts.isEmpty()) {
             return;
         }
         double[] axis = lineAxis(parts);
         double reach = Math.max(END_MARGIN_PX, EXTENSION_GAP_PX);
-        List<SourceExtractor.DetectedObject> absorbed = new ArrayList<>();
-        List<SourceExtractor.DetectedObject> span = new ArrayList<>(parts);
+        List<DetectedObject> absorbed = new ArrayList<>();
+        List<DetectedObject> span = new ArrayList<>(parts);
         boolean grew = true;
         while (grew) {
             CancellationScope.check();
             grew = false;
             double[] range = projectionRange(span, axis[0], axis[1], axis[2], axis[3]);
-            List<SourceExtractor.DetectedObject> wave = new ArrayList<>();
-            for (SourceExtractor.DetectedObject candidate : candidates) {
+            List<DetectedObject> wave = new ArrayList<>();
+            for (DetectedObject candidate : candidates) {
                 CancellationScope.check();
                 if (!isFragment(candidate, usedPoints, onStreak) || absorbed.contains(candidate)) {
                     continue;
@@ -490,7 +493,7 @@ public final class FaintStreakFragmentGrouper {
             }
         }
         absorbed.sort(Comparator.comparingDouble(piece -> projection(piece.x, piece.y, axis[0], axis[1], axis[2], axis[3])));
-        for (SourceExtractor.DetectedObject piece : absorbed) {
+        for (DetectedObject piece : absorbed) {
             CancellationScope.check();
             track.addPoint(piece);
             usedPoints.add(piece);
@@ -503,8 +506,8 @@ public final class FaintStreakFragmentGrouper {
      * Axis packed as originX, originY, dirX, dirY, normalX, normalY, angle.
      * A single part keeps its own angle and does not define an infinite line.
      */
-    private static double[] lineAxis(List<SourceExtractor.DetectedObject> parts) {
-        SourceExtractor.DetectedObject first = parts.get(0);
+    private static double[] lineAxis(List<DetectedObject> parts) {
+        DetectedObject first = parts.get(0);
         double angle = parts.size() == 1 ? first.angle : principalAngle(parts);
         if (!Double.isFinite(angle)) {
             angle = 0.0;
@@ -514,18 +517,18 @@ public final class FaintStreakFragmentGrouper {
         return new double[]{first.x, first.y, dirX, dirY, -dirY, dirX, angle};
     }
 
-    private static double[] projectionRange(List<SourceExtractor.DetectedObject> parts,
+    private static double[] projectionRange(List<DetectedObject> parts,
                                             double originX,
                                             double originY,
                                             double dirX,
                                             double dirY) {
         double min = Double.POSITIVE_INFINITY;
         double max = Double.NEGATIVE_INFINITY;
-        for (SourceExtractor.DetectedObject part : parts) {
+        for (DetectedObject part : parts) {
             CancellationScope.check();
             boolean usedPixels = false;
             if (part.rawPixels != null) {
-                for (SourceExtractor.Pixel pixel : part.rawPixels) {
+                for (Pixel pixel : part.rawPixels) {
                     double along = projection(pixel.x, pixel.y, originX, originY, dirX, dirY);
                     min = Math.min(min, along);
                     max = Math.max(max, along);
@@ -546,10 +549,10 @@ public final class FaintStreakFragmentGrouper {
         return new double[]{min, max};
     }
 
-    private static List<SourceExtractor.DetectedObject> bestNewLine(List<SourceExtractor.DetectedObject> pool,
+    private static List<DetectedObject> bestNewLine(List<DetectedObject> pool,
                                                                     double tolerance) {
-        List<SourceExtractor.DetectedObject> stable = new ArrayList<>();
-        for (SourceExtractor.DetectedObject object : pool) {
+        List<DetectedObject> stable = new ArrayList<>();
+        for (DetectedObject object : pool) {
             CancellationScope.check();
             if (object.pixelArea >= STABLE_ANGLE_MIN_PIXELS && object.elongation >= SEED_MIN_ELONGATION) {
                 stable.add(object);
@@ -559,26 +562,26 @@ public final class FaintStreakFragmentGrouper {
             return null;
         }
 
-        List<SourceExtractor.DetectedObject> best = null;
+        List<DetectedObject> best = null;
         double bestSpan = -1.0;
-        for (SourceExtractor.DetectedObject seed : stable) {
+        for (DetectedObject seed : stable) {
             CancellationScope.check();
             if (!Double.isFinite(seed.angle)) {
                 continue;
             }
-            List<SourceExtractor.DetectedObject> corridor = new ArrayList<>();
+            List<DetectedObject> corridor = new ArrayList<>();
             double dirX = Math.cos(seed.angle);
             double dirY = Math.sin(seed.angle);
             double normalX = -dirY;
             double normalY = dirX;
-            for (SourceExtractor.DetectedObject object : pool) {
+            for (DetectedObject object : pool) {
                 CancellationScope.check();
                 double perp = Math.abs(projection(object.x, object.y, seed.x, seed.y, normalX, normalY));
                 if (perp <= tolerance) {
                     corridor.add(object);
                 }
             }
-            List<SourceExtractor.DetectedObject> line = refineLine(corridor, corridor, tolerance);
+            List<DetectedObject> line = refineLine(corridor, corridor, tolerance);
             if (line == null) {
                 continue;
             }
@@ -591,8 +594,8 @@ public final class FaintStreakFragmentGrouper {
         return best;
     }
 
-    private static List<SourceExtractor.DetectedObject> refineLine(List<SourceExtractor.DetectedObject> seeds,
-                                                                   List<SourceExtractor.DetectedObject> pool,
+    private static List<DetectedObject> refineLine(List<DetectedObject> seeds,
+                                                                   List<DetectedObject> pool,
                                                                    double tolerance) {
         if (seeds.size() < 3) {
             return null;
@@ -604,8 +607,8 @@ public final class FaintStreakFragmentGrouper {
         double normalY = dirX;
         double originX = seeds.get(0).x;
         double originY = seeds.get(0).y;
-        List<SourceExtractor.DetectedObject> members = new ArrayList<>();
-        for (SourceExtractor.DetectedObject object : pool) {
+        List<DetectedObject> members = new ArrayList<>();
+        for (DetectedObject object : pool) {
             CancellationScope.check();
             if (object.pixelArea < SEED_MIN_PIXELS) {
                 continue;
@@ -619,13 +622,13 @@ public final class FaintStreakFragmentGrouper {
             return null;
         }
         members.sort(Comparator.comparingDouble(piece -> projection(piece.x, piece.y, originX, originY, dirX, dirY)));
-        List<SourceExtractor.DetectedObject> bestWindow = null;
+        List<DetectedObject> bestWindow = null;
         double bestSpan = -1.0;
         for (int start = 0; start < members.size(); start++) {
             CancellationScope.check();
             for (int end = start + MIN_NEW_LINE_PIECES - 1; end < members.size(); end++) {
                 CancellationScope.check();
-                List<SourceExtractor.DetectedObject> window = members.subList(start, end + 1);
+                List<DetectedObject> window = members.subList(start, end + 1);
                 double span = spanOf(window);
                 if (span < MIN_SPAN_PX || largestGap(window, originX, originY, dirX, dirY) > MAX_GAP_FRACTION * span) {
                     continue;
@@ -642,10 +645,10 @@ public final class FaintStreakFragmentGrouper {
         return bestWindow;
     }
 
-    private static boolean anglesSupportLine(List<SourceExtractor.DetectedObject> members, double angle) {
+    private static boolean anglesSupportLine(List<DetectedObject> members, double angle) {
         int stableCount = 0;
         int agreeing = 0;
-        for (SourceExtractor.DetectedObject member : members) {
+        for (DetectedObject member : members) {
             CancellationScope.check();
             if (member.pixelArea < STABLE_ANGLE_MIN_PIXELS || !isElongated(member)) {
                 continue;
@@ -658,13 +661,13 @@ public final class FaintStreakFragmentGrouper {
         return agreeing >= 3 && agreeing * 2 > stableCount;
     }
 
-    private static double spanOf(List<SourceExtractor.DetectedObject> members) {
-        SourceExtractor.DetectedObject first = members.get(0);
-        SourceExtractor.DetectedObject last = members.get(members.size() - 1);
+    private static double spanOf(List<DetectedObject> members) {
+        DetectedObject first = members.get(0);
+        DetectedObject last = members.get(members.size() - 1);
         return Math.hypot(last.x - first.x, last.y - first.y);
     }
 
-    private static double largestGap(List<SourceExtractor.DetectedObject> ordered,
+    private static double largestGap(List<DetectedObject> ordered,
                                      double originX,
                                      double originY,
                                      double dirX,
@@ -680,10 +683,10 @@ public final class FaintStreakFragmentGrouper {
         return largest;
     }
 
-    private static double principalAngle(List<SourceExtractor.DetectedObject> points) {
+    private static double principalAngle(List<DetectedObject> points) {
         double meanX = 0.0;
         double meanY = 0.0;
-        for (SourceExtractor.DetectedObject point : points) {
+        for (DetectedObject point : points) {
             CancellationScope.check();
             meanX += point.x;
             meanY += point.y;
@@ -693,7 +696,7 @@ public final class FaintStreakFragmentGrouper {
         double sxx = 0.0;
         double syy = 0.0;
         double sxy = 0.0;
-        for (SourceExtractor.DetectedObject point : points) {
+        for (DetectedObject point : points) {
             CancellationScope.check();
             double dx = point.x - meanX;
             double dy = point.y - meanY;

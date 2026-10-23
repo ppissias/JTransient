@@ -9,6 +9,9 @@
  */
 package io.github.ppissias.jtransient.photometry;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
+import io.github.ppissias.jtransient.model.Pixel;
+import io.github.ppissias.jtransient.model.Track;
 import io.github.ppissias.jtransient.execution.DiagnosticContext;
 
 import io.github.ppissias.jtransient.execution.OperationContext;
@@ -21,7 +24,6 @@ import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.config.PhotometryGeometry;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.SourceExtractor;
-import io.github.ppissias.jtransient.core.TrackLinker;
 import io.github.ppissias.jtransient.engine.ImageFrame;
 import io.github.ppissias.jtransient.engine.TransientEngineProgressListener;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
@@ -89,13 +91,13 @@ public final class VariableStarAnalyzer {
         /** Quality metrics of the same frames, same order. */
         public List<FrameQualityAnalyzer.FrameMetrics> frameMetrics;
         /** All detections of each frame before the stationary-star veto, same order. */
-        public List<List<SourceExtractor.DetectedObject>> frameDetections;
-        public List<SourceExtractor.DetectedObject> masterStars;
+        public List<List<DetectedObject>> frameDetections;
+        public List<DetectedObject> masterStars;
         public short[][] masterStack;
         /** Master-star pixel mask, excluded from sky annuli; may be null. */
         public boolean[][] masterStarMask;
-        public List<TrackLinker.Track> tracks = new ArrayList<>();
-        public List<SourceExtractor.DetectedObject> slowMoverCandidates = new ArrayList<>();
+        public List<Track> tracks = new ArrayList<>();
+        public List<DetectedObject> slowMoverCandidates = new ArrayList<>();
         /** Where every kept frame has image data; stars are measured only inside it. Null to use the image edge. */
         public DataArea dataArea;
         /** Optional progress listener, 0 to 100 over the photometry stage. */
@@ -115,7 +117,7 @@ public final class VariableStarAnalyzer {
                 throw new IllegalArgumentException("Photometry requires aligned frame, metric and optional detection lists.");
             }
             Input snapshot = new Input();
-            List<List<SourceExtractor.DetectedObject>> detections = new ArrayList<>();
+            List<List<DetectedObject>> detections = new ArrayList<>();
             int previousSequenceIndex = -1;
             for (int position = 0; position < frames.size(); position++) {
                 ImageFrame frame = frames.get(position);
@@ -128,11 +130,11 @@ public final class VariableStarAnalyzer {
                     throw new IllegalArgumentException("Photometry metrics belong to another frame at position " + position + ".");
                 }
                 if (frameDetections != null) {
-                    List<SourceExtractor.DetectedObject> objects = frameDetections.get(position);
+                    List<DetectedObject> objects = frameDetections.get(position);
                     if (objects == null) {
                         throw new IllegalArgumentException("Missing photometry detection slot at position " + position + ".");
                     }
-                    for (SourceExtractor.DetectedObject object : objects) {
+                    for (DetectedObject object : objects) {
                         if (object == null || object.sourceFrameIndex != frame.sequenceIndex
                                 || (object.sourceFilename != null && !java.util.Objects.equals(object.sourceFilename, frame.filename))) {
                             throw new IllegalArgumentException("Photometry detection belongs to another frame at position " + position + ".");
@@ -236,7 +238,7 @@ public final class VariableStarAnalyzer {
         // reference data its extra stars, mostly too faint to measure, changed which stars photometry selected.)
         DetectionConfig starConfig = config.clone();
         starConfig.growSigmaMultiplier = STAR_LIST_GROW_SIGMA;
-        List<SourceExtractor.DetectedObject> photometryStars = SourceExtractor.extractSources(input.masterStack,
+        List<DetectedObject> photometryStars = SourceExtractor.extractSources(input.masterStack,
                 STAR_LIST_SEED_SIGMA, STAR_LIST_MIN_PIXELS, starConfig, null,
                 DataArea.wholeImage(input.masterStack[0].length, input.masterStack.length)).objects;
         boolean[][] skyMask = footprintMask(photometryStars, input.masterStack.length, input.masterStack[0].length);
@@ -748,7 +750,7 @@ public final class VariableStarAnalyzer {
      */
     static void flagCrossings(Input input,
                                       List<PhotometryStarSelector.Star> stars,
-                                      List<SourceExtractor.DetectedObject> photometryStars,
+                                      List<DetectedObject> photometryStars,
                                       ApertureMeasurer.FrameMeasurement[] measurements,
                                       DetectionConfig config) {
         int nFrames = measurements.length;
@@ -780,7 +782,7 @@ public final class VariableStarAnalyzer {
             double oy = finiteOrZero(m.offsetY);
 
             if (input.frameDetections != null && j < input.frameDetections.size()) {
-                for (SourceExtractor.DetectedObject d : input.frameDetections.get(j)) {
+                for (DetectedObject d : input.frameDetections.get(j)) {
                     if (d.peakSigma < CROSSING_PEAK_SIGMA && !d.isStreak) {
                         continue;
                     }
@@ -794,7 +796,7 @@ public final class VariableStarAnalyzer {
                         continue;
                     }
                     if (d.rawPixels != null && !d.rawPixels.isEmpty()) {
-                        for (SourceExtractor.Pixel p : d.rawPixels) {
+                        for (Pixel p : d.rawPixels) {
                             for (int i : starGrid.within(p.x - ox, p.y - oy, radius)) {
                                 m.flags[i] |= PhotometryFlags.CROSSING;
                             }
@@ -809,19 +811,19 @@ public final class VariableStarAnalyzer {
         }
 
         if (input.tracks != null) {
-            for (TrackLinker.Track track : input.tracks) {
+            for (Track track : input.tracks) {
                 CancellationScope.check();
                 flagTrack(track, input.frames, stars, starGrid, measurements, config);
             }
         }
 
         if (input.slowMoverCandidates != null) {
-            for (SourceExtractor.DetectedObject candidate : input.slowMoverCandidates) {
+            for (DetectedObject candidate : input.slowMoverCandidates) {
                 CancellationScope.check();
                 for (int j = 0; j < nFrames; j++) {
                     double radius = PhotometryGeometry.resolve(config, measurements[j].fwhm).annulusOuterRadius();
                     if (candidate.rawPixels != null && !candidate.rawPixels.isEmpty()) {
-                        for (SourceExtractor.Pixel p : candidate.rawPixels) {
+                        for (Pixel p : candidate.rawPixels) {
                             for (int i : starGrid.within(p.x, p.y, radius)) {
                                 measurements[j].flags[i] |= PhotometryFlags.CROSSING;
                             }
@@ -843,7 +845,7 @@ public final class VariableStarAnalyzer {
      * as a segment along its footprint (a point source is a segment of length zero), so a long streak flags
      * the stars along its line rather than every star within its length.
      */
-    static void flagTrack(TrackLinker.Track track,
+    static void flagTrack(Track track,
                                   List<ImageFrame> frames,
                                   List<PhotometryStarSelector.Star> stars,
                                   PointGrid starGrid,
@@ -860,7 +862,7 @@ public final class VariableStarAnalyzer {
         }
         // {sequence, x, y, angle, half length along the angle, half width across it, capture time or NaN}
         List<double[]> points = new ArrayList<>(track.points.size());
-        for (SourceExtractor.DetectedObject p : track.points) {
+        for (DetectedObject p : track.points) {
             CancellationScope.check();
             Integer j = frameBySequence.get(p.sourceFrameIndex);
             double ox = j == null ? 0.0 : finiteOrZero(measurements[j].offsetX);
@@ -1065,14 +1067,14 @@ public final class VariableStarAnalyzer {
     }
 
     /** Star mask for the sky annulus from the footprints of the photometry star list, grown by one pixel. */
-    static boolean[][] footprintMask(List<SourceExtractor.DetectedObject> stars, int height, int width) {
+    static boolean[][] footprintMask(List<DetectedObject> stars, int height, int width) {
         boolean[][] mask = new boolean[height][width];
-        for (SourceExtractor.DetectedObject star : stars) {
+        for (DetectedObject star : stars) {
             CancellationScope.check();
             if (star.rawPixels == null) {
                 continue;
             }
-            for (SourceExtractor.Pixel p : star.rawPixels) {
+            for (Pixel p : star.rawPixels) {
                 CancellationScope.check();
                 for (int y = Math.max(0, p.y - 1); y <= Math.min(height - 1, p.y + 1); y++) {
                     for (int x = Math.max(0, p.x - 1); x <= Math.min(width - 1, p.x + 1); x++) {

@@ -1,7 +1,7 @@
 package io.github.ppissias.jtransient.photometry;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
 import io.github.ppissias.jtransient.config.DetectionConfig;
-import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.engine.ImageFrame;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
 import org.junit.Test;
@@ -95,7 +95,7 @@ public class PhotometryInputSnapshotTest {
             input.frameMetrics.add(metrics);
             input.frameDetections.add(new ArrayList<>());
         }
-        SourceExtractor.DetectedObject object = new SourceExtractor.DetectedObject(0, 0, 1, 1);
+        DetectedObject object = new DetectedObject(0, 0, 1, 1);
         object.sourceFrameIndex = 10;
         object.sourceFilename = "frame-10";
         input.frameDetections.getFirst().add(object);

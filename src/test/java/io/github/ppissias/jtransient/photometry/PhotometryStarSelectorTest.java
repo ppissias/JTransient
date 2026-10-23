@@ -9,10 +9,10 @@
  */
 package io.github.ppissias.jtransient.photometry;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.FrameCoverage;
-import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 import org.junit.Test;
 
@@ -28,13 +28,13 @@ public class PhotometryStarSelectorTest {
 
     private static final double FWHM = 3.0;
 
-    private static SourceExtractor.DetectedObject star(double x, double y, double flux) {
-        SourceExtractor.DetectedObject d = new SourceExtractor.DetectedObject(x, y, flux, 20);
+    private static DetectedObject star(double x, double y, double flux) {
+        DetectedObject d = new DetectedObject(x, y, flux, 20);
         d.elongation = 1.0;
         return d;
     }
 
-    private static List<PhotometryStarSelector.Star> select(List<SourceExtractor.DetectedObject> stars) {
+    private static List<PhotometryStarSelector.Star> select(List<DetectedObject> stars) {
         short[][] stack = new short[240][240];
         for (short[] row : stack) {
             java.util.Arrays.fill(row, (short) (1000 - 32768));
@@ -56,7 +56,7 @@ public class PhotometryStarSelectorTest {
             java.util.Arrays.fill(row, 0, 40, Short.MIN_VALUE);
         }
         DataArea area = DataArea.of(List.of(FrameCoverage.measure(0, frame)));
-        List<SourceExtractor.DetectedObject> stars = new ArrayList<>();
+        List<DetectedObject> stars = new ArrayList<>();
         stars.add(star(50, 120, 10_000));
         stars.add(star(120, 120, 10_000));
         List<PhotometryStarSelector.Star> result = PhotometryStarSelector.select(stars, stack, FWHM, 60000,
@@ -91,7 +91,7 @@ public class PhotometryStarSelectorTest {
     @Test
     public void faintNeighbourDoesNotMakeAStarCrowded() {
         // A neighbour 7.5 mag fainter at two FWHM adds far less than 2% light to the aperture.
-        List<SourceExtractor.DetectedObject> stars = new ArrayList<>();
+        List<DetectedObject> stars = new ArrayList<>();
         stars.add(star(120, 120, 100_000));
         stars.add(star(120 + 2 * FWHM, 120, 100));
 
@@ -101,7 +101,7 @@ public class PhotometryStarSelectorTest {
     @Test
     public void neighbourAtTheApertureEdgeContaminatesTheStar() {
         // 8% of the star's flux (below the bright-neighbour ratio) at the aperture edge puts about 4% light inside it.
-        List<SourceExtractor.DetectedObject> stars = new ArrayList<>();
+        List<DetectedObject> stars = new ArrayList<>();
         stars.add(star(120, 120, 50_000));
         stars.add(star(120 + 1.5 * FWHM, 120, 4_000));
 

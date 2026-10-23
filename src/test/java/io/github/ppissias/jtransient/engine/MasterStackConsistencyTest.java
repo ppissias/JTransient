@@ -1,9 +1,10 @@
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
+import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.MasterVetoMask;
 import io.github.ppissias.jtransient.core.PixelEncoding;
-import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 import org.junit.Test;
 
@@ -60,7 +61,7 @@ public class MasterStackConsistencyTest {
             }
             for (int position = 0; position < transients.size(); position++) {
                 FrameTransients frame = transients.get(position);
-                for (SourceExtractor.DetectedObject object : frame.extractionResult.objects) {
+                for (DetectedObject object : frame.extractionResult.objects) {
                     assertEquals(expected.get(position).intValue(), object.sourceFrameIndex);
                     assertEquals(frame.filename, object.sourceFilename);
                 }
@@ -100,8 +101,8 @@ public class MasterStackConsistencyTest {
 
     @Test
     public void vetoMaskWidensEachFootprintByHalfTheJitter() {
-        SourceExtractor.DetectedObject star = new SourceExtractor.DetectedObject(10, 10, 100.0, 1);
-        star.rawPixels = Collections.singletonList(new SourceExtractor.Pixel(10, 10, 100));
+        DetectedObject star = new DetectedObject(10, 10, 100.0, 1);
+        star.rawPixels = Collections.singletonList(new Pixel(10, 10, 100));
         // Jitter 2 -> radius 1: the pixel and its four neighbours.
         boolean[][] mask = MasterVetoMask.build(Collections.singletonList(star), 20, 20, 2.0);
         assertTrue(mask[10][10] && mask[10][11] && mask[10][9] && mask[11][10] && mask[9][10]);

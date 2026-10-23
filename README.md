@@ -142,7 +142,7 @@ public final class RunPipelineExample {
 
 Key `PipelineResult` fields:
 
-- `tracks`: returned `TrackLinker.Track` objects: streak tracks, single streaks and point tracks
+- `tracks`: returned `model.Track` objects: streak tracks, single streaks and point tracks
 - `anomalies`: rescued single-frame anomalies kept separate from normal tracks
 - `allTransients`: per-frame export of the full post-veto transient population carried through tracking, including point detections and mobile streak detections
 - `unclassifiedTransients`: observations remaining after tracks, anomalies and common-motion filtering; local rescue candidates still reference their observations here
@@ -358,6 +358,7 @@ If you only want object detection on one image, call `SourceExtractor.extractSou
 ```java
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.SourceExtractor;
+import io.github.ppissias.jtransient.model.DetectedObject;
 
 public final class ExtractSingleFrameExample {
     public static void main(String[] args) {
@@ -375,7 +376,7 @@ public final class ExtractSingleFrameExample {
         System.out.println("Background median: " + extraction.backgroundMetrics.median);
         System.out.println("Background sigma: " + extraction.backgroundMetrics.sigma);
 
-        for (SourceExtractor.DetectedObject object : extraction.objects) {
+        for (DetectedObject object : extraction.objects) {
             System.out.printf(
                     "x=%.2f y=%.2f area=%.0f elongation=%.2f streak=%s%n",
                     object.x,

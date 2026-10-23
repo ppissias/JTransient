@@ -9,6 +9,9 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.AnomalyDetection;
+import io.github.ppissias.jtransient.model.DetectedObject;
+import io.github.ppissias.jtransient.model.Track;
 import io.github.ppissias.jtransient.execution.CancellationScope;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
@@ -36,7 +39,7 @@ public final class ResidualTransientAnalyzer {
     /**
      * Runs the residual-transient analysis stage on the final uncategorized per-frame detections.
      */
-    public static ResidualTransientAnalysis analyze(List<List<SourceExtractor.DetectedObject>> unclassifiedTransients,
+    public static ResidualTransientAnalysis analyze(List<List<DetectedObject>> unclassifiedTransients,
                                                     DetectionConfig config) {
         if (config == null || !config.enableResidualTransientAnalysis
                 || unclassifiedTransients == null || unclassifiedTransients.isEmpty()) {
@@ -47,13 +50,13 @@ public final class ResidualTransientAnalyzer {
                 ? findLocalRescueCandidates(unclassifiedTransients)
                 : Collections.emptyList();
 
-        Set<SourceExtractor.DetectedObject> rescueConsumedDetections = Collections.newSetFromMap(new IdentityHashMap<>());
+        Set<DetectedObject> rescueConsumedDetections = Collections.newSetFromMap(new IdentityHashMap<>());
         for (ResidualTransientAnalysis.LocalRescueCandidate candidate : localRescueCandidates) {
             CancellationScope.check();
             rescueConsumedDetections.addAll(candidate.points);
         }
 
-        List<List<SourceExtractor.DetectedObject>> residualsAfterLocalRescue = removeConsumedDetections(
+        List<List<DetectedObject>> residualsAfterLocalRescue = removeConsumedDetections(
                 unclassifiedTransients,
                 rescueConsumedDetections
         );
@@ -65,16 +68,16 @@ public final class ResidualTransientAnalyzer {
         return new ResidualTransientAnalysis(localRescueCandidates, localActivityClusters);
     }
 
-    static List<SourceExtractor.DetectedObject> collectAlreadyClassifiedPoints(List<TrackLinker.Track> tracks,
-                                                                               List<TrackLinker.AnomalyDetection> anomalies) {
-        List<SourceExtractor.DetectedObject> excludedPoints = new ArrayList<>();
+    static List<DetectedObject> collectAlreadyClassifiedPoints(List<Track> tracks,
+                                                                               List<AnomalyDetection> anomalies) {
+        List<DetectedObject> excludedPoints = new ArrayList<>();
         if (tracks != null) {
-            for (TrackLinker.Track track : tracks) {
+            for (Track track : tracks) {
                 CancellationScope.check();
                 if (track == null || track.points == null) {
                     continue;
                 }
-                for (SourceExtractor.DetectedObject point : track.points) {
+                for (DetectedObject point : track.points) {
                     if (point != null) {
                         excludedPoints.add(point);
                     }
@@ -82,7 +85,7 @@ public final class ResidualTransientAnalyzer {
             }
         }
         if (anomalies != null) {
-            for (TrackLinker.AnomalyDetection anomaly : anomalies) {
+            for (AnomalyDetection anomaly : anomalies) {
                 CancellationScope.check();
                 if (anomaly != null && anomaly.object != null) {
                     excludedPoints.add(anomaly.object);
@@ -92,8 +95,8 @@ public final class ResidualTransientAnalyzer {
         return excludedPoints;
     }
 
-    static List<List<SourceExtractor.DetectedObject>> filterExcludedDetections(List<List<SourceExtractor.DetectedObject>> transients,
-                                                                               List<SourceExtractor.DetectedObject> excludedDetections) {
+    static List<List<DetectedObject>> filterExcludedDetections(List<List<DetectedObject>> transients,
+                                                                               List<DetectedObject> excludedDetections) {
         if (transients == null || transients.isEmpty()) {
             return Collections.emptyList();
         }
@@ -102,9 +105,9 @@ public final class ResidualTransientAnalyzer {
             return copyFrameList(transients);
         }
 
-        Set<SourceExtractor.DetectedObject> identityExcluded = Collections.newSetFromMap(new IdentityHashMap<>());
-        Map<Integer, List<SourceExtractor.DetectedObject>> excludedByFrame = new HashMap<>();
-        for (SourceExtractor.DetectedObject detection : excludedDetections) {
+        Set<DetectedObject> identityExcluded = Collections.newSetFromMap(new IdentityHashMap<>());
+        Map<Integer, List<DetectedObject>> excludedByFrame = new HashMap<>();
+        for (DetectedObject detection : excludedDetections) {
             CancellationScope.check();
             if (detection == null) {
                 continue;
@@ -114,14 +117,14 @@ public final class ResidualTransientAnalyzer {
             excludedByFrame.computeIfAbsent(detection.sourceFrameIndex, ignored -> new ArrayList<>()).add(detection);
         }
 
-        List<List<SourceExtractor.DetectedObject>> filtered = new ArrayList<>(transients.size());
+        List<List<DetectedObject>> filtered = new ArrayList<>(transients.size());
         for (int frameIndex = 0; frameIndex < transients.size(); frameIndex++) {
             CancellationScope.check();
-            List<SourceExtractor.DetectedObject> frameDetections = transients.get(frameIndex);
-            List<SourceExtractor.DetectedObject> accepted = new ArrayList<>();
+            List<DetectedObject> frameDetections = transients.get(frameIndex);
+            List<DetectedObject> accepted = new ArrayList<>();
             if (frameDetections != null) {
-                List<SourceExtractor.DetectedObject> frameExcluded = excludedByFrame.get(frameIndex);
-                for (SourceExtractor.DetectedObject detection : frameDetections) {
+                List<DetectedObject> frameExcluded = excludedByFrame.get(frameIndex);
+                for (DetectedObject detection : frameDetections) {
                     if (!matchesExcludedDetection(detection, frameExcluded, identityExcluded)) {
                         accepted.add(detection);
                     }
@@ -133,7 +136,7 @@ public final class ResidualTransientAnalyzer {
     }
 
     static List<ResidualTransientAnalysis.LocalRescueCandidate> findLocalRescueCandidates(
-            List<List<SourceExtractor.DetectedObject>> transients) {
+            List<List<DetectedObject>> transients) {
         if (transients == null || transients.isEmpty()) {
             return Collections.emptyList();
         }
@@ -174,11 +177,11 @@ public final class ResidualTransientAnalyzer {
         });
 
         List<ResidualTransientAnalysis.LocalRescueCandidate> accepted = new ArrayList<>();
-        Set<SourceExtractor.DetectedObject> consumedDetections = Collections.newSetFromMap(new IdentityHashMap<>());
+        Set<DetectedObject> consumedDetections = Collections.newSetFromMap(new IdentityHashMap<>());
         for (LocalRescueCandidateScore candidate : rawCandidates) {
             CancellationScope.check();
             boolean overlapsAccepted = false;
-            for (SourceExtractor.DetectedObject point : candidate.points) {
+            for (DetectedObject point : candidate.points) {
                 CancellationScope.check();
                 if (consumedDetections.contains(point)) {
                     overlapsAccepted = true;
@@ -197,7 +200,7 @@ public final class ResidualTransientAnalyzer {
     }
 
     static List<ResidualTransientAnalysis.LocalActivityCluster> findLocalActivityClusters(
-            List<List<SourceExtractor.DetectedObject>> transients,
+            List<List<DetectedObject>> transients,
             DetectionConfig config) {
         if (transients == null || transients.isEmpty()) {
             return Collections.emptyList();
@@ -214,7 +217,7 @@ public final class ResidualTransientAnalyzer {
         Map<Integer, Integer> ordinals = frameOrdinals(transients);
         for (List<Node> clusterNodes : clusterNodesByProximity(nodes, linkageRadius)) {
             CancellationScope.check();
-            List<SourceExtractor.DetectedObject> points = orderPoints(clusterNodes);
+            List<DetectedObject> points = orderPoints(clusterNodes);
             ResidualTransientAnalysis.LocalTransientMetrics metrics = computeMetrics(points, ordinals);
             if (metrics.uniqueFrameCount < minimumFrames) {
                 continue;
@@ -236,15 +239,15 @@ public final class ResidualTransientAnalyzer {
         return clusters;
     }
 
-    private static List<Node> collectNodes(List<List<SourceExtractor.DetectedObject>> transients) {
+    private static List<Node> collectNodes(List<List<DetectedObject>> transients) {
         List<Node> nodes = new ArrayList<>();
         for (int frameIndex = 0; frameIndex < transients.size(); frameIndex++) {
             CancellationScope.check();
-            List<SourceExtractor.DetectedObject> frameDetections = transients.get(frameIndex);
+            List<DetectedObject> frameDetections = transients.get(frameIndex);
             if (frameDetections == null) {
                 continue;
             }
-            for (SourceExtractor.DetectedObject detection : frameDetections) {
+            for (DetectedObject detection : frameDetections) {
                 CancellationScope.check();
                 if (detection == null || detection.isStreak) {
                     continue;
@@ -358,7 +361,7 @@ public final class ResidualTransientAnalyzer {
         return candidates;
     }
 
-    private static LocalRescueCandidateScore evaluateCandidate(List<SourceExtractor.DetectedObject> points,
+    private static LocalRescueCandidateScore evaluateCandidate(List<DetectedObject> points,
                                                                Map<Integer, Integer> ordinals) {
         ResidualTransientAnalysis.LocalTransientMetrics metrics = computeMetrics(points, ordinals);
         ResidualTransientAnalysis.LocalRescueKind kind = classifyLocalRescueKind(metrics);
@@ -478,15 +481,15 @@ public final class ResidualTransientAnalyzer {
      * Position of each frame in the list of kept frames, by sequence index. The chain, its gaps and its coverage
      * count the frames that were available: a frame that quality control left out is not a missed observation.
      */
-    private static Map<Integer, Integer> frameOrdinals(List<List<SourceExtractor.DetectedObject>> transients) {
+    private static Map<Integer, Integer> frameOrdinals(List<List<DetectedObject>> transients) {
         Map<Integer, Integer> ordinals = new HashMap<>();
         for (int i = 0; i < transients.size(); i++) {
             CancellationScope.check();
-            List<SourceExtractor.DetectedObject> frame = transients.get(i);
+            List<DetectedObject> frame = transients.get(i);
             if (frame == null) {
                 continue;
             }
-            for (SourceExtractor.DetectedObject detection : frame) {
+            for (DetectedObject detection : frame) {
                 CancellationScope.check();
                 if (detection != null) {
                     ordinals.putIfAbsent(detection.sourceFrameIndex, i);
@@ -496,7 +499,7 @@ public final class ResidualTransientAnalyzer {
         return ordinals;
     }
 
-    private static int ordinal(SourceExtractor.DetectedObject point, Map<Integer, Integer> ordinals) {
+    private static int ordinal(DetectedObject point, Map<Integer, Integer> ordinals) {
         return ordinals.getOrDefault(point.sourceFrameIndex, point.sourceFrameIndex);
     }
 
@@ -504,7 +507,7 @@ public final class ResidualTransientAnalyzer {
      * Metrics of a candidate. Span, gaps and coverage are counted in kept frames; the position-against-time fit uses
      * the frames' sequence indices, because a left-out frame is still a real gap in time.
      */
-    private static ResidualTransientAnalysis.LocalTransientMetrics computeMetrics(List<SourceExtractor.DetectedObject> points,
+    private static ResidualTransientAnalysis.LocalTransientMetrics computeMetrics(List<DetectedObject> points,
                                                                                   Map<Integer, Integer> ordinals) {
         if (points == null || points.isEmpty()) {
             return new ResidualTransientAnalysis.LocalTransientMetrics(
@@ -512,8 +515,8 @@ public final class ResidualTransientAnalyzer {
             );
         }
 
-        List<SourceExtractor.DetectedObject> orderedPoints = new ArrayList<>(points);
-        orderedPoints.sort(Comparator.comparingInt((SourceExtractor.DetectedObject point) -> point.sourceFrameIndex)
+        List<DetectedObject> orderedPoints = new ArrayList<>(points);
+        orderedPoints.sort(Comparator.comparingInt((DetectedObject point) -> point.sourceFrameIndex)
                 .thenComparingDouble(point -> point.x)
                 .thenComparingDouble(point -> point.y));
 
@@ -525,14 +528,14 @@ public final class ResidualTransientAnalyzer {
         int totalGapFrames = 0;
         Set<Integer> uniqueFrames = new HashSet<>();
 
-        SourceExtractor.DetectedObject first = orderedPoints.get(0);
-        SourceExtractor.DetectedObject last = orderedPoints.get(orderedPoints.size() - 1);
+        DetectedObject first = orderedPoints.get(0);
+        DetectedObject last = orderedPoints.get(orderedPoints.size() - 1);
         int frameSpan = (ordinal(last, ordinals) - ordinal(first, ordinals)) + 1;
         double totalDisplacement = Math.hypot(last.x - first.x, last.y - first.y);
 
         for (int i = 0; i < orderedPoints.size(); i++) {
             CancellationScope.check();
-            SourceExtractor.DetectedObject point = orderedPoints.get(i);
+            DetectedObject point = orderedPoints.get(i);
             summedSignal += Math.max(point.peakSigma, point.integratedSigma);
             sumX += point.x;
             sumY += point.y;
@@ -540,7 +543,7 @@ public final class ResidualTransientAnalyzer {
             if (i == 0) {
                 continue;
             }
-            SourceExtractor.DetectedObject previous = orderedPoints.get(i - 1);
+            DetectedObject previous = orderedPoints.get(i - 1);
             int gap = Math.max(1, ordinal(point, ordinals) - ordinal(previous, ordinals));
             totalGapFrames += Math.max(0, gap - 1);
             double step = Math.hypot(point.x - previous.x, point.y - previous.y);
@@ -573,7 +576,7 @@ public final class ResidualTransientAnalyzer {
         );
     }
 
-    private static double computeLinearityRmse(List<SourceExtractor.DetectedObject> points) {
+    private static double computeLinearityRmse(List<DetectedObject> points) {
         if (points == null || points.size() < 2) {
             return 0.0;
         }
@@ -583,7 +586,7 @@ public final class ResidualTransientAnalyzer {
         double[] ys = new double[points.size()];
         for (int i = 0; i < points.size(); i++) {
             CancellationScope.check();
-            SourceExtractor.DetectedObject point = points.get(i);
+            DetectedObject point = points.get(i);
             time[i] = point.sourceFrameIndex;
             xs[i] = point.x;
             ys[i] = point.y;
@@ -602,7 +605,7 @@ public final class ResidualTransientAnalyzer {
         return Math.sqrt(sumSquaredError / points.size());
     }
 
-    private static double computeClusterRadius(List<SourceExtractor.DetectedObject> points,
+    private static double computeClusterRadius(List<DetectedObject> points,
                                                double centroidX,
                                                double centroidY) {
         if (points == null || points.isEmpty()) {
@@ -610,7 +613,7 @@ public final class ResidualTransientAnalyzer {
         }
 
         double maxRadius = 0.0;
-        for (SourceExtractor.DetectedObject point : points) {
+        for (DetectedObject point : points) {
             CancellationScope.check();
             double radius = Math.hypot(point.x - centroidX, point.y - centroidY);
             if (radius > maxRadius) {
@@ -620,21 +623,21 @@ public final class ResidualTransientAnalyzer {
         return maxRadius;
     }
 
-    private static List<SourceExtractor.DetectedObject> orderPoints(List<Node> nodes) {
-        List<SourceExtractor.DetectedObject> points = new ArrayList<>(nodes.size());
+    private static List<DetectedObject> orderPoints(List<Node> nodes) {
+        List<DetectedObject> points = new ArrayList<>(nodes.size());
         for (Node node : nodes) {
             CancellationScope.check();
             points.add(node.detection);
         }
-        points.sort(Comparator.comparingInt((SourceExtractor.DetectedObject point) -> point.sourceFrameIndex)
+        points.sort(Comparator.comparingInt((DetectedObject point) -> point.sourceFrameIndex)
                 .thenComparingDouble(point -> point.x)
                 .thenComparingDouble(point -> point.y));
         return points;
     }
 
-    private static List<List<SourceExtractor.DetectedObject>> removeConsumedDetections(
-            List<List<SourceExtractor.DetectedObject>> frames,
-            Set<SourceExtractor.DetectedObject> consumedDetections) {
+    private static List<List<DetectedObject>> removeConsumedDetections(
+            List<List<DetectedObject>> frames,
+            Set<DetectedObject> consumedDetections) {
         if (frames == null || frames.isEmpty()) {
             return Collections.emptyList();
         }
@@ -643,12 +646,12 @@ public final class ResidualTransientAnalyzer {
             return copyFrameList(frames);
         }
 
-        List<List<SourceExtractor.DetectedObject>> filtered = new ArrayList<>(frames.size());
-        for (List<SourceExtractor.DetectedObject> frame : frames) {
+        List<List<DetectedObject>> filtered = new ArrayList<>(frames.size());
+        for (List<DetectedObject> frame : frames) {
             CancellationScope.check();
-            List<SourceExtractor.DetectedObject> kept = new ArrayList<>();
+            List<DetectedObject> kept = new ArrayList<>();
             if (frame != null) {
-                for (SourceExtractor.DetectedObject detection : frame) {
+                for (DetectedObject detection : frame) {
                     if (!consumedDetections.contains(detection)) {
                         kept.add(detection);
                     }
@@ -659,18 +662,18 @@ public final class ResidualTransientAnalyzer {
         return filtered;
     }
 
-    private static List<List<SourceExtractor.DetectedObject>> copyFrameList(List<List<SourceExtractor.DetectedObject>> frames) {
-        List<List<SourceExtractor.DetectedObject>> copy = new ArrayList<>(frames.size());
-        for (List<SourceExtractor.DetectedObject> frame : frames) {
+    private static List<List<DetectedObject>> copyFrameList(List<List<DetectedObject>> frames) {
+        List<List<DetectedObject>> copy = new ArrayList<>(frames.size());
+        for (List<DetectedObject> frame : frames) {
             CancellationScope.check();
             copy.add(frame == null ? new ArrayList<>() : new ArrayList<>(frame));
         }
         return copy;
     }
 
-    private static boolean matchesExcludedDetection(SourceExtractor.DetectedObject detection,
-                                                    List<SourceExtractor.DetectedObject> excludedInFrame,
-                                                    Set<SourceExtractor.DetectedObject> identityExcluded) {
+    private static boolean matchesExcludedDetection(DetectedObject detection,
+                                                    List<DetectedObject> excludedInFrame,
+                                                    Set<DetectedObject> identityExcluded) {
         if (detection == null) {
             return true;
         }
@@ -682,7 +685,7 @@ public final class ResidualTransientAnalyzer {
         }
 
         String detectionSource = normalizeSourceName(detection.sourceFilename);
-        for (SourceExtractor.DetectedObject excluded : excludedInFrame) {
+        for (DetectedObject excluded : excludedInFrame) {
             CancellationScope.check();
             if (excluded == null) {
                 continue;
@@ -731,9 +734,9 @@ public final class ResidualTransientAnalyzer {
 
     private static final class Node {
         private final int frameIndex;
-        private final SourceExtractor.DetectedObject detection;
+        private final DetectedObject detection;
 
-        private Node(int frameIndex, SourceExtractor.DetectedObject detection) {
+        private Node(int frameIndex, DetectedObject detection) {
             this.frameIndex = frameIndex;
             this.detection = detection;
         }
@@ -755,12 +758,12 @@ public final class ResidualTransientAnalyzer {
 
     private static final class LocalRescueCandidateScore {
         private final ResidualTransientAnalysis.LocalRescueKind kind;
-        private final List<SourceExtractor.DetectedObject> points;
+        private final List<DetectedObject> points;
         private final ResidualTransientAnalysis.LocalTransientMetrics metrics;
         private final double score;
 
         private LocalRescueCandidateScore(ResidualTransientAnalysis.LocalRescueKind kind,
-                                          List<SourceExtractor.DetectedObject> points,
+                                          List<DetectedObject> points,
                                           ResidualTransientAnalysis.LocalTransientMetrics metrics,
                                           double score) {
             this.kind = kind;

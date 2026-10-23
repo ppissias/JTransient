@@ -1,5 +1,6 @@
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -13,8 +14,8 @@ import static org.junit.Assert.assertTrue;
 
 public class CameraFixedRejectorTest {
 
-    private static SourceExtractor.DetectedObject point(double x, double y, int frame) {
-        SourceExtractor.DetectedObject p = new SourceExtractor.DetectedObject(x, y, 8, 4);
+    private static DetectedObject point(double x, double y, int frame) {
+        DetectedObject p = new DetectedObject(x, y, 8, 4);
         p.pixelArea = 4;
         p.sourceFrameIndex = frame;
         return p;
@@ -35,8 +36,8 @@ public class CameraFixedRejectorTest {
         return new double[]{r.tx + u * c - v * s, r.ty + u * s + v * c};
     }
 
-    private static List<List<SourceExtractor.DetectedObject>> frames(int n) {
-        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
+    private static List<List<DetectedObject>> frames(int n) {
+        List<List<DetectedObject>> frames = new ArrayList<>();
         for (int i = 0; i < n; i++) {
             frames.add(new ArrayList<>());
         }
@@ -46,11 +47,11 @@ public class CameraFixedRejectorTest {
     @Test
     public void aHotPixelIsRemovedAndSkyObjectsAreKept() {
         Map<Integer, FrameRegistration> registrations = dithered();
-        List<List<SourceExtractor.DetectedObject>> frames = frames(6);
-        List<SourceExtractor.DetectedObject> hot = new ArrayList<>();
+        List<List<DetectedObject>> frames = frames(6);
+        List<DetectedObject> hot = new ArrayList<>();
         for (int i = 0; i < 6; i++) {
             double[] p = onFrame(registrations.get(i), 1500, 900);
-            SourceExtractor.DetectedObject h = point(p[0] + 0.3 * (i % 2), p[1] - 0.2 * (i % 3), i);
+            DetectedObject h = point(p[0] + 0.3 * (i % 2), p[1] - 0.2 * (i % 3), i);
             hot.add(h);
             frames.get(i).add(h);
             frames.get(i).add(point(300, 300, i));                  // fixed on the sky (a flare)
@@ -63,9 +64,9 @@ public class CameraFixedRejectorTest {
         assertEquals(hot, groups.get(0).points);
         assertEquals(1500, groups.get(0).cameraX, 1.0);
         assertEquals(900, groups.get(0).cameraY, 1.0);
-        for (List<SourceExtractor.DetectedObject> frame : frames) {
+        for (List<DetectedObject> frame : frames) {
             assertEquals(2, frame.size());
-            for (SourceExtractor.DetectedObject d : frame) {
+            for (DetectedObject d : frame) {
                 assertFalse(hot.contains(d));
             }
         }
@@ -74,7 +75,7 @@ public class CameraFixedRejectorTest {
     @Test
     public void framesThatDidNotMoveCannotTellACameraPositionFromTheSky() {
         Map<Integer, FrameRegistration> registrations = new HashMap<>();
-        List<List<SourceExtractor.DetectedObject>> frames = frames(5);
+        List<List<DetectedObject>> frames = frames(5);
         for (int i = 0; i < 5; i++) {
             registrations.put(i, FrameRegistration.of(i, 1, 1, 0));
             frames.get(i).add(point(201, 201, i));
@@ -86,7 +87,7 @@ public class CameraFixedRejectorTest {
     @Test
     public void twoFramesAreNotEnough() {
         Map<Integer, FrameRegistration> registrations = dithered();
-        List<List<SourceExtractor.DetectedObject>> frames = frames(6);
+        List<List<DetectedObject>> frames = frames(6);
         for (int i : new int[]{1, 4}) {
             double[] p = onFrame(registrations.get(i), 600, 600);
             frames.get(i).add(point(p[0], p[1], i));
@@ -97,7 +98,7 @@ public class CameraFixedRejectorTest {
     @Test
     public void framesWithoutAUsableRegistrationAreLeftOut() {
         Map<Integer, FrameRegistration> registrations = dithered();
-        List<List<SourceExtractor.DetectedObject>> frames = frames(6);
+        List<List<DetectedObject>> frames = frames(6);
         for (int i = 0; i < 6; i++) {
             double[] p = onFrame(registrations.get(i), 700, 500);
             frames.get(i).add(point(p[0], p[1], i));

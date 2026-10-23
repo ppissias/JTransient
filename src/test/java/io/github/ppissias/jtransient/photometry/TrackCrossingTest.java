@@ -9,9 +9,10 @@
  */
 package io.github.ppissias.jtransient.photometry;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
+import io.github.ppissias.jtransient.model.Pixel;
+import io.github.ppissias.jtransient.model.Track;
 import io.github.ppissias.jtransient.config.DetectionConfig;
-import io.github.ppissias.jtransient.core.SourceExtractor;
-import io.github.ppissias.jtransient.core.TrackLinker;
 import io.github.ppissias.jtransient.engine.ImageFrame;
 import org.junit.Test;
 
@@ -58,7 +59,7 @@ public class TrackCrossingTest {
             grid.add(stars.get(i).x, stars.get(i).y, i);
         }
 
-        TrackLinker.Track track = new TrackLinker.Track();
+        Track track = new Track();
         track.points.add(fragment(40.0));
         track.points.add(fragment(240.0));
         List<ImageFrame> frames = List.of(new ImageFrame(0, "frame0.fits", new short[1][1], -1, -1));
@@ -74,8 +75,8 @@ public class TrackCrossingTest {
         assertEquals(0, measurement.flags[2] & PhotometryFlags.CROSSING);
     }
 
-    private static SourceExtractor.DetectedObject fragment(double x) {
-        SourceExtractor.DetectedObject d = new SourceExtractor.DetectedObject(x, 100.0, 5000.0, 30);
+    private static DetectedObject fragment(double x) {
+        DetectedObject d = new DetectedObject(x, 100.0, 5000.0, 30);
         d.sourceFrameIndex = 0;
         d.isStreak = true;
         d.angle = 0.0;
@@ -94,10 +95,10 @@ public class TrackCrossingTest {
         VariableStarAnalyzer.Input input = new VariableStarAnalyzer.Input();
         input.frames = List.of(new ImageFrame(0, "frame0.fits", new short[1][1], -1, -1));
         input.masterStars = new ArrayList<>();
-        SourceExtractor.DetectedObject detection = new SourceExtractor.DetectedObject(100, 100, 5000, 10);
+        DetectedObject detection = new DetectedObject(100, 100, 5000, 10);
         detection.sourceFrameIndex = 0;
         detection.fwhm = 2;
-        TrackLinker.Track track = new TrackLinker.Track();
+        Track track = new Track();
         track.points.add(detection);
         input.tracks = List.of(track);
         var trackMeasurement = new ApertureMeasurer.FrameMeasurement(2, stars.size());
@@ -122,9 +123,9 @@ public class TrackCrossingTest {
                 new PhotometryStarSelector.Star(111, 100, 1000));
         VariableStarAnalyzer.Input input = new VariableStarAnalyzer.Input();
         input.masterStars = new ArrayList<>();
-        SourceExtractor.DetectedObject detection = new SourceExtractor.DetectedObject(100, 100, 5000, 10);
+        DetectedObject detection = new DetectedObject(100, 100, 5000, 10);
         detection.peakSigma = 10;
-        detection.rawPixels = List.of(new SourceExtractor.Pixel(100, 100, (short) 100));
+        detection.rawPixels = List.of(new Pixel(100, 100, (short) 100));
         input.frameDetections = List.of(List.of(detection));
         var measurement = new ApertureMeasurer.FrameMeasurement(2, stars.size());
         VariableStarAnalyzer.flagCrossings(input, stars, input.masterStars,

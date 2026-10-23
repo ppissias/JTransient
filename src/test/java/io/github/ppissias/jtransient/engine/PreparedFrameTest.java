@@ -1,5 +1,6 @@
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
 import io.github.ppissias.jtransient.core.FrameRegistration;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
@@ -56,7 +57,7 @@ public class PreparedFrameTest {
         assertThrows(UnsupportedOperationException.class, () -> context.cleanFrames.clear());
         prepared.frame().pixelData[0][0] = 123;
         assertEquals(123, context.cleanFrames.getFirst().pixelData[0][0]);
-        SourceExtractor.DetectedObject object = new SourceExtractor.DetectedObject(0, 0, 1, 1);
+        DetectedObject object = new DetectedObject(0, 0, 1, 1);
         prepared.extractionResult().objects.add(object);
         assertSame(object, context.cleanFramesData.getFirst().objects.getFirst());
     }

@@ -9,6 +9,7 @@
  */
 package io.github.ppissias.jtransient.quality;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
 import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.DataArea;
@@ -87,7 +88,7 @@ public class FrameQualityAnalyzer {
         qualityConfig.growSigmaMultiplier = config.qualityGrowSigmaMultiplier;
 
         // 1. Extract sources using the strict quality-evaluation parameters from the config
-        List<SourceExtractor.DetectedObject> objects =
+        List<DetectedObject> objects =
                 SourceExtractor.extractSources(
                         imageData,
                         config.qualitySigmaMultiplier,
@@ -117,7 +118,7 @@ public class FrameQualityAnalyzer {
                 config.qualitySigmaMultiplier + config.qualityBrightStarPeakSigmaOffset
         );
 
-        for (SourceExtractor.DetectedObject obj : objects) {
+        for (DetectedObject obj : objects) {
             CancellationScope.check();
             // Only measure true point sources (ignore obvious noise and massive satellite streaks)
             if (!obj.isStreak && !obj.isNoise) {

@@ -9,11 +9,11 @@
  */
 package io.github.ppissias.jtransient.photometry;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.config.PhotometryGeometry;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.PixelEncoding;
-import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.engine.ImageFrame;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 
@@ -63,7 +63,7 @@ final class PhotometryStarSelector {
     /**
      * Selects isolated, point-like master stars away from edges and void padding.
      */
-    static List<Star> select(List<SourceExtractor.DetectedObject> masterStars,
+    static List<Star> select(List<DetectedObject> masterStars,
                              short[][] masterStack,
                              double sessionFwhm,
                              double saturationThreshold,
@@ -85,7 +85,7 @@ final class PhotometryStarSelector {
      * @param dataArea where every kept frame has image data, or null for the whole frame
      * @return selected stars, brightest first
      */
-    static List<Star> select(List<SourceExtractor.DetectedObject> masterStars,
+    static List<Star> select(List<DetectedObject> masterStars,
                              short[][] masterStack,
                              double sessionFwhm,
                              double saturationThreshold,
@@ -105,7 +105,7 @@ final class PhotometryStarSelector {
         telemetry.masterStarsConsidered = masterStars.size();
 
         List<Star> survivors = new ArrayList<>();
-        for (SourceExtractor.DetectedObject star : masterStars) {
+        for (DetectedObject star : masterStars) {
             if (star.isStreak) {
                 telemetry.starsRejectedStreak++;
                 continue;
@@ -280,11 +280,11 @@ final class PhotometryStarSelector {
      */
     private static final class NeighbourIndex {
         private final double cellSize;
-        private final Map<Long, List<SourceExtractor.DetectedObject>> cells = new HashMap<>();
+        private final Map<Long, List<DetectedObject>> cells = new HashMap<>();
 
-        NeighbourIndex(List<SourceExtractor.DetectedObject> stars, double cellSize) {
+        NeighbourIndex(List<DetectedObject> stars, double cellSize) {
             this.cellSize = cellSize;
-            for (SourceExtractor.DetectedObject star : stars) {
+            for (DetectedObject star : stars) {
                 cells.computeIfAbsent(key((int) Math.floor(star.x / cellSize), (int) Math.floor(star.y / cellSize)),
                         k -> new ArrayList<>()).add(star);
             }
@@ -295,7 +295,7 @@ final class PhotometryStarSelector {
          * neighbour sits within one FWHM (centroids and apertures merge), or a neighbour of at least
          * {@link #BRIGHT_NEIGHBOUR_FLUX_RATIO} of the star's flux lies inside the sky annulus's inner radius.
          */
-        boolean isContaminated(SourceExtractor.DetectedObject star, double fwhm, double innerRadius, double[] enclosed) {
+        boolean isContaminated(DetectedObject star, double fwhm, double innerRadius, double[] enclosed) {
             double searchRadius = (enclosed.length - 2) * ENCLOSED_TABLE_STEP;
             int span = (int) Math.ceil(searchRadius / cellSize);
             int cx = (int) Math.floor(star.x / cellSize);
@@ -304,11 +304,11 @@ final class PhotometryStarSelector {
             double added = 0;
             for (int gy = cy - span; gy <= cy + span; gy++) {
                 for (int gx = cx - span; gx <= cx + span; gx++) {
-                    List<SourceExtractor.DetectedObject> cell = cells.get(key(gx, gy));
+                    List<DetectedObject> cell = cells.get(key(gx, gy));
                     if (cell == null) {
                         continue;
                     }
-                    for (SourceExtractor.DetectedObject other : cell) {
+                    for (DetectedObject other : cell) {
                         if (other == star) {
                             continue;
                         }

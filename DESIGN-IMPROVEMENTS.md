@@ -19,7 +19,7 @@ Develop SpacePixels, JTransient and JPlateSolve together with both local composi
 
 ### Current dependencies
 
-The graph is only partly layered: orchestration calls science services, while shared engine-package frames/callbacks and nested model types still create reverse dependencies. Adopted config/execution boundaries and facade-independent diagnostic access are enforced by bytecode checks; JA-07 addresses remaining shared contracts.
+The graph is only partly layered: orchestration calls science services, while shared engine-package frames/callbacks still create reverse dependencies. Detections, pixels, tracks and anomalies are top-level `model` types since JA-07. Adopted config/execution boundaries and facade-independent diagnostic access are enforced by bytecode checks.
 
 `core` contains extraction, image geometry, stacks, tracking, slow movers and residual analysis. Its classes often have useful responsibilities, but the package does not express those boundaries. Conversely, `photometry` already gives its helpers a coherent home and uses package-private implementation classes. Keep that pattern. `PipelineTelemetry` has no imports of the science packages today, but placing their frame records inside it makes those packages depend on a pipeline-level container; moving diagnostics must reverse that ownership carefully.
 
@@ -104,7 +104,7 @@ Migrate one vertical responsibility at a time, update its callers, run component
 
 - **The streak-shape predicate.** The scientific decision must retain its behavior, but the old public method need not stay on `core.SourceExtractor` merely as a facade; migrate its callers with the extraction/tracking separation. The canonical `extraction.SourceExtractor` has no streak-shape method and no tracking dependency. Measurements live in `image.FootprintGeometry`, and the decision lives in tracking.
 - **Prepared inputs.** The main analysis methods take prepared inputs: tracking receives a built mask, and slow movers receive built stacks. Standalone convenience facades may still compose reference services; tell them apart from the analysis methods before tightening the dependency table.
-- **Temporary exceptions.** Model migration names its temporary dependency exceptions explicitly, for example `residual` and `photometry` naming `TrackLinker` types until the shared models move. The residual helper that takes `TrackLinker.Track` is called only by a test, so it alone does not decide a production dependency.
+- **Shared models.** Detections, pixels, tracks and anomalies are top-level types in `model` since JA-07, so later stages no longer name `SourceExtractor` or `TrackLinker` to use them.
 - **Names are candidates.** The class names are design candidates, not a requirement to create every listed helper. Introduce a collaborator when its responsibility and ownership are clear.
 
 ### Responsibility map and refactor scope
@@ -121,7 +121,7 @@ Paths below are relative to `src/main/java/io/github/ppissias/jtransient/`. This
 | `engine/JTransientEngine` | Keep in `engine`; extract private runner, preparation and result builder; delegate resource policy to `execution`. | JA-01/02/03/05/09 |
 | `engine/InputRules`, `ExtractedFramesContext` | Sequence validation goes to `image.FrameSequenceValidator`; engine context becomes private `PreparedFrame`/`PreparedSequence` associations. | JA-01/05 |
 | `engine/ImageFrame`, `FrameTransients`, `TransientEngineProgressListener` | Canonical frame data goes to `model`; keep pipeline frame export in `engine`; new progress contract goes to `execution`, with the old callback adapted. | JA-05/07/09 |
-| `engine/PipelineResult` | Keep pipeline result in `engine`; build coherent groups from stage-owned results and migrate consumers to coherent result construction instead of retaining obsolete positional constructors/duplicate fields. | JA-07/10 |
+| `engine/PipelineResult` | Keep pipeline result in `engine`; assembled with `PipelineResult.builder()` since JA-07. | JA-07 |
 | `engine/CalibratedAutoTuner`, `AutoTuneProfile`, `AutoTunerResult` | Canonical implementation in `tuning.CalibratedAutoTuner`; migrate facade/profile/result consumers directly. The legacy tuner was removed under JA-08. | JA-02/03/04/08 |
 | `core/PixelEncoding`, `FrameCoverage`, `FrameRegistration`, `DataArea` | Canonical home `image`; retain their distinct purposes and numerical behavior; update imports instead of retaining compatibility names. | JA-05/07 |
 | `core/FrameDriftAnalyzer` | Canonical home `image`; consume `model.ImageFrame` without an engine dependency. | JA-05/07 |
@@ -163,7 +163,7 @@ flowchart TD
 
 ### Delivery order
 
-First JA-07, then JA-06, then JA-09's stage observer for SpacePixels F10 slice 2. Each slice migrates its SpacePixels callers in the same change. JA-11 checks the selected artifact combination at release; completed foundations are not queued again.
+First JA-06, then JA-09's stage observer for SpacePixels F10 slice 2. Each slice migrates its SpacePixels callers in the same change. JA-11 checks the selected artifact combination at release; completed foundations are not queued again.
 
 ### Verification and coordination with SpacePixels
 
@@ -180,7 +180,6 @@ Do not combine these changes with new detection gates, altered association order
 | ID | Scope | Status |
 |---|---|---|
 | JA-06 | Clean track-linker design without changing assignment/science, with before/after timings | Accepted |
-| JA-07 | Top-level detection/track models and a `PipelineResult` builder | Accepted (narrowed) |
 | JA-09 | Typed stage progress/outcomes and callback guarantees | In progress |
 | JA-11 | Final selected-release repository/artifact validation | In progress |
 
@@ -206,21 +205,6 @@ Make the current assignment sequence explicit: a detection may be visible in sev
 **Review note (2026-10-23).** This is a structural refactor of the most order-sensitive science code (greedy claims, tie order, shared detection identity), and nothing changes that a user can see. Do it as the first step of a tracking change that needs the seam, for example PT-2, PT-6 or ST-5, and extract only the seam that change needs. Do not schedule it as a standalone item.
 
 Decision: I would like to have clean design in the track linker so this change is desirable. The goal is to have a good overall consistent clean design and stages and clean collaboration beteen stages where needed. We should also evaluate before / after performance impact, besides confirming correctness.  
-
-### JA-07. Make detections and tracks top-level models, and assemble `PipelineResult` with a builder
-
-**Scope (reformulated 2026-10-23 after the maintainer's decision).** Two changes, and nothing else from the earlier model and package proposal:
-
-1. **Top-level shared models.** `SourceExtractor.DetectedObject`, `SourceExtractor.Pixel`, `TrackLinker.Track`, `TrackLinker.AnomalyDetection` and `TrackLinker.AnomalyType` become top-level classes in a new `io.github.ppissias.jtransient.model` package. They are used by every later stage and by SpacePixels (about 570 references in 49 files), so they should not be nested in the class that first creates them. Fields, object identity and the shared detection graph stay exactly as they are: one detection can still be in a track, an anomaly and the transient lists. No value equality, no copies and no immutability are added.
-2. **A builder for `PipelineResult`.** Its five positional constructors (the longest takes 18 arguments) become one package-private builder used by the engine. The public fields and their meaning stay the same; only how the result is assembled changes.
-
-The package table under "Target package layout and allowed dependencies" stays as orientation for where new code goes; it is not a migration target. Other classes stay where they are.
-
-**Acceptance.** JTransient `test`, `apiConsumer` and `verifyArchitecture` pass; SpacePixels compiles and passes its tests against the composite build; `PipelineResult` and the report outputs are byte-identical on klangwolke-1, klangwolde-2 and one variable-star dataset.
-
-Earlier evidence and proposal (ownership contracts, frozen collections, output-retention policy) are in git history; they are not planned.
-
-Decision: Agreed with the review note. Please also re-formulate this issue accordingly. 
 
 ### JA-09. Make progress, stage outcomes and diagnostics consistent
 
@@ -304,7 +288,7 @@ Statuses describe the current decision, not a new priority. Partial items retain
 | JA-04 | Immutable tuning policy and scoped diagnostics | Implemented |
 | JA-05 | Prepared frame identity and input ownership | Implemented |
 | JA-06 | Tracking responsibility separation | Accepted |
-| JA-07 | Coherent results/models and shared buffers | Accepted; narrowed to top-level models and a result builder |
+| JA-07 | Coherent results/models and shared buffers | Implemented 2026-10-23 (narrowed): top-level `model` types and a `PipelineResult` builder |
 | JA-08 | Tuner measurement, selection and presentation | Implemented 2026-10-23: legacy tuner retired, calibrated measurement named |
 | JA-09 | Typed stage progress/outcomes | In progress |
 | JA-10 | Reusable reference provenance | Closed 2026-10-23: one consumer, no cache; reopen if a need appears |

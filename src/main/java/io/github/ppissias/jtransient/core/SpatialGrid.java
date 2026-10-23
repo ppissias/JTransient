@@ -9,6 +9,7 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -22,8 +23,8 @@ public class SpatialGrid {
     private static final int MAX_GRID_WINDOW_BEFORE_LINEAR_SCAN = 512;
 
     private final double cellSize;
-    private final Map<String, List<SourceExtractor.DetectedObject>> cells;
-    private final List<SourceExtractor.DetectedObject> allObjects;
+    private final Map<String, List<DetectedObject>> cells;
+    private final List<DetectedObject> allObjects;
 
     /**
      * Builds a grid over the supplied objects.
@@ -31,13 +32,13 @@ public class SpatialGrid {
      * @param objects detected objects to index
      * @param cellSize requested cell size in pixels; values below {@code 1.0} are clamped
      */
-    public SpatialGrid(List<SourceExtractor.DetectedObject> objects, double cellSize) {
+    public SpatialGrid(List<DetectedObject> objects, double cellSize) {
         // Ensure cell size is at least 1.0 to prevent infinite/tiny grids
         this.cellSize = Math.max(1.0, cellSize);
         this.cells = new HashMap<>(objects.size());
         this.allObjects = new ArrayList<>(objects);
 
-        for (SourceExtractor.DetectedObject obj : objects) {
+        for (DetectedObject obj : objects) {
             String key = getCellKey(obj.x, obj.y);
             cells.computeIfAbsent(key, k -> new ArrayList<>()).add(obj);
         }
@@ -53,7 +54,7 @@ public class SpatialGrid {
      * Returns whether any indexed object lies within the given search radius.
      */
     public boolean hasMatch(double targetX, double targetY, double searchRadius) {
-        for (SourceExtractor.DetectedObject obj : getCandidates(targetX, targetY, searchRadius)) {
+        for (DetectedObject obj : getCandidates(targetX, targetY, searchRadius)) {
             double dx = targetX - obj.x;
             double dy = targetY - obj.y;
             if (dx * dx + dy * dy <= searchRadius * searchRadius) {
@@ -66,18 +67,18 @@ public class SpatialGrid {
     /**
      * Returns all indexed objects within the supplied search radius.
      */
-    public List<SourceExtractor.DetectedObject> getCandidates(double targetX, double targetY, double searchRadius) {
+    public List<DetectedObject> getCandidates(double targetX, double targetY, double searchRadius) {
         int minX = (int) ((targetX - searchRadius) / cellSize);
         int maxX = (int) ((targetX + searchRadius) / cellSize);
         int minY = (int) ((targetY - searchRadius) / cellSize);
         int maxY = (int) ((targetY + searchRadius) / cellSize);
 
-        List<SourceExtractor.DetectedObject> candidates = new ArrayList<>();
+        List<DetectedObject> candidates = new ArrayList<>();
         double radiusSquared = searchRadius * searchRadius;
         long cellWindow = (long) (maxX - minX + 1) * (maxY - minY + 1);
 
         if (shouldUseLinearScan(cellWindow)) {
-            for (SourceExtractor.DetectedObject obj : allObjects) {
+            for (DetectedObject obj : allObjects) {
                 double dx = targetX - obj.x;
                 double dy = targetY - obj.y;
                 if (dx * dx + dy * dy <= radiusSquared) {
@@ -89,9 +90,9 @@ public class SpatialGrid {
 
         for (int cx = minX; cx <= maxX; cx++) {
             for (int cy = minY; cy <= maxY; cy++) {
-                List<SourceExtractor.DetectedObject> cell = cells.get(cx + "," + cy);
+                List<DetectedObject> cell = cells.get(cx + "," + cy);
                 if (cell != null) {
-                    for (SourceExtractor.DetectedObject obj : cell) {
+                    for (DetectedObject obj : cell) {
                         double dx = targetX - obj.x;
                         double dy = targetY - obj.y;
                         if (dx * dx + dy * dy <= radiusSquared) {
@@ -107,7 +108,7 @@ public class SpatialGrid {
     /**
      * Returns the nearest candidates in ascending distance order, capped to {@code maxCandidates}.
      */
-    public List<SourceExtractor.DetectedObject> getNearestCandidates(double targetX,
+    public List<DetectedObject> getNearestCandidates(double targetX,
                                                                      double targetY,
                                                                      double searchRadius,
                                                                      int maxCandidates) {
@@ -121,12 +122,12 @@ public class SpatialGrid {
         int maxY = (int) ((targetY + searchRadius) / cellSize);
 
         double radiusSquared = searchRadius * searchRadius;
-        List<SourceExtractor.DetectedObject> nearest = new ArrayList<>(maxCandidates);
+        List<DetectedObject> nearest = new ArrayList<>(maxCandidates);
         List<Double> nearestDistances = new ArrayList<>(maxCandidates);
         long cellWindow = (long) (maxX - minX + 1) * (maxY - minY + 1);
 
         if (shouldUseLinearScan(cellWindow)) {
-            for (SourceExtractor.DetectedObject obj : allObjects) {
+            for (DetectedObject obj : allObjects) {
                 double dx = targetX - obj.x;
                 double dy = targetY - obj.y;
                 double distSq = dx * dx + dy * dy;
@@ -140,12 +141,12 @@ public class SpatialGrid {
 
         for (int cx = minX; cx <= maxX; cx++) {
             for (int cy = minY; cy <= maxY; cy++) {
-                List<SourceExtractor.DetectedObject> cell = cells.get(cx + "," + cy);
+                List<DetectedObject> cell = cells.get(cx + "," + cy);
                 if (cell == null) {
                     continue;
                 }
 
-                for (SourceExtractor.DetectedObject obj : cell) {
+                for (DetectedObject obj : cell) {
                     double dx = targetX - obj.x;
                     double dy = targetY - obj.y;
                     double distSq = dx * dx + dy * dy;
@@ -168,7 +169,7 @@ public class SpatialGrid {
         double minDistanceSquared = Double.MAX_VALUE;
         boolean found = false;
 
-        for (SourceExtractor.DetectedObject obj : getCandidates(targetX, targetY, searchRadius)) {
+        for (DetectedObject obj : getCandidates(targetX, targetY, searchRadius)) {
             double dx = targetX - obj.x;
             double dy = targetY - obj.y;
             double distSq = dx * dx + dy * dy;
@@ -190,9 +191,9 @@ public class SpatialGrid {
     /**
      * Inserts one object into the fixed-size nearest-candidate list while preserving sort order.
      */
-    private void insertNearest(List<SourceExtractor.DetectedObject> nearest,
+    private void insertNearest(List<DetectedObject> nearest,
                                List<Double> nearestDistances,
-                               SourceExtractor.DetectedObject obj,
+                               DetectedObject obj,
                                double distSq,
                                int maxCandidates) {
         int insertAt = nearestDistances.size();

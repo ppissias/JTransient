@@ -1,5 +1,7 @@
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
+import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import org.junit.Test;
 
@@ -24,7 +26,7 @@ public class TrackLinkerGeometricDiscoveryTest {
         DetectionConfig config = new DetectionConfig();
         config.enableGeometricTrackLinking = false;
 
-        List<List<SourceExtractor.DetectedObject>> frames = List.of(
+        List<List<DetectedObject>> frames = List.of(
                 List.of(createPoint(10.0, 10.0, 0, 0L, 500L)),
                 List.of(createPoint(20.0, 10.0, 1, 1000L, 500L)),
                 List.of(createPoint(30.0, 10.0, 2, 5000L, 500L))
@@ -52,7 +54,7 @@ public class TrackLinkerGeometricDiscoveryTest {
         DetectionConfig config = new DetectionConfig();
         config.enableGeometricTrackLinking = false;
 
-        List<List<SourceExtractor.DetectedObject>> frames = List.of(
+        List<List<DetectedObject>> frames = List.of(
                 List.of(createPoint(10.0, 10.0, 0, -1L, -1L)),
                 List.of(createPoint(20.0, 10.0, 1, -1L, -1L)),
                 List.of(createPoint(30.0, 10.0, 2, -1L, -1L))
@@ -82,7 +84,7 @@ public class TrackLinkerGeometricDiscoveryTest {
         config.strictExposureKinematics = true;
         config.enableGeometricTrackLinking = true;
 
-        List<List<SourceExtractor.DetectedObject>> frames = List.of(
+        List<List<DetectedObject>> frames = List.of(
                 List.of(createPoint(10.0, 10.0, 0, 0L, 1000L)),
                 List.of(createPoint(20.0, 10.0, 1, 1000L, 1000L)),
                 List.of(createPoint(30.0, 10.0, 2, 2000L, 1000L))
@@ -112,13 +114,13 @@ public class TrackLinkerGeometricDiscoveryTest {
         config.enableGeometricTrackLinking = false;
         config.strictExposureKinematics = false;
 
-        SourceExtractor.DetectedObject baselineNonPositiveDelta = createPoint(14.0, 10.0, 1, 500L, 500L);
-        SourceExtractor.DetectedObject baselineJitter = createPoint(10.5, 10.0, 1, 1500L, 500L);
-        SourceExtractor.DetectedObject baselineSizeMismatch = createPoint(16.0, 10.0, 1, 1700L, 500L);
+        DetectedObject baselineNonPositiveDelta = createPoint(14.0, 10.0, 1, 500L, 500L);
+        DetectedObject baselineJitter = createPoint(10.5, 10.0, 1, 1500L, 500L);
+        DetectedObject baselineSizeMismatch = createPoint(16.0, 10.0, 1, 1700L, 500L);
         baselineSizeMismatch.fwhm = 10.0;
-        SourceExtractor.DetectedObject validBaseline = createPoint(20.0, 10.0, 1, 2000L, 500L);
+        DetectedObject validBaseline = createPoint(20.0, 10.0, 1, 2000L, 500L);
 
-        List<List<SourceExtractor.DetectedObject>> frames = List.of(
+        List<List<DetectedObject>> frames = List.of(
                 List.of(createPoint(10.0, 10.0, 0, 1000L, 500L)),
                 List.of(baselineNonPositiveDelta, baselineJitter, baselineSizeMismatch, validBaseline),
                 List.of(
@@ -154,7 +156,7 @@ public class TrackLinkerGeometricDiscoveryTest {
         config.maxStarJitter = 0.6;
         config.rhythmStationaryThreshold = 1.2;
         config.rhythmAllowedVariance = 0.8;
-        List<List<SourceExtractor.DetectedObject>> frames = List.of(
+        List<List<DetectedObject>> frames = List.of(
                 List.of(createPoint(10, 10, 0, -1, -1)),
                 List.of(createPoint(10.8, 10, 1, -1, -1)),
                 List.of(createPoint(11.3, 10, 2, -1, -1)),
@@ -169,14 +171,14 @@ public class TrackLinkerGeometricDiscoveryTest {
         assertEquals(1.2, config.rhythmStationaryThreshold, 0);
     }
 
-    private static SourceExtractor.DetectedObject createPoint(
+    private static DetectedObject createPoint(
             double x,
             double y,
             int frameIndex,
             long timestamp,
             long exposureDuration
     ) {
-        SourceExtractor.DetectedObject obj = new SourceExtractor.DetectedObject(x, y, 100.0, 1);
+        DetectedObject obj = new DetectedObject(x, y, 100.0, 1);
         obj.sourceFrameIndex = frameIndex;
         obj.timestamp = timestamp;
         obj.exposureDuration = exposureDuration;
@@ -184,7 +186,7 @@ public class TrackLinkerGeometricDiscoveryTest {
         obj.totalFlux = 100.0;
         obj.fwhm = 1.0;
         obj.rawPixels = new ArrayList<>();
-        obj.rawPixels.add(new SourceExtractor.Pixel((int) Math.round(x), (int) Math.round(y), (short) 100));
+        obj.rawPixels.add(new Pixel((int) Math.round(x), (int) Math.round(y), (short) 100));
         return obj;
     }
 }

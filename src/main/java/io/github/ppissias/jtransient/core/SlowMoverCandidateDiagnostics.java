@@ -1,5 +1,7 @@
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
+
 /** Snapshot of the measurements and effective thresholds for one accepted maximum-stack candidate. */
 public final class SlowMoverCandidateDiagnostics {
     /** Number of connected pixels in the candidate's maximum-stack footprint. */
@@ -62,7 +64,7 @@ public final class SlowMoverCandidateDiagnostics {
      * @param medianSupportMinOverlapThreshold effective lower mask-overlap threshold
      * @param medianSupportMaxOverlapThreshold effective upper mask-overlap threshold
      */
-    public SlowMoverCandidateDiagnostics(SourceExtractor.DetectedObject object,
+    public SlowMoverCandidateDiagnostics(DetectedObject object,
                                          double medianMaskOverlapFraction,
                                          double minAxisRatioThreshold,
                                          double maxAxisRatioThreshold,
@@ -74,7 +76,7 @@ public final class SlowMoverCandidateDiagnostics {
                 SlowMoverFrameEvidence.unavailable(), 0.0, 100.0);
     }
 
-    SlowMoverCandidateDiagnostics(SourceExtractor.DetectedObject object,
+    SlowMoverCandidateDiagnostics(DetectedObject object,
                                   double medianMaskOverlapFraction,
                                   double minAxisRatioThreshold,
                                   double maxAxisRatioThreshold,

@@ -9,6 +9,7 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
 import io.github.ppissias.jtransient.execution.CancellationScope;
 
 import java.util.ArrayList;
@@ -49,9 +50,9 @@ public final class CameraFixedRejector {
         /** Median camera y of the members. */
         public final double cameraY;
         /** The detections, in frame order. */
-        public final List<SourceExtractor.DetectedObject> points;
+        public final List<DetectedObject> points;
 
-        Group(double cameraX, double cameraY, List<SourceExtractor.DetectedObject> points) {
+        Group(double cameraX, double cameraY, List<DetectedObject> points) {
             this.cameraX = cameraX;
             this.cameraY = cameraY;
             this.points = Collections.unmodifiableList(points);
@@ -59,11 +60,11 @@ public final class CameraFixedRejector {
     }
 
     private static final class Entry {
-        final SourceExtractor.DetectedObject detection;
+        final DetectedObject detection;
         final double u;
         final double v;
 
-        Entry(SourceExtractor.DetectedObject detection, double u, double v) {
+        Entry(DetectedObject detection, double u, double v) {
             this.detection = detection;
             this.u = u;
             this.v = v;
@@ -77,18 +78,18 @@ public final class CameraFixedRejector {
      * @param registrations the frames' registrations by sequence index
      * @return the groups, ordered by their first frame and position
      */
-    public static List<Group> reject(List<List<SourceExtractor.DetectedObject>> frames,
+    public static List<Group> reject(List<List<DetectedObject>> frames,
                                      Map<Integer, FrameRegistration> registrations) {
         if (frames == null || registrations == null || registrations.isEmpty()) {
             return List.of();
         }
         List<Entry> entries = new ArrayList<>();
-        for (List<SourceExtractor.DetectedObject> frame : frames) {
+        for (List<DetectedObject> frame : frames) {
             CancellationScope.check();
             if (frame == null) {
                 continue;
             }
-            for (SourceExtractor.DetectedObject detection : frame) {
+            for (DetectedObject detection : frame) {
                 CancellationScope.check();
                 FrameRegistration registration = detection == null || detection.isStreak
                         ? null : registrations.get(detection.sourceFrameIndex);
@@ -123,7 +124,7 @@ public final class CameraFixedRejector {
                 continue;
             }
             members.sort(Comparator.comparingInt(e -> e.detection.sourceFrameIndex));
-            List<SourceExtractor.DetectedObject> points = new ArrayList<>(members.size());
+            List<DetectedObject> points = new ArrayList<>(members.size());
             for (Entry member : members) {
                 CancellationScope.check();
                 assigned.add(member);
@@ -133,12 +134,12 @@ public final class CameraFixedRejector {
         }
 
         if (!groups.isEmpty()) {
-            Set<SourceExtractor.DetectedObject> removed = Collections.newSetFromMap(new IdentityHashMap<>());
+            Set<DetectedObject> removed = Collections.newSetFromMap(new IdentityHashMap<>());
             for (Group group : groups) {
                 CancellationScope.check();
                 removed.addAll(group.points);
             }
-            for (List<SourceExtractor.DetectedObject> frame : frames) {
+            for (List<DetectedObject> frame : frames) {
                 CancellationScope.check();
                 if (frame != null) {
                     frame.removeIf(removed::contains);
@@ -198,8 +199,8 @@ public final class CameraFixedRejector {
             CancellationScope.check();
             for (int j = i + 1; j < entries.size(); j++) {
                 CancellationScope.check();
-                SourceExtractor.DetectedObject a = entries.get(i).detection;
-                SourceExtractor.DetectedObject b = entries.get(j).detection;
+                DetectedObject a = entries.get(i).detection;
+                DetectedObject b = entries.get(j).detection;
                 spread = Math.max(spread, Math.hypot(a.x - b.x, a.y - b.y));
             }
         }

@@ -1,10 +1,11 @@
 package io.github.ppissias.jtransient.consumer;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
+import io.github.ppissias.jtransient.model.Pixel;
+import io.github.ppissias.jtransient.model.Track;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.MasterMapGenerator;
 import io.github.ppissias.jtransient.core.PixelEncoding;
-import io.github.ppissias.jtransient.core.SourceExtractor;
-import io.github.ppissias.jtransient.core.TrackLinker;
 import io.github.ppissias.jtransient.engine.AutoTuneProfile;
 import io.github.ppissias.jtransient.engine.AutoTunerResult;
 import io.github.ppissias.jtransient.engine.CalibratedAutoTuner;
@@ -27,9 +28,9 @@ public final class ApiConsumer {
             require(input.readUnsignedShort() == 65, "Engine must target Java 21");
         }
         DetectionConfig config = new DetectionConfig();
-        var object = new SourceExtractor.DetectedObject(10, 12, 100, 5);
-        object.rawPixels = new ArrayList<>(List.of(new SourceExtractor.Pixel(10, 12, 1000)));
-        TrackLinker.Track track = new TrackLinker.Track();
+        var object = new DetectedObject(10, 12, 100, 5);
+        object.rawPixels = new ArrayList<>(List.of(new Pixel(10, 12, 1000)));
+        Track track = new Track();
         track.addPoint(object);
         require(track.points.get(0) == object, "Detection identity changed");
 

@@ -1,5 +1,7 @@
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
+import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import org.junit.Test;
 
@@ -56,13 +58,13 @@ public class MasterReferenceAnalyzerTest {
         DetectionConfig config = new DetectionConfig();
         config.growSigmaMultiplier = 3;
 
-        java.util.List<SourceExtractor.DetectedObject> stars = MasterReferenceAnalyzer.extractStars(stack, 3, 3, config);
+        java.util.List<DetectedObject> stars = MasterReferenceAnalyzer.extractStars(stack, 3, 3, config);
 
         boolean nebulaCovered = false;
         boolean starFound = false;
         java.util.Set<Long> seen = new java.util.HashSet<>();
-        for (SourceExtractor.DetectedObject star : stars) {
-            for (SourceExtractor.Pixel p : star.rawPixels) {
+        for (DetectedObject star : stars) {
+            for (Pixel p : star.rawPixels) {
                 assertTrue("pixel " + p.x + "," + p.y + " in two objects", seen.add((long) p.y * width + p.x));
                 if (p.x == 350 && p.y == 725) {
                     nebulaCovered = true;

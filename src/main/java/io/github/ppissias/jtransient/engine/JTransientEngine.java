@@ -9,6 +9,8 @@
  */
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
+import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.execution.DiagnosticContext;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
@@ -335,7 +337,7 @@ public class JTransientEngine implements AutoCloseable {
                 config
         ));
         short[][] masterStackData = masterReference.masterStackData;
-        List<SourceExtractor.DetectedObject> masterStars = masterReference.masterStars;
+        List<DetectedObject> masterStars = masterReference.masterStars;
         int sensorHeight = masterReference.sensorHeight;
         int sensorWidth = masterReference.sensorWidth;
 
@@ -346,7 +348,7 @@ public class JTransientEngine implements AutoCloseable {
             proxyListener = null;
         }
 
-        List<List<SourceExtractor.DetectedObject>> cleanFramesObjects = new ArrayList<>();
+        List<List<DetectedObject>> cleanFramesObjects = new ArrayList<>();
         for (SourceExtractor.ExtractionResult extRes : context.cleanFramesData) {
             cleanFramesObjects.add(extRes.objects);
         }
@@ -396,7 +398,7 @@ public class JTransientEngine implements AutoCloseable {
         // =================================================================
         long stageStartedNanos = System.nanoTime();
         FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = analyzeDitherAndDrift(inputFrames, config, listener, telemetry);
-        List<SourceExtractor.Pixel> driftPoints = new ArrayList<>(driftAnalysis.driftPoints);
+        List<Pixel> driftPoints = new ArrayList<>(driftAnalysis.driftPoints);
         QualityArea quality = qualityArea(driftAnalysis.frameCoverages, telemetry);
         Map<Integer, FrameRegistration> registrations = registrationsBySequence(driftAnalysis);
         telemetry.recordStage(PipelineTelemetry.Stage.DRIFT_ANALYSIS, stageStartedNanos);
@@ -425,9 +427,9 @@ public class JTransientEngine implements AutoCloseable {
                         quality.area,
                         wholeFrame
                 ));
-                List<SourceExtractor.DetectedObject> objectsInFrame = extResult.objects;
+                List<DetectedObject> objectsInFrame = extResult.objects;
 
-                for (SourceExtractor.DetectedObject obj : objectsInFrame) {
+                for (DetectedObject obj : objectsInFrame) {
                     obj.sourceFrameIndex = frame.sequenceIndex;
                     obj.sourceFilename = frame.filename;
                     obj.timestamp = frame.timestamp;
@@ -768,7 +770,7 @@ public class JTransientEngine implements AutoCloseable {
                 config
         ));
         short[][] masterStackData = masterReference.masterStackData;
-        List<SourceExtractor.DetectedObject> masterStars = masterReference.masterStars;
+        List<DetectedObject> masterStars = masterReference.masterStars;
         int sensorHeight = masterReference.sensorHeight;
         int sensorWidth = masterReference.sensorWidth;
 
@@ -788,7 +790,7 @@ public class JTransientEngine implements AutoCloseable {
         SlowMoverAnalysis slowMoverAnalysis = SlowMoverAnalysis.empty();
         short[][] slowMoverStackData = null;
         boolean[][] slowMoverMedianVetoMask = null;
-        List<SourceExtractor.DetectedObject> slowMoverCandidates = new ArrayList<>();
+        List<DetectedObject> slowMoverCandidates = new ArrayList<>();
         PipelineTelemetry.SlowMoverTelemetry smTelemetry = null;
 
         if (config.enableSlowMoverDetection) {
@@ -875,7 +877,7 @@ public class JTransientEngine implements AutoCloseable {
             trackingProxyListener = null;
         }
 
-        List<List<SourceExtractor.DetectedObject>> cleanFramesObjects = new ArrayList<>();
+        List<List<DetectedObject>> cleanFramesObjects = new ArrayList<>();
         for (SourceExtractor.ExtractionResult extRes : cleanFramesData) {
             cleanFramesObjects.add(extRes.objects);
         }
@@ -979,11 +981,26 @@ public class JTransientEngine implements AutoCloseable {
         }
 
         telemetry.processingTimeMs = (System.nanoTime() - context.startNanos) / 1_000_000L;
-        return new PipelineResult(trackResult.tracks, telemetry, masterStackData, masterStars,
-                slowMoverAnalysis, slowMoverStackData, slowMoverMedianVetoMask, slowMoverCandidates, trackResult.anomalies,
-                trackResult.allTransients, trackResult.unclassifiedTransients,
-                residualTransientAnalysis, trackResult.masterVetoMask, context.driftPoints,
-                maximumStackData, variableStarAnalysis, context.dataArea, trackResult.cameraFixedGroups);
+        return PipelineResult.builder()
+                .tracks(trackResult.tracks)
+                .telemetry(telemetry)
+                .masterStackData(masterStackData)
+                .masterStars(masterStars)
+                .slowMoverAnalysis(slowMoverAnalysis)
+                .slowMoverStackData(slowMoverStackData)
+                .slowMoverMedianVetoMask(slowMoverMedianVetoMask)
+                .slowMoverCandidates(slowMoverCandidates)
+                .anomalies(trackResult.anomalies)
+                .allTransients(trackResult.allTransients)
+                .unclassifiedTransients(trackResult.unclassifiedTransients)
+                .residualTransientAnalysis(residualTransientAnalysis)
+                .masterVetoMask(trackResult.masterVetoMask)
+                .driftPoints(context.driftPoints)
+                .maximumStackData(maximumStackData)
+                .variableStarAnalysis(variableStarAnalysis)
+                .dataArea(context.dataArea)
+                .cameraFixedGroups(trackResult.cameraFixedGroups)
+                .build();
     }
 
     /**

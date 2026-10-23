@@ -1,5 +1,7 @@
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
+import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.FrameCoverage;
@@ -27,15 +29,15 @@ public class DetectionAreaTest {
     @Test
     public void pointSourcesNeedEveryPixelInsideAndStreaksTheirCentroid() {
         DataArea area = DataArea.fullFrame(50, 50);
-        SourceExtractor.DetectedObject point = new SourceExtractor.DetectedObject(4, 20, 100, 2);
-        point.rawPixels = List.of(new SourceExtractor.Pixel(3, 20, 100), new SourceExtractor.Pixel(2, 20, 100));
+        DetectedObject point = new DetectedObject(4, 20, 100, 2);
+        point.rawPixels = List.of(new Pixel(3, 20, 100), new Pixel(2, 20, 100));
         assertFalse(SourceExtractor.isInside(point, area));
-        point.rawPixels = List.of(new SourceExtractor.Pixel(3, 20, 100), new SourceExtractor.Pixel(4, 20, 100));
+        point.rawPixels = List.of(new Pixel(3, 20, 100), new Pixel(4, 20, 100));
         assertTrue(SourceExtractor.isInside(point, area));
 
-        SourceExtractor.DetectedObject streak = new SourceExtractor.DetectedObject(20, 20, 100, 2);
+        DetectedObject streak = new DetectedObject(20, 20, 100, 2);
         streak.isStreak = true;
-        streak.rawPixels = List.of(new SourceExtractor.Pixel(0, 20, 100), new SourceExtractor.Pixel(40, 20, 100));
+        streak.rawPixels = List.of(new Pixel(0, 20, 100), new Pixel(40, 20, 100));
         assertTrue(SourceExtractor.isInside(streak, area));
     }
 
@@ -70,8 +72,8 @@ public class DetectionAreaTest {
             PipelineResult result = engine.runPipeline(frames, new DetectionConfig(), null);
             assertEquals(7, result.telemetry.totalFramesKept);
             boolean insideFound = false;
-            for (List<SourceExtractor.DetectedObject> frame : result.allTransients) {
-                for (SourceExtractor.DetectedObject object : frame) {
+            for (List<DetectedObject> frame : result.allTransients) {
+                for (DetectedObject object : frame) {
                     assertTrue("transient at " + object.x + "," + object.y, result.dataArea.contains(object.x, object.y));
                     insideFound |= Math.hypot(object.x - 120, object.y - 110) < 3;
                 }

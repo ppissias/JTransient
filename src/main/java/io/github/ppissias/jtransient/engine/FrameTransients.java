@@ -9,6 +9,7 @@
  */
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 
 import java.util.List;
@@ -20,7 +21,7 @@ public final class FrameTransients {
     /** Source frame label. */
     public final String filename;
     /** Post-veto transient objects for the frame. */
-    public final List<SourceExtractor.DetectedObject> transients;
+    public final List<DetectedObject> transients;
     /** Full extraction result for the same frame. */
     public final SourceExtractor.ExtractionResult extractionResult;
 
@@ -32,7 +33,7 @@ public final class FrameTransients {
      * @param extractionResult full extraction result collected before the stationary-star veto
      */
     public FrameTransients(String filename,
-                           List<SourceExtractor.DetectedObject> transients,
+                           List<DetectedObject> transients,
                            SourceExtractor.ExtractionResult extractionResult) {
         this.filename = filename;
         this.transients = transients;

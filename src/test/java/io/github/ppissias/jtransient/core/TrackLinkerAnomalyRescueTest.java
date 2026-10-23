@@ -1,5 +1,9 @@
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.AnomalyType;
+import io.github.ppissias.jtransient.model.DetectedObject;
+import io.github.ppissias.jtransient.model.Pixel;
+import io.github.ppissias.jtransient.model.Track;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import org.junit.Test;
 
@@ -24,7 +28,7 @@ public class TrackLinkerAnomalyRescueTest {
     @Test
     public void qualifiesForAnomalyRescueAcceptsSharpPeakAnomaly() {
         DetectionConfig config = new DetectionConfig();
-        SourceExtractor.DetectedObject obj = createAnomaly(20, 9.0, 6.0);
+        DetectedObject obj = createAnomaly(20, 9.0, 6.0);
 
         assertTrue(TrackLinker.qualifiesForAnomalyRescue(obj, config));
     }
@@ -35,7 +39,7 @@ public class TrackLinkerAnomalyRescueTest {
     @Test
     public void qualifiesForAnomalyRescueAcceptsDiffuseIntegratedAnomaly() {
         DetectionConfig config = new DetectionConfig();
-        SourceExtractor.DetectedObject obj = createAnomaly(30, 4.0, 14.0);
+        DetectedObject obj = createAnomaly(30, 4.0, 14.0);
 
         assertTrue(TrackLinker.qualifiesForAnomalyRescue(obj, config));
     }
@@ -46,7 +50,7 @@ public class TrackLinkerAnomalyRescueTest {
     @Test
     public void qualifiesForAnomalyRescueRejectsDiffuseLowPeakBlob() {
         DetectionConfig config = new DetectionConfig();
-        SourceExtractor.DetectedObject obj = createAnomaly(30, 2.5, 14.0);
+        DetectedObject obj = createAnomaly(30, 2.5, 14.0);
 
         assertFalse(TrackLinker.qualifiesForAnomalyRescue(obj, config));
     }
@@ -57,7 +61,7 @@ public class TrackLinkerAnomalyRescueTest {
     @Test
     public void qualifiesForAnomalyRescueRejectsIntegratedAnomalyBelowIntegratedPixelFloor() {
         DetectionConfig config = new DetectionConfig();
-        SourceExtractor.DetectedObject obj = createAnomaly(20, 4.0, 14.0);
+        DetectedObject obj = createAnomaly(20, 4.0, 14.0);
 
         assertFalse(TrackLinker.qualifiesForAnomalyRescue(obj, config));
     }
@@ -68,7 +72,7 @@ public class TrackLinkerAnomalyRescueTest {
     @Test
     public void qualifiesForAnomalyRescueRejectsTooSmallObject() {
         DetectionConfig config = new DetectionConfig();
-        SourceExtractor.DetectedObject obj = createAnomaly(8, 9.0, 20.0);
+        DetectedObject obj = createAnomaly(8, 9.0, 20.0);
 
         assertFalse(TrackLinker.qualifiesForAnomalyRescue(obj, config));
     }
@@ -80,12 +84,12 @@ public class TrackLinkerAnomalyRescueTest {
     @Test
     public void classifyAnomalyRescueDistinguishesPeakAndIntegratedPaths() {
         DetectionConfig config = new DetectionConfig();
-        SourceExtractor.DetectedObject peakAnomaly = createAnomaly(20, 9.0, 6.0);
-        SourceExtractor.DetectedObject integratedAnomaly = createAnomaly(30, 4.0, 14.0);
-        SourceExtractor.DetectedObject rejectedBlob = createAnomaly(30, 2.5, 14.0);
+        DetectedObject peakAnomaly = createAnomaly(20, 9.0, 6.0);
+        DetectedObject integratedAnomaly = createAnomaly(30, 4.0, 14.0);
+        DetectedObject rejectedBlob = createAnomaly(30, 2.5, 14.0);
 
-        assertEquals(TrackLinker.AnomalyType.PEAK_SIGMA, TrackLinker.classifyAnomalyRescue(peakAnomaly, config));
-        assertEquals(TrackLinker.AnomalyType.INTEGRATED_SIGMA, TrackLinker.classifyAnomalyRescue(integratedAnomaly, config));
+        assertEquals(AnomalyType.PEAK_SIGMA, TrackLinker.classifyAnomalyRescue(peakAnomaly, config));
+        assertEquals(AnomalyType.INTEGRATED_SIGMA, TrackLinker.classifyAnomalyRescue(integratedAnomaly, config));
         assertNull(TrackLinker.classifyAnomalyRescue(rejectedBlob, config));
     }
 
@@ -95,7 +99,7 @@ public class TrackLinkerAnomalyRescueTest {
     @Test
     public void findMovingObjectsReturnsAnomaliesOutsideTrackList() {
         DetectionConfig config = new DetectionConfig();
-        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
+        List<List<DetectedObject>> frames = new ArrayList<>();
         frames.add(List.of(createFrameAnomaly(10, 10, 20, 9.0, 6.0, (short) 120, 0)));
         frames.add(new ArrayList<>());
         frames.add(new ArrayList<>());
@@ -111,7 +115,7 @@ public class TrackLinkerAnomalyRescueTest {
 
         assertEquals(0, result.tracks.size());
         assertEquals(1, result.anomalies.size());
-        assertEquals(TrackLinker.AnomalyType.PEAK_SIGMA, result.anomalies.get(0).type);
+        assertEquals(AnomalyType.PEAK_SIGMA, result.anomalies.get(0).type);
         assertSame(frames.get(0).get(0), result.anomalies.get(0).object);
         assertEquals(1, result.telemetry.anomaliesFound);
         assertEquals(0, result.telemetry.integratedSigmaAnomaliesFound);
@@ -122,21 +126,21 @@ public class TrackLinkerAnomalyRescueTest {
      */
     @Test
     public void buildPhase5AnomalyCandidatesExcludesObjectsAlreadyConsumedByTracks() {
-        SourceExtractor.DetectedObject trackedStreak = createFrameStreak(10, 10, 20, 9.0, 6.0, (short) 120, 0, 4.2, 0.0);
-        SourceExtractor.DetectedObject trackedPoint = createFrameAnomaly(20, 20, 20, 9.0, 6.0, (short) 120, 0);
-        SourceExtractor.DetectedObject leftover = createFrameAnomaly(30, 30, 20, 9.0, 6.0, (short) 120, 0);
+        DetectedObject trackedStreak = createFrameStreak(10, 10, 20, 9.0, 6.0, (short) 120, 0, 4.2, 0.0);
+        DetectedObject trackedPoint = createFrameAnomaly(20, 20, 20, 9.0, 6.0, (short) 120, 0);
+        DetectedObject leftover = createFrameAnomaly(30, 30, 20, 9.0, 6.0, (short) 120, 0);
 
-        TrackLinker.Track streakTrack = new TrackLinker.Track();
+        Track streakTrack = new Track();
         streakTrack.isStreakTrack = true;
         streakTrack.addPoint(trackedStreak);
 
-        TrackLinker.Track pointTrack = new TrackLinker.Track();
+        Track pointTrack = new Track();
         pointTrack.addPoint(trackedPoint);
 
-        List<List<SourceExtractor.DetectedObject>> remainingTransients = new ArrayList<>();
+        List<List<DetectedObject>> remainingTransients = new ArrayList<>();
         remainingTransients.add(List.of(trackedStreak, trackedPoint, leftover));
 
-        List<List<SourceExtractor.DetectedObject>> result = TrackLinker.buildPhase5AnomalyCandidates(
+        List<List<DetectedObject>> result = TrackLinker.buildPhase5AnomalyCandidates(
                 remainingTransients,
                 List.of(streakTrack),
                 List.of(pointTrack)
@@ -156,8 +160,8 @@ public class TrackLinkerAnomalyRescueTest {
         DetectionConfig config = new DetectionConfig();
         config.singleStreakMinPeakSigma = 10.0;
 
-        SourceExtractor.DetectedObject preservedStreak = createFrameStreak(10, 10, 20, 9.0, 6.0, (short) 120, 0, 4.2, 0.0);
-        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
+        DetectedObject preservedStreak = createFrameStreak(10, 10, 20, 9.0, 6.0, (short) 120, 0, 4.2, 0.0);
+        List<List<DetectedObject>> frames = new ArrayList<>();
         frames.add(List.of(preservedStreak));
         frames.add(new ArrayList<>());
         frames.add(new ArrayList<>());
@@ -173,7 +177,7 @@ public class TrackLinkerAnomalyRescueTest {
 
         assertEquals(0, result.tracks.size());
         assertEquals(1, result.anomalies.size());
-        assertEquals(TrackLinker.AnomalyType.PEAK_SIGMA, result.anomalies.get(0).type);
+        assertEquals(AnomalyType.PEAK_SIGMA, result.anomalies.get(0).type);
         assertSame(preservedStreak, result.anomalies.get(0).object);
     }
 
@@ -183,7 +187,7 @@ public class TrackLinkerAnomalyRescueTest {
     @Test
     public void findMovingObjectsKeepsAlignedSameFrameAnomaliesAsAnomalies() {
         DetectionConfig config = new DetectionConfig();
-        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
+        List<List<DetectedObject>> frames = new ArrayList<>();
         frames.add(List.of(
                 createFrameAnomaly(10, 10, 30, 4.0, 14.0, (short) 120, 0, 4.2, 0.0),
                 createFrameAnomaly(22, 10, 30, 4.3, 15.0, (short) 120, 0, 4.4, 0.0),
@@ -218,11 +222,11 @@ public class TrackLinkerAnomalyRescueTest {
     public void findMovingObjectsDoesNotGroupRescuedAnomaliesAcrossFrames() {
         DetectionConfig config = new DetectionConfig();
 
-        SourceExtractor.DetectedObject frame0a = createFrameAnomaly(10, 10, 30, 4.0, 14.0, (short) 120, 0, 1.3, 0.0);
-        SourceExtractor.DetectedObject frame0b = createFrameAnomaly(22, 10, 30, 4.1, 14.1, (short) 120, 0, 1.2, 0.0);
-        SourceExtractor.DetectedObject frame1 = createFrameAnomaly(34, 10, 30, 4.2, 14.2, (short) 120, 1, 1.1, 0.0);
+        DetectedObject frame0a = createFrameAnomaly(10, 10, 30, 4.0, 14.0, (short) 120, 0, 1.3, 0.0);
+        DetectedObject frame0b = createFrameAnomaly(22, 10, 30, 4.1, 14.1, (short) 120, 0, 1.2, 0.0);
+        DetectedObject frame1 = createFrameAnomaly(34, 10, 30, 4.2, 14.2, (short) 120, 1, 1.1, 0.0);
 
-        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
+        List<List<DetectedObject>> frames = new ArrayList<>();
         frames.add(List.of(frame0a, frame0b));
         frames.add(List.of(frame1));
         frames.add(new ArrayList<>());
@@ -248,8 +252,8 @@ public class TrackLinkerAnomalyRescueTest {
     @Test
     public void findMovingObjectsKeepsIsolatedIntegratedAnomalyAsStandaloneAnomaly() {
         DetectionConfig config = new DetectionConfig();
-        SourceExtractor.DetectedObject integratedAnomaly = createFrameAnomaly(10, 10, 30, 4.0, 14.0, (short) 120, 0, 4.2, 0.0);
-        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
+        DetectedObject integratedAnomaly = createFrameAnomaly(10, 10, 30, 4.0, 14.0, (short) 120, 0, 4.2, 0.0);
+        List<List<DetectedObject>> frames = new ArrayList<>();
         frames.add(List.of(integratedAnomaly));
         frames.add(new ArrayList<>());
         frames.add(new ArrayList<>());
@@ -265,14 +269,14 @@ public class TrackLinkerAnomalyRescueTest {
 
         assertEquals(0, result.tracks.size());
         assertEquals(1, result.anomalies.size());
-        assertEquals(TrackLinker.AnomalyType.INTEGRATED_SIGMA, result.anomalies.get(0).type);
+        assertEquals(AnomalyType.INTEGRATED_SIGMA, result.anomalies.get(0).type);
         assertSame(integratedAnomaly, result.anomalies.get(0).object);
         assertEquals(1, result.telemetry.anomaliesFound);
         assertEquals(1, result.telemetry.integratedSigmaAnomaliesFound);
     }
 
-    private static SourceExtractor.DetectedObject createAnomaly(int pixelArea, double peakSigma, double integratedSigma) {
-        SourceExtractor.DetectedObject obj = new SourceExtractor.DetectedObject(0.0, 0.0, 0.0, pixelArea);
+    private static DetectedObject createAnomaly(int pixelArea, double peakSigma, double integratedSigma) {
+        DetectedObject obj = new DetectedObject(0.0, 0.0, 0.0, pixelArea);
         obj.pixelArea = pixelArea;
         obj.peakSigma = peakSigma;
         obj.integratedSigma = integratedSigma;
@@ -282,7 +286,7 @@ public class TrackLinkerAnomalyRescueTest {
         return obj;
     }
 
-    private static SourceExtractor.DetectedObject createFrameAnomaly(
+    private static DetectedObject createFrameAnomaly(
             int x,
             int y,
             int pixelArea,
@@ -294,7 +298,7 @@ public class TrackLinkerAnomalyRescueTest {
         return createFrameAnomaly(x, y, pixelArea, peakSigma, integratedSigma, signal, frameIndex, 1.0, 0.0);
     }
 
-    private static SourceExtractor.DetectedObject createFrameAnomaly(
+    private static DetectedObject createFrameAnomaly(
             int x,
             int y,
             int pixelArea,
@@ -305,7 +309,7 @@ public class TrackLinkerAnomalyRescueTest {
             double elongation,
             double angle
     ) {
-        SourceExtractor.DetectedObject obj = createAnomaly(pixelArea, peakSigma, integratedSigma);
+        DetectedObject obj = createAnomaly(pixelArea, peakSigma, integratedSigma);
         obj.x = x;
         obj.y = y;
         obj.elongation = elongation;
@@ -313,12 +317,12 @@ public class TrackLinkerAnomalyRescueTest {
         obj.sourceFrameIndex = frameIndex;
         obj.rawPixels = new ArrayList<>();
         for (int i = 0; i < pixelArea; i++) {
-            obj.rawPixels.add(new SourceExtractor.Pixel(x + i, y, signal));
+            obj.rawPixels.add(new Pixel(x + i, y, signal));
         }
         return obj;
     }
 
-    private static SourceExtractor.DetectedObject createFrameStreak(
+    private static DetectedObject createFrameStreak(
             int x,
             int y,
             int pixelArea,
@@ -329,7 +333,7 @@ public class TrackLinkerAnomalyRescueTest {
             double elongation,
             double angle
     ) {
-        SourceExtractor.DetectedObject obj = createFrameAnomaly(
+        DetectedObject obj = createFrameAnomaly(
                 x,
                 y,
                 pixelArea,

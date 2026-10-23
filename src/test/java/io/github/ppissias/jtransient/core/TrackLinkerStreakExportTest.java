@@ -1,5 +1,7 @@
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
+import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import org.junit.Test;
 
@@ -21,9 +23,9 @@ public class TrackLinkerStreakExportTest {
     @Test
     public void filterTransientsIncludesTrackedStreaksInAllTransients() {
         DetectionConfig config = new DetectionConfig();
-        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
-        SourceExtractor.DetectedObject streak1 = createStreak(10.0, 10.0, 0);
-        SourceExtractor.DetectedObject streak2 = createStreak(20.0, 10.0, 1);
+        List<List<DetectedObject>> frames = new ArrayList<>();
+        DetectedObject streak1 = createStreak(10.0, 10.0, 0);
+        DetectedObject streak2 = createStreak(20.0, 10.0, 1);
         frames.add(List.of(streak1));
         frames.add(List.of(streak2));
         frames.add(new ArrayList<>());
@@ -49,10 +51,10 @@ public class TrackLinkerStreakExportTest {
     @Test
     public void filterTransientsPreservesLowSigmaSingleStreakInAllTransients() {
         DetectionConfig config = new DetectionConfig();
-        SourceExtractor.DetectedObject lowSigmaStreak = createStreak(10.0, 10.0, 0);
+        DetectedObject lowSigmaStreak = createStreak(10.0, 10.0, 0);
         lowSigmaStreak.peakSigma = config.singleStreakMinPeakSigma - 1.0;
 
-        List<List<SourceExtractor.DetectedObject>> frames = new ArrayList<>();
+        List<List<DetectedObject>> frames = new ArrayList<>();
         frames.add(List.of(lowSigmaStreak));
         frames.add(new ArrayList<>());
         frames.add(new ArrayList<>());
@@ -71,14 +73,14 @@ public class TrackLinkerStreakExportTest {
         assertTrue(result.allTransients.get(0).contains(lowSigmaStreak));
     }
 
-    private static SourceExtractor.DetectedObject createStreak(double x, double y, int frameIndex) {
-        SourceExtractor.DetectedObject obj = new SourceExtractor.DetectedObject(x, y, 500.0, 20);
+    private static DetectedObject createStreak(double x, double y, int frameIndex) {
+        DetectedObject obj = new DetectedObject(x, y, 500.0, 20);
         obj.isStreak = true;
         obj.angle = 0.0;
         obj.peakSigma = 9.0;
         obj.sourceFrameIndex = frameIndex;
         obj.rawPixels = new ArrayList<>();
-        obj.rawPixels.add(new SourceExtractor.Pixel((int) x, (int) y, (short) 200));
+        obj.rawPixels.add(new Pixel((int) x, (int) y, (short) 200));
         return obj;
     }
 }

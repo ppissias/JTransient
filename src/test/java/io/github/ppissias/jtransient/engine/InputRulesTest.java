@@ -1,7 +1,7 @@
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
 import io.github.ppissias.jtransient.config.DetectionConfig;
-import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.core.TrackLinker;
 import org.junit.Test;
 
@@ -120,13 +120,13 @@ public class InputRulesTest {
 
     @Test
     public void trackLinkerRejectsAMixOfTimedAndUntimedDetections() {
-        List<List<SourceExtractor.DetectedObject>> detections = new ArrayList<>();
+        List<List<DetectedObject>> detections = new ArrayList<>();
         for (int frame = 0; frame < 3; frame++) {
-            SourceExtractor.DetectedObject object = new SourceExtractor.DetectedObject(10 + frame, 10, 100, 5);
+            DetectedObject object = new DetectedObject(10 + frame, 10, 100, 5);
             object.sourceFrameIndex = frame;
             object.timestamp = frame == 1 ? -1L : frame * 1000L;
             object.exposureDuration = -1L;
-            List<SourceExtractor.DetectedObject> objects = new ArrayList<>();
+            List<DetectedObject> objects = new ArrayList<>();
             objects.add(object);
             detections.add(objects);
         }

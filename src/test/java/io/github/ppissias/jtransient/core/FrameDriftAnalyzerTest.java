@@ -1,5 +1,6 @@
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.engine.ImageFrame;
 import org.junit.Test;
 
@@ -88,7 +89,7 @@ public class FrameDriftAnalyzerTest {
 
         FrameDriftAnalyzer.DriftAnalysisResult result = FrameDriftAnalyzer.analyze(frames);
 
-        SourceExtractor.Pixel drift = result.driftPoints.get(1);
+        Pixel drift = result.driftPoints.get(1);
         assertTrue("dy " + drift.y, Math.abs(drift.y - 30) <= 1);
         // The old first-valid-column rule reported no x drift at all for this frame.
         assertTrue("dx " + drift.x, Math.abs(drift.x + 6) <= 2);

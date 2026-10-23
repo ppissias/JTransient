@@ -9,6 +9,7 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.engine.ImageFrame;
 
@@ -47,7 +48,7 @@ public final class FrameDriftAnalyzer {
      */
     public static final class DriftAnalysisResult {
         /** Translation (dx, dy) of every usable frame; {@code value} holds the frame's sequence index. */
-        public final List<SourceExtractor.Pixel> driftPoints;
+        public final List<Pixel> driftPoints;
         /** Deepest padding of any usable frame, measured in the central half of each edge, in pixels. */
         public final int maxPaddingPixels;
         /** Sequence indices of blank or failed-registration frames (left out of the drift analysis). */
@@ -57,7 +58,7 @@ public final class FrameDriftAnalyzer {
         /** How registration moved each usable frame, measured from its fill; same order as {@link #frameCoverages}. */
         public final List<FrameRegistration> frameRegistrations;
 
-        public DriftAnalysisResult(List<SourceExtractor.Pixel> driftPoints,
+        public DriftAnalysisResult(List<Pixel> driftPoints,
                                    int maxPaddingPixels,
                                    List<Integer> failedRegistrationFrames,
                                    List<FrameCoverage> frameCoverages) {
@@ -83,7 +84,7 @@ public final class FrameDriftAnalyzer {
         }
 
         int maxDrift = 0;
-        List<SourceExtractor.Pixel> driftPoints = new ArrayList<>();
+        List<Pixel> driftPoints = new ArrayList<>();
         List<Integer> failedRegistrationFrames = new ArrayList<>();
         List<FrameCoverage> frameCoverages = new ArrayList<>();
         List<ImageFrame> sortedFrames = new ArrayList<>(inputFrames);
@@ -96,7 +97,7 @@ public final class FrameDriftAnalyzer {
                 failedRegistrationFrames.add(frame.sequenceIndex);
                 continue;
             }
-            driftPoints.add(new SourceExtractor.Pixel(measurement.dx, measurement.dy, frame.sequenceIndex));
+            driftPoints.add(new Pixel(measurement.dx, measurement.dy, frame.sequenceIndex));
             frameCoverages.add(FrameCoverage.measure(frame.sequenceIndex, frame.pixelData));
             if (measurement.maxPaddingExtent > maxDrift) {
                 maxDrift = measurement.maxPaddingExtent;

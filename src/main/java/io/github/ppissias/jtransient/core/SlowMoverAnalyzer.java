@@ -1,5 +1,7 @@
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
+import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.execution.CancellationScope;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
@@ -94,7 +96,7 @@ public final class SlowMoverAnalyzer {
 
         DataArea wholeFrame = dataArea == null ? null
                 : DataArea.fullFrame(maximumStackData[0].length, maximumStackData.length);
-        List<SourceExtractor.DetectedObject> maximumObjects = SourceExtractor.extractSources(
+        List<DetectedObject> maximumObjects = SourceExtractor.extractSources(
                 maximumStackData,
                 config.masterSlowMoverSigmaMultiplier,
                 config.masterSlowMoverMinPixels,
@@ -102,7 +104,7 @@ public final class SlowMoverAnalyzer {
                 dataArea,
                 dataArea
         ).objects;
-        List<SourceExtractor.DetectedObject> medianObjects = SourceExtractor.extractSources(
+        List<DetectedObject> medianObjects = SourceExtractor.extractSources(
                 medianStackData,
                 config.masterSlowMoverSigmaMultiplier,
                 config.masterSlowMoverMinPixels,
@@ -122,7 +124,7 @@ public final class SlowMoverAnalyzer {
 
     /** Applies the size, shape, then median-mask gates in that order. */
     private static List<SlowMoverCandidateResult> filterCandidates(
-            List<SourceExtractor.DetectedObject> maximumObjects,
+            List<DetectedObject> maximumObjects,
             boolean[][] medianMask,
             List<ImageFrame> cleanFrames,
             DetectionConfig config,
@@ -149,7 +151,7 @@ public final class SlowMoverAnalyzer {
         double evaluatedOverlapSum = 0.0;
         telemetry.minCandidateAxisRatio = Double.POSITIVE_INFINITY;
 
-        for (SourceExtractor.DetectedObject object : maximumObjects) {
+        for (DetectedObject object : maximumObjects) {
             CancellationScope.check();
             if (object.rawPixels == null || object.rawPixels.size() < config.masterSlowMoverMinPixels) {
                 telemetry.rejectedBelowMinPixels++;
@@ -237,16 +239,16 @@ public final class SlowMoverAnalyzer {
     }
 
     /** Paints only detected median-object raw pixels; the mask is not dilated. */
-    private static boolean[][] buildMedianMask(List<SourceExtractor.DetectedObject> medianObjects,
+    private static boolean[][] buildMedianMask(List<DetectedObject> medianObjects,
                                                int width,
                                                int height) {
         boolean[][] mask = new boolean[height][width];
-        for (SourceExtractor.DetectedObject object : medianObjects) {
+        for (DetectedObject object : medianObjects) {
             CancellationScope.check();
             if (object.rawPixels == null) {
                 continue;
             }
-            for (SourceExtractor.Pixel pixel : object.rawPixels) {
+            for (Pixel pixel : object.rawPixels) {
                 CancellationScope.check();
                 mask[pixel.y][pixel.x] = true;
             }
@@ -255,9 +257,9 @@ public final class SlowMoverAnalyzer {
     }
 
     /** Returns the fraction of the maximum-stack candidate's raw pixels inside the median mask. */
-    private static double computeMaskOverlapFraction(SourceExtractor.DetectedObject object, boolean[][] mask) {
+    private static double computeMaskOverlapFraction(DetectedObject object, boolean[][] mask) {
         int overlapCount = 0;
-        for (SourceExtractor.Pixel pixel : object.rawPixels) {
+        for (Pixel pixel : object.rawPixels) {
             CancellationScope.check();
             if (mask[pixel.y][pixel.x]) {
                 overlapCount++;

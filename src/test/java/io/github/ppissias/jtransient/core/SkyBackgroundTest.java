@@ -1,5 +1,6 @@
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import org.junit.Test;
 
@@ -137,7 +138,7 @@ public class SkyBackgroundTest {
         config.masterSigmaMultiplier = 5;
         config.masterMinDetectionPixels = 3;
 
-        java.util.List<SourceExtractor.DetectedObject> found =
+        java.util.List<DetectedObject> found =
                 MasterReferenceAnalyzer.analyzeFromMasterStack(master, config).masterStars;
 
         for (int[] star : stars) {

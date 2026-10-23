@@ -9,6 +9,7 @@
  */
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.FrameRegistration;
 import io.github.ppissias.jtransient.core.SourceExtractor;
@@ -37,7 +38,7 @@ final class ExtractedFramesContext {
     /** Monotonic System.nanoTime() value at pipeline start. */
     final long startNanos;
     /** Relative per-frame drift diagnostics derived from the valid image footprint. */
-    final List<SourceExtractor.Pixel> driftPoints;
+    final List<Pixel> driftPoints;
     /** Where every clean frame has image data, or null when no frame was kept. */
     final DataArea dataArea;
     /** How registration moved each frame, measured from its fill, by sequence index. */
@@ -47,7 +48,7 @@ final class ExtractedFramesContext {
     ExtractedFramesContext(List<PreparedFrame> retainedFrames,
                            PipelineTelemetry telemetry,
                            long startNanos,
-                           List<SourceExtractor.Pixel> driftPoints,
+                           List<Pixel> driftPoints,
                            DataArea dataArea,
                            Map<Integer, FrameRegistration> frameRegistrations) {
         this.retainedFrames = List.copyOf(retainedFrames);

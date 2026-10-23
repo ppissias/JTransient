@@ -9,6 +9,8 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
+import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.execution.OperationContext;
 import io.github.ppissias.jtransient.execution.StageId;
 
@@ -47,12 +49,12 @@ public final class MasterReferenceAnalyzer {
      */
     public static final class MasterReferenceAnalysis {
         public final short[][] masterStackData;
-        public final List<SourceExtractor.DetectedObject> masterStars;
+        public final List<DetectedObject> masterStars;
         public final int sensorWidth;
         public final int sensorHeight;
 
         public MasterReferenceAnalysis(short[][] masterStackData,
-                                       List<SourceExtractor.DetectedObject> masterStars,
+                                       List<DetectedObject> masterStars,
                                        int sensorWidth,
                                        int sensorHeight) {
             this.masterStackData = masterStackData;
@@ -103,7 +105,7 @@ public final class MasterReferenceAnalyzer {
         // Use a stage-local config so master-star extraction cannot leak temporary thresholds back to callers.
         extractionConfig.growSigmaMultiplier = effectiveMasterGrowSigma(config);
 
-        List<SourceExtractor.DetectedObject> masterStars = extractStars(masterStackData,
+        List<DetectedObject> masterStars = extractStars(masterStackData,
                 extractionConfig.masterSigmaMultiplier, extractionConfig.masterMinDetectionPixels, extractionConfig);
 
         return new MasterReferenceAnalysis(masterStackData, masterStars, sensorWidth, sensorHeight);
@@ -122,34 +124,34 @@ public final class MasterReferenceAnalyzer {
      * @param minPixels minimum object size
      * @param config extraction settings; its {@code growSigmaMultiplier} is the grow threshold
      */
-    public static List<SourceExtractor.DetectedObject> extractStars(short[][] stack, double sigma, int minPixels,
+    public static List<DetectedObject> extractStars(short[][] stack, double sigma, int minPixels,
                                                                     DetectionConfig config) {
         int height = stack.length;
         int width = stack[0].length;
         DataArea wholeImage = DataArea.wholeImage(width, height);
-        List<SourceExtractor.DetectedObject> stars = new ArrayList<>(
+        List<DetectedObject> stars = new ArrayList<>(
                 OperationContext.compute(StageId.MASTER_REFERENCE, null, () -> SourceExtractor.extractSources(stack, sigma, minPixels, config, null, wholeImage)).objects);
         short[][] flat = SkyBackground.flatten(stack);
         if (flat == stack) {
             return stars;
         }
         BitSet covered = new BitSet(width * height);
-        for (SourceExtractor.DetectedObject star : stars) {
+        for (DetectedObject star : stars) {
             CancellationScope.check();
             if (star.rawPixels != null) {
-                for (SourceExtractor.Pixel p : star.rawPixels) {
+                for (Pixel p : star.rawPixels) {
                     covered.set(p.y * width + p.x);
                 }
             }
         }
-        for (SourceExtractor.DetectedObject candidate
+        for (DetectedObject candidate
                 : OperationContext.compute(StageId.MASTER_REFERENCE, null, () -> SourceExtractor.extractSources(flat, Math.max(sigma, LOCAL_PASS_MIN_SIGMA), minPixels, config, null,
                 wholeImage)).objects) {
             if (candidate.rawPixels == null) {
                 continue;
             }
             boolean overlaps = false;
-            for (SourceExtractor.Pixel p : candidate.rawPixels) {
+            for (Pixel p : candidate.rawPixels) {
                 CancellationScope.check();
                 if (covered.get(p.y * width + p.x)) {
                     overlaps = true;

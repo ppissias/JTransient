@@ -1,5 +1,7 @@
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
+import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.engine.ImageFrame;
 
@@ -70,7 +72,7 @@ final class SlowMoverFrameEvidence {
      * @param config void threshold and expected star-jitter scale
      * @return frame support and stationary-likelihood measurements with availability flags
      */
-    static SlowMoverFrameEvidence measure(SourceExtractor.DetectedObject object,
+    static SlowMoverFrameEvidence measure(DetectedObject object,
                                           List<ImageFrame> frames,
                                           DetectionConfig config) {
         if (frames == null || frames.isEmpty() || object.rawPixels == null || object.rawPixels.isEmpty()) {
@@ -81,7 +83,7 @@ final class SlowMoverFrameEvidence {
         int maxX = Integer.MIN_VALUE;
         int minY = Integer.MAX_VALUE;
         int maxY = Integer.MIN_VALUE;
-        for (SourceExtractor.Pixel pixel : object.rawPixels) {
+        for (Pixel pixel : object.rawPixels) {
             minX = Math.min(minX, pixel.x);
             maxX = Math.max(maxX, pixel.x);
             minY = Math.min(minY, pixel.y);
@@ -201,9 +203,9 @@ final class SlowMoverFrameEvidence {
      * Excludes a frame when at least half the candidate footprint is at the fill level (registration padding). The
      * fill level is absolute, so a sky only a few sigma above zero doesn't count as padding.
      */
-    private static boolean isMostlyVoid(short[][] image, SourceExtractor.DetectedObject object) {
+    private static boolean isMostlyVoid(short[][] image, DetectedObject object) {
         int voidPixels = 0;
-        for (SourceExtractor.Pixel pixel : object.rawPixels) {
+        for (Pixel pixel : object.rawPixels) {
             if (PixelEncoding.toShiftedPositiveInt(image[pixel.y][pixel.x]) <= DataArea.FILL_LEVEL) {
                 voidPixels++;
             }
@@ -216,13 +218,13 @@ final class SlowMoverFrameEvidence {
      * Signed background-subtracted flux determines SNR; positive excess alone weights the
      * centroid, so a negative noise pixel does not pull the reported position away from the source.
      */
-    private static FrameMeasurement findBestAperture(short[][] image, List<SourceExtractor.Pixel> footprint,
+    private static FrameMeasurement findBestAperture(short[][] image, List<Pixel> footprint,
                                                       double radius, LocalBackground background, int frameIndex) {
         int searchRadius = (int) Math.ceil(radius);
         double radiusSquared = radius * radius;
         double bestSignalToNoise = Double.NEGATIVE_INFINITY;
         FrameMeasurement best = null;
-        for (SourceExtractor.Pixel center : footprint) {
+        for (Pixel center : footprint) {
             double signal = 0.0;
             double weightedX = 0.0;
             double weightedY = 0.0;

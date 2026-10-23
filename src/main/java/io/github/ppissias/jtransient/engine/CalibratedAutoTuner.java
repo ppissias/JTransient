@@ -9,6 +9,8 @@
  */
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
+import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.execution.DiagnosticContext;
 
 import io.github.ppissias.jtransient.execution.OperationContext;
@@ -530,7 +532,7 @@ public final class CalibratedAutoTuner {
         final boolean streak;
         final int[] pixels;
 
-        Detection(SourceExtractor.DetectedObject obj, int width) {
+        Detection(DetectedObject obj, int width) {
             this.x = obj.x;
             this.y = obj.y;
             this.streak = obj.isStreak;
@@ -539,7 +541,7 @@ public final class CalibratedAutoTuner {
             } else {
                 this.pixels = new int[obj.rawPixels.size()];
                 for (int i = 0; i < pixels.length; i++) {
-                    SourceExtractor.Pixel p = obj.rawPixels.get(i);
+                    Pixel p = obj.rawPixels.get(i);
                     pixels[i] = p.y * width + p.x;
                 }
             }
@@ -834,8 +836,8 @@ public final class CalibratedAutoTuner {
             // sensor (hot pixels) be recognised although they move across the registered frames.
             FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = OperationContext.compute(StageId.REGISTRATION, null,
                     () -> FrameDriftAnalyzer.analyze(pool));
-            Map<Integer, SourceExtractor.Pixel> driftBySequence = new HashMap<>();
-            for (SourceExtractor.Pixel p : driftAnalysis.driftPoints) {
+            Map<Integer, Pixel> driftBySequence = new HashMap<>();
+            for (Pixel p : driftAnalysis.driftPoints) {
                 CancellationScope.check();
                 driftBySequence.put(p.value, p);
             }
@@ -920,7 +922,7 @@ public final class CalibratedAutoTuner {
                 CropFrame prepared = OperationContext.compute(StageId.CALIBRATION, identity,
                         () -> prepareCropFrame(c, measurementCrops.get(measurementIndex), masters.get(c), psfSigma, baseConfig, random, options));
                 prepared.sourceFrame = identity;
-                SourceExtractor.Pixel drift = driftBySequence.get(sourceFrame.sequenceIndex);
+                Pixel drift = driftBySequence.get(sourceFrame.sequenceIndex);
                 if (drift != null) {
                     prepared.driftX = drift.x;
                     prepared.driftY = drift.y;
@@ -1145,16 +1147,16 @@ public final class CalibratedAutoTuner {
         cfg.detectionSigmaMultiplier = STREAK_PASS_SIGMA;
         cfg.growSigmaMultiplier = STREAK_PASS_GROW;
         BitSet streaks = new BitSet(size * size);
-        for (SourceExtractor.DetectedObject obj : extractInCrop(image, STREAK_PASS_SIGMA, cfg.minDetectionPixels, cfg)) {
+        for (DetectedObject obj : extractInCrop(image, STREAK_PASS_SIGMA, cfg.minDetectionPixels, cfg)) {
             CancellationScope.check();
             if (!obj.isStreak || obj.rawPixels == null || obj.rawPixels.isEmpty()) continue;
             int inStars = 0;
-            for (SourceExtractor.Pixel p : obj.rawPixels) {
+            for (Pixel p : obj.rawPixels) {
                 CancellationScope.check();
                 if (starMask.get(p.y * size + p.x)) inStars++;
             }
             if (inStars > STREAK_MAX_STAR_OVERLAP * obj.rawPixels.size()) continue;
-            for (SourceExtractor.Pixel p : obj.rawPixels) {
+            for (Pixel p : obj.rawPixels) {
                 CancellationScope.check();
                 streaks.set(p.y * size + p.x);
             }
@@ -1377,7 +1379,7 @@ public final class CalibratedAutoTuner {
     }
 
     private static Detection[] extract(short[][] image, FrameSetting fs, DetectionConfig cfg, int width) {
-        List<SourceExtractor.DetectedObject> objects = extractInCrop(image, fs.sigma, fs.minPixels, cfg);
+        List<DetectedObject> objects = extractInCrop(image, fs.sigma, fs.minPixels, cfg);
         Detection[] out = new Detection[objects.size()];
         for (int i = 0; i < out.length; i++) {
             CancellationScope.check();
@@ -1390,14 +1392,14 @@ public final class CalibratedAutoTuner {
      * Objects of a crop, kept up to {@link DataArea#MARGIN} px from its edge. Crops lie inside the data area, so no
      * edge band or darkness test is needed.
      */
-    private static List<SourceExtractor.DetectedObject> extractInCrop(short[][] image, double sigma, int minPixels,
+    private static List<DetectedObject> extractInCrop(short[][] image, double sigma, int minPixels,
                                                                       DetectionConfig cfg) {
         return SourceExtractor.extractSources(image, sigma, minPixels, cfg, null,
                 DataArea.fullFrame(image[0].length, image.length)).objects;
     }
 
     /** Stars of a master cut-out, found as the pipeline finds its master stars. */
-    private static List<SourceExtractor.DetectedObject> extractMasterStars(short[][] master, double sigma, int minPixels,
+    private static List<DetectedObject> extractMasterStars(short[][] master, double sigma, int minPixels,
                                                                            DetectionConfig cfg) {
         return MasterReferenceAnalyzer.extractStars(master, sigma, minPixels, cfg);
     }
@@ -1421,11 +1423,11 @@ public final class CalibratedAutoTuner {
         int h = master.length;
         int w = master[0].length;
         BitSet mask = new BitSet(w * h);
-        List<SourceExtractor.DetectedObject> stars = extractMasterStars(master, ms.seed, ms.minPixels, cfg);
-        for (SourceExtractor.DetectedObject star : stars) {
+        List<DetectedObject> stars = extractMasterStars(master, ms.seed, ms.minPixels, cfg);
+        for (DetectedObject star : stars) {
             CancellationScope.check();
             if (star.rawPixels == null) continue;
-            for (SourceExtractor.Pixel p : star.rawPixels) {
+            for (Pixel p : star.rawPixels) {
                 CancellationScope.check();
                 for (int dy = -dilation; dy <= dilation; dy++) {
                     for (int dx = -dilation; dx <= dilation; dx++) {
@@ -1536,13 +1538,13 @@ public final class CalibratedAutoTuner {
             int h = image.length;
             int w = image[0].length;
             double background = SourceExtractor.calculateBackgroundSigmaClipped(image, w, h, 3.0, base).median;
-            List<SourceExtractor.DetectedObject> objects = extractInCrop(image, 5.0, 5, probe);
-            for (SourceExtractor.DetectedObject obj : objects) {
+            List<DetectedObject> objects = extractInCrop(image, 5.0, 5, probe);
+            for (DetectedObject obj : objects) {
                 CancellationScope.check();
                 if (obj.isStreak || obj.elongation > 1.3 || obj.peakSigma < 20 || obj.peakSigma > 150) continue;
                 double window = Math.max(4.0, 2.0 * obj.fwhm);
                 boolean isolated = true;
-                for (SourceExtractor.DetectedObject other : objects) {
+                for (DetectedObject other : objects) {
                     if (other != obj && Math.hypot(other.x - obj.x, other.y - obj.y) < 2 * window) {
                         isolated = false;
                         break;
@@ -1590,7 +1592,7 @@ public final class CalibratedAutoTuner {
                                         DetectionConfig base) {
         DetectionConfig probe = base.clone();
         probe.growSigmaMultiplier = 3.0;
-        List<List<SourceExtractor.DetectedObject>> masterStars = new ArrayList<>();
+        List<List<DetectedObject>> masterStars = new ArrayList<>();
         for (short[][] master : masters) {
             CancellationScope.check();
             DetectionConfig mc = probe.clone();
@@ -1600,11 +1602,11 @@ public final class CalibratedAutoTuner {
         List<Double> distances = new ArrayList<>();
         for (int i = 0; i < images.size(); i++) {
             CancellationScope.check();
-            List<SourceExtractor.DetectedObject> frameStars = usable(extractInCrop(images.get(i), 4.0, 5, probe));
-            List<SourceExtractor.DetectedObject> reference = masterStars.get(cropOfImage.get(i));
-            for (SourceExtractor.DetectedObject star : reference) {
+            List<DetectedObject> frameStars = usable(extractInCrop(images.get(i), 4.0, 5, probe));
+            List<DetectedObject> reference = masterStars.get(cropOfImage.get(i));
+            for (DetectedObject star : reference) {
                 CancellationScope.check();
-                SourceExtractor.DetectedObject match = nearest(star, frameStars);
+                DetectedObject match = nearest(star, frameStars);
                 if (match == null) continue;
                 double d = Math.hypot(match.x - star.x, match.y - star.y);
                 if (d > 4.0 || nearest(match, reference) != star) continue;
@@ -1619,9 +1621,9 @@ public final class CalibratedAutoTuner {
         return Math.max(MIN_JITTER, JITTER_SAFETY_MULTIPLIER * p);
     }
 
-    private static List<SourceExtractor.DetectedObject> usable(List<SourceExtractor.DetectedObject> objects) {
-        List<SourceExtractor.DetectedObject> out = new ArrayList<>();
-        for (SourceExtractor.DetectedObject o : objects) {
+    private static List<DetectedObject> usable(List<DetectedObject> objects) {
+        List<DetectedObject> out = new ArrayList<>();
+        for (DetectedObject o : objects) {
             CancellationScope.check();
             if (o.rawPixels != null && o.rawPixels.size() >= 5 && o.elongation <= 2.5) out.add(o);
         }
@@ -1631,8 +1633,8 @@ public final class CalibratedAutoTuner {
     }
 
     /** Nearest object by centroid; the list must be sorted by x. */
-    private static SourceExtractor.DetectedObject nearest(SourceExtractor.DetectedObject source,
-                                                          List<SourceExtractor.DetectedObject> sortedByX) {
+    private static DetectedObject nearest(DetectedObject source,
+                                                          List<DetectedObject> sortedByX) {
         int lo = 0;
         int hi = sortedByX.size();
         while (lo < hi) {
@@ -1640,13 +1642,13 @@ public final class CalibratedAutoTuner {
             int mid = (lo + hi) >>> 1;
             if (sortedByX.get(mid).x < source.x) lo = mid + 1; else hi = mid;
         }
-        SourceExtractor.DetectedObject best = null;
+        DetectedObject best = null;
         double bestDist = Double.MAX_VALUE;
         for (int dir = -1; dir <= 1; dir += 2) {
             CancellationScope.check();
             for (int i = dir < 0 ? lo - 1 : lo; i >= 0 && i < sortedByX.size(); i += dir) {
                 CancellationScope.check();
-                SourceExtractor.DetectedObject c = sortedByX.get(i);
+                DetectedObject c = sortedByX.get(i);
                 if (Math.abs(c.x - source.x) > Math.min(bestDist, 10.0)) break;
                 double d = Math.hypot(c.x - source.x, c.y - source.y);
                 if (d < bestDist) {

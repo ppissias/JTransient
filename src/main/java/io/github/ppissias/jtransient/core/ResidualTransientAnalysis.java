@@ -9,6 +9,7 @@
  */
 package io.github.ppissias.jtransient.core;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -56,7 +57,7 @@ public final class ResidualTransientAnalysis {
      */
     public static final class CommonMotionGroup {
         /** One entry per source, ordered by frame. */
-        public final List<List<SourceExtractor.DetectedObject>> sources;
+        public final List<List<DetectedObject>> sources;
         /** Number of frames shared by every source in the group. */
         public final int sharedFrameCount;
 
@@ -66,10 +67,10 @@ public final class ResidualTransientAnalysis {
          * @param sources detections of each separated source
          * @param sharedFrameCount number of frames shared by every source
          */
-        public CommonMotionGroup(List<List<SourceExtractor.DetectedObject>> sources, int sharedFrameCount) {
-            List<List<SourceExtractor.DetectedObject>> copied = new ArrayList<>();
+        public CommonMotionGroup(List<List<DetectedObject>> sources, int sharedFrameCount) {
+            List<List<DetectedObject>> copied = new ArrayList<>();
             if (sources != null) {
-                for (List<SourceExtractor.DetectedObject> source : sources) {
+                for (List<DetectedObject> source : sources) {
                     copied.add(List.copyOf(source));
                 }
             }
@@ -94,7 +95,7 @@ public final class ResidualTransientAnalysis {
         /** Category assigned to the weak rescue candidate. */
         public final LocalRescueKind kind;
         /** Ordered detections that make up the weak local candidate. */
-        public final List<SourceExtractor.DetectedObject> points;
+        public final List<DetectedObject> points;
         /** Shared summary metrics for this candidate. */
         public final LocalTransientMetrics metrics;
         /** Ranking score used by the residual-analysis stage. */
@@ -109,7 +110,7 @@ public final class ResidualTransientAnalysis {
          * @param score ranking score assigned by the analyzer
          */
         public LocalRescueCandidate(LocalRescueKind kind,
-                                    List<SourceExtractor.DetectedObject> points,
+                                    List<DetectedObject> points,
                                     LocalTransientMetrics metrics,
                                     double score) {
             this.kind = kind;
@@ -124,7 +125,7 @@ public final class ResidualTransientAnalysis {
      */
     public static final class LocalActivityCluster {
         /** Detections grouped into the broad review cluster. */
-        public final List<SourceExtractor.DetectedObject> points;
+        public final List<DetectedObject> points;
         /** Shared summary metrics for the cluster. */
         public final LocalTransientMetrics metrics;
         /** Radius used to link detections into this cluster. */
@@ -137,7 +138,7 @@ public final class ResidualTransientAnalysis {
          * @param metrics summary measurements for the cluster
          * @param linkageRadiusPixels clustering radius used to build the cluster
          */
-        public LocalActivityCluster(List<SourceExtractor.DetectedObject> points,
+        public LocalActivityCluster(List<DetectedObject> points,
                                     LocalTransientMetrics metrics,
                                     double linkageRadiusPixels) {
             this.points = Collections.unmodifiableList(new ArrayList<>(points));

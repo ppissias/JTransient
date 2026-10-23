@@ -1,5 +1,7 @@
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.model.DetectedObject;
+import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.MasterMapGenerator;
 import io.github.ppissias.jtransient.core.PixelEncoding;
@@ -358,15 +360,15 @@ public class JTransientEngineSlowMoverTest {
                                                                     DetectionConfig config) {
         DetectionConfig extractionConfig = config.clone();
         extractionConfig.growSigmaMultiplier = config.masterSlowMoverGrowSigmaMultiplier;
-        List<SourceExtractor.DetectedObject> medianObjects = SourceExtractor.extractSources(
+        List<DetectedObject> medianObjects = SourceExtractor.extractSources(
                 medianStack,
                 config.masterSlowMoverSigmaMultiplier,
                 config.masterSlowMoverMinPixels,
                 extractionConfig
         ).objects;
         boolean[][] expected = new boolean[mask.length][mask[0].length];
-        for (SourceExtractor.DetectedObject object : medianObjects) {
-            for (SourceExtractor.Pixel pixel : object.rawPixels) {
+        for (DetectedObject object : medianObjects) {
+            for (Pixel pixel : object.rawPixels) {
                 expected[pixel.y][pixel.x] = true;
             }
         }

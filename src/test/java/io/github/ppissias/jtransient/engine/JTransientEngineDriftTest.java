@@ -1,8 +1,8 @@
 package io.github.ppissias.jtransient.engine;
 
+import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.FrameDriftAnalyzer;
-import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 import org.junit.Test;
 
@@ -31,7 +31,7 @@ public class JTransientEngineDriftTest {
             short[][] frame = createFrame(40, 40, 4, 2, 3, 1, (short) -32600);
             burnCenterCross(frame);
 
-            List<SourceExtractor.Pixel> driftPoints = analyze(engine, Arrays.asList(
+            List<Pixel> driftPoints = analyze(engine, Arrays.asList(
                     new ImageFrame(0, "frame-0", frame, -1L, -1L)
             ), config);
 
@@ -56,7 +56,7 @@ public class JTransientEngineDriftTest {
             String before = new com.google.gson.Gson().toJson(config);
 
             short[][] frame = createFrame(60, 60, 12, 1, 2, 7, (short) -32500);
-            List<SourceExtractor.Pixel> driftPoints = analyze(engine, Arrays.asList(
+            List<Pixel> driftPoints = analyze(engine, Arrays.asList(
                     new ImageFrame(0, "frame-0", frame, -1L, -1L)
             ), config);
 
@@ -81,7 +81,7 @@ public class JTransientEngineDriftTest {
             short[][] earlyFrame = createFrame(30, 30, 5, 1, 0, 0, (short) -32550);
             short[][] lateFrame = createFrame(30, 30, 1, 3, 0, 0, (short) -32550);
 
-            List<SourceExtractor.Pixel> driftPoints = analyze(engine, Arrays.asList(
+            List<Pixel> driftPoints = analyze(engine, Arrays.asList(
                     new ImageFrame(5, "late", lateFrame, -1L, -1L),
                     new ImageFrame(1, "early", earlyFrame, -1L, -1L)
             ), config);
@@ -98,7 +98,7 @@ public class JTransientEngineDriftTest {
         }
     }
 
-    private static List<SourceExtractor.Pixel> analyze(JTransientEngine engine,
+    private static List<Pixel> analyze(JTransientEngine engine,
                                                        List<ImageFrame> frames,
                                                        DetectionConfig config) throws Exception {
         Method method = JTransientEngine.class.getDeclaredMethod(
