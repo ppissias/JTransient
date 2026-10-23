@@ -24,7 +24,7 @@ public class AutoTunerOptionsTest {
         try (var scope = io.github.ppissias.jtransient.execution.DiagnosticContext.open(
                 new io.github.ppissias.jtransient.execution.DiagnosticOptions(true, messages::add));
              var session = io.github.ppissias.jtransient.execution.ExecutionSession.owned(policy)) {
-            var legacy = JTransientAutoTuner.tuneSnapshot(frames(), new DetectionConfig(), legacyOptions(5, 4),
+            var legacy = JTransientAutoTuner.tune(frames(), new DetectionConfig(), legacyOptions(5, 4),
                     session, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
             assertTrue(legacy.success);
             assertTrue(messages.stream().anyMatch(message -> message.contains("BACKGROUND STATS")));
@@ -50,7 +50,7 @@ public class AutoTunerOptionsTest {
     public void borrowedSessionPolicyAndOwnershipArePreserved() {
         var policy = io.github.ppissias.jtransient.execution.ExecutionPolicy.bounded(1);
         try (var session = io.github.ppissias.jtransient.execution.ExecutionSession.owned(policy)) {
-            var legacy = JTransientAutoTuner.tuneSnapshot(frames(), new DetectionConfig(), legacyOptions(5, 4),
+            var legacy = JTransientAutoTuner.tune(frames(), new DetectionConfig(), legacyOptions(5, 4),
                     session, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
             var measured = CalibratedAutoTuner.calibrate(frames(), new DetectionConfig(), calibratedOptions(4, 1), session, null);
             assertTrue(legacy.success);
@@ -205,7 +205,7 @@ public class AutoTunerOptionsTest {
     /** Tunes borrowed synthetic frames, rendezvousing at the first callback to ensure runs overlap. */
     private static JTransientAutoTuner.AutoTunerResult legacy(List<ImageFrame> frames, JTransientAutoTuner.Options options,
                                                             CyclicBarrier barrier) {
-        return JTransientAutoTuner.tuneSnapshot(frames, new DetectionConfig(), options,
+        return JTransientAutoTuner.tune(frames, new DetectionConfig(), options,
                 JTransientAutoTuner.AutoTuneProfile.MEDIUM, listener(barrier));
     }
 

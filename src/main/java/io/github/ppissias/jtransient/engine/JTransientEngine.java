@@ -20,7 +20,6 @@ import io.github.ppissias.jtransient.execution.ExecutionPolicy;
 import io.github.ppissias.jtransient.execution.ExecutionSession;
 import io.github.ppissias.jtransient.execution.FrameIdentity;
 import io.github.ppissias.jtransient.execution.OperationContext;
-import io.github.ppissias.jtransient.execution.OperationOutcome;
 import io.github.ppissias.jtransient.execution.StageId;
 import io.github.ppissias.jtransient.core.CommonMotionRejector;
 import io.github.ppissias.jtransient.core.DataArea;
@@ -62,7 +61,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * an executor or shared execution session. Reuse the same instance sequentially when practical and
  * call {@link #shutdown()} when no longer needed; borrowed resources remain caller-owned.</p>
  *
- * <p>Every entry point checks its input first and throws {@link IllegalArgumentException}, naming the frames, when
+ * <p>Every entry point checks its input first and throws {@link io.github.ppissias.jtransient.execution.OperationFailedException}, retaining validation causes and naming the frames, when
  * the list is empty, the frames differ in size or share a sequence index, some frames have a timestamp and others
  * don't ({@code -1}), some have an exposure time and others don't, the exposure times differ by more than 2 % (at
  * least 0.1 s), or a supplied master stack has another size. A timestamp of 0 is a real time.</p>
@@ -83,7 +82,7 @@ public class JTransientEngine implements AutoCloseable {
     private boolean closed;
 
     /** Exclusively leases this facade and scopes all nested scientific batches to its owned or borrowed workers. */
-    private <Result> Result executeOperation(CancellationToken cancellation, Callable<Result> operation) throws Exception {
+    private <Result> Result executeOperation(CancellationToken cancellation, Callable<Result> operation) {
         synchronized (this) {
             ensureOpen();
             if (running) {
@@ -95,7 +94,7 @@ public class JTransientEngine implements AutoCloseable {
              ExecutionSession.Scope executionScope = execution.open();
              DiagnosticContext.Scope diagnosticScope = DiagnosticContext.openDefaults()) {
             CancellationScope.check();
-            Result result = operation.call();
+            Result result = OperationContext.execute(StageId.OPERATION, operation);
             CancellationScope.check();
             return result;
         } finally {
@@ -112,61 +111,12 @@ public class JTransientEngine implements AutoCloseable {
         this(ExecutionPolicy.defaults());
     }
 
-    /** Runs on a private sortable list copy, borrowing descriptors/pixels until joined completion. */
-    public PipelineResult runPipelineSnapshot(List<ImageFrame> inputFrames, DetectionConfig config,
-                                               TransientEngineProgressListener listener, short[][] providedMasterStack,
-                                               CancellationToken cancellation) throws Exception {
-        return runPipeline(copyFrameList(inputFrames), config, listener, providedMasterStack, cancellation);
-    }
-
-    /** Builds a master on a private list copy; neither descriptors nor pixel buffers are cloned. */
-    public MasterStackResult generateMasterStackSnapshot(List<ImageFrame> inputFrames, DetectionConfig config,
-                                                         TransientEngineProgressListener listener,
-                                                         CancellationToken cancellation) throws Exception {
-        return generateMasterStackWithDetails(copyFrameList(inputFrames), config, listener, cancellation);
-    }
-
-    /** Exports transients from a private sortable list copy, preserving empty retained-frame slots. */
-    public List<FrameTransients> detectTransientsSnapshot(List<ImageFrame> inputFrames, DetectionConfig config,
-                                                         TransientEngineProgressListener listener, short[][] providedMasterStack,
-                                                         CancellationToken cancellation) throws Exception {
-        return detectTransients(copyFrameList(inputFrames), config, listener, providedMasterStack, cancellation);
-    }
 
     /** Copies only the list structure; null is left for the existing named input-validation failure. */
     private static List<ImageFrame> copyFrameList(List<ImageFrame> inputFrames) {
         return inputFrames == null ? null : new ArrayList<>(inputFrames);
     }
 
-    /** Captures terminal pipeline failures/cancellation with stage/frame context; ordinary scientific emptiness remains completed. */
-    public OperationOutcome<PipelineResult> runPipelineOutcome(List<ImageFrame> inputFrames, DetectionConfig config,
-                                                              TransientEngineProgressListener listener) {
-        return runPipelineOutcome(inputFrames, config, listener, null, CancellationScope.current());
-    }
-
-    /** Runs the legacy pipeline under additive failure capture, preserving its sorting/pixel ownership and joining all work. */
-    public OperationOutcome<PipelineResult> runPipelineOutcome(List<ImageFrame> inputFrames, DetectionConfig config,
-                                                              TransientEngineProgressListener listener, short[][] providedMasterStack,
-                                                              CancellationToken cancellation) {
-        return OperationContext.capture(StageId.OPERATION,
-                () -> runPipeline(inputFrames, config, listener, providedMasterStack, cancellation));
-    }
-
-    /** Captures terminal master-preparation outcomes without changing the existing exception-based entry point. */
-    public OperationOutcome<MasterStackResult> generateMasterStackOutcome(List<ImageFrame> inputFrames, DetectionConfig config,
-                                                                        TransientEngineProgressListener listener,
-                                                                        CancellationToken cancellation) {
-        return OperationContext.capture(StageId.OPERATION,
-                () -> generateMasterStackWithDetails(inputFrames, config, listener, cancellation));
-    }
-
-    /** Captures transient-only completion/failure/cancellation; empty per-frame exports remain normal completed results. */
-    public OperationOutcome<List<FrameTransients>> detectTransientsOutcome(List<ImageFrame> inputFrames, DetectionConfig config,
-                                                                         TransientEngineProgressListener listener,
-                                                                         short[][] providedMasterStack, CancellationToken cancellation) {
-        return OperationContext.capture(StageId.OPERATION,
-                () -> detectTransients(inputFrames, config, listener, providedMasterStack, cancellation));
-    }
 
     /** Creates an engine with owned workers and explicit per-operation CPU/scratch-estimation limits. */
     public JTransientEngine(ExecutionPolicy policy) {
@@ -217,16 +167,16 @@ public class JTransientEngine implements AutoCloseable {
      * Generates the Master Stack independently so it can be reused across iterative pipeline runs.
      * Highly optimized: Skips transient extraction and only runs quality analysis to drop outliers.
      *
-     * <p>The supplied {@code inputFrames} list is sorted in place by {@link ImageFrame#sequenceIndex}
-     * before processing.</p>
+     * <p>A private list copy is ordered by {@link ImageFrame#sequenceIndex}; caller order is preserved.
+     * Frame descriptors and pixel buffers remain borrowed, not cloned.</p>
      *
      * @param inputFrames frames to evaluate and stack
      * @param config pipeline configuration
      * @param listener optional progress listener
      * @return median master stack built from the retained frames
-     * @throws Exception if frame evaluation or stack generation fails
+     * @throws io.github.ppissias.jtransient.execution.OperationFailedException if frame evaluation or stack generation fails
      */
-    public short[][] generateMasterStack(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
+    public short[][] generateMasterStack(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) {
         return generateMasterStackWithDetails(inputFrames, config, listener).masterStack;
     }
 
@@ -252,13 +202,14 @@ public class JTransientEngine implements AutoCloseable {
      * not changed.
      */
     public MasterStackResult generateMasterStackWithDetails(List<ImageFrame> inputFrames, DetectionConfig config,
-                                                            TransientEngineProgressListener listener) throws Exception {
+                                                            TransientEngineProgressListener listener) {
         return generateMasterStackWithDetails(inputFrames, config, listener, CancellationScope.current());
     }
 
     public MasterStackResult generateMasterStackWithDetails(List<ImageFrame> inputFrames, DetectionConfig config,
-                                                            TransientEngineProgressListener listener, CancellationToken cancellation) throws Exception {
-        return executeOperation(cancellation, () -> generateMasterStackWithDetailsInternal(inputFrames,
+                                                            TransientEngineProgressListener listener, CancellationToken cancellation) {
+        List<ImageFrame> operationFrames = copyFrameList(inputFrames);
+        return executeOperation(cancellation, () -> generateMasterStackWithDetailsInternal(operationFrames,
                 OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.MASTER_STACK)), listener));
     }
 
@@ -349,16 +300,16 @@ public class JTransientEngine implements AutoCloseable {
      * Entry point for the JTransient library.
      * Convenience wrapper that calculates the master stack automatically.
      *
-     * <p>The supplied {@code inputFrames} list is sorted in place by {@link ImageFrame#sequenceIndex}
-     * before processing.</p>
+     * <p>A private list copy is ordered by {@link ImageFrame#sequenceIndex}; caller order is preserved.
+     * Frame descriptors and pixel buffers remain borrowed, not cloned.</p>
      *
      * @param inputFrames frames to process
      * @param config pipeline configuration
      * @param listener optional progress listener
      * @return full pipeline output bundle
-     * @throws Exception if extraction, stacking, tracking, or residual analysis fails
+     * @throws io.github.ppissias.jtransient.execution.OperationFailedException if extraction, stacking, tracking, or residual analysis fails
      */
-    public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
+    public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) {
         return runPipeline(inputFrames, config, listener, null);
     }
 
@@ -366,16 +317,16 @@ public class JTransientEngine implements AutoCloseable {
      * Runs the pipeline up to detecting the transients (extracted objects) for all frames and does no further processing.
      * Generates a median master stack automatically to apply the Veto Mask.
      *
-     * <p>The supplied {@code inputFrames} list is sorted in place by {@link ImageFrame#sequenceIndex}
-     * before processing.</p>
+     * <p>A private list copy is ordered by {@link ImageFrame#sequenceIndex}; caller order is preserved.
+     * Frame descriptors and pixel buffers remain borrowed, not cloned.</p>
      *
      * @param inputFrames frames to process
      * @param config pipeline configuration
      * @param listener optional progress listener
      * @return per-frame transient exports after the stationary-star veto
-     * @throws Exception if extraction, master-stack generation, or vetoing fails
+     * @throws io.github.ppissias.jtransient.execution.OperationFailedException if extraction, master-stack generation, or vetoing fails
      */
-    public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
+    public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) {
         return detectTransients(inputFrames, config, listener, null);
     }
 
@@ -383,22 +334,23 @@ public class JTransientEngine implements AutoCloseable {
      * Runs the pipeline up to detecting the transients for all frames and does no further processing.
      * Uses the provided master stack to successfully apply the Veto Mask.
      *
-     * <p>The supplied {@code inputFrames} list is sorted in place by {@link ImageFrame#sequenceIndex}
-     * before processing.</p>
+     * <p>A private list copy is ordered by {@link ImageFrame#sequenceIndex}; caller order is preserved.
+     * Frame descriptors and pixel buffers remain borrowed, not cloned.</p>
      *
      * @param inputFrames frames to process
      * @param config pipeline configuration
      * @param listener optional progress listener
      * @param providedMasterStack optional precomputed median master stack
      * @return per-frame transient exports after the stationary-star veto
-     * @throws Exception if extraction or vetoing fails
+     * @throws io.github.ppissias.jtransient.execution.OperationFailedException if extraction or vetoing fails
      */
-    public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
+    public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) {
         return detectTransients(inputFrames, config, listener, providedMasterStack, CancellationScope.current());
     }
 
-    public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack, CancellationToken cancellation) throws Exception {
-        return executeOperation(cancellation, () -> detectTransientsInternal(inputFrames,
+    public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack, CancellationToken cancellation) {
+        List<ImageFrame> operationFrames = copyFrameList(inputFrames);
+        return executeOperation(cancellation, () -> detectTransientsInternal(operationFrames,
                 OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.TRANSIENTS)), listener, providedMasterStack));
     }
 
@@ -795,24 +747,25 @@ public class JTransientEngine implements AutoCloseable {
      * Entry point for the JTransient library.
      * Allows passing a pre-computed master stack to bypass the heavy stacking phase during iterative runs.
      *
-     * <p>The supplied {@code inputFrames} list is sorted in place by {@link ImageFrame#sequenceIndex}
-     * before processing.</p>
+     * <p>A private list copy is ordered by {@link ImageFrame#sequenceIndex}; caller order is preserved.
+     * Frame descriptors and pixel buffers remain borrowed, not cloned.</p>
      *
      * @param inputFrames frames to process
      * @param config pipeline configuration
      * @param listener optional progress listener
      * @param providedMasterStack optional precomputed median master stack
      * @return full pipeline output bundle
-     * @throws Exception if extraction, tracking, or residual analysis fails
+     * @throws io.github.ppissias.jtransient.execution.OperationFailedException if extraction, tracking, or residual analysis fails
      */
-    public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
+    public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) {
         return runPipeline(inputFrames, config, listener, providedMasterStack, CancellationScope.current());
     }
 
-    public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack, CancellationToken cancellation) throws Exception {
-        return executeOperation(cancellation, () -> runPipelineInternal(inputFrames,
+    public PipelineResult runPipeline(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack, CancellationToken cancellation) {
+        List<ImageFrame> operationFrames = copyFrameList(inputFrames);
+        return executeOperation(cancellation, () -> runPipelineInternal(operationFrames,
                 OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.PIPELINE,
-                        inputFrames != null && inputFrames.stream().anyMatch(frame -> frame != null && frame.timestamp != -1L)
+                        operationFrames != null && operationFrames.stream().anyMatch(frame -> frame != null && frame.timestamp != -1L)
                                 ? DetectionConfigRules.Timing.AVAILABLE : DetectionConfigRules.Timing.MISSING)),
                 listener, providedMasterStack));
     }
@@ -1056,7 +1009,7 @@ public class JTransientEngine implements AutoCloseable {
                 // Photometry 0-100% maps to 93-99%.
                 photometryInput.progress = (percentage, message) -> OperationContext.notify(listener::onProgressUpdate, 93 + (int) (percentage * 0.06), message);
             }
-            variableStarAnalysis = OperationContext.call(StageId.PHOTOMETRY, null, () -> VariableStarAnalyzer.analyzeSnapshot(photometryInput, config, executor));
+            variableStarAnalysis = OperationContext.call(StageId.PHOTOMETRY, null, () -> VariableStarAnalyzer.analyze(photometryInput, config, executor));
             telemetry.photometryTelemetry = variableStarAnalysis.telemetry;
             telemetry.recordStage(PipelineTelemetry.Stage.PHOTOMETRY, stageStartedNanos);
         }

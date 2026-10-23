@@ -104,13 +104,15 @@ public class InputRulesTest {
             try {
                 engine.runPipeline(frames, new DetectionConfig(), null);
                 fail("runPipeline accepted frames of different sizes");
-            } catch (IllegalArgumentException expected) {
+            } catch (io.github.ppissias.jtransient.execution.OperationFailedException expected) {
+                assertTrue(expected.getCause() instanceof IllegalArgumentException);
                 assertTrue(expected.getMessage().contains("odd.fits"));
             }
             try {
                 engine.generateMasterStack(frames, new DetectionConfig(), null);
                 fail("generateMasterStack accepted frames of different sizes");
-            } catch (IllegalArgumentException expected) {
+            } catch (io.github.ppissias.jtransient.execution.OperationFailedException expected) {
+                assertTrue(expected.getCause() instanceof IllegalArgumentException);
                 assertTrue(expected.getMessage().contains("odd.fits"));
             }
         }

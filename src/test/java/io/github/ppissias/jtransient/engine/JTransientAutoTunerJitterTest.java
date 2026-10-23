@@ -53,7 +53,7 @@ public class JTransientAutoTunerJitterTest {
 
         List<ImageFrame> frames = createImageSequence(96, 96, 8, 8);
 
-        JTransientAutoTuner.AutoTunerResult result = JTransientAutoTuner.tuneSnapshot(frames, baseConfig, options, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
+        JTransientAutoTuner.AutoTunerResult result = JTransientAutoTuner.tune(frames, baseConfig, options, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
 
         assertTrue(result.success);
         assertNotNull(result.optimizedConfig);

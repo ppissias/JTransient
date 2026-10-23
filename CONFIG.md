@@ -7,7 +7,7 @@ All fields are public and mutable. A few implementation details matter when you 
 - engine operations capture and validate a private primitive snapshot at entry, so later caller edits do not change an active run; callers must synchronize edits during capture
 - the engine never changes the caller's config object; registration fill is handled by the session data area, not by a setting
 - the engine uses stage-local config overrides for master-star and slow-mover extraction so the caller's config object is not left mutated afterward
-- both tuners expose `tuneSnapshot(...)`: success and fallback configurations are detached from the caller; compatibility `tune(...)` returns the original base reference on unsuccessful results
+- both tuners expose `tune(...)`: success and fallback configurations are detached from the caller; compatibility `tune(...)` returns the original base reference on unsuccessful results
 
 ## Shared rules and compatibility
 

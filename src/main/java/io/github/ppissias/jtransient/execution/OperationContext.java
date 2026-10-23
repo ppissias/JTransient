@@ -11,7 +11,7 @@ import java.util.function.Supplier;
 
 /**
  * Thread-scoped additive failure capture, propagated explicitly into managed batches.
- * Legacy calls rethrow the same exceptions; only capture callers receive terminal outcome values.
+ * Canonical engine/tuner calls throw structured OperationFailedException; generic capture also supports terminal values.
  * Concurrent failures retain the first recorded ordinary failure, not a deterministic choice among racing failures.
  */
 public final class OperationContext {
@@ -29,6 +29,7 @@ public final class OperationContext {
             } catch (Exception failure) {
                 Throwable original = unwrap(failure);
                 if (original instanceof Error error) throw error;
+                if (original instanceof OperationFailedException failed) return new OperationOutcome.Failed<>(failed.failure());
                 if (original instanceof InterruptedException) {
                     Thread.currentThread().interrupt();
                     CancellationException cancelled = new CancellationException("JTransient operation interrupted.");
@@ -40,6 +41,14 @@ public final class OperationContext {
                 return new OperationOutcome.Failed<>(context.failure.get());
             }
         }
+    }
+
+    /** Executes an operation using the canonical throwing contract; cancellation and fatal errors remain distinct. */
+    public static <Result> Result execute(StageId defaultStage, Callable<Result> operation) {
+        OperationOutcome<Result> outcome = capture(defaultStage, operation);
+        if (outcome instanceof OperationOutcome.Completed<Result> completed) return completed.value();
+        if (outcome instanceof OperationOutcome.Cancelled<Result> cancelled) throw cancelled.cause();
+        throw new OperationFailedException(((OperationOutcome.Failed<Result>) outcome).failure());
     }
 
     /** Runs checked stage work, inheriting frame identity when null, and records/rethrows the same original exception. */

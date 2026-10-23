@@ -12,6 +12,12 @@ Contents:
 - [Completed and retired findings](#completed-and-retired-findings)
 - [Review of the plan, with answered questions](#review)
 
+## Coordinated cleanup: canonical input and failure contracts (2026-10-23)
+
+Ordinary engine entry points sort private frame-list copies and borrow pixels; duplicate `*Snapshot`/`*Outcome` engine facades are removed. Both tuners expose canonical `tune` methods with detached success/fallback settings, not separate same-reference legacy fallbacks. Photometry's ordinary analysis validates/captures aligned inputs; the permissive alternative is removed. `OperationFailedException` now supplies stage/frame and the original cause through ordinary engine/tuner calls, including invalid consumed settings and calibrated execution failures. Calibrated execution errors are no longer hidden in scientific unsuccessful results or a runtime `failureCause` field. Cancellation/fatal errors remain distinct, with joined worker cleanup. Generic `OperationContext.capture` still supports value-based outcomes around any callable without duplicating engine APIs.
+
+SpacePixels callers, current consumers and contract tests are migrated together. All three scientific snapshots (full 153-frame pipeline, both reduced-grid tuners, six large frames) remain byte-identical; validation details and any limitations are recorded in the feature commits. No detection algorithm, saved profile schema, reference caching or maintainer-owned live-preview behavior is changed.
+
 ## Coordinated cleanup: fixed tuner defaults and scoped diagnostics (2026-10-23)
 
 Tuner defaults are private constants copied into caller-owned builders and immutable `Options.defaults()`. Removed mutable public tuner knobs, global debug flags, the legacy diagnostic registration bridge and the separate legacy tuner text sink. Core and both tuners share one scoped diagnostic policy. SpacePixels captures its application property at each engine/tuner/standalone-extraction boundary, while explicit caller scopes take precedence; no global library state is changed. GUI budget labels read immutable default options. Tests now build per-run sweeps rather than saving/restoring global tuner state.

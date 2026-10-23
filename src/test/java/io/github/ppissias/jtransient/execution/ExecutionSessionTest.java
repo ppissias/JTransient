@@ -116,7 +116,7 @@ public class ExecutionSessionTest {
             assertFalse(session.isClosed());
             assertThrows(IllegalStateException.class, () -> borrowingEngine.runPipeline(new ArrayList<>(), new DetectionConfig(), null));
             try (var engine = new JTransientEngine(ExecutionPolicy.bounded(1), executor)) {
-                assertThrows(IllegalArgumentException.class, () -> engine.runPipeline(new ArrayList<>(), new DetectionConfig(), null));
+                assertThrows(OperationFailedException.class, () -> engine.runPipeline(new ArrayList<>(), new DetectionConfig(), null));
             }
             assertFalse(executor.isShutdown());
             assertEquals(2, executor.submit(() -> 2).get().intValue());

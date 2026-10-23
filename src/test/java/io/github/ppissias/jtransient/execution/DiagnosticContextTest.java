@@ -114,7 +114,7 @@ public class DiagnosticContextTest {
                     throw original;
                 }
             })); JTransientEngine engine = new JTransientEngine(ExecutionPolicy.bounded(1), workers)) {
-                OperationOutcome<?> outcome = engine.runPipelineOutcome(frames(1), new DetectionConfig(), null);
+                OperationOutcome<?> outcome = OperationContext.capture(StageId.OPERATION, () -> engine.runPipeline(frames(1), new DetectionConfig(), null));
                 OperationOutcome.Failed<?> failure = (OperationOutcome.Failed<?>) outcome;
                 assertSame(original, failure.failure().cause());
                 assertEquals(StageId.FRAME_EXTRACTION, failure.failure().stage());

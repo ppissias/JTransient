@@ -34,11 +34,11 @@ public final class ApiConsumer {
 
         List<ImageFrame> frames = frames();
         var profile = JTransientAutoTuner.AutoTuneProfile.MEDIUM;
-        var legacy = JTransientAutoTuner.tuneSnapshot(frames.subList(0, 4), config, profile, null);
-        var calibrated = CalibratedAutoTuner.tuneSnapshot(frames.subList(0, 4), config, profile, null);
+        var legacy = JTransientAutoTuner.tune(frames.subList(0, 4), config, profile, null);
+        var calibrated = CalibratedAutoTuner.tune(frames.subList(0, 4), config, profile, null);
         require(!legacy.success && legacy.optimizedConfig != config, "Legacy tuning must detach fallback settings");
         require(!calibrated.success && calibrated.optimizedConfig != config, "Calibrated tuning must detach fallback settings");
-        var detached = JTransientAutoTuner.tuneSnapshot(frames.subList(0, 4), config, profile, null);
+        var detached = JTransientAutoTuner.tune(frames.subList(0, 4), config, profile, null);
         require(detached.optimizedConfig != config, "Snapshot fallback aliases caller settings");
         require(new com.google.gson.Gson().toJson(detached).contains("optimizedConfig"), "Result JSON missing settings");
         require(PixelEncoding.toShiftedPositiveInt(MasterMapGenerator.createMedianMasterStack(frames)[5][5]) == 1000,

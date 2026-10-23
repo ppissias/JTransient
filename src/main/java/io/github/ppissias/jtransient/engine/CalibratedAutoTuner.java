@@ -12,7 +12,6 @@ package io.github.ppissias.jtransient.engine;
 import io.github.ppissias.jtransient.execution.DiagnosticContext;
 
 import io.github.ppissias.jtransient.execution.OperationContext;
-import io.github.ppissias.jtransient.execution.OperationOutcome;
 import io.github.ppissias.jtransient.execution.FrameIdentity;
 import io.github.ppissias.jtransient.execution.StageId;
 
@@ -240,12 +239,12 @@ public final class CalibratedAutoTuner {
             require(falsePositiveBudgetPerMpixFrame.length == PROFILE_COUNT, "one false-positive budget is required per profile");
         }
 
-        /** Captures compatibility defaults once; callers must not edit static knobs concurrently with this capture. */
+        /** Returns validated immutable search options from fixed private defaults. */
         public static Options defaults() {
             return new Builder().build();
         }
 
-        /** Creates an independent mutable builder from the current compatibility defaults. */
+        /** Creates a caller-owned mutable builder copied from fixed defaults. */
         public static Builder builder() {
             return new Builder();
         }
@@ -411,7 +410,7 @@ public final class CalibratedAutoTuner {
             /** cropPaddingClearance policy; array values are copied by build(). */
             public int cropPaddingClearance;
 
-            /** Captures the current legacy defaults, copying arrays immediately. */
+            /** Copies fixed default values and detaches their arrays into a caller-owned builder. */
             public Builder() {
                 executionPolicy = ExecutionPolicy.defaults();
                 falsePositiveBudgetPerMpixFrame = CalibratedAutoTuner.FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME.clone();
@@ -466,38 +465,10 @@ public final class CalibratedAutoTuner {
         }
     }
 
-    /** Prevents construction of the static compatibility facade. */
+    /** Prevents construction of the static tuner facade. */
     private CalibratedAutoTuner() {
     }
 
-    /** Captures calibrated tuning execution failures/cancellation; scientific insufficient-evidence fallback remains completed. */
-    public static OperationOutcome<JTransientAutoTuner.AutoTunerResult> tuneOutcome(List<ImageFrame> frames, DetectionConfig config,
-            Options options, JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener,
-            io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
-        return OperationContext.capture(StageId.CALIBRATION, () -> {
-            var result = tuneSnapshot(frames, config, options, profile, listener, cancellation);
-            rethrowExecutionFailure(result.calibration);
-            return result;
-        });
-    }
-
-    /** Captures direct measurement failure separately from its ordinary insufficient-evidence result, inheriting cancellation. */
-    public static OperationOutcome<Calibration> calibrateOutcome(List<ImageFrame> frames, DetectionConfig config,
-                                                                Options options, TransientEngineProgressListener listener) {
-        return OperationContext.capture(StageId.CALIBRATION, () -> {
-            Calibration result = calibrate(frames, config, options, listener);
-            rethrowExecutionFailure(result);
-            return result;
-        });
-    }
-
-    /** Adapts only runtime execution failure for outcome capture; existing result APIs retain their original cause/fallback shape. */
-    private static void rethrowExecutionFailure(Calibration calibration) throws Exception {
-        if (calibration == null || calibration.failureCause == null) return;
-        if (calibration.failureCause instanceof Exception failure) throw failure;
-        if (calibration.failureCause instanceof Error error) throw error;
-        throw new java.util.concurrent.ExecutionException(calibration.failureCause);
-    }
 
     // =========================================================================
     // Data holders
@@ -642,7 +613,6 @@ public final class CalibratedAutoTuner {
         public boolean success;
         /** Human-readable explanation when {@link #success} is false. */
         public String failureReason;
-        public transient Throwable failureCause;
         public int poolFrames;
         public int measurementFrames;
         public int crops;
@@ -734,43 +704,6 @@ public final class CalibratedAutoTuner {
         return tuned;
     }
 
-    /**
-     * Tunes the detection and master-mask settings for the supplied candidate frames.
-     *
-     * @param poolFrames representative frames of the session (the master is built from all of them)
-     * @param baseConfig configuration to start from; tuned fields are overwritten in a clone
-     * @param profile sensitivity profile (low, medium, high or maximum)
-     * @param listener optional progress listener
-     * @return result in the same shape as the legacy tuner, with {@code summary} filled in
-     */
-    public static JTransientAutoTuner.AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
-                                         JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener,
-                                         io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
-        try (CancellationScope scope = CancellationScope.open(cancellation)) {
-            CancellationScope.check();
-            JTransientAutoTuner.AutoTunerResult result = tune(poolFrames, baseConfig, profile, listener);
-            CancellationScope.check();
-            return result;
-        }
-    }
-
-    /**
-     * Runs calibrated tuning while preserving the compatibility entry point's original-base fallback identity.
-     *
-     * @param poolFrames available calibration frames
-     * @param baseConfig settings captured for the measurement; returned by reference only on unsuccessful tuning
-     * @param profile sensitivity/budget policy preset
-     * @param listener optional progress listener
-     * @return selected settings on success, or an unsuccessful result referring to baseConfig
-     */
-    public static JTransientAutoTuner.AutoTunerResult tune(List<ImageFrame> poolFrames,
-                                                           DetectionConfig baseConfig,
-                                                           JTransientAutoTuner.AutoTuneProfile profile,
-                                                           TransientEngineProgressListener listener) {
-        JTransientAutoTuner.AutoTunerResult result = tuneSnapshot(poolFrames, baseConfig, profile, listener);
-        if (!result.success) result.optimizedConfig = baseConfig;
-        return result;
-    }
 
     /**
      * Tunes a captured configuration under explicit cancellation and keeps both success and fallback settings detached.
@@ -781,15 +714,15 @@ public final class CalibratedAutoTuner {
      * @param listener optional progress listener
      * @param cancellation request checked before capture, during work and before return
      * @return calibrated tuning outcome with an independent optimized or fallback configuration
-     * @throws DetectionConfigRules.InvalidConfigurationException if consumed configuration values are invalid
+     * @throws io.github.ppissias.jtransient.execution.OperationFailedException for invalid settings or execution failures, retaining stage/frame and cause
      * @throws java.util.concurrent.CancellationException if cancellation is requested
      */
-    public static JTransientAutoTuner.AutoTunerResult tuneSnapshot(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+    public static JTransientAutoTuner.AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
             JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener,
             io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
         try (CancellationScope scope = CancellationScope.open(cancellation)) {
             CancellationScope.check();
-            JTransientAutoTuner.AutoTunerResult result = tuneSnapshot(poolFrames, baseConfig, profile, listener);
+            JTransientAutoTuner.AutoTunerResult result = tune(poolFrames, baseConfig, profile, listener);
             CancellationScope.check();
             return result;
         }
@@ -804,46 +737,46 @@ public final class CalibratedAutoTuner {
      * @param profile sensitivity/budget policy preset
      * @param listener optional progress listener
      * @return calibrated tuning outcome with detached successful or fallback settings
-     * @throws DetectionConfigRules.InvalidConfigurationException if consumed configuration values are invalid
+     * @throws io.github.ppissias.jtransient.execution.OperationFailedException for invalid settings or execution failures, retaining stage/frame and cause
      * @throws java.util.concurrent.CancellationException if the inherited scope is cancelled
      */
-    public static JTransientAutoTuner.AutoTunerResult tuneSnapshot(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+    public static JTransientAutoTuner.AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
             JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener) {
         CancellationScope.check();
-        return tuneSnapshot(poolFrames, baseConfig, Options.defaults(), profile, listener);
+        return tune(poolFrames, baseConfig, Options.defaults(), profile, listener);
     }
 
 
     /** Tunes with detached configuration and immutable options, borrowing frame pixels until the joined operation returns. */
-    public static JTransientAutoTuner.AutoTunerResult tuneSnapshot(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+    public static JTransientAutoTuner.AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
             Options options, JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener) {
         CancellationScope.check();
         java.util.Objects.requireNonNull(options, "options");
         try (ExecutionSession execution = ExecutionSession.owned(options.executionPolicy)) {
-            return tuneSnapshot(poolFrames, baseConfig, options, execution, profile, listener);
+            return tune(poolFrames, baseConfig, options, execution, profile, listener);
         }
     }
 
     /** Tunes with a borrowed session, preserving its policy/ownership and inheriting cooperative cancellation. */
-    public static JTransientAutoTuner.AutoTunerResult tuneSnapshot(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+    public static JTransientAutoTuner.AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
             Options options, ExecutionSession execution, JTransientAutoTuner.AutoTuneProfile profile,
             TransientEngineProgressListener listener) {
         CancellationScope.check();
         java.util.Objects.requireNonNull(options, "options");
         try (ExecutionSession.Scope scope = execution.open();
              DiagnosticContext.Scope diagnosticScope = DiagnosticContext.openDefaults()) {
-            return tuneCaptured(poolFrames, OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION)),
-                    profile, listener, options.withExecutionPolicy(execution.policy()));
+            return OperationContext.execute(StageId.CALIBRATION, () -> tuneCaptured(poolFrames, OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION)),
+                    profile, listener, options.withExecutionPolicy(execution.policy())));
         }
     }
 
     /** Tunes with independent options and explicit cancellation; no process-wide tuner state is changed. */
-    public static JTransientAutoTuner.AutoTunerResult tuneSnapshot(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+    public static JTransientAutoTuner.AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
             Options options, JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener,
             io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
         try (CancellationScope scope = CancellationScope.open(cancellation)) {
             CancellationScope.check();
-            JTransientAutoTuner.AutoTunerResult result = tuneSnapshot(poolFrames, baseConfig, options, profile, listener);
+            JTransientAutoTuner.AutoTunerResult result = tune(poolFrames, baseConfig, options, profile, listener);
             CancellationScope.check();
             return result;
         }
@@ -904,7 +837,7 @@ public final class CalibratedAutoTuner {
      * @param baseConfig caller settings captured without mutation
      * @param listener optional progress listener
      * @return calibration measurements and choices, or an unsuccessful calibration when evidence is insufficient
-     * @throws DetectionConfigRules.InvalidConfigurationException if consumed configuration values are invalid
+     * @throws io.github.ppissias.jtransient.execution.OperationFailedException for invalid settings or execution failures, retaining stage/frame and cause
      * @throws IllegalArgumentException if the frames break the engine's input rules (see {@link JTransientEngine})
      */
     public static Calibration calibrate(List<ImageFrame> poolFrames,
@@ -932,9 +865,9 @@ public final class CalibratedAutoTuner {
         java.util.Objects.requireNonNull(options, "options");
         try (ExecutionSession.Scope scope = execution.open();
              DiagnosticContext.Scope diagnosticScope = DiagnosticContext.openDefaults()) {
-            return calibrateCaptured(poolFrames,
+            return OperationContext.execute(StageId.CALIBRATION, () -> calibrateCaptured(poolFrames,
                     OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION)), listener,
-                    options.withExecutionPolicy(execution.policy()));
+                    options.withExecutionPolicy(execution.policy())));
         }
     }
 
@@ -1231,11 +1164,8 @@ public final class CalibratedAutoTuner {
             return calibration;
         } catch (java.util.concurrent.CancellationException cancelled) {
             throw cancelled;
-        } catch (Exception e) {
-            calibration.failureCause = e instanceof java.util.concurrent.ExecutionException && e.getCause() != null ? e.getCause() : e;
-            calibration.success = false;
-            calibration.failureReason = "Calibrated auto-tuning failed: " + e;
-            return calibration;
+        } catch (Exception failure) {
+            throw new java.util.concurrent.CompletionException(failure);
         }
     }
 

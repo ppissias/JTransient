@@ -54,20 +54,20 @@ public class ConfigurationSnapshotTest {
         }
     }
 
-    /** Preserves legacy base-reference fallbacks while both snapshot APIs return independent fallback settings. */
+    /** Both canonical tuner APIs return independent fallback settings without aliases to caller state. */
     @Test
-    public void legacyAndSnapshotTunerFallbackIdentitiesAreDeliberatelyDifferent() {
+    public void bothTunerFallbacksAreDetached() {
         DetectionConfig base = new DetectionConfig();
         var frames = frames(2);
         var legacy = JTransientAutoTuner.tune(frames, base, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
-        var snapshot = JTransientAutoTuner.tuneSnapshot(frames, base, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
+        var snapshot = JTransientAutoTuner.tune(frames, base, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
         assertFalse(legacy.success);
         assertFalse(snapshot.success);
-        assertSame(base, legacy.optimizedConfig);
+        assertNotSame(base, legacy.optimizedConfig);
         assertNotSame(base, snapshot.optimizedConfig);
         var calibratedLegacy = CalibratedAutoTuner.tune(frames, base, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
-        var calibratedSnapshot = CalibratedAutoTuner.tuneSnapshot(frames, base, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
-        assertSame(base, calibratedLegacy.optimizedConfig);
+        var calibratedSnapshot = CalibratedAutoTuner.tune(frames, base, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
+        assertNotSame(base, calibratedLegacy.optimizedConfig);
         assertNotSame(base, calibratedSnapshot.optimizedConfig);
         base.qualitySigmaMultiplier = 13;
         assertEquals(5, snapshot.optimizedConfig.qualitySigmaMultiplier, 0);
@@ -78,7 +78,7 @@ public class ConfigurationSnapshotTest {
     @Test
     public void tunerProgressCannotChangeTheCapturedFallbackValues() {
         DetectionConfig base = new DetectionConfig();
-        var result = JTransientAutoTuner.tuneSnapshot(frames(2), base, JTransientAutoTuner.AutoTuneProfile.MEDIUM,
+        var result = JTransientAutoTuner.tune(frames(2), base, JTransientAutoTuner.AutoTuneProfile.MEDIUM,
                 (percent, message) -> base.masterSigmaMultiplier = 17);
         assertEquals(17, base.masterSigmaMultiplier, 0);
         assertEquals(2.25, result.optimizedConfig.masterSigmaMultiplier, 0);
@@ -91,9 +91,9 @@ public class ConfigurationSnapshotTest {
         config.qualitySigmaMultiplier = Double.POSITIVE_INFINITY;
         AtomicBoolean progressed = new AtomicBoolean();
         try (JTransientEngine engine = new JTransientEngine()) {
-            var failure = assertThrows(DetectionConfigRules.InvalidConfigurationException.class, () ->
+            var failure = assertThrows(io.github.ppissias.jtransient.execution.OperationFailedException.class, () ->
                     engine.generateMasterStack(frames(5), config, (percent, message) -> progressed.set(true)));
-            assertEquals("qualitySigmaMultiplier", failure.issues().getFirst().fields().getFirst());
+            assertEquals("qualitySigmaMultiplier", ((DetectionConfigRules.InvalidConfigurationException) failure.getCause()).issues().getFirst().fields().getFirst());
             assertFalse(progressed.get());
         }
     }
@@ -104,16 +104,16 @@ public class ConfigurationSnapshotTest {
         DetectionConfig config = new DetectionConfig();
         config.bgClippingFactor = Double.NaN;
         AtomicBoolean progressed = new AtomicBoolean();
-        assertThrows(DetectionConfigRules.InvalidConfigurationException.class, () -> JTransientAutoTuner.tuneSnapshot(
+        assertThrows(io.github.ppissias.jtransient.execution.OperationFailedException.class, () -> JTransientAutoTuner.tune(
                 frames(5), config, JTransientAutoTuner.AutoTuneProfile.MEDIUM, (percent, message) -> progressed.set(true)));
-        assertThrows(DetectionConfigRules.InvalidConfigurationException.class, () -> CalibratedAutoTuner.tuneSnapshot(
+        assertThrows(io.github.ppissias.jtransient.execution.OperationFailedException.class, () -> CalibratedAutoTuner.tune(
                 frames(5), config, JTransientAutoTuner.AutoTuneProfile.MEDIUM, (percent, message) -> progressed.set(true)));
         assertFalse(progressed.get());
         config.bgClippingFactor = 3;
         config.growSigmaMultiplier = Double.NaN;
         config.variableMinAmplitudeMag = Double.NaN;
-        assertFalse(JTransientAutoTuner.tuneSnapshot(frames(2), config, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null).success);
-        assertFalse(CalibratedAutoTuner.tuneSnapshot(frames(2), config, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null).success);
+        assertFalse(JTransientAutoTuner.tune(frames(2), config, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null).success);
+        assertFalse(CalibratedAutoTuner.tune(frames(2), config, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null).success);
     }
 
     /** Creates deterministic, independent noisy frames with consistent timestamps/exposures for boundary tests. */

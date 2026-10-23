@@ -29,7 +29,7 @@ public class PhotometryInputSnapshotTest {
         snapshot.frames.getFirst().pixelData[0][0] = 123;
         assertEquals(123, snapshot.frames.getFirst().pixelData[0][0]);
         assertThrows(UnsupportedOperationException.class, () -> snapshot.frames.clear());
-        VariableStarAnalysis result = VariableStarAnalyzer.analyzeSnapshot(snapshot, new DetectionConfig(), null);
+        VariableStarAnalysis result = VariableStarAnalyzer.analyze(snapshot, new DetectionConfig(), null);
         assertEquals(List.of(10, 90), result.frames.stream().map(stat -> stat.frameIndex).toList());
         assertEquals(PhotometricReadiness.Verdict.NOT_READY, result.readiness.verdict);
     }
@@ -68,19 +68,17 @@ public class PhotometryInputSnapshotTest {
         assertThrows(IllegalArgumentException.class, input::snapshot);
     }
 
-    /** Legacy readiness-only calls retain their permissive missing-metrics behavior; the opt-in API is strict. */
+    /** Canonical photometry validates required metrics even for readiness-only runs; detection lists remain optional. */
     @Test
-    public void legacyReadinessAndOptionalDetectionCompatibilityRemain() throws Exception {
+    public void readinessRequiresAlignedMetricsAndOptionalDetections() throws Exception {
         VariableStarAnalyzer.Input input = input();
         input.frameDetections = null;
         assertNull(input.snapshot().frameDetections);
         input.frameMetrics = null;
-        assertEquals(PhotometricReadiness.Verdict.NOT_READY,
-                VariableStarAnalyzer.analyze(input, new DetectionConfig(), null).readiness.verdict);
         assertThrows(IllegalArgumentException.class,
-                () -> VariableStarAnalyzer.analyzeSnapshot(input, new DetectionConfig(), null));
+                () -> VariableStarAnalyzer.analyze(input, new DetectionConfig(), null));
         assertThrows(IllegalArgumentException.class,
-                () -> VariableStarAnalyzer.analyzeSnapshot(null, new DetectionConfig(), null));
+                () -> VariableStarAnalyzer.analyze(null, new DetectionConfig(), null));
     }
 
     /** Creates two aligned non-contiguous frames, one with no detections, using tiny caller-owned pixels. */

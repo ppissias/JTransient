@@ -17,7 +17,7 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 - `JTransientEngine.generateMasterStack(...)`: precomputes a reusable median master stack
 - `SourceExtractor.extractSources(...)`: standalone single-frame object extraction
 - `DetectionConfigRules`: shared, operation-scoped validation/metadata and explicit copy-based alignment; engine operations capture settings before processing
-- `CalibratedAutoTuner.tuneSnapshot(...)` / `JTransientAutoTuner.tuneSnapshot(...)`: detached tuning results, including unsuccessful fallback configs; legacy `tune(...)` retains fallback alias compatibility
+- `CalibratedAutoTuner.tune(...)` / `JTransientAutoTuner.tune(...)`: detached tuning results, including unsuccessful fallback configs; legacy `tune(...)` retains fallback alias compatibility
 - `OperationOutcome` and engine/tuner `...Outcome(...)` entry points: additive completed/failed/cancelled results with stable stage/original-frame failure context, without changing legacy exception objects or scientific readiness/fallback behavior
 
 ## Documentation
@@ -237,7 +237,7 @@ public final class AutoTuneExample {
         List<ImageFrame> frames = loadFrames();
         DetectionConfig baseConfig = new DetectionConfig();
 
-        JTransientAutoTuner.AutoTunerResult tuning = CalibratedAutoTuner.tuneSnapshot(
+        JTransientAutoTuner.AutoTunerResult tuning = CalibratedAutoTuner.tune(
                 frames,
                 baseConfig,
                 JTransientAutoTuner.AutoTuneProfile.MEDIUM,
@@ -266,7 +266,7 @@ Per-operation options (introduced in 1.0.6) avoid changing static knobs:
 var policy = CalibratedAutoTuner.Options.builder();
 policy.sigmasToTest = new double[] {3.0, 4.0, 5.0};
 policy.falsePositiveBudgetPerMpixFrame = new double[] {0.05, 0.4, 1.5, 3.5};
-var result = CalibratedAutoTuner.tuneSnapshot(frames, config, policy.build(),
+var result = CalibratedAutoTuner.tune(frames, config, policy.build(),
         JTransientAutoTuner.AutoTuneProfile.MEDIUM, listener);
 ```
 

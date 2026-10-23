@@ -120,7 +120,7 @@ public class CalibratedAutoTunerTest {
     public void tuneReturnsTheChosenSettings() {
         DetectionConfig base = new DetectionConfig();
         DetectionConfig original = base.clone();
-        JTransientAutoTuner.AutoTunerResult result = CalibratedAutoTuner.tuneSnapshot(createFrames(), base,
+        JTransientAutoTuner.AutoTunerResult result = CalibratedAutoTuner.tune(createFrames(), base,
                 JTransientAutoTuner.AutoTuneProfile.MEDIUM, (percent, message) -> base.qualitySigmaMultiplier = 17);
         assertTrue(result.telemetryReport, result.success);
         assertTrue(result.summary.contains("Medium profile"));

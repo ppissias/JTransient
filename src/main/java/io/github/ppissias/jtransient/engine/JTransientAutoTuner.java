@@ -12,7 +12,6 @@ package io.github.ppissias.jtransient.engine;
 import io.github.ppissias.jtransient.execution.DiagnosticContext;
 
 import io.github.ppissias.jtransient.execution.OperationContext;
-import io.github.ppissias.jtransient.execution.OperationOutcome;
 import io.github.ppissias.jtransient.execution.FrameIdentity;
 import io.github.ppissias.jtransient.execution.StageId;
 
@@ -223,12 +222,12 @@ public class JTransientAutoTuner {
             require(hardMaskCoverageReject >= softMaskCoverageStart, "mask-coverage bounds are reversed");
         }
 
-        /** Captures compatibility defaults once; callers must not edit static knobs concurrently with this capture. */
+        /** Returns validated immutable search options from fixed private defaults. */
         public static Options defaults() {
             return new Builder().build();
         }
 
-        /** Creates an independent mutable builder from the current compatibility defaults. */
+        /** Creates a caller-owned mutable builder copied from fixed defaults. */
         public static Builder builder() {
             return new Builder();
         }
@@ -473,7 +472,7 @@ public class JTransientAutoTuner {
             /** minCropSize policy; array values are copied by build(). */
             public int minCropSize;
 
-            /** Captures the current legacy defaults, copying arrays immediately. */
+            /** Copies fixed default values and detaches their arrays into a caller-owned builder. */
             public Builder() {
                 executionPolicy = ExecutionPolicy.defaults();
                 sampleSize = JTransientAutoTuner.AUTO_TUNE_SAMPLE_SIZE;
@@ -558,14 +557,6 @@ public class JTransientAutoTuner {
     public JTransientAutoTuner() {
     }
 
-    /** Captures legacy tuning failures/cancellation; insufficient frames or no winning policy remain completed detached results. */
-    public static OperationOutcome<AutoTunerResult> tuneOutcome(List<ImageFrame> allFrames, DetectionConfig baseConfig,
-                                                               Options options, AutoTuneProfile profile,
-                                                               TransientEngineProgressListener listener,
-                                                               io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
-        return OperationContext.capture(StageId.LEGACY_TUNING,
-                () -> tuneSnapshot(allFrames, baseConfig, options, profile, listener, cancellation));
-    }
 
     /**
      * Result of one auto-tuning run.
@@ -919,50 +910,6 @@ public class JTransientAutoTuner {
 
 
     /**
-     * Automatically determines the optimal extraction and kinematic settings for a given image sequence.
-     *
-     * @param allFrames full frame sequence available for sampling
-     * @param baseConfig starting configuration that is cloned and refined
-     * @param listener optional progress listener
-     * @return tuning result using the medium profile
-     */
-    public static AutoTunerResult tune(List<ImageFrame> allFrames, DetectionConfig baseConfig,
-                                         AutoTuneProfile profile, TransientEngineProgressListener listener,
-                                         io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
-        try (CancellationScope scope = CancellationScope.open(cancellation)) {
-            CancellationScope.check();
-            AutoTunerResult result = tune(allFrames, baseConfig, profile, listener);
-            CancellationScope.check();
-            return result;
-        }
-    }
-
-    public static AutoTunerResult tune(List<ImageFrame> allFrames,
-                                       DetectionConfig baseConfig,
-                                       TransientEngineProgressListener listener) {
-        return tune(allFrames, baseConfig, AutoTuneProfile.MEDIUM, listener);
-    }
-
-    /**
-     * Automatically determines an optimized configuration using the supplied tuning policy.
-     *
-     * @param allFrames full frame sequence available for sampling
-     * @param baseConfig starting configuration that is cloned and refined
-     * @param profile policy preset controlling scoring aggressiveness
-     * @param listener optional progress listener
-     * @return tuning result containing the best configuration or a fallback to {@code baseConfig}
-     * @throws IllegalArgumentException if the frames break the engine's input rules (see {@link JTransientEngine})
-     */
-    public static AutoTunerResult tune(List<ImageFrame> allFrames,
-                                       DetectionConfig baseConfig,
-                                       AutoTuneProfile profile,
-                                       TransientEngineProgressListener listener) {
-        AutoTunerResult result = tuneSnapshot(allFrames, baseConfig, profile, listener);
-        if (!result.success) result.optimizedConfig = baseConfig;
-        return result;
-    }
-
-    /**
      * Tunes a captured configuration under an explicit cancellation scope without aliasing caller fallback settings.
      *
      * @param allFrames frame sequence available for sampling
@@ -971,15 +918,15 @@ public class JTransientAutoTuner {
      * @param listener optional progress listener
      * @param cancellation cancellation request checked before capture, during work and before return
      * @return tuning outcome whose successful or fallback configuration is independent of baseConfig
-     * @throws DetectionConfigRules.InvalidConfigurationException if consumed configuration values are invalid
+     * @throws io.github.ppissias.jtransient.execution.OperationFailedException for invalid settings or execution failures, retaining stage/frame and cause
      * @throws java.util.concurrent.CancellationException if cancellation is requested
      */
-    public static AutoTunerResult tuneSnapshot(List<ImageFrame> allFrames, DetectionConfig baseConfig,
+    public static AutoTunerResult tune(List<ImageFrame> allFrames, DetectionConfig baseConfig,
                                               AutoTuneProfile profile, TransientEngineProgressListener listener,
                                               io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
         try (CancellationScope scope = CancellationScope.open(cancellation)) {
             CancellationScope.check();
-            AutoTunerResult result = tuneSnapshot(allFrames, baseConfig, profile, listener);
+            AutoTunerResult result = tune(allFrames, baseConfig, profile, listener);
             CancellationScope.check();
             return result;
         }
@@ -987,21 +934,21 @@ public class JTransientAutoTuner {
 
     /**
      * Captures legacy-tuner inputs once and returns detached settings even when tuning cannot produce a winner.
-     * Inherits an enclosing cancellation scope; unlike {@link #tune}, fallback never returns the caller's base object.
+     * Inherits an enclosing cancellation scope; fallback settings never alias the caller's base object.
      *
      * @param allFrames frame sequence available for sampling
      * @param baseConfig caller-owned starting settings
      * @param profile scoring policy preset
      * @param listener optional progress listener
      * @return tuning outcome with an independent optimized or fallback configuration
-     * @throws DetectionConfigRules.InvalidConfigurationException if consumed configuration values are invalid
+     * @throws io.github.ppissias.jtransient.execution.OperationFailedException for invalid settings or execution failures, retaining stage/frame and cause
      * @throws IllegalArgumentException if frame input rules are violated
      * @throws java.util.concurrent.CancellationException if the inherited scope is cancelled
      */
-    public static AutoTunerResult tuneSnapshot(List<ImageFrame> allFrames, DetectionConfig baseConfig,
+    public static AutoTunerResult tune(List<ImageFrame> allFrames, DetectionConfig baseConfig,
                                               AutoTuneProfile profile, TransientEngineProgressListener listener) {
         CancellationScope.check();
-        return tuneSnapshot(allFrames, baseConfig, Options.defaults(), profile, listener);
+        return tune(allFrames, baseConfig, Options.defaults(), profile, listener);
     }
 
 
@@ -1009,37 +956,37 @@ public class JTransientAutoTuner {
      * Tunes with an immutable caller-supplied policy; neither config nor policy arrays alias running work.
      * Borrows frame pixels until return and inherits the current cancellation scope.
      */
-    public static AutoTunerResult tuneSnapshot(List<ImageFrame> allFrames, DetectionConfig baseConfig,
+    public static AutoTunerResult tune(List<ImageFrame> allFrames, DetectionConfig baseConfig,
                                                Options options, AutoTuneProfile profile,
                                                TransientEngineProgressListener listener) {
         CancellationScope.check();
         java.util.Objects.requireNonNull(options, "options");
         try (ExecutionSession execution = ExecutionSession.owned(options.executionPolicy)) {
-            return tuneSnapshot(allFrames, baseConfig, options, execution, profile, listener);
+            return tune(allFrames, baseConfig, options, execution, profile, listener);
         }
     }
 
     /** Tunes using caller-owned workers/session limits; all work is joined but the session is never closed here. */
-    public static AutoTunerResult tuneSnapshot(List<ImageFrame> allFrames, DetectionConfig baseConfig,
+    public static AutoTunerResult tune(List<ImageFrame> allFrames, DetectionConfig baseConfig,
                                                Options options, ExecutionSession execution, AutoTuneProfile profile,
                                                TransientEngineProgressListener listener) {
         CancellationScope.check();
         java.util.Objects.requireNonNull(options, "options");
         try (ExecutionSession.Scope scope = execution.open();
              DiagnosticContext.Scope diagnosticScope = DiagnosticContext.openDefaults()) {
-            return tuneCaptured(allFrames, OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.AUTO_TUNE)),
-                    profile, listener, options.withExecutionPolicy(execution.policy()));
+            return OperationContext.execute(StageId.LEGACY_TUNING, () -> tuneCaptured(allFrames, OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.AUTO_TUNE)),
+                    profile, listener, options.withExecutionPolicy(execution.policy())));
         }
     }
 
     /** Tunes with per-operation options and explicit cancellation, joining all work before returning or throwing. */
-    public static AutoTunerResult tuneSnapshot(List<ImageFrame> allFrames, DetectionConfig baseConfig,
+    public static AutoTunerResult tune(List<ImageFrame> allFrames, DetectionConfig baseConfig,
                                                Options options, AutoTuneProfile profile,
                                                TransientEngineProgressListener listener,
                                                io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
         try (CancellationScope scope = CancellationScope.open(cancellation)) {
             CancellationScope.check();
-            AutoTunerResult result = tuneSnapshot(allFrames, baseConfig, options, profile, listener);
+            AutoTunerResult result = tune(allFrames, baseConfig, options, profile, listener);
             CancellationScope.check();
             return result;
         }
@@ -1049,9 +996,9 @@ public class JTransientAutoTuner {
      * Tunes with captured defaults while limiting the legacy sample request to the available frame count.
      * This compatibility-friendly entry point replaces temporary edits of AUTO_TUNE_SAMPLE_SIZE in callers.
      * Borrows pixels until return, detaches fallback settings, and uses explicit cooperative cancellation.
-     * Introduced in 1.0.6; the ordinary snapshot overload retains its minimum-sample fallback behavior.
+     * Introduced in 1.0.6; the ordinary options overload retains its minimum-sample fallback behavior.
      */
-    public static AutoTunerResult tuneAvailableSnapshot(List<ImageFrame> allFrames, DetectionConfig baseConfig,
+    public static AutoTunerResult tuneAvailable(List<ImageFrame> allFrames, DetectionConfig baseConfig,
                                                        AutoTuneProfile profile, TransientEngineProgressListener listener,
                                                        io.github.ppissias.jtransient.execution.CancellationToken cancellation) {
         try (CancellationScope scope = CancellationScope.open(cancellation)) {
@@ -1059,7 +1006,7 @@ public class JTransientAutoTuner {
             OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkFrames(allFrames));
             Options.Builder options = Options.builder();
             options.sampleSize = Math.min(options.sampleSize, allFrames.size());
-            AutoTunerResult result = tuneSnapshot(allFrames, baseConfig, options.build(), profile, listener);
+            AutoTunerResult result = tune(allFrames, baseConfig, options.build(), profile, listener);
             CancellationScope.check();
             return result;
         }

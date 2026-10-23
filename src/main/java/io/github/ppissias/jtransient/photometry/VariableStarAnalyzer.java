@@ -160,17 +160,7 @@ public final class VariableStarAnalyzer {
     private VariableStarAnalyzer() {
     }
 
-    /**
-     * Validates/captures aligned input containers before analysis; light-curve positions follow
-     * that captured order, not original sequence indices. Pixels/products remain borrowed.
-     * The legacy {@link #analyze} entry point retains its existing permissive input behavior.
-     */
-    public static VariableStarAnalysis analyzeSnapshot(Input input, DetectionConfig config, ExecutorService executor) throws Exception {
-        if (input == null) {
-            throw new IllegalArgumentException("Photometry input is null.");
-        }
-        return analyze(input.snapshot(), config.clone(), executor);
-    }
+
 
     /**
      * Runs the photometry stage.
@@ -181,6 +171,12 @@ public final class VariableStarAnalyzer {
      * @return analysis result; never null
      */
     public static VariableStarAnalysis analyze(Input input, DetectionConfig config, ExecutorService executor) throws Exception {
+        if (input == null) throw new IllegalArgumentException("Photometry input is null.");
+        return analyzePrepared(input.snapshot(), config.clone(), executor);
+    }
+
+    /** Measures already captured/validated associations without changing their frame order or borrowing contract. */
+    private static VariableStarAnalysis analyzePrepared(Input input, DetectionConfig config, ExecutorService executor) throws Exception {
         long start = System.nanoTime();
         PipelineTelemetry.PhotometryTelemetry telemetry = new PipelineTelemetry.PhotometryTelemetry();
         PhotometricReadiness readiness = new PhotometricReadiness();

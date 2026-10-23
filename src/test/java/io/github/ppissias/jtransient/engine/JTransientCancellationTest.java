@@ -43,7 +43,7 @@ public class JTransientCancellationTest {
             int progressAtReturn = extracted.get();
             assertTrue(progressAtReturn > 0);
             assertFalse(completed.get());
-            assertThrows(IllegalArgumentException.class,
+            assertThrows(io.github.ppissias.jtransient.execution.OperationFailedException.class,
                     () -> engine.runPipeline(new ArrayList<>(), new DetectionConfig(), null));
             engine.generateMasterStackWithDetails(frames(5, 80), new DetectionConfig(), null);
             assertEquals(progressAtReturn, extracted.get());
@@ -73,14 +73,13 @@ public class JTransientCancellationTest {
     @Test
     public void runtimeTuningFailureRetainsItsCauseAndRemainsJsonSerializable() {
         IllegalStateException problem = new IllegalStateException("injected calibration failure");
-        JTransientAutoTuner.AutoTunerResult result = CalibratedAutoTuner.tune(frames(5, 900), new DetectionConfig(),
-                JTransientAutoTuner.AutoTuneProfile.MEDIUM, (percent, message) -> { throw problem; });
-        assertFalse(result.success);
-        assertSame(problem, result.calibration.failureCause);
-        com.google.gson.Gson gson = new com.google.gson.Gson();
-        String saved = gson.toJson(result);
-        assertFalse(saved.contains("failureCause"));
-        assertFalse(gson.fromJson(saved, JTransientAutoTuner.AutoTunerResult.class).success);
+        var failure = assertThrows(io.github.ppissias.jtransient.execution.OperationFailedException.class,
+                () -> CalibratedAutoTuner.tune(frames(5, 900), new DetectionConfig(),
+                        JTransientAutoTuner.AutoTuneProfile.MEDIUM, (percent, message) -> { throw problem; }));
+        assertSame(problem, failure.getCause());
+        assertEquals(io.github.ppissias.jtransient.execution.StageId.LISTENER, failure.failure().stage());
+        String saved = new com.google.gson.Gson().toJson(failure.failure());
+        assertFalse(saved.contains("cause"));
     }
 
     @Test

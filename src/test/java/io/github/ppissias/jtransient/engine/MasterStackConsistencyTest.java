@@ -38,9 +38,9 @@ public class MasterStackConsistencyTest {
         try (JTransientEngine engine = new JTransientEngine()) {
             List<Integer> originalOrder = frames.stream().map(frame -> frame.sequenceIndex).toList();
             List<ImageFrame> immutableInput = List.copyOf(frames);
-            PipelineResult pipeline = engine.runPipelineSnapshot(immutableInput, config, null, null, CancellationToken.NONE);
-            JTransientEngine.MasterStackResult standalone = engine.generateMasterStackSnapshot(immutableInput, config, null, CancellationToken.NONE);
-            List<FrameTransients> transients = engine.detectTransientsSnapshot(immutableInput, config, null, null, CancellationToken.NONE);
+            PipelineResult pipeline = engine.runPipeline(immutableInput, config, null, null, CancellationToken.NONE);
+            JTransientEngine.MasterStackResult standalone = engine.generateMasterStackWithDetails(immutableInput, config, null, CancellationToken.NONE);
+            List<FrameTransients> transients = engine.detectTransients(immutableInput, config, null, null, CancellationToken.NONE);
             assertEquals(originalOrder, immutableInput.stream().map(frame -> frame.sequenceIndex).toList());
             assertEquals(originalOrder, frames.stream().map(frame -> frame.sequenceIndex).toList());
             List<Integer> expected = List.of(10, 20, 30, 40, 50, 60);
@@ -70,7 +70,7 @@ public class MasterStackConsistencyTest {
                 assertArrayEquals(pipeline.masterStackData[row], standalone.masterStack[row]);
             }
             engine.generateMasterStackWithDetails(frames, config, null);
-            assertEquals(List.of(10, 20, 30, 35, 40, 50, 60), frames.stream().map(frame -> frame.sequenceIndex).toList());
+            assertEquals(originalOrder, frames.stream().map(frame -> frame.sequenceIndex).toList());
         }
     }
 

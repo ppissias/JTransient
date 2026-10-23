@@ -23,7 +23,7 @@ public class OperationOutcomeTest {
     @Test
     public void completedEmptyPipelineKeepsItsScientificResult() {
         try (var engine = new JTransientEngine(ExecutionPolicy.bounded(1))) {
-            var outcome = engine.runPipelineOutcome(frames(), new DetectionConfig(), null);
+            var outcome = OperationContext.capture(StageId.OPERATION, () -> engine.runPipeline(frames(), new DetectionConfig(), null));
             assertTrue(outcome instanceof OperationOutcome.Completed<?>);
             var result = ((OperationOutcome.Completed<io.github.ppissias.jtransient.engine.PipelineResult>) outcome).value();
             assertTrue(result.tracks.isEmpty());
@@ -36,9 +36,9 @@ public class OperationOutcomeTest {
     public void oneHundredPercentIsNotATerminalOutcome() {
         var problem = new IllegalStateException("final callback failed");
         try (var engine = new JTransientEngine(ExecutionPolicy.bounded(1))) {
-            var result = engine.runPipelineOutcome(frames(), new DetectionConfig(), (percentage, message) -> {
+            var result = OperationContext.capture(StageId.OPERATION, () -> engine.runPipeline(frames(), new DetectionConfig(), (percentage, message) -> {
                 if (percentage == 100) throw problem;
-            });
+            }));
             assertEquals(StageId.LISTENER, failure(result).stage());
             assertSame(problem, failure(result).cause());
         }
@@ -58,18 +58,18 @@ public class OperationOutcomeTest {
     public void pipelineListenerFailureCarriesItsOriginalFrameAndCause() throws Exception {
         var problem = new IllegalStateException("listener failed");
         try (var engine = new JTransientEngine(ExecutionPolicy.bounded(1))) {
-            var outcome = engine.runPipelineOutcome(frames(), new DetectionConfig(), (percent, message) -> {
+            var outcome = OperationContext.capture(StageId.OPERATION, () -> engine.runPipeline(frames(), new DetectionConfig(), (percent, message) -> {
                 if (message.startsWith("Extracting features")) throw problem;
-            });
+            }));
             OperationFailure failure = failure(outcome);
             assertEquals(StageId.LISTENER, failure.stage());
             assertEquals(new FrameIdentity(10, "frame-10"), failure.frame());
             assertSame(problem, failure.cause());
-            ExecutionException legacy = assertThrows(ExecutionException.class, () -> engine.runPipeline(frames(),
+            OperationFailedException failureException = assertThrows(OperationFailedException.class, () -> engine.runPipeline(frames(),
                     new DetectionConfig(), (percent, message) -> {
                         if (message.startsWith("Extracting features")) throw problem;
                     }));
-            assertSame(problem, legacy.getCause());
+            assertSame(problem, failureException.getCause());
         }
     }
 
@@ -78,19 +78,19 @@ public class OperationOutcomeTest {
     public void otherEngineEntryPointsCaptureWorkerContext() {
         var problem = new IllegalArgumentException("progress callback failed");
         try (var engine = new JTransientEngine(ExecutionPolicy.bounded(1))) {
-            var master = engine.generateMasterStackOutcome(frames(), new DetectionConfig(), (percent, message) -> {
+            var master = OperationContext.capture(StageId.OPERATION, () -> engine.generateMasterStackWithDetails(frames(), new DetectionConfig(), (percent, message) -> {
                 if (message.startsWith("Evaluating frame ")) throw problem;
-            }, CancellationToken.NONE);
+            }, CancellationToken.NONE));
             assertEquals(StageId.LISTENER, failure(master).stage());
             assertEquals(10, failure(master).frame().sequenceIndex());
             assertSame(problem, failure(master).cause());
-            var transients = engine.detectTransientsOutcome(frames(), new DetectionConfig(), (percent, message) -> {
+            var transients = OperationContext.capture(StageId.OPERATION, () -> engine.detectTransients(frames(), new DetectionConfig(), (percent, message) -> {
                 if (message.startsWith("Extracting features")) throw problem;
-            }, null, CancellationToken.NONE);
+            }, null, CancellationToken.NONE));
             assertEquals(StageId.LISTENER, failure(transients).stage());
             assertEquals(10, failure(transients).frame().sequenceIndex());
             var cancelled = new CancellationException("cancel in listener");
-            var stopped = engine.runPipelineOutcome(frames(), new DetectionConfig(), (percent, message) -> { throw cancelled; });
+            var stopped = OperationContext.capture(StageId.OPERATION, () -> engine.runPipeline(frames(), new DetectionConfig(), (percent, message) -> { throw cancelled; }));
             assertTrue(stopped instanceof OperationOutcome.Cancelled<?>);
             assertSame(cancelled, ((OperationOutcome.Cancelled<?>) stopped).cause());
         }
@@ -102,13 +102,13 @@ public class OperationOutcomeTest {
         DetectionConfig config = new DetectionConfig();
         config.detectionSigmaMultiplier = Double.NaN;
         try (var engine = new JTransientEngine()) {
-            var invalid = failure(engine.runPipelineOutcome(frames(), config, null));
+            var invalid = failure(OperationContext.capture(StageId.OPERATION, () -> engine.runPipeline(frames(), config, null)));
             assertEquals(StageId.INPUT_VALIDATION, invalid.stage());
             assertTrue(invalid.cause() instanceof IllegalArgumentException);
             assertNull(invalid.frame());
-            assertThrows(IllegalArgumentException.class, () -> engine.runPipeline(frames(), config, null));
+            assertThrows(OperationFailedException.class, () -> engine.runPipeline(frames(), config, null));
             assertEquals(StageId.INPUT_VALIDATION,
-                    failure(engine.runPipelineOutcome(new ArrayList<>(), new DetectionConfig(), null)).stage());
+                    failure(OperationContext.capture(StageId.OPERATION, () -> engine.runPipeline(new ArrayList<>(), new DetectionConfig(), null))).stage());
         }
     }
 
@@ -116,16 +116,16 @@ public class OperationOutcomeTest {
     @Test
     public void tunerFallbackIsNotAnExecutionFailure() {
         DetectionConfig config = new DetectionConfig();
-        var legacy = JTransientAutoTuner.tuneOutcome(frames().subList(0, 4), config,
-                JTransientAutoTuner.Options.defaults(), JTransientAutoTuner.AutoTuneProfile.MEDIUM, null, CancellationToken.NONE);
+        var legacy = OperationContext.capture(StageId.OPERATION, () -> JTransientAutoTuner.tune(frames().subList(0, 4), config,
+                JTransientAutoTuner.Options.defaults(), JTransientAutoTuner.AutoTuneProfile.MEDIUM, null, CancellationToken.NONE));
         assertTrue(legacy instanceof OperationOutcome.Completed<?>);
         assertFalse(((OperationOutcome.Completed<JTransientAutoTuner.AutoTunerResult>) legacy).value().success);
-        var calibrated = CalibratedAutoTuner.tuneOutcome(frames().subList(0, 4), config,
-                CalibratedAutoTuner.Options.defaults(), JTransientAutoTuner.AutoTuneProfile.MEDIUM, null, CancellationToken.NONE);
+        var calibrated = OperationContext.capture(StageId.OPERATION, () -> CalibratedAutoTuner.tune(frames().subList(0, 4), config,
+                CalibratedAutoTuner.Options.defaults(), JTransientAutoTuner.AutoTuneProfile.MEDIUM, null, CancellationToken.NONE));
         assertTrue(calibrated instanceof OperationOutcome.Completed<?>);
         assertFalse(((OperationOutcome.Completed<JTransientAutoTuner.AutoTunerResult>) calibrated).value().success);
-        var cancelled = JTransientAutoTuner.tuneOutcome(null, config, JTransientAutoTuner.Options.defaults(),
-                JTransientAutoTuner.AutoTuneProfile.MEDIUM, null, () -> true);
+        var cancelled = OperationContext.capture(StageId.OPERATION, () -> JTransientAutoTuner.tune(null, config, JTransientAutoTuner.Options.defaults(),
+                JTransientAutoTuner.AutoTuneProfile.MEDIUM, null, () -> true));
         assertTrue(cancelled instanceof OperationOutcome.Cancelled<?>);
     }
 
@@ -138,11 +138,12 @@ public class OperationOutcomeTest {
         options.minCropBorderMargin = 8;
         options.cropPaddingClearance = 8;
         var problem = new IllegalStateException("measurement callback failed");
-        var legacy = CalibratedAutoTuner.calibrate(frames(), new DetectionConfig(), options.build(),
-                (percent, message) -> { throw problem; });
-        assertSame(problem, legacy.failureCause);
-        var outcome = CalibratedAutoTuner.calibrateOutcome(frames(), new DetectionConfig(), options.build(),
-                (percent, message) -> { throw problem; });
+        var thrown = assertThrows(OperationFailedException.class,
+                () -> CalibratedAutoTuner.calibrate(frames(), new DetectionConfig(), options.build(),
+                        (percent, message) -> { throw problem; }));
+        assertSame(problem, thrown.getCause());
+        var outcome = OperationContext.capture(StageId.OPERATION, () -> CalibratedAutoTuner.calibrate(frames(), new DetectionConfig(), options.build(),
+                (percent, message) -> { throw problem; }));
         assertEquals(StageId.LISTENER, failure(outcome).stage());
         assertSame(problem, failure(outcome).cause());
         String json = new com.google.gson.Gson().toJson(failure(outcome));
