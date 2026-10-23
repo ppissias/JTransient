@@ -36,6 +36,7 @@ A fresh review of the engine (about 20,000 lines of main code and 7,700 of tests
 | [JT-05](#jt-05-let-the-pipeline-method-read-as-the-algorithm) | Let the pipeline method read as the algorithm | Medium | Small |
 | [JT-06](#jt-06-tuner-constants-instead-of-an-options-builder) | Tuner constants instead of an options builder | Low | Small |
 | [JT-07](#jt-07-split-the-largest-classes-along-their-phases-when-they-change) | Split the largest classes along their phases when they change | Low | Guidance |
+| [JT-08](#jt-08-upgrade-the-dependencies) | Upgrade the dependencies | Medium | Small |
 | [JA-11](#ja-11-validate-the-selected-release-artifacts) | Validate the selected release artifacts | Release gate | Process |
 
 **Suggested order.** JT-01, then JT-05 (it makes JT-03 and JT-04 easy to see), then JT-03 and JT-04 together, then JT-02 and JT-06. JA-11 runs at each release.
@@ -115,6 +116,16 @@ The phase comments are numbered 0, 0.5, 4 and 5.
 ### JT-07. Split the largest classes along their phases when they change
 
 `CalibratedAutoTuner` (1,976 lines), `VariableStarAnalyzer` (1,291) and `JTransientEngine` (1,082) are large but each holds one responsibility. Do not split them for their size. When one of them changes for another reason, extract the phase being changed, as was done for the track linker. For the tuner, that would be crops and injection, the sweep, the selection, or the trade-off; for photometry, measurement or scoring.
+
+### JT-08. Upgrade the dependencies
+
+Part of SpacePixels' [SP-18](../SpacePixels/DESIGN-IMPROVEMENTS.md#sp-18-upgrade-the-dependencies), which holds the version table, the risks and the verification for all three repositories. For JTransient:
+- the Gradle wrapper goes from 9.2.1 to 9.8.2;
+- Gson goes from 2.13.2 to 2.14.0;
+- JUnit stays at 4.13.2;
+- the release stays at Java 21, so that the library reaches the most users.
+
+Detection results must stay byte-identical.
 
 ### JA-11. Validate the selected release artifacts
 

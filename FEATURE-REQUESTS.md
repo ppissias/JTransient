@@ -33,6 +33,15 @@ These are not authorisations. Keep the existing algorithms until the stated evid
 | VS-9 | Deferred | The nominal selected-star minimum differs from check B's counted linear-range minimum. With the default 50 required references and a 90 % faint bound, an ideal sample needs at least 55 before further exclusions. Improve cap validation, and distinguish insufficient samples from measured nonlinearity. |
 | VS-10 | Deferred | In a frame a streak track skips, photometry flags the stars along one piece's length around a position interpolated between two pieces, not along the streak's predicted path. On klangwolke-2, a satellite's path in its missing frame 3 (x about 7270–7750) was only partly flagged, and which part depended on the order of the pieces. Flagging the whole predicted path must be weighed against losing good measurements when a flashing satellite left no trail in that frame. |
 
+## API requests from SpacePixels
+
+Additions to the engine's public API that SpacePixels features need. They change no detection result: the outputs must stay byte-identical.
+
+| ID | Status | Request |
+|---|---|---|
+| API-1 | Proposed, for SpacePixels [F10](../SpacePixels/FEATURE-REQUESTS.md#f10-live-view-pictures-of-the-running-phase) | **Live-view updates from inside a stage.** Today `PipelineStageObserver.stageFinished` is called once per finished stage, so the live view has nothing new during source extraction, tracking or photometry. Add three default methods, so that existing observers are unaffected: `stageStarted(stage)`; a cheap `wantsUpdate()` check; and in-stage snapshots that the engine builds only when the check says yes. The snapshots come per processed frame in source extraction, after each linking step in tracking, and per measured frame in photometry. Source extraction runs on worker threads, so the check must be thread-safe and let one worker through at a time. Without an observer, or when the check says no, nothing is built or copied. The stage runner of [JT-05](DESIGN-IMPROVEMENTS.md#jt-05-let-the-pipeline-method-read-as-the-algorithm) is the natural place for `stageStarted`. |
+| API-2 | Proposed, for SpacePixels [F13](../SpacePixels/FEATURE-REQUESTS.md#f13-manual-transient-inspection-with-trial-per-frame-settings) | **Re-detect transients against a kept reference.** A variant of `detectTransients` that also returns what it built: the kept frames, their data areas, the master stars, the star mask and the master settings used. A second call re-detects one kept frame against that reference with new per-frame settings (`detectionSigmaMultiplier`, `growSigmaMultiplier`, `minDetectionPixels`), using the pipeline's own extraction and `TransientVeto`. Frame selection and the reference do not read these three settings, and the veto treats each frame on its own. So the result must equal a new `detectTransients` call with those settings, and a test should check that. |
+
 ## Declined
 
 These decisions are binding. Do not propose them again without new evidence.
