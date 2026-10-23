@@ -112,6 +112,32 @@ public class JTransientEngine implements AutoCloseable {
         this(ExecutionPolicy.defaults());
     }
 
+    /** Runs on a private sortable list copy, borrowing descriptors/pixels until joined completion. */
+    public PipelineResult runPipelineSnapshot(List<ImageFrame> inputFrames, DetectionConfig config,
+                                               TransientEngineProgressListener listener, short[][] providedMasterStack,
+                                               CancellationToken cancellation) throws Exception {
+        return runPipeline(copyFrameList(inputFrames), config, listener, providedMasterStack, cancellation);
+    }
+
+    /** Builds a master on a private list copy; neither descriptors nor pixel buffers are cloned. */
+    public MasterStackResult generateMasterStackSnapshot(List<ImageFrame> inputFrames, DetectionConfig config,
+                                                         TransientEngineProgressListener listener,
+                                                         CancellationToken cancellation) throws Exception {
+        return generateMasterStackWithDetails(copyFrameList(inputFrames), config, listener, cancellation);
+    }
+
+    /** Exports transients from a private sortable list copy, preserving empty retained-frame slots. */
+    public List<FrameTransients> detectTransientsSnapshot(List<ImageFrame> inputFrames, DetectionConfig config,
+                                                         TransientEngineProgressListener listener, short[][] providedMasterStack,
+                                                         CancellationToken cancellation) throws Exception {
+        return detectTransients(copyFrameList(inputFrames), config, listener, providedMasterStack, cancellation);
+    }
+
+    /** Copies only the list structure; null is left for the existing named input-validation failure. */
+    private static List<ImageFrame> copyFrameList(List<ImageFrame> inputFrames) {
+        return inputFrames == null ? null : new ArrayList<>(inputFrames);
+    }
+
     /** Captures terminal pipeline failures/cancellation with stage/frame context; ordinary scientific emptiness remains completed. */
     public OperationOutcome<PipelineResult> runPipelineOutcome(List<ImageFrame> inputFrames, DetectionConfig config,
                                                               TransientEngineProgressListener listener) {
@@ -413,6 +439,7 @@ public class JTransientEngine implements AutoCloseable {
 
         TrackLinker.TransientsFilterResult filterResult = OperationContext.compute(StageId.TRANSIENT_VETO, null, () -> TrackLinker.filterTransients(
                 cleanFramesObjects, masterStars, config, proxyListener, sensorWidth, sensorHeight));
+        context.labelTrackerFrames(filterResult.telemetry);
         
         if (listener != null) OperationContext.notify(listener::onProgressUpdate, 100, "Transient Extraction Complete!");
 
@@ -971,6 +998,7 @@ public class JTransientEngine implements AutoCloseable {
                 sensorHeight,
                 context.frameRegistrations
         ));
+        context.labelTrackerFrames(trackResult.telemetry);
 
         telemetry.recordStage(PipelineTelemetry.Stage.TRACKING, stageStartedNanos);
         // Map the track results back to our main telemetry object
@@ -1028,7 +1056,7 @@ public class JTransientEngine implements AutoCloseable {
                 // Photometry 0-100% maps to 93-99%.
                 photometryInput.progress = (percentage, message) -> OperationContext.notify(listener::onProgressUpdate, 93 + (int) (percentage * 0.06), message);
             }
-            variableStarAnalysis = OperationContext.call(StageId.PHOTOMETRY, null, () -> VariableStarAnalyzer.analyze(photometryInput, config, executor));
+            variableStarAnalysis = OperationContext.call(StageId.PHOTOMETRY, null, () -> VariableStarAnalyzer.analyzeSnapshot(photometryInput, config, executor));
             telemetry.photometryTelemetry = variableStarAnalysis.telemetry;
             telemetry.recordStage(PipelineTelemetry.Stage.PHOTOMETRY, stageStartedNanos);
         }

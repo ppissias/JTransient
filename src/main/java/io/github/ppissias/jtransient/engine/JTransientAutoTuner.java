@@ -926,13 +926,15 @@ public class JTransientAutoTuner {
     private static class CroppedFrame {
         final short[][] pixelData;
         final int sequenceIndex;
+        final String filename;
 
         /**
-         * Creates one cropped-frame descriptor.
+         * Associates crop pixels with original identity without retaining the source image buffer.
          */
-        CroppedFrame(short[][] pixelData, int sequenceIndex) {
+        CroppedFrame(short[][] pixelData, int sequenceIndex, String filename) {
             this.pixelData = pixelData;
             this.sequenceIndex = sequenceIndex;
+            this.filename = filename;
         }
     }
 
@@ -1334,7 +1336,7 @@ public class JTransientAutoTuner {
 
                             // STEP C: Extract each cropped frame and test against this crop mask
                             for (CroppedFrame frame : cropFrames) {
-                                List<SourceExtractor.DetectedObject> objects = OperationContext.compute(StageId.FRAME_EXTRACTION, new FrameIdentity(frame.sequenceIndex, null), () -> extractInCrop(
+                                List<SourceExtractor.DetectedObject> objects = OperationContext.compute(StageId.FRAME_EXTRACTION, new FrameIdentity(frame.sequenceIndex, frame.filename), () -> extractInCrop(
                                         frame.pixelData,
                                         testConfig.detectionSigmaMultiplier,
                                         testConfig.minDetectionPixels,
@@ -1686,7 +1688,7 @@ public class JTransientAutoTuner {
         List<CroppedFrame> cropped = new ArrayList<>(frames.size());
         for (ImageFrame frame : frames) {
             CancellationScope.check();
-            cropped.add(new CroppedFrame(cropPixels(frame.pixelData, region), frame.sequenceIndex));
+            cropped.add(new CroppedFrame(cropPixels(frame.pixelData, region), frame.sequenceIndex, frame.filename));
         }
         return cropped;
     }
@@ -2172,7 +2174,7 @@ public class JTransientAutoTuner {
 
             for (CroppedFrame frame : cropFrames) {
                 CancellationScope.check();
-                List<SourceExtractor.DetectedObject> objects = OperationContext.compute(StageId.FRAME_EXTRACTION, new FrameIdentity(frame.sequenceIndex, null), () -> extractInCrop(
+                List<SourceExtractor.DetectedObject> objects = OperationContext.compute(StageId.FRAME_EXTRACTION, new FrameIdentity(frame.sequenceIndex, frame.filename), () -> extractInCrop(
                         frame.pixelData,
                         evalConfig.detectionSigmaMultiplier,
                         evalConfig.minDetectionPixels,
@@ -2555,7 +2557,7 @@ public class JTransientAutoTuner {
             List<List<SourceExtractor.DetectedObject>> frameObjectsByCrop = new ArrayList<>(cropFrames.size());
             for (CroppedFrame frame : cropFrames) {
                 CancellationScope.check();
-                frameObjectsByCrop.add(OperationContext.compute(StageId.FRAME_EXTRACTION, new FrameIdentity(frame.sequenceIndex, null), () -> extractInCrop(
+                frameObjectsByCrop.add(OperationContext.compute(StageId.FRAME_EXTRACTION, new FrameIdentity(frame.sequenceIndex, frame.filename), () -> extractInCrop(
                         frame.pixelData,
                         probeConfig.detectionSigmaMultiplier,
                         probeConfig.minDetectionPixels,

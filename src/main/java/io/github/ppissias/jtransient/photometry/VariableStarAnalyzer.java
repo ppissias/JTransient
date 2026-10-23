@@ -101,9 +101,74 @@ public final class VariableStarAnalyzer {
         public DataArea dataArea;
         /** Optional progress listener, 0 to 100 over the photometry stage. */
         public TransientEngineProgressListener progress;
+
+        /**
+         * Copies aligned list structure without cloning pixels, measurements or detections.
+         * Frames must already be in increasing original sequence order. Optional detection lists,
+         * when supplied, include every frame, even those with no detections. Caller mutation during
+         * capture/analysis is unsupported; mutable elements and large buffers remain borrowed.
+         *
+         * @throws IllegalArgumentException when frame identity, labels or list alignment disagree
+         */
+        public Input snapshot() {
+            if (frames == null || frameMetrics == null || frameMetrics.size() != frames.size()
+                    || (frameDetections != null && frameDetections.size() != frames.size())) {
+                throw new IllegalArgumentException("Photometry requires aligned frame, metric and optional detection lists.");
+            }
+            Input snapshot = new Input();
+            List<List<SourceExtractor.DetectedObject>> detections = new ArrayList<>();
+            int previousSequenceIndex = -1;
+            for (int position = 0; position < frames.size(); position++) {
+                ImageFrame frame = frames.get(position);
+                FrameQualityAnalyzer.FrameMetrics metrics = frameMetrics.get(position);
+                if (frame == null || metrics == null || frame.sequenceIndex <= previousSequenceIndex) {
+                    throw new IllegalArgumentException("Photometry needs unique, increasing sequence indices and non-null metrics at position " + position + ".");
+                }
+                previousSequenceIndex = frame.sequenceIndex;
+                if (metrics.filename != null && !java.util.Objects.equals(metrics.filename, frame.filename)) {
+                    throw new IllegalArgumentException("Photometry metrics belong to another frame at position " + position + ".");
+                }
+                if (frameDetections != null) {
+                    List<SourceExtractor.DetectedObject> objects = frameDetections.get(position);
+                    if (objects == null) {
+                        throw new IllegalArgumentException("Missing photometry detection slot at position " + position + ".");
+                    }
+                    for (SourceExtractor.DetectedObject object : objects) {
+                        if (object == null || object.sourceFrameIndex != frame.sequenceIndex
+                                || (object.sourceFilename != null && !java.util.Objects.equals(object.sourceFilename, frame.filename))) {
+                            throw new IllegalArgumentException("Photometry detection belongs to another frame at position " + position + ".");
+                        }
+                    }
+                    detections.add(List.copyOf(objects));
+                }
+            }
+            snapshot.frames = List.copyOf(frames);
+            snapshot.frameMetrics = List.copyOf(frameMetrics);
+            snapshot.frameDetections = frameDetections == null ? null : List.copyOf(detections);
+            snapshot.masterStars = masterStars == null ? null : List.copyOf(masterStars);
+            snapshot.masterStack = masterStack;
+            snapshot.masterStarMask = masterStarMask;
+            snapshot.tracks = tracks == null ? null : List.copyOf(tracks);
+            snapshot.slowMoverCandidates = slowMoverCandidates == null ? null : List.copyOf(slowMoverCandidates);
+            snapshot.dataArea = dataArea;
+            snapshot.progress = progress;
+            return snapshot;
+        }
     }
 
     private VariableStarAnalyzer() {
+    }
+
+    /**
+     * Validates/captures aligned input containers before analysis; light-curve positions follow
+     * that captured order, not original sequence indices. Pixels/products remain borrowed.
+     * The legacy {@link #analyze} entry point retains its existing permissive input behavior.
+     */
+    public static VariableStarAnalysis analyzeSnapshot(Input input, DetectionConfig config, ExecutorService executor) throws Exception {
+        if (input == null) {
+            throw new IllegalArgumentException("Photometry input is null.");
+        }
+        return analyze(input.snapshot(), config.clone(), executor);
     }
 
     /**

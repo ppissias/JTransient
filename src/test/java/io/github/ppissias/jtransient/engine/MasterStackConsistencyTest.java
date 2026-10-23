@@ -1,6 +1,7 @@
 package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.execution.CancellationToken;
 import io.github.ppissias.jtransient.core.MasterVetoMask;
 import io.github.ppissias.jtransient.core.PixelEncoding;
 import io.github.ppissias.jtransient.core.SourceExtractor;
@@ -35,9 +36,13 @@ public class MasterStackConsistencyTest {
         DetectionConfig config = new DetectionConfig();
         config.enableVariableStarDetection = true;
         try (JTransientEngine engine = new JTransientEngine()) {
-            PipelineResult pipeline = engine.runPipeline(frames, config, null);
-            JTransientEngine.MasterStackResult standalone = engine.generateMasterStackWithDetails(new ArrayList<>(frames), config, null);
-            List<FrameTransients> transients = engine.detectTransients(new ArrayList<>(frames), config, null, null);
+            List<Integer> originalOrder = frames.stream().map(frame -> frame.sequenceIndex).toList();
+            List<ImageFrame> immutableInput = List.copyOf(frames);
+            PipelineResult pipeline = engine.runPipelineSnapshot(immutableInput, config, null, null, CancellationToken.NONE);
+            JTransientEngine.MasterStackResult standalone = engine.generateMasterStackSnapshot(immutableInput, config, null, CancellationToken.NONE);
+            List<FrameTransients> transients = engine.detectTransientsSnapshot(immutableInput, config, null, null, CancellationToken.NONE);
+            assertEquals(originalOrder, immutableInput.stream().map(frame -> frame.sequenceIndex).toList());
+            assertEquals(originalOrder, frames.stream().map(frame -> frame.sequenceIndex).toList());
             List<Integer> expected = List.of(10, 20, 30, 40, 50, 60);
             assertEquals(expected, standalone.keptFrames);
             assertEquals(List.of(35), standalone.rejectedFrames.stream().map(stat -> stat.frameIndex).toList());
@@ -47,6 +52,13 @@ public class MasterStackConsistencyTest {
             assertEquals(List.of(10, 20, 30, 35, 40, 50, 60),
                     pipeline.telemetry.frameQualityStats.stream().map(stat -> stat.frameIndex).toList());
             assertEquals(6, pipeline.allTransients.size());
+            assertEquals(expected, pipeline.telemetry.trackerTelemetry.frameStarMapStats.stream()
+                    .map(stat -> stat.originalFrame.sequenceIndex()).toList());
+            for (int position = 0; position < expected.size(); position++) {
+                assertEquals(position, pipeline.telemetry.trackerTelemetry.frameStarMapStats.get(position).frameIndex);
+                assertEquals("sequence-" + expected.get(position),
+                        pipeline.telemetry.trackerTelemetry.frameStarMapStats.get(position).originalFrame.filename());
+            }
             for (int position = 0; position < transients.size(); position++) {
                 FrameTransients frame = transients.get(position);
                 for (SourceExtractor.DetectedObject object : frame.extractionResult.objects) {
@@ -57,6 +69,7 @@ public class MasterStackConsistencyTest {
             for (int row = 0; row < standalone.masterStack.length; row++) {
                 assertArrayEquals(pipeline.masterStackData[row], standalone.masterStack[row]);
             }
+            engine.generateMasterStackWithDetails(frames, config, null);
             assertEquals(List.of(10, 20, 30, 35, 40, 50, 60), frames.stream().map(frame -> frame.sequenceIndex).toList());
         }
     }

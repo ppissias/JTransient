@@ -14,6 +14,8 @@ import io.github.ppissias.jtransient.core.FrameRegistration;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
+import io.github.ppissias.jtransient.telemetry.TrackerTelemetry;
+import io.github.ppissias.jtransient.execution.FrameIdentity;
 
 import java.util.List;
 import java.util.Map;
@@ -58,5 +60,13 @@ final class ExtractedFramesContext {
         this.driftPoints = driftPoints;
         this.dataArea = dataArea;
         this.frameRegistrations = frameRegistrations;
+    }
+
+    /** Labels legacy retained-position counters with original identity, including empty detection slots. */
+    void labelTrackerFrames(TrackerTelemetry trackerTelemetry) {
+        for (TrackerTelemetry.FrameStarMapStat stat : trackerTelemetry.frameStarMapStats) {
+            ImageFrame frame = retainedFrames.get(stat.retainedPosition()).frame();
+            stat.originalFrame = new FrameIdentity(frame.sequenceIndex, frame.filename);
+        }
     }
 }

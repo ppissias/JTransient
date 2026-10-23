@@ -4,6 +4,7 @@ import io.github.ppissias.jtransient.core.FrameRegistration;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
+import io.github.ppissias.jtransient.telemetry.TrackerTelemetry;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -33,6 +34,14 @@ public class PreparedFrameTest {
         assertSame(last.extractionResult(), context.cleanFramesData.get(1));
         assertSame(last.registration(), context.frameRegistrations.get(context.cleanFrames.get(1).sequenceIndex));
         assertSame(last.frame().pixelData, context.retainedFrames.get(1).frame().pixelData);
+        TrackerTelemetry tracker = new TrackerTelemetry();
+        TrackerTelemetry.FrameStarMapStat stat = new TrackerTelemetry.FrameStarMapStat();
+        stat.frameIndex = 1;
+        tracker.frameStarMapStats.add(stat);
+        context.labelTrackerFrames(tracker);
+        assertEquals(1, stat.frameIndex);
+        assertEquals(90, stat.originalFrame.sequenceIndex());
+        assertEquals(last.frame().filename, stat.originalFrame.filename());
     }
 
     /** Stable container structure must not imply cloning mutable images or extraction products. */

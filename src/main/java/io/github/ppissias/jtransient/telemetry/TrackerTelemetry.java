@@ -9,6 +9,8 @@
  */
 package io.github.ppissias.jtransient.telemetry;
 
+import io.github.ppissias.jtransient.execution.FrameIdentity;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -38,9 +40,17 @@ public class TrackerTelemetry {
      * Per-frame summary of the stationary-star veto pass.
      */
     public static class FrameStarMapStat {
+        /** Legacy zero-based position in the retained input list, not original sequence identity. */
         public int frameIndex;
+        /** Original identity supplied by engine orchestration; null for standalone legacy tracker calls. */
+        public FrameIdentity originalFrame;
         public int initialPointSources;
         public int survivingTransients;
         public int purgedStars;
+
+        /** Returns the zero-based retained-list position without confusing it with original sequence identity. */
+        public int retainedPosition() {
+            return frameIndex;
+        }
     }
 }

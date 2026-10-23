@@ -295,13 +295,13 @@ public class JTransientAutoTunerJitterTest {
         int[] shifts = {-2, -1, 0, 1, 2};
 
         Class<?> croppedFrameClass = Class.forName("io.github.ppissias.jtransient.engine.JTransientAutoTuner$CroppedFrame");
-        Constructor<?> constructor = croppedFrameClass.getDeclaredConstructor(short[][].class, int.class);
+        Constructor<?> constructor = croppedFrameClass.getDeclaredConstructor(short[][].class, int.class, String.class);
         constructor.setAccessible(true);
 
         List<Object> frames = new ArrayList<>(shifts.length);
         for (int i = 0; i < shifts.length; i++) {
             short[][] pixels = createSyntheticFrame(width, height, centers, shifts[i], 0);
-            frames.add(constructor.newInstance(pixels, i));
+            frames.add(constructor.newInstance(pixels, i, "frame-" + i));
         }
         return frames;
     }
