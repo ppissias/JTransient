@@ -89,8 +89,9 @@ tasks.register('verifyArchitecture') {
     }
 }
 
+// The standalone API consumer runs when the Central bundle is prepared (bundleCentralPortal), not on every check.
 tasks.named('check') {
-    dependsOn tasks.named('apiConsumer'), tasks.named('verifyArchitecture')
+    dependsOn tasks.named('verifyArchitecture')
 }
 
 tasks.withType(Javadoc).configureEach {
@@ -204,9 +205,9 @@ tasks.named('publishMavenJavaPublicationToCentralStagingRepository') {
 }
 
 tasks.register('bundleCentralPortal', Zip) {
-    description = 'Builds a Maven Central Portal upload bundle from the signed staged Maven repository.'
+    description = 'Builds a Maven Central Portal upload bundle from the signed staged Maven repository after the API consumer check.'
     group = 'publishing'
-    dependsOn tasks.named('check')
+    dependsOn tasks.named('check'), tasks.named('apiConsumer')
     dependsOn tasks.named('publishMavenJavaPublicationToCentralStagingRepository')
     from centralStagingRepository
     destinationDirectory = layout.buildDirectory.dir('distributions')
