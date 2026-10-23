@@ -12,6 +12,12 @@ Contents:
 - [Completed and retired findings](#completed-and-retired-findings)
 - [Review of the plan, with answered questions](#review)
 
+## Coordinated cleanup: fixed tuner defaults and scoped diagnostics (2026-10-23)
+
+Tuner defaults are private constants copied into caller-owned builders and immutable `Options.defaults()`. Removed mutable public tuner knobs, global debug flags, the legacy diagnostic registration bridge and the separate legacy tuner text sink. Core and both tuners share one scoped diagnostic policy. SpacePixels captures its application property at each engine/tuner/standalone-extraction boundary, while explicit caller scopes take precedence; no global library state is changed. GUI budget labels read immutable default options. Tests now build per-run sweeps rather than saving/restoring global tuner state.
+
+Validation: focused tuner/core/application diagnostic tests cover default silence, inherited explicit policy, worker/scope restoration, listener/cancellation and immutable grids. Full real-data pipeline, reduced-grid tuner and six large-frame snapshots are byte-identical to the prior snapshots, with no additional exclusions. Full artifact checks and completion are recorded in the commit body; no scientific settings or live-preview behavior changed.
+
 ## Coordinated cleanup: selected artifacts and direct tuning (2026-10-23)
 
 Removed the previous-JAR binary baseline and historical engine matrix. `apiConsumer` now compiles/runs the current engine contract, retaining Java 21, identity, encoding and sequential reuse checks without historical constructor/fallback requirements. SpacePixels calls the current available-sample tuner API directly; reflective version detection and the locked static-mutation fallback are removed. Development coordinates now match current sources, with both engine and solver versions explicitly selectable/verified for release-artifact validation. `Verify-ReleaseArtifacts.ps1` checks one selected source-built combination and both consumer metadata modes. Local validation JAR output is isolated from active IDE JARs after a Windows lock exposed the need; no ignored configuration is changed or artifacts published to Central.

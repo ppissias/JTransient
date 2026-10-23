@@ -69,13 +69,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class JTransientEngine implements AutoCloseable {
 
-    /** Global debug switch shared by the core library. */
-    public static boolean DEBUG = false;
-
-    static {
-        DiagnosticContext.registerLegacyDebugFlag(() -> DEBUG);
-    }
-
     /**
      * A frame is rejected when leaving it out would enlarge the area where every frame has image data by at least
      * this share of the frame: it is shifted far from the others, and keeping it would cost every other frame that

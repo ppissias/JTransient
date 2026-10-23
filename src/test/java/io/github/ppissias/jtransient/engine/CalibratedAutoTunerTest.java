@@ -41,7 +41,7 @@ public class CalibratedAutoTunerTest {
         for (int p = 0; p < JTransientAutoTuner.AutoTuneProfile.values().length; p++) {
             CalibratedAutoTuner.Candidate c = calibration.chosen[p];
             assertTrue("profile " + p + " within budget", calibration.withinBudget[p]);
-            assertTrue(c.falsePositivesPerMpixFrame <= CalibratedAutoTuner.FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[p]
+            assertTrue(c.falsePositivesPerMpixFrame <= CalibratedAutoTuner.Options.defaults().falsePositiveBudgetPerMpixFrame()[p]
                     || !calibration.budgetVerifiable[p]);
 
         }
@@ -142,8 +142,8 @@ public class CalibratedAutoTunerTest {
         assertEquals(JTransientAutoTuner.AutoTuneProfile.MEDIUM, JTransientAutoTuner.AutoTuneProfile.parse("BALANCED"));
         assertEquals(JTransientAutoTuner.AutoTuneProfile.HIGH, JTransientAutoTuner.AutoTuneProfile.parse("aggressive"));
         assertEquals("Medium", JTransientAutoTuner.AutoTuneProfile.MEDIUM.displayName());
-        assertEquals(0.4, CalibratedAutoTuner.FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[JTransientAutoTuner.AutoTuneProfile.MEDIUM.ordinal()], 1e-12);
-        assertEquals(1.5, CalibratedAutoTuner.FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME[JTransientAutoTuner.AutoTuneProfile.HIGH.ordinal()], 1e-12);
+        assertEquals(0.4, CalibratedAutoTuner.Options.defaults().falsePositiveBudgetPerMpixFrame()[JTransientAutoTuner.AutoTuneProfile.MEDIUM.ordinal()], 1e-12);
+        assertEquals(1.5, CalibratedAutoTuner.Options.defaults().falsePositiveBudgetPerMpixFrame()[JTransientAutoTuner.AutoTuneProfile.HIGH.ordinal()], 1e-12);
     }
 
     @Test
@@ -154,7 +154,7 @@ public class CalibratedAutoTunerTest {
         for (CalibratedAutoTuner.FrameSetting setting : CalibratedAutoTuner.frameSettings(coreArea)) {
             largest = Math.max(largest, setting.minPixels);
         }
-        assertEquals(CalibratedAutoTuner.MAX_MIN_PIXELS, largest);
+        assertEquals(CalibratedAutoTuner.Options.defaults().maxMinPixels(), largest);
         // Sharp stars keep their area-based sizes (FWHM 2 px: largest 3x core area = 9 px).
         int sharpLargest = 0;
         for (CalibratedAutoTuner.FrameSetting setting : CalibratedAutoTuner.frameSettings(Math.PI)) {

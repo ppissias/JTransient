@@ -1,38 +1,30 @@
 package io.github.ppissias.jtransient.execution;
 
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BooleanSupplier;
 
 /** Per-operation core diagnostic routing, independent of engine/science implementation classes. */
 public final class DiagnosticContext {
     private static final ThreadLocal<Scope> CURRENT = new ThreadLocal<>();
-    private static final AtomicReference<BooleanSupplier> LEGACY_DEBUG = new AtomicReference<>();
+    private static final DiagnosticOptions SILENT = new DiagnosticOptions(false, message -> { });
 
     /** Prevents construction of this scoped routing utility. */
     private DiagnosticContext() {
     }
 
-    /**
-     * Installs the facade's legacy flag adapter once. This compatibility bridge is not a per-request setting;
-     * applications should open a scope instead. No reverse dependency on the facade is retained in bytecode.
-     */
-    public static void registerLegacyDebugFlag(BooleanSupplier flag) {
-        if (!LEGACY_DEBUG.compareAndSet(null, Objects.requireNonNull(flag, "flag"))) {
-            throw new IllegalStateException("Legacy diagnostic adapter is already installed.");
-        }
-    }
-
-    /** Captures active options, or the legacy flag/current standard-output stream outside a scope. */
+    /** Returns active immutable options, or silent defaults outside a scope. */
     public static DiagnosticOptions currentOptions() {
         Scope scope = CURRENT.get();
-        BooleanSupplier flag = LEGACY_DEBUG.get();
-        return scope == null ? DiagnosticOptions.standardOutput(flag != null && flag.getAsBoolean()) : scope.options;
+        return scope == null ? SILENT : scope.options;
     }
 
-    /** Opens inherited options, capturing compatibility defaults only once at an operation boundary. */
+    /** Opens inherited options, remaining silent when the caller supplied no diagnostic scope. */
     public static Scope openDefaults() {
         return open(currentOptions());
+    }
+
+    /** Inherits an explicit caller policy, otherwise captures the application's supplied default policy. */
+    public static Scope openIfAbsent(DiagnosticOptions defaults) {
+        return open(CURRENT.get() == null ? defaults : currentOptions());
     }
 
     /** Opens explicit options until close; nested scopes restore prior options rather than editing globals. */

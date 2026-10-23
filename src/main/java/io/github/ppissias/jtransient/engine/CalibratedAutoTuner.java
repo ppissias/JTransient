@@ -73,45 +73,45 @@ public final class CalibratedAutoTuner {
      * high and maximum profiles (indexed by profile ordinal). Because the budget is per megapixel, maximum leaves
      * many candidates on a large sensor; it is meant for small sensors and targeted searches.
      */
-    public static double[] FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME = {0.05, 0.4, 1.5, 3.5};
+    private static final double[] FALSE_POSITIVE_BUDGET_PER_MPIX_FRAME = {0.05, 0.4, 1.5, 3.5};
     private static final int PROFILE_COUNT = JTransientAutoTuner.AutoTuneProfile.values().length;
 
-    public static double[] SIGMAS_TO_TEST = {2.5, 2.75, 3.0, 3.25, 3.5, 4.0, 4.5, 5.0, 6.0};
-    public static double[] GROW_DELTAS_TO_TEST = {0.75, 1.25};
+    private static final double[] SIGMAS_TO_TEST = {2.5, 2.75, 3.0, 3.25, 3.5, 4.0, 4.5, 5.0, 6.0};
+    private static final double[] GROW_DELTAS_TO_TEST = {0.75, 1.25};
     /** Minimum-pixel candidates as multiples of the PSF core area (pi x (FWHM/2)^2). */
-    public static double[] MIN_PIXEL_AREA_FACTORS = {0.3, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0};
+    private static final double[] MIN_PIXEL_AREA_FACTORS = {0.3, 0.5, 0.75, 1.0, 1.5, 2.0, 3.0};
     /**
      * Upper limit of the minimum-pixel candidates. With wide stars the area factors would reach 25 pixels and more,
      * which rejects small faint movers; larger sizes than this are not tried.
      */
-    public static int MAX_MIN_PIXELS = 15;
-    public static double[] MASTER_SIGMAS_TO_TEST = {1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0};
-    public static double[] MASTER_GROW_OFFSETS_TO_TEST = {0.0, 0.5, 1.0};
+    private static final int MAX_MIN_PIXELS = 15;
+    private static final double[] MASTER_SIGMAS_TO_TEST = {1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0};
+    private static final double[] MASTER_GROW_OFFSETS_TO_TEST = {0.0, 0.5, 1.0};
     /** Master minimum-pixel candidates as multiples of the PSF core area, in addition to 3 pixels. */
-    public static double[] MASTER_MIN_PIXEL_AREA_FACTORS = {0.25, 0.5, 1.0};
-    public static double[] MASK_OVERLAPS_TO_TEST = {0.5, 0.65, 0.75, 0.85, 0.95};
+    private static final double[] MASTER_MIN_PIXEL_AREA_FACTORS = {0.25, 0.5, 1.0};
+    private static final double[] MASK_OVERLAPS_TO_TEST = {0.5, 0.65, 0.75, 0.85, 0.95};
 
     /** Injected peak signal-to-noise levels (peak amplitude over background sigma). */
-    public static double[] INJECTION_PEAK_SNR = {2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0};
-    public static int INJECTIONS_PER_LEVEL_PER_CROP_FRAME = 12;
+    private static final double[] INJECTION_PEAK_SNR = {2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0};
+    private static final int INJECTIONS_PER_LEVEL_PER_CROP_FRAME = 12;
 
-    public static int MEASUREMENT_FRAMES = 10;
+    private static final int MEASUREMENT_FRAMES = 10;
     /** Crops on ordinary frames: the centre and the four interior corners. */
-    public static int CROP_COUNT = 5;
+    private static final int CROP_COUNT = 5;
     /**
      * Large frames get an even grid of crops instead, about one per {@code 2 x crop size} of usable width and
      * height (at most this many per side), so local problems such as a badly registered region are sampled.
      */
-    public static int MAX_CROPS_PER_SIDE = 4;
-    public static int PREFERRED_CROP_SIZE = 1024;
-    public static int MIN_CROP_SIZE = 384;
+    private static final int MAX_CROPS_PER_SIDE = 4;
+    private static final int PREFERRED_CROP_SIZE = 1024;
+    private static final int MIN_CROP_SIZE = 384;
     /** Largest border kept clear of the frame edges; the actual border is the measured drift padding plus
      * {@link #CROP_PADDING_CLEARANCE}, at least {@link #MIN_CROP_BORDER_MARGIN}. */
-    public static int CROP_BORDER_MARGIN = 200;
+    private static final int CROP_BORDER_MARGIN = 200;
     /** Synthetic stars are injected at least this far from a crop's edge, in pixels. */
     private static final int INJECTION_MARGIN = 30;
-    public static int MIN_CROP_BORDER_MARGIN = 50;
-    public static int CROP_PADDING_CLEARANCE = 50;
+    private static final int MIN_CROP_BORDER_MARGIN = 50;
+    private static final int CROP_PADDING_CLEARANCE = 50;
 
     /**
      * Streak pass: a more sensitive extraction of every real frame joins the fragments of faint satellite or
@@ -145,7 +145,7 @@ public final class CalibratedAutoTuner {
 
     /**
      * Immutable per-operation tuning policy. Arrays are copied on capture and access; pixel buffers are not owned.
-     * Legacy static knobs are read only by the builder, never by a running operation.
+     * Defaults are private constants; per-run tuning policy is captured by immutable options.
      */
     public static final class Options {
         private final ExecutionPolicy executionPolicy;
@@ -241,7 +241,7 @@ public final class CalibratedAutoTuner {
         }
 
         /** Captures compatibility defaults once; callers must not edit static knobs concurrently with this capture. */
-        public static Options captureDefaults() {
+        public static Options defaults() {
             return new Builder().build();
         }
 
@@ -810,7 +810,7 @@ public final class CalibratedAutoTuner {
     public static JTransientAutoTuner.AutoTunerResult tuneSnapshot(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
             JTransientAutoTuner.AutoTuneProfile profile, TransientEngineProgressListener listener) {
         CancellationScope.check();
-        return tuneSnapshot(poolFrames, baseConfig, Options.captureDefaults(), profile, listener);
+        return tuneSnapshot(poolFrames, baseConfig, Options.defaults(), profile, listener);
     }
 
 
@@ -911,7 +911,7 @@ public final class CalibratedAutoTuner {
                                         DetectionConfig baseConfig,
                                         TransientEngineProgressListener listener) {
         CancellationScope.check();
-        return calibrate(poolFrames, baseConfig, Options.captureDefaults(), listener);
+        return calibrate(poolFrames, baseConfig, Options.defaults(), listener);
     }
 
 
@@ -1817,7 +1817,7 @@ public final class CalibratedAutoTuner {
 
     public static Tradeoff buildTradeoff(Calibration calibration) {
         if (calibration == null) return null;
-        return buildTradeoff(calibration, calibration.options == null ? Options.captureDefaults() : calibration.options);
+        return buildTradeoff(calibration, calibration.options == null ? Options.defaults() : calibration.options);
     }
 
     /** Builds the compatibility tradeoff from the policy captured during measurement, never fresh global grids. */
@@ -1996,7 +1996,7 @@ public final class CalibratedAutoTuner {
 
 
     static List<FrameSetting> frameSettings(double psfCoreArea) {
-        return frameSettings(psfCoreArea, Options.captureDefaults());
+        return frameSettings(psfCoreArea, Options.defaults());
     }
 
     /** Enumerates frame settings from one immutable operation policy, preserving grid order and deduplication. */

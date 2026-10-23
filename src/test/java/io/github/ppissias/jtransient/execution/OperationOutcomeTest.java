@@ -117,14 +117,14 @@ public class OperationOutcomeTest {
     public void tunerFallbackIsNotAnExecutionFailure() {
         DetectionConfig config = new DetectionConfig();
         var legacy = JTransientAutoTuner.tuneOutcome(frames().subList(0, 4), config,
-                JTransientAutoTuner.Options.captureDefaults(), JTransientAutoTuner.AutoTuneProfile.MEDIUM, null, CancellationToken.NONE);
+                JTransientAutoTuner.Options.defaults(), JTransientAutoTuner.AutoTuneProfile.MEDIUM, null, CancellationToken.NONE);
         assertTrue(legacy instanceof OperationOutcome.Completed<?>);
         assertFalse(((OperationOutcome.Completed<JTransientAutoTuner.AutoTunerResult>) legacy).value().success);
         var calibrated = CalibratedAutoTuner.tuneOutcome(frames().subList(0, 4), config,
-                CalibratedAutoTuner.Options.captureDefaults(), JTransientAutoTuner.AutoTuneProfile.MEDIUM, null, CancellationToken.NONE);
+                CalibratedAutoTuner.Options.defaults(), JTransientAutoTuner.AutoTuneProfile.MEDIUM, null, CancellationToken.NONE);
         assertTrue(calibrated instanceof OperationOutcome.Completed<?>);
         assertFalse(((OperationOutcome.Completed<JTransientAutoTuner.AutoTunerResult>) calibrated).value().success);
-        var cancelled = JTransientAutoTuner.tuneOutcome(null, config, JTransientAutoTuner.Options.captureDefaults(),
+        var cancelled = JTransientAutoTuner.tuneOutcome(null, config, JTransientAutoTuner.Options.defaults(),
                 JTransientAutoTuner.AutoTuneProfile.MEDIUM, null, () -> true);
         assertTrue(cancelled instanceof OperationOutcome.Cancelled<?>);
     }

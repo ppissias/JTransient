@@ -26,24 +26,18 @@ public class JTransientAutoTunerJitterTest {
      */
     @Test
     public void measureMaxStarJitterCalibratesFromReferenceStackMatches() throws Exception {
-        TunerState tunerState = TunerState.capture();
-        try {
-            JTransientAutoTuner.DEBUG = false;
 
-            DetectionConfig config = new DetectionConfig();
-            StringBuilder report = new StringBuilder();
+        DetectionConfig config = new DetectionConfig();
+        StringBuilder report = new StringBuilder();
 
-            List<List<?>> croppedFramesByRegion = Collections.singletonList(
-                    createCroppedSequence(64, 64, 0, 0)
-            );
+        List<List<?>> croppedFramesByRegion = Collections.singletonList(
+                createCroppedSequence(64, 64, 0, 0)
+        );
 
-            double measured = measureMaxStarJitter(croppedFramesByRegion, config, report);
+        double measured = measureMaxStarJitter(croppedFramesByRegion, config, report);
 
-            assertEquals(4.0, measured, 0.5);
-            assertTrue(report.toString().contains("Calibrated maxStarJitter"));
-        } finally {
-            tunerState.restore();
-        }
+        assertEquals(4.0, measured, 0.5);
+        assertTrue(report.toString().contains("Calibrated maxStarJitter"));
     }
 
     /**
@@ -52,29 +46,23 @@ public class JTransientAutoTunerJitterTest {
      */
     @Test
     public void tuneUsesCalibratedJitterInsteadOfCallerGuess() {
-        TunerState tunerState = TunerState.capture();
-        try {
-            JTransientAutoTuner.DEBUG = false;
-            configureSingleSweepForTest();
+        var options = singleSweepOptions();
 
-            DetectionConfig baseConfig = new DetectionConfig();
-            baseConfig.maxStarJitter = 0.25;
+        DetectionConfig baseConfig = new DetectionConfig();
+        baseConfig.maxStarJitter = 0.25;
 
-            List<ImageFrame> frames = createImageSequence(96, 96, 8, 8);
+        List<ImageFrame> frames = createImageSequence(96, 96, 8, 8);
 
-            JTransientAutoTuner.AutoTunerResult result = JTransientAutoTuner.tune(frames, baseConfig, null);
+        JTransientAutoTuner.AutoTunerResult result = JTransientAutoTuner.tuneSnapshot(frames, baseConfig, options, JTransientAutoTuner.AutoTuneProfile.MEDIUM, null);
 
-            assertTrue(result.success);
-            assertNotNull(result.optimizedConfig);
-            assertEquals(4.0, result.optimizedConfig.maxStarJitter, 0.5);
-            assertEquals(baseConfig.qualityMaxElongationForFwhm, result.optimizedConfig.qualityMaxElongationForFwhm, 0.0);
-            assertTrue(result.optimizedConfig.maxStarJitter > baseConfig.maxStarJitter + 3.0);
-            assertTrue(result.telemetryReport.contains("Jitter Calibration"));
-            assertTrue(result.telemetryReport.contains("Quality Max Elong FWHM"));
-            assertFalse(result.telemetryReport.contains("Measured Median Star Elongation"));
-        } finally {
-            tunerState.restore();
-        }
+        assertTrue(result.success);
+        assertNotNull(result.optimizedConfig);
+        assertEquals(4.0, result.optimizedConfig.maxStarJitter, 0.5);
+        assertEquals(baseConfig.qualityMaxElongationForFwhm, result.optimizedConfig.qualityMaxElongationForFwhm, 0.0);
+        assertTrue(result.optimizedConfig.maxStarJitter > baseConfig.maxStarJitter + 3.0);
+        assertTrue(result.telemetryReport.contains("Jitter Calibration"));
+        assertTrue(result.telemetryReport.contains("Quality Max Elong FWHM"));
+        assertFalse(result.telemetryReport.contains("Measured Median Star Elongation"));
     }
 
     /**
@@ -84,32 +72,26 @@ public class JTransientAutoTunerJitterTest {
      */
     @Test
     public void frameSamplingIgnoresDetectionGrowSigmaWhenQualityGrowSigmaUnchanged() throws Exception {
-        TunerState tunerState = TunerState.capture();
-        try {
-            JTransientAutoTuner.DEBUG = false;
 
-            List<ImageFrame> frames = createImageSequence(96, 96, 8, 8);
+        List<ImageFrame> frames = createImageSequence(96, 96, 8, 8);
 
-            DetectionConfig baselineConfig = new DetectionConfig();
-            StringBuilder baselineReport = new StringBuilder();
-            List<ImageFrame> baselineSelection = getBestSampleFrames(frames, baselineConfig, baselineReport);
+        DetectionConfig baselineConfig = new DetectionConfig();
+        StringBuilder baselineReport = new StringBuilder();
+        List<ImageFrame> baselineSelection = getBestSampleFrames(frames, baselineConfig, baselineReport);
 
-            DetectionConfig tunedConfig = new DetectionConfig();
-            tunedConfig.detectionSigmaMultiplier = 3.5;
-            tunedConfig.growSigmaMultiplier = 2.75;
-            tunedConfig.minDetectionPixels = 12;
-            tunedConfig.maxStarJitter = 1.81;
+        DetectionConfig tunedConfig = new DetectionConfig();
+        tunedConfig.detectionSigmaMultiplier = 3.5;
+        tunedConfig.growSigmaMultiplier = 2.75;
+        tunedConfig.minDetectionPixels = 12;
+        tunedConfig.maxStarJitter = 1.81;
 
-            StringBuilder tunedReport = new StringBuilder();
-            List<ImageFrame> tunedSelection = getBestSampleFrames(frames, tunedConfig, tunedReport);
+        StringBuilder tunedReport = new StringBuilder();
+        List<ImageFrame> tunedSelection = getBestSampleFrames(frames, tunedConfig, tunedReport);
 
-            assertEquals(sequenceIndices(baselineSelection), sequenceIndices(tunedSelection));
-            assertTrue(tunedReport.toString().contains("Effective Frame-Sampling Config -> QualitySigma: 5.00 | QualityGrowSigma: 3.00 | QualityMinPix: 5 | QualityMaxElongationForFwhm: 1.50"));
-            assertTrue(tunedReport.toString().contains("Frame sampling ignores incoming Detect Sigma 3.50, Grow Sigma 2.75, MinPix 12, MaskOverlap 0.75, MaxStarJitter 1.81"));
-            assertFalse(tunedReport.toString().contains("forced to"));
-        } finally {
-            tunerState.restore();
-        }
+        assertEquals(sequenceIndices(baselineSelection), sequenceIndices(tunedSelection));
+        assertTrue(tunedReport.toString().contains("Effective Frame-Sampling Config -> QualitySigma: 5.00 | QualityGrowSigma: 3.00 | QualityMinPix: 5 | QualityMaxElongationForFwhm: 1.50"));
+        assertTrue(tunedReport.toString().contains("Frame sampling ignores incoming Detect Sigma 3.50, Grow Sigma 2.75, MinPix 12, MaskOverlap 0.75, MaxStarJitter 1.81"));
+        assertFalse(tunedReport.toString().contains("forced to"));
     }
 
     /**
@@ -154,7 +136,7 @@ public class JTransientAutoTunerJitterTest {
     public void aggressiveProfileUsesSofterLowSigmaMinPixGuard() throws Exception {
         Object policy = getPolicy(JTransientAutoTuner.AutoTuneProfile.HIGH);
 
-        assertEquals(8.0, JTransientAutoTuner.AGGRESSIVE_LOWER_SIGMA_SCORE_WINDOW, 0.0001);
+        assertEquals(8.0, JTransientAutoTuner.Options.defaults().aggressiveLowerSigmaScoreWindow(), 0.0001);
         assertEquals(34.0, getDoubleField(policy, "scoreWeightHarshness"), 0.0001);
         assertEquals(0.90, getDoubleField(policy, "harshnessSigmaWeight"), 0.0001);
         assertEquals(22.0, getDoubleField(policy, "lowSigmaMinPixGuardWeight"), 0.0001);
@@ -186,7 +168,7 @@ public class JTransientAutoTunerJitterTest {
                 JTransientAutoTuner.Options.class
         );
         method.setAccessible(true);
-        return (Double) method.invoke(null, croppedFramesByRegion, config, report, JTransientAutoTuner.Options.captureDefaults());
+        return (Double) method.invoke(null, croppedFramesByRegion, config, report, JTransientAutoTuner.Options.defaults());
     }
 
     @SuppressWarnings("unchecked")
@@ -201,7 +183,7 @@ public class JTransientAutoTunerJitterTest {
                 JTransientAutoTuner.Options.class
         );
         method.setAccessible(true);
-        return (List<ImageFrame>) method.invoke(null, frames, config, report, JTransientAutoTuner.Options.captureDefaults());
+        return (List<ImageFrame>) method.invoke(null, frames, config, report, JTransientAutoTuner.Options.defaults());
     }
 
     private static boolean isBetterSweepCandidate(double candidateScore,
@@ -219,7 +201,7 @@ public class JTransientAutoTunerJitterTest {
                 JTransientAutoTuner.Options.class
         );
         method.setAccessible(true);
-        return (Boolean) method.invoke(null, candidateScore, candidateSigma, bestScore, bestConfig, profile, JTransientAutoTuner.Options.captureDefaults());
+        return (Boolean) method.invoke(null, candidateScore, candidateSigma, bestScore, bestConfig, profile, JTransientAutoTuner.Options.defaults());
     }
 
     private static double deriveSweepGrowSigma(double sigma,
@@ -233,7 +215,7 @@ public class JTransientAutoTunerJitterTest {
                 JTransientAutoTuner.Options.class
         );
         method.setAccessible(true);
-        return (Double) method.invoke(null, sigma, growDelta, baseConfig, JTransientAutoTuner.Options.captureDefaults());
+        return (Double) method.invoke(null, sigma, growDelta, baseConfig, JTransientAutoTuner.Options.defaults());
     }
 
     private static Object getPolicy(JTransientAutoTuner.AutoTuneProfile profile) throws Exception {
@@ -251,23 +233,25 @@ public class JTransientAutoTunerJitterTest {
         return field.getDouble(target);
     }
 
-    private static void configureSingleSweepForTest() {
-        // Shrink the search space so the end-to-end tune(...) test stays fast and deterministic.
-        JTransientAutoTuner.AUTO_TUNE_SAMPLE_SIZE = 5;
-        JTransientAutoTuner.AUTO_TUNE_CROP_COUNT = 1;
-        JTransientAutoTuner.AUTO_TUNE_BORDER_MARGIN = 8;
-        JTransientAutoTuner.AUTO_TUNE_PREFERRED_CROP_SIZE_LARGE = 64;
-        JTransientAutoTuner.AUTO_TUNE_PREFERRED_CROP_SIZE_SMALL = 64;
-        JTransientAutoTuner.AUTO_TUNE_MIN_CROP_SIZE = 32;
+    /** Builds the deterministic small per-run sweep without changing shared defaults. */
+    private static JTransientAutoTuner.Options singleSweepOptions() {
+        var builder = JTransientAutoTuner.Options.builder();        builder.sampleSize = 5;
+        builder.cropCount = 1;
+        builder.borderMargin = 8;
+        builder.preferredCropSizeLarge = 64;
+        builder.preferredCropSizeSmall = 64;
+        builder.minCropSize = 32;
 
-        JTransientAutoTuner.MIN_STABLE_STARS = 4;
-        JTransientAutoTuner.MIN_TOTAL_EXTRACTED_OBJECTS = 1;
-        JTransientAutoTuner.MAX_TOTAL_EXTRACTED_OBJECTS = 1000;
+        builder.minStableStars = 4;
+        builder.minTotalExtractedObjects = 1;
+        builder.maxTotalExtractedObjects = 1000;
 
-        JTransientAutoTuner.SIGMAS_TO_TEST = new double[]{4.0};
-        JTransientAutoTuner.MIN_PIXELS_TO_TEST = new int[]{5};
-        JTransientAutoTuner.GROW_DELTAS_TO_TEST = new double[]{1.0};
-        JTransientAutoTuner.MASK_OVERLAP_TO_TEST = new double[]{0.75};
+        builder.sigmasToTest = new double[]{4.0};
+        builder.minPixelsToTest = new int[]{5};
+        builder.growDeltasToTest = new double[]{1.0};
+        builder.maskOverlapToTest = new double[]{0.75};
+
+        return builder.build();
     }
 
     private static List<ImageFrame> createImageSequence(int width,
@@ -365,87 +349,5 @@ public class JTransientAutoTunerJitterTest {
         return indices;
     }
 
-    private static final class TunerState {
-        private final boolean debug;
-        private final int autoTuneSampleSize;
-        private final int autoTuneCropCount;
-        private final int autoTuneBorderMargin;
-        private final int autoTunePreferredCropSizeLarge;
-        private final int autoTunePreferredCropSizeSmall;
-        private final int autoTuneMinCropSize;
-        private final int minStableStars;
-        private final int minTotalExtractedObjects;
-        private final int maxTotalExtractedObjects;
-        private final double[] sigmasToTest;
-        private final int[] minPixelsToTest;
-        private final double[] growDeltasToTest;
-        private final double[] maskOverlapToTest;
 
-        private TunerState(boolean debug,
-                           int autoTuneSampleSize,
-                           int autoTuneCropCount,
-                           int autoTuneBorderMargin,
-                           int autoTunePreferredCropSizeLarge,
-                           int autoTunePreferredCropSizeSmall,
-                           int autoTuneMinCropSize,
-                           int minStableStars,
-                           int minTotalExtractedObjects,
-                           int maxTotalExtractedObjects,
-                           double[] sigmasToTest,
-                           int[] minPixelsToTest,
-                           double[] growDeltasToTest,
-                           double[] maskOverlapToTest) {
-            this.debug = debug;
-            this.autoTuneSampleSize = autoTuneSampleSize;
-            this.autoTuneCropCount = autoTuneCropCount;
-            this.autoTuneBorderMargin = autoTuneBorderMargin;
-            this.autoTunePreferredCropSizeLarge = autoTunePreferredCropSizeLarge;
-            this.autoTunePreferredCropSizeSmall = autoTunePreferredCropSizeSmall;
-            this.autoTuneMinCropSize = autoTuneMinCropSize;
-            this.minStableStars = minStableStars;
-            this.minTotalExtractedObjects = minTotalExtractedObjects;
-            this.maxTotalExtractedObjects = maxTotalExtractedObjects;
-            this.sigmasToTest = sigmasToTest;
-            this.minPixelsToTest = minPixelsToTest;
-            this.growDeltasToTest = growDeltasToTest;
-            this.maskOverlapToTest = maskOverlapToTest;
-        }
-
-        private static TunerState capture() {
-            // The tuner stores many knobs in static fields, so tests snapshot and restore them explicitly.
-            return new TunerState(
-                    JTransientAutoTuner.DEBUG,
-                    JTransientAutoTuner.AUTO_TUNE_SAMPLE_SIZE,
-                    JTransientAutoTuner.AUTO_TUNE_CROP_COUNT,
-                    JTransientAutoTuner.AUTO_TUNE_BORDER_MARGIN,
-                    JTransientAutoTuner.AUTO_TUNE_PREFERRED_CROP_SIZE_LARGE,
-                    JTransientAutoTuner.AUTO_TUNE_PREFERRED_CROP_SIZE_SMALL,
-                    JTransientAutoTuner.AUTO_TUNE_MIN_CROP_SIZE,
-                    JTransientAutoTuner.MIN_STABLE_STARS,
-                    JTransientAutoTuner.MIN_TOTAL_EXTRACTED_OBJECTS,
-                    JTransientAutoTuner.MAX_TOTAL_EXTRACTED_OBJECTS,
-                    JTransientAutoTuner.SIGMAS_TO_TEST,
-                    JTransientAutoTuner.MIN_PIXELS_TO_TEST,
-                    JTransientAutoTuner.GROW_DELTAS_TO_TEST,
-                    JTransientAutoTuner.MASK_OVERLAP_TO_TEST
-            );
-        }
-
-        private void restore() {
-            JTransientAutoTuner.DEBUG = debug;
-            JTransientAutoTuner.AUTO_TUNE_SAMPLE_SIZE = autoTuneSampleSize;
-            JTransientAutoTuner.AUTO_TUNE_CROP_COUNT = autoTuneCropCount;
-            JTransientAutoTuner.AUTO_TUNE_BORDER_MARGIN = autoTuneBorderMargin;
-            JTransientAutoTuner.AUTO_TUNE_PREFERRED_CROP_SIZE_LARGE = autoTunePreferredCropSizeLarge;
-            JTransientAutoTuner.AUTO_TUNE_PREFERRED_CROP_SIZE_SMALL = autoTunePreferredCropSizeSmall;
-            JTransientAutoTuner.AUTO_TUNE_MIN_CROP_SIZE = autoTuneMinCropSize;
-            JTransientAutoTuner.MIN_STABLE_STARS = minStableStars;
-            JTransientAutoTuner.MIN_TOTAL_EXTRACTED_OBJECTS = minTotalExtractedObjects;
-            JTransientAutoTuner.MAX_TOTAL_EXTRACTED_OBJECTS = maxTotalExtractedObjects;
-            JTransientAutoTuner.SIGMAS_TO_TEST = sigmasToTest;
-            JTransientAutoTuner.MIN_PIXELS_TO_TEST = minPixelsToTest;
-            JTransientAutoTuner.GROW_DELTAS_TO_TEST = growDeltasToTest;
-            JTransientAutoTuner.MASK_OVERLAP_TO_TEST = maskOverlapToTest;
-        }
-    }
 }

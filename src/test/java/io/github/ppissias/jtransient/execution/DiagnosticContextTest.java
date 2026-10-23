@@ -78,32 +78,28 @@ public class DiagnosticContextTest {
         }
     }
 
-    /** Silent defaults are captured before callbacks, while direct legacy debug and explicit overrides remain usable. */
+    /** Library defaults are silent and explicit per-run policy alone controls core output. */
     @Test
-    public void legacyFlagIsCapturedAndExplicitSilenceOverridesIt() throws Exception {
-        boolean previousDebug = JTransientEngine.DEBUG;
+    public void silenceDoesNotDependOnFacadeGlobals() throws Exception {
         PrintStream previousOutput = System.out;
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         try (PrintStream capture = new PrintStream(output)) {
             System.setOut(capture);
-            JTransientEngine.DEBUG = false;
             try (JTransientEngine engine = new JTransientEngine(ExecutionPolicy.bounded(1))) {
-                engine.runPipeline(frames(1), new DetectionConfig(), (percentage, message) -> JTransientEngine.DEBUG = true);
-            }
-            assertEquals(0, output.size());
-            SourceExtractor.extractSources(frames(1).getFirst().pixelData, 5, 5, new DetectionConfig());
-            assertTrue(output.size() > 0);
-            output.reset();
-            List<String> disabledMessages = new ArrayList<>();
-            try (DiagnosticContext.Scope scope = DiagnosticContext.open(new DiagnosticOptions(false, disabledMessages::add));
-                 JTransientEngine engine = new JTransientEngine(ExecutionPolicy.bounded(1))) {
                 engine.runPipeline(frames(1), new DetectionConfig(), null);
             }
             assertEquals(0, output.size());
-            assertTrue(disabledMessages.isEmpty());
+            try (var diagnostics = DiagnosticContext.open(DiagnosticOptions.standardOutput(true))) {
+                SourceExtractor.extractSources(frames(1).getFirst().pixelData, 5, 5, new DetectionConfig());
+            }
+            assertTrue(output.size() > 0);
+            output.reset();
+            try (var diagnostics = DiagnosticContext.open(new DiagnosticOptions(false, message -> fail("Disabled sink called")))) {
+                SourceExtractor.extractSources(frames(1).getFirst().pixelData, 5, 5, new DetectionConfig());
+            }
+            assertEquals(0, output.size());
         } finally {
             System.setOut(previousOutput);
-            JTransientEngine.DEBUG = previousDebug;
         }
     }
 

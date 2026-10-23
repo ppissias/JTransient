@@ -118,11 +118,15 @@ public class AutoTunerOptionsTest {
     public void diagnosticsArePerRunAndSilentByDefault() {
         List<String> messages = new ArrayList<>();
         var builder = legacyOptions(5, 4).toBuilder();
-        builder.diagnosticSink = messages::add;
-        legacy(frames(), builder.build(), null);
+        try (var scope = io.github.ppissias.jtransient.execution.DiagnosticContext.open(
+                new io.github.ppissias.jtransient.execution.DiagnosticOptions(false, messages::add))) {
+            legacy(frames(), builder.build(), null);
+        }
         assertTrue(messages.isEmpty());
-        builder.debug = true;
-        legacy(frames(), builder.build(), null);
+        try (var scope = io.github.ppissias.jtransient.execution.DiagnosticContext.open(
+                new io.github.ppissias.jtransient.execution.DiagnosticOptions(true, messages::add))) {
+            legacy(frames(), builder.build(), null);
+        }
         assertFalse(messages.isEmpty());
     }
 
