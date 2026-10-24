@@ -38,7 +38,6 @@ A fresh review of the engine (about 20,000 lines of main code and 7,700 of tests
 | [JT-05](#jt-05-let-the-pipeline-method-read-as-the-algorithm) | Let the pipeline method read as the algorithm | Medium | Small |
 | [JT-06](#jt-06-tuner-constants-instead-of-an-options-builder) | Tuner constants instead of an options builder | Low | Small |
 | [JT-07](#jt-07-split-the-largest-classes-along-their-phases-when-they-change) | Split the largest classes along their phases when they change | Low | Guidance |
-| [JT-08](#jt-08-upgrade-the-dependencies) | Upgrade the dependencies | Medium | Small |
 | [JA-11](#ja-11-validate-the-selected-release-artifacts) | Validate the selected release artifacts | Release gate | Process |
 
 **Suggested order.** JT-01, then JT-05 (it makes JT-03 and JT-04 easy to see), then JT-03 and JT-04 together, then JT-02 and JT-06. JA-11 runs at each release.
@@ -156,20 +155,6 @@ The phase comments are numbered 0, 0.5, 4 and 5.
 **Issue review (2026-10-24; evaluate before implementation).**
 - The guidance is sound: extract a phase only when it has a coherent responsibility and explicit inputs/outputs. Keep algorithm changes separately reviewable from moving their code.
 - Identify ownership and release points for large arrays, and preserve numerical iteration order, deterministic seeds and cancellation checks. Neither a new class nor an immutable wrapper justifies copying large images. Existing operation snapshots and result views can remain distinct without creating competing mutable owners.
-
-### JT-08. Upgrade the dependencies
-
-Part of SpacePixels' [SP-18](../SpacePixels/DESIGN-IMPROVEMENTS.md#sp-18-upgrade-the-dependencies), which holds the version table, the risks and the verification for all three repositories. For JTransient:
-- the Gradle wrapper goes from 9.2.1 to 9.8.2;
-- Gson goes from 2.13.2 to 2.14.0;
-- JUnit stays at 4.13.2;
-- the release stays at Java 21, so that the library reaches the most users.
-
-Detection results must stay byte-identical.
-
-**Issue review (2026-10-24; evaluate before implementation).**
-- Use SP-18's shared review and recheck versions at implementation time. Keep dependency changes separate from algorithm and execution-layer refactors, and check the published API consumer as well as local composite builds.
-- Compare deterministic result snapshots with measured timings excluded, as DEVELOPER.md specifies. Exercise configuration/result serialization and preserved validation behaviour when changing Gson; unchanged detections alone do not cover the serialization contract.
 
 ### JA-11. Validate the selected release artifacts
 
