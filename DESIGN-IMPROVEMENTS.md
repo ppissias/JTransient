@@ -4,6 +4,8 @@ This file lists design, refactoring and code-quality work for JTransient: change
 
 Every item is a proposal until the maintainer decides on it. When an item is done, describe the result in the reference documents and remove it from this file; git history keeps the record. A refactoring must leave the results byte-identical on the reference datasets (see [DEVELOPER.md](DEVELOPER.md#real-data-checks)).
 
+**How to use the issue reviews (2026-10-24).** Before implementing an item, consider and evaluate its review comments against the current code, tests and documented API. Record which comments are accepted, adjusted or rejected, why, and the relevant verification with the change. They are review input, not authorization to implement the proposal or automatic proof of a current bug. This was a static review; no runtime or real-data checks were run. Scientific parity alone does not establish parity of input acceptance, diagnostics, cancellation or public API behaviour.
+
 ## Code review of 2026-10-23
 
 A fresh review of the engine (about 20,000 lines of main code and 7,700 of tests), against the principles in [DEVELOPER.md](DEVELOPER.md#principles): readable code, clear boundaries, a few patterns applied consistently, and no abstraction without a real need.
@@ -41,6 +43,8 @@ A fresh review of the engine (about 20,000 lines of main code and 7,700 of tests
 
 **Suggested order.** JT-01, then JT-05 (it makes JT-03 and JT-04 easy to see), then JT-03 and JT-04 together, then JT-02 and JT-06. JA-11 runs at each release.
 
+**Order review.** Verify the dead-code subset of JT-01 first. Keep failure-context and diagnostic-routing changes independently reviewable, even if scheduled together. Evaluate the contract changes in JT-02, JT-04 and JT-06 before treating them as behaviour-preserving simplifications.
+
 ### JT-01. Remove dead code and compatibility aliases
 
 **Problem.**
@@ -52,6 +56,11 @@ A fresh review of the engine (about 20,000 lines of main code and 7,700 of tests
 The libraries are now developed together with SpacePixels, so none of these needs to survive.
 
 **Proposal.** Delete `SpatialGrid`. Keep one name per product, drop the aliases and the legacy telemetry conversion, and update SpacePixels' report code (about 70 references) in the same change. Record the original frame identity in the tracker telemetry directly.
+
+**Issue review (2026-10-24; evaluate before implementation).**
+- Verify absence of callers separately from deciding to remove an exposed capability. `PipelineResult` and its builder are public, and their products are documented in README.md and PIPELINE.md. Update the API consumer, SpacePixels reports and examples together, and document intentional signature changes.
+- Preserve optional-product semantics: `slowMoverStackData` is documented as null when slow movers are disabled, whereas `maximumStackData` is a separate pipeline product. Removing the alias must not make a disabled analysis appear enabled in callers. Preserve shared buffer ownership without introducing image copies.
+- Tracker statistics currently translate retained positions through `ExtractedFramesContext.labelTrackerFrames`. Test original identity after rejected frames, empty detections and non-contiguous sequence indices when removing that translation; an array position is not an original frame identity.
 
 ### JT-02. Shrink the settings rules to what is used
 
@@ -79,6 +88,12 @@ The per-field domains duplicate the ranges of the GUI's spinners, so there are t
 
 **Verification.** Profile loading, "Review rules…" and the API reject or accept the same inputs as before (unit tests). Detection results are unchanged.
 
+**Issue review (2026-10-24; evaluate before implementation).**
+- **This changes accepted inputs.** `DetectionConfigRulesTest` explicitly accepts non-finite values in fields unused by a particular operation or timing branch and rejects them when active. Validating every number always cannot also preserve the stated accept/reject behaviour. Decide whether to change that API contract, and separate the decision from removing redundant metadata.
+- Per-field domains currently produce `NUMERIC_DOMAIN` advisory warnings in `validate`; they are not only duplicate spinner ranges. Removing them changes "Review rules..." findings. Inventory the advisories and preserve or explicitly revise them, including disabled stages, calibration, timing branches and legitimate sentinel values.
+- Keep configuration capture before callbacks and worker execution, caller immutability, and the distinction between engine invariants and the GUI's alignment policy. Update PIPELINE.md and SpacePixels tests for any accepted contract change.
+- Note from maintainer: If the SpacePixels GUI Spinners also have their own range definition, this is a suplication. See how we can have this information about the range in the rules and the GUI gets that information about the range from the rules and applies it to the Spinners.  
+
 ### JT-03. Label failures at stage boundaries, without a thread-local
 
 **Problem.** `OperationContext` keeps the current stage and frame in a `ThreadLocal`. The engine, tuner and photometry call `OperationContext.compute`, `call`, `run` and `notify` 68 times so that a failure can name its stage and frame (`OperationFailure`, `OperationFailedException`, `StageId`, `FrameIdentity`). `WorkerPool` copies the context into worker batches, and progress callbacks are wrapped too. SpacePixels never reads the structured failure; it shows the exception's message.
@@ -87,11 +102,22 @@ The per-field domains duplicate the ranges of the GUI's spinners, so there are t
 
 **Benefit.** The stage code shows the science only. A failure still says "failed at TRACKING for frame 12 [name.fits]: …".
 
+**Issue review (2026-10-24; evaluate before implementation).**
+- `OperationContext` does more than format a message: it preserves the original cause and nested stage/frame identity, excludes cancellation from ordinary failure recording, restores interrupt status and propagates fatal errors. `OperationContextTest` and `WorkerPoolTest` exercise those contracts.
+- An outer engine-stage catch cannot reconstruct the frame that failed inside a parallel batch, and it does not cover standalone tuner, extraction and photometry entry points. Define an explicit replacement for those paths before deleting the scopes. Preserve worker joining and the original failure when sibling tasks are cancelled.
+- Retain meaningful distinction between progress-listener failures and scientific failures. If structured public failure fields are removed, update PIPELINE.md and consumer checks as an intentional API change, even though the GUI currently displays only the message.
+
+
 ### JT-04. Diagnostics through java.util.logging
 
 **Problem.** `DiagnosticContext` and `DiagnosticOptions` route debug text through a per-operation `ThreadLocal` sink: 139 calls, most of them `if (DiagnosticContext.enabled()) DiagnosticContext.println/printf(...)`. SpacePixels bridges to it with `DebugOutput.openEngineDiagnostics()` around every engine call. Per-operation routing would matter for several concurrent runs with different sinks; SpacePixels runs one job at a time.
 
 **Proposal.** Log through `java.util.logging` loggers at `FINE`, which is standard, needs no scope and costs nothing when off (`logger.isLoggable(FINE)`). SpacePixels' debug option sets the level and the console handler. Remove `DiagnosticContext`, `DiagnosticOptions` and the bridge.
+
+**Issue review (2026-10-24; evaluate before implementation).**
+- **The single-GUI-job argument is insufficient.** `EngineDiagnosticsTest.independentEnginesMatchTheirIsolatedDiagnosticStreams` checks concurrent engines with separate sinks. PIPELINE.md documents per-operation routing, and SpacePixels' `DebugOutputTest` checks that an explicit disabled caller policy overrides application defaults.
+- Changing a shared logger level or console handler does not preserve those contracts and can affect an embedding application's other runs. Evaluate keeping the scoped policy, or passing an explicit per-operation policy, even if logging is used as an output destination. Library code must not reconfigure the host's global handlers.
+- Check quiet defaults, enabled and disabled concurrent callers, nested scopes, worker propagation, sink-failure behaviour and absence of expensive formatting when diagnostics are off. Any intentional loss of per-run routing needs a documented contract decision, not only unchanged detection results.
 
 ### JT-05. Let the pipeline method read as the algorithm
 
@@ -107,15 +133,29 @@ The phase comments are numbered 0, 0.5, 4 and 5.
 
 **Proposal.** A small private helper: `runStage(stage, percent, message, work)` handles timing, progress and the failure label. Move the telemetry printing into `PipelineTelemetry`'s own formatter, which already writes a text report. Name the phases by what they do. The method then reads as: extract, select frames, build the reference, slow movers, tracking, common motion, residual analysis, photometry.
 
+**Issue review (2026-10-24; evaluate before implementation).**
+- A small private helper is reasonable if it preserves stage-specific result types and leaves branch decisions visible. Do not introduce an untyped stage framework to shorten the method.
+- Preserve the ordering of progress, stage timing and observer delivery, including disabled/empty stages and early returns. PIPELINE.md distinguishes observer exceptions, which are isolated, from progress-listener exceptions, which fail the operation. Keep that distinction when centralizing callbacks and timing.
+- Compare scientific results and stage/observer sequences separately from elapsed-time values. Retain the failure and cancellation guarantees evaluated in JT-03; extract orchestration first without simultaneously changing diagnostic policy.
+
 ### JT-06. Tuner constants instead of an options builder
 
 **Problem.** `CalibratedAutoTuner.Options` and its `Builder` (about 300 lines, with defensive copies and validation) exist so that a caller could change the tuning grids. No caller does. SpacePixels only reads `Options.defaults().falsePositiveBudgetPerMpixFrame()[profile.ordinal()]`.
 
 **Proposal.** Private constants in the tuner. Make the false-positive budget a property of `AutoTuneProfile` (`profile.falsePositiveBudget()`).
 
+**Issue review (2026-10-24; evaluate before implementation).**
+- **The builder has exercised callers and a documented contract.** `AutoTunerOptionsTest` builds small search grids, runs concurrent calibrations with different budgets, checks array isolation and rebuilds trade-offs from retained options. README.md also gives an options-builder example, and PIPELINE.md describes the capability. Revise the claim that nobody calls it before deciding removal.
+- Evaluate whether the public customization is wanted and whether a smaller test seam can preserve useful bounded calibration tests. Default-only SpacePixels usage does not by itself make options or their defensive copies redundant.
+- If removal is chosen, document the API change and retained calibration provenance. Preserve grid order, crop policy, random seed and nominal/effective profile budgets so the cleanup does not change tuning science. Check all profiles and trade-off reconstruction as well as default end-to-end tuning.
+
 ### JT-07. Split the largest classes along their phases when they change
 
 `CalibratedAutoTuner` (1,976 lines), `VariableStarAnalyzer` (1,291) and `JTransientEngine` (1,082) are large but each holds one responsibility. Do not split them for their size. When one of them changes for another reason, extract the phase being changed, as was done for the track linker. For the tuner, that would be crops and injection, the sweep, the selection, or the trade-off; for photometry, measurement or scoring.
+
+**Issue review (2026-10-24; evaluate before implementation).**
+- The guidance is sound: extract a phase only when it has a coherent responsibility and explicit inputs/outputs. Keep algorithm changes separately reviewable from moving their code.
+- Identify ownership and release points for large arrays, and preserve numerical iteration order, deterministic seeds and cancellation checks. Neither a new class nor an immutable wrapper justifies copying large images. Existing operation snapshots and result views can remain distinct without creating competing mutable owners.
 
 ### JT-08. Upgrade the dependencies
 
@@ -127,6 +167,10 @@ Part of SpacePixels' [SP-18](../SpacePixels/DESIGN-IMPROVEMENTS.md#sp-18-upgrade
 
 Detection results must stay byte-identical.
 
+**Issue review (2026-10-24; evaluate before implementation).**
+- Use SP-18's shared review and recheck versions at implementation time. Keep dependency changes separate from algorithm and execution-layer refactors, and check the published API consumer as well as local composite builds.
+- Compare deterministic result snapshots with measured timings excluded, as DEVELOPER.md specifies. Exercise configuration/result serialization and preserved validation behaviour when changing Gson; unchanged detections alone do not cover the serialization contract.
+
 ### JA-11. Validate the selected release artifacts
 
 At each SpacePixels release:
@@ -136,6 +180,10 @@ At each SpacePixels release:
 4. Verify the resolved versions, metadata and the headless/desktop separation.
 
 Local staging is packaging evidence, not proof that the artifacts are publicly available.
+
+**Issue review (2026-10-24; evaluate before implementation).**
+- Retain this release gate. Record the resolved artifact versions and repository configuration so success against sibling sources or a locally staged artifact is not mistaken for a check of the published combination.
+- Include API consumer compilation after the removals proposed in JT-01/JT-03/JT-04/JT-06 and the SpacePixels package moves. Packaging checks and scientific regression answer different questions; both remain necessary for the changes that affect them.
 
 ## Removed from the previous plan (2026-10-23)
 
