@@ -21,7 +21,8 @@ import java.util.List;
 /**
  * One finished stage of a pipeline run and its products, as handed to a {@link PipelineStageObserver}. The stages
  * arrive in this order; an optional stage that is switched off still arrives, with {@code enabled} false and empty
- * products. The products are the same objects the run's {@link PipelineResult} holds.
+ * products. The products are the same objects the run's {@link PipelineResult} holds. A run that keeps too few frames
+ * stops before the first stage ({@link PipelineResult#tooFewFrames}), so none arrives.
  */
 public sealed interface PipelineStage {
 

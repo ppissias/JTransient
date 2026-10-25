@@ -283,6 +283,7 @@ Common-motion filtering has its own switch and removes groups before optional re
 
 What it returns:
 
+- `PipelineResult.tooFewFrames` (see below)
 - `PipelineResult.tracks`
 - `PipelineResult.telemetry`
 - `PipelineResult.masterStackData`
@@ -305,6 +306,8 @@ What it returns:
 - `PipelineResult.telemetry.photometryTelemetry`
 
 When slow-mover detection is enabled, `slowMoverStackData` is the same array as `maximumStackData`, and `slowMoverMedianVetoMask` is the same array as `slowMoverAnalysis.medianMask`.
+
+**Too few frames.** When quality control keeps fewer than `JTransientEngine.MIN_KEPT_FRAMES` (3) frames, the run stops after quality control and returns a completed result with `tooFewFrames` true, not a failure. It holds the telemetry of extraction, quality control and frame rejection, the drift points and the data area of the kept frames (null when no frame was kept). The lists and analyses are empty, the stacks and masks are null, and no stage reaches the observer. This also applies when no frame is kept, which used to fail at the master reference. `generateMasterStack` and `detectTransients` do not apply the rule.
 
 Result image/mask arrays are shared data, not defensive deep copies. In particular, slow-mover compatibility aliases refer to the same arrays. Treat engine outputs as read-only when passing them between viewers or analysis stages.
 
@@ -370,7 +373,7 @@ Tune once and pass `optimizedConfig` to `runPipeline(...)` for a complete run. P
 | 50-90% | stationary-star veto and track linking |
 | 92% | common-motion filtering and optional residual transient analysis |
 | 93-99% | variable-star photometry (when enabled) |
-| 100% | complete |
+| 100% | complete; a run that keeps too few frames goes from 42% to 100% |
 
 `detectTransients(...)` reports extraction and frame rejection up to 42%, the master stack at 45-48% and the stationary-star veto at 60-100%.
 
@@ -387,7 +390,7 @@ The five-argument `runPipeline(...)` hands each finished stage to a `PipelineSta
 | `ResidualAnalysis` | residual analysis | `enabled`, local rescue candidates and activity clusters |
 | `Photometry` | variable-star photometry | `enabled`, the variable-star analysis |
 
-A switched-off stage still arrives, with `enabled` false and empty products. The products are the objects and arrays the `PipelineResult` will hold, not copies, and no later stage changes them: common-motion filtering and residual analysis work on the detections no track or anomaly took. Treat them as read-only and copy what you keep after the call.
+A switched-off stage still arrives, with `enabled` false and empty products. A run that keeps too few frames stops before the first stage, so none arrives. The products are the objects and arrays the `PipelineResult` will hold, not copies, and no later stage changes them: common-motion filtering and residual analysis work on the detections no track or anomaly took. Treat them as read-only and copy what you keep after the call.
 
 The observer runs on the thread that runs the pipeline, once per stage; the run waits for it. An exception from it is caught, written to the run's diagnostics and ignored: it never fails or cancels the run, unlike a progress listener's. Nothing is called after the run returns or throws. Without an observer nothing is allocated. Results are identical with no observer, a no-op observer and a throwing one.
 

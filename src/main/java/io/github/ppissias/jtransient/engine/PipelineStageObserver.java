@@ -19,7 +19,8 @@ package io.github.ppissias.jtransient.engine;
  * stage's products are final: no later stage changes them. The products are the run's own objects and arrays, not
  * copies, so treat them as read-only and copy what you keep after the call returns. The run waits while the observer
  * runs. An exception from the observer is caught, reported through the run's diagnostics and ignored: it never fails
- * or cancels the run. Nothing is called after the run returns or throws.</p>
+ * or cancels the run. Nothing is called after the run returns or throws. A run that keeps too few frames stops after
+ * quality control ({@link PipelineResult#tooFewFrames}) and calls it for no stage.</p>
  */
 @FunctionalInterface
 public interface PipelineStageObserver {

@@ -29,8 +29,16 @@ import java.util.List;
  * Confirmed tracks, rescued anomalies, leftover
  * transients, and diagnostic products all live here so callers can decide how much of the
  * pipeline output they want to keep.</p>
+ *
+ * <p>A run that keeps too few frames stops after quality control and says so in {@link #tooFewFrames}.</p>
  */
 public class PipelineResult {
+    /**
+     * True when fewer than {@link JTransientEngine#MIN_KEPT_FRAMES} frames survived quality control. The run then
+     * stopped there: only the telemetry (extraction, quality control and frame rejection), the drift points and the
+     * data area are filled in; the lists and analyses are empty, and the stacks and masks are null.
+     */
+    public final boolean tooFewFrames;
     /** Returned tracks: streak tracks, single streaks and point tracks. */
     public final List<Track> tracks;
     /** Per-phase counters and diagnostics collected during processing. */
@@ -89,6 +97,7 @@ public class PipelineResult {
     /** Starts a builder holding this result's fields: the same objects and arrays, not copies. */
     public Builder toBuilder() {
         Builder builder = new Builder();
+        builder.tooFewFrames = tooFewFrames;
         builder.tracks = tracks;
         builder.telemetry = telemetry;
         builder.masterStackData = masterStackData;
@@ -111,6 +120,7 @@ public class PipelineResult {
     }
 
     private PipelineResult(Builder builder) {
+        this.tooFewFrames = builder.tooFewFrames;
         this.tracks = builder.tracks;
         this.telemetry = builder.telemetry;
         this.masterStackData = builder.masterStackData;
@@ -136,6 +146,7 @@ public class PipelineResult {
      * detection stays the same object in every list that holds it.
      */
     public static final class Builder {
+        private boolean tooFewFrames;
         private List<Track> tracks;
         private PipelineTelemetry telemetry;
         private short[][] masterStackData;
@@ -156,6 +167,12 @@ public class PipelineResult {
         private List<CameraFixedRejector.Group> cameraFixedGroups;
 
         private Builder() {
+        }
+
+        /** Sets {@link PipelineResult#tooFewFrames}. */
+        public Builder tooFewFrames(boolean tooFewFrames) {
+            this.tooFewFrames = tooFewFrames;
+            return this;
         }
 
         /** Sets {@link PipelineResult#tracks}. */

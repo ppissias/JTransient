@@ -45,6 +45,8 @@ public final class ApiConsumer {
             PipelineResult result = engine.runPipeline(frames, config, null);
             require(result.tracks != null && result.telemetry != null && result.masterStackData != null,
                     "Result fields missing");
+            require(!result.tooFewFrames && engine.runPipeline(frames.subList(0, JTransientEngine.MIN_KEPT_FRAMES - 1),
+                    config, null).tooFewFrames, "Too-few-frames result missing");
             require(engine.generateMasterStack(new ArrayList<>(frames), config, null) != null, "Sequential reuse failed");
         }
         System.out.println("Current public API consumer passed on Java 21.");

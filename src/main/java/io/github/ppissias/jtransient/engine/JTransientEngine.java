@@ -62,8 +62,18 @@ import java.util.concurrent.atomic.AtomicInteger;
  * the list is empty, the frames differ in size or share a sequence index, some frames have a timestamp and others
  * don't ({@code -1}), some have an exposure time and others don't, the exposure times differ by more than 2 % (at
  * least 0.1 s), or a supplied master stack has another size. A timestamp of 0 is a real time.</p>
+ *
+ * <p>{@link #runPipeline} stops after quality control when it keeps fewer than {@link #MIN_KEPT_FRAMES} frames, and
+ * returns a completed result marked {@link PipelineResult#tooFewFrames}, not a failure.</p>
  */
 public class JTransientEngine implements AutoCloseable {
+
+    /**
+     * The fewest frames quality control must keep for {@link #runPipeline} to go on to the stacks, tracking, slow
+     * movers, residual analysis and photometry; the tracker needs as many for a point track. With fewer, the run stops
+     * after quality control ({@link PipelineResult#tooFewFrames}).
+     */
+    public static final int MIN_KEPT_FRAMES = 3;
 
     /**
      * A frame is rejected when leaving it out would enlarge the area where every frame has image data by at least
@@ -755,6 +765,9 @@ public class JTransientEngine implements AutoCloseable {
         ensureOpen();
         OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkPipelineInput(inputFrames, providedMasterStack));
         ExtractedFramesContext context = extractSourcesFromFrames(inputFrames, config, listener);
+        if (context.cleanFrames.size() < MIN_KEPT_FRAMES) {
+            return tooFewFramesResult(context, listener);
+        }
         long stageStartedNanos = System.nanoTime();
         PipelineTelemetry telemetry = context.telemetry;
         List<SourceExtractor.ExtractionResult> cleanFramesData = context.cleanFramesData;
@@ -1043,6 +1056,37 @@ public class JTransientEngine implements AutoCloseable {
                 .variableStarAnalysis(variableStarAnalysis)
                 .dataArea(context.dataArea)
                 .cameraFixedGroups(trackResult.cameraFixedGroups)
+                .build();
+    }
+
+    /**
+     * The result of a run that stops after quality control because fewer than {@link #MIN_KEPT_FRAMES} frames were
+     * kept: the extraction and quality-control telemetry, the drift points and the data area of the kept frames. No
+     * later stage runs, so the lists are empty, the stacks and masks are null and the observer hears no stage.
+     */
+    private static PipelineResult tooFewFramesResult(ExtractedFramesContext context, TransientEngineProgressListener listener) {
+        PipelineTelemetry telemetry = context.telemetry;
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.println("DEBUG: Quality control kept " + telemetry.totalFramesKept + " of " + telemetry.totalFramesLoaded
+                    + " frames; at least " + MIN_KEPT_FRAMES + " are needed. The run stops here.");
+        }
+        if (listener != null) {
+            OperationContext.notify(listener::onProgressUpdate, 100, "Only " + telemetry.totalFramesKept + " of the "
+                    + MIN_KEPT_FRAMES + " frames needed passed quality control; stopping.");
+        }
+        telemetry.processingTimeMs = (System.nanoTime() - context.startNanos) / 1_000_000L;
+        return PipelineResult.builder()
+                .tooFewFrames(true)
+                .tracks(List.of())
+                .telemetry(telemetry)
+                .masterStars(List.of())
+                .slowMoverCandidates(List.of())
+                .anomalies(List.of())
+                .allTransients(List.of())
+                .unclassifiedTransients(List.of())
+                .residualTransientAnalysis(ResidualTransientAnalysis.empty())
+                .driftPoints(context.driftPoints)
+                .dataArea(context.dataArea)
                 .build();
     }
 

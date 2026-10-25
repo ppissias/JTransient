@@ -422,6 +422,7 @@ Minimum median jump required for a geometric track.
 Minimum number of frames required before session-level rejection is applied.
 
 - below this count, the engine skips outlier rejection
+- this is not the pipeline's own minimum: `runPipeline` stops after quality control when it keeps fewer than three frames (`JTransientEngine.MIN_KEPT_FRAMES`), whatever this value is
 
 ### `starCountSigmaDeviation` (default `2.0`)
 

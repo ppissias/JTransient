@@ -32,7 +32,7 @@ The full run is organized into these major phases:
 
 1. border drift diagnostics
 2. parallel extraction and frame-quality measurement
-3. session-level frame rejection
+3. session-level frame rejection; with fewer than three retained frames the run stops here
 4. median master-stack generation
 5. master-star extraction
 6. maximum-stack generation and optional slow-mover candidate analysis
@@ -220,6 +220,8 @@ The background envelope is also never smaller than the session's median per-fram
 The star count has no absolute floor: its limit is the median minus a multiple of the MAD sigma. Since the counts are measured on the same sky in every frame (the quality area), they vary little between frames, so the limit can sit close to the median; on Africano a frame with 26 % fewer stars than the median is rejected. A relative floor was considered (code review QC-1) and left for later.
 
 Rejected frames are recorded in `PipelineTelemetry.rejectedFrames`. Only the retained frames participate in stacking and tracking.
+
+**Too few frames.** `runPipeline` goes on to the stacks only with at least three retained frames (`JTransientEngine.MIN_KEPT_FRAMES`), the number the tracker needs for a point track. With fewer, the run stops here and returns a completed result marked `PipelineResult.tooFewFrames`: the extraction and quality-control telemetry, the drift points and the data area of the retained frames, with no stacks and no findings. `generateMasterStack` and `detectTransients` do not apply this rule, and the tracker keeps its own: it forms no tracks from fewer than three frame lists.
 
 ## 6. Median Master Stack
 
