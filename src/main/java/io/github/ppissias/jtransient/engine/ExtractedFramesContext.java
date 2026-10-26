@@ -41,6 +41,10 @@ final class ExtractedFramesContext {
     final List<Pixel> driftPoints;
     /** Where every clean frame has image data, or null when no frame was kept. */
     final DataArea dataArea;
+    /** Sky area used while extracting the kept frames. */
+    final DataArea backgroundArea;
+    /** Search area used while extracting the kept frames. */
+    final DataArea searchArea;
     /** How registration moved each frame, measured from its fill, by sequence index. */
     final Map<Integer, FrameRegistration> frameRegistrations;
 
@@ -50,6 +54,8 @@ final class ExtractedFramesContext {
                            long startNanos,
                            List<Pixel> driftPoints,
                            DataArea dataArea,
+                           DataArea backgroundArea,
+                           DataArea searchArea,
                            Map<Integer, FrameRegistration> frameRegistrations) {
         this.retainedFrames = List.copyOf(retainedFrames);
         this.cleanFramesData = this.retainedFrames.stream()
@@ -60,6 +66,8 @@ final class ExtractedFramesContext {
         this.startNanos = startNanos;
         this.driftPoints = driftPoints;
         this.dataArea = dataArea;
+        this.backgroundArea = backgroundArea;
+        this.searchArea = searchArea;
         this.frameRegistrations = frameRegistrations;
     }
 

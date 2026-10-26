@@ -25,7 +25,7 @@ public class PreparedFrameTest {
         PreparedFrame last = prepared(90, false);
         List<PreparedFrame> retained = PreparedFrame.retained(List.of(first, rejected, last));
         ExtractedFramesContext context = new ExtractedFramesContext(retained, new PipelineTelemetry(),
-                0L, List.of(), null, Map.of(10, first.registration(), 35, rejected.registration(), 90, last.registration()));
+                0L, List.of(), null, null, null, Map.of(10, first.registration(), 35, rejected.registration(), 90, last.registration()));
 
         assertEquals(List.of(10, 90), context.cleanFrames.stream().map(frame -> frame.sequenceIndex).toList());
         assertEquals(2, context.cleanFramesData.size());
@@ -51,7 +51,7 @@ public class PreparedFrameTest {
         PreparedFrame prepared = prepared(70, false);
         List<PreparedFrame> supplied = new ArrayList<>(List.of(prepared));
         ExtractedFramesContext context = new ExtractedFramesContext(supplied, new PipelineTelemetry(),
-                0L, List.of(), null, Map.of());
+                0L, List.of(), null, null, null, Map.of());
         supplied.clear();
         assertEquals(1, context.retainedFrames.size());
         assertThrows(UnsupportedOperationException.class, () -> context.cleanFrames.clear());
@@ -71,7 +71,7 @@ public class PreparedFrameTest {
         assertEquals(List.of(qualityOnly), PreparedFrame.retained(List.of(qualityOnly)));
         assertNull(qualityOnly.extractionResult());
         assertThrows(NullPointerException.class, () -> new ExtractedFramesContext(List.of(qualityOnly),
-                new PipelineTelemetry(), 0L, List.of(), null, Map.of()));
+                new PipelineTelemetry(), 0L, List.of(), null, null, null, Map.of()));
     }
 
     /** An original sequence identity cannot silently receive another frame's registration. */

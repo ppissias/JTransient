@@ -40,7 +40,7 @@ Additions to the engine's public API that SpacePixels features need. They change
 | ID | Status | Request |
 |---|---|---|
 | API-1 | Implemented for SpacePixels F10 | `PipelineStageObserver` now has `stageStarted`, a thread-safe `wantsUpdate` check, and `liveUpdate` snapshots during source extraction, tracking and photometry. Existing observers are unchanged. Without an observer, or when the check says no, nothing is built. |
-| API-2 | Proposed, for SpacePixels [F13](../SpacePixels/FEATURE-REQUESTS.md#f13-manual-transient-inspection-with-trial-per-frame-settings) | **Re-detect transients against a kept reference.** A variant of `detectTransients` that also returns what it built: the kept frames, their data areas, the master stars, the star mask and the master settings used. A second call re-detects one kept frame against that reference with new per-frame settings (`detectionSigmaMultiplier`, `growSigmaMultiplier`, `minDetectionPixels`), using the pipeline's own extraction and `TransientVeto`. Frame selection and the reference do not read these three settings, and the veto treats each frame on its own. So the result must equal a new `detectTransients` call with those settings, and a test should check that. |
+| API-2 | Implemented for SpacePixels F13 | `inspectTransients` returns the kept frames, areas, master stars and star mask. `redetectFrame` extracts one kept frame with new per-frame settings and vetoes it against that reference. A test checks it matches a fresh `detectTransients` call. |
 
 ## Declined
 

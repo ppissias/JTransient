@@ -48,6 +48,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -325,10 +326,53 @@ public class JTransientEngine implements AutoCloseable {
     public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) {
         List<ImageFrame> operationFrames = copyFrameList(inputFrames);
         return executeOperation(() -> detectTransientsInternal(operationFrames,
-                OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.TRANSIENTS)), listener, providedMasterStack));
+                OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.TRANSIENTS)), listener, providedMasterStack)).frames();
     }
 
-    private List<FrameTransients> detectTransientsInternal(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
+    /**
+     * Runs the same transient detection and also keeps the frame selection, master stars and star mask, so one frame
+     * can be re-detected later without building the reference again.
+     */
+    public TransientInspection inspectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) {
+        List<ImageFrame> operationFrames = copyFrameList(inputFrames);
+        return executeOperation(() -> detectTransientsInternal(operationFrames,
+                OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.TRANSIENTS)), listener, null));
+    }
+
+    /**
+     * Re-detects one kept frame with new per-frame settings against a reference from {@link #inspectTransients}.
+     * The master stack and star mask are not rebuilt.
+     */
+    public FrameTransients redetectFrame(TransientReference reference, int keptIndex, DetectionConfig config) {
+        Objects.requireNonNull(reference, "reference");
+        Objects.requireNonNull(config, "config");
+        ImageFrame frame = reference.keptFrames().get(keptIndex);
+        return executeOperation(() -> redetectFrameInternal(reference, frame,
+                OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.TRANSIENTS))));
+    }
+
+    private FrameTransients redetectFrameInternal(TransientReference reference, ImageFrame frame, DetectionConfig config) {
+        ensureOpen();
+        SourceExtractor.ExtractionResult extracted = OperationContext.compute(StageId.FRAME_EXTRACTION, null, () -> SourceExtractor.extractSources(
+                frame.pixelData, config.detectionSigmaMultiplier, config.minDetectionPixels, config,
+                reference.backgroundArea(), reference.searchArea()));
+        for (DetectedObject object : extracted.objects) {
+            object.sourceFrameIndex = frame.sequenceIndex;
+            object.sourceFilename = frame.filename;
+            object.timestamp = frame.timestamp;
+            object.exposureDuration = frame.exposureDuration;
+        }
+        if (reference.sessionArea() != null) {
+            extracted.objects.removeIf(object -> !SourceExtractor.isInside(object, reference.sessionArea()));
+        }
+        int height = frame.pixelData.length;
+        int width = frame.pixelData[0].length;
+        TrackLinker.TransientsFilterResult filtered = OperationContext.compute(StageId.TRANSIENT_VETO, null, () -> TrackLinker.filterTransients(
+                List.of(extracted.objects), reference.masterStars(), config, null, width, height));
+        return new FrameTransients(frame.filename, filtered.allTransients.get(0), extracted);
+    }
+
+    private TransientInspection detectTransientsInternal(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
         ensureOpen();
         OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkPipelineInput(inputFrames, providedMasterStack));
         ExtractedFramesContext context = extractSourcesFromFrames(inputFrames, config, listener, null);
@@ -377,7 +421,18 @@ public class JTransientEngine implements AutoCloseable {
                     context.cleanFramesData.get(i)
             ));
         }
-        return finalResult;
+        TransientReference reference = new TransientReference(
+                context.cleanFrames,
+                context.backgroundArea,
+                context.searchArea,
+                context.dataArea,
+                masterStars,
+                filterResult.masterVetoMask,
+                config.masterSigmaMultiplier,
+                config.masterGrowSigmaMultiplier,
+                config.masterMinDetectionPixels,
+                config.maxStarJitter);
+        return new TransientInspection(reference, finalResult);
     }
 
     /**
@@ -576,6 +631,8 @@ public class JTransientEngine implements AutoCloseable {
                 startNanos,
                 driftPoints,
                 dataArea,
+                quality.area,
+                wholeFrame,
                 registrations
         );
     }
