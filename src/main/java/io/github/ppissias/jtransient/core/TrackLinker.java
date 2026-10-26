@@ -10,6 +10,8 @@
 package io.github.ppissias.jtransient.core;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.engine.LiveSnapshot;
+import io.github.ppissias.jtransient.engine.PipelineStageObserver;
 import io.github.ppissias.jtransient.engine.TransientEngineProgressListener;
 import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.execution.DiagnosticContext;
@@ -205,6 +207,22 @@ public class TrackLinker {
             int sensorWidth,
             int sensorHeight,
             Map<Integer, FrameRegistration> registrations) {
+        return findMovingObjects(allFrames, masterStars, config, listener, sensorWidth, sensorHeight, registrations, null);
+    }
+
+    /**
+     * {@link #findMovingObjects(List, List, DetectionConfig, TransientEngineProgressListener, int, int, Map)} that
+     * may offer one live-view snapshot after a linking step, and only when the observer asks for it.
+     */
+    public static TrackingResult findMovingObjects(
+            List<List<DetectedObject>> allFrames,
+            List<DetectedObject> masterStars,
+            DetectionConfig config,
+            TransientEngineProgressListener listener,
+            int sensorWidth,
+            int sensorHeight,
+            Map<Integer, FrameRegistration> registrations,
+            PipelineStageObserver observer) {
 
         checkUniformTimestamps(allFrames);
         int numFrames = allFrames.size();
@@ -227,6 +245,7 @@ public class TrackLinker {
         }
 
         TransientsFilterResult filterResult = filterTransients(allFrames, masterStars, config, listener, sensorWidth, sensorHeight);
+        offerTrackingPicture(observer, "Tracking · star mask and streaks · provisional", filterResult.streakTracks);
 
         List<Track> confirmedTracks = new ArrayList<>(filterResult.streakTracks);
         TrackerTelemetry telemetry = filterResult.telemetry;
@@ -261,6 +280,7 @@ public class TrackLinker {
             DiagnosticContext.println("DEBUG: [PHASE 4] Skipping geometric linker because timestamps are available and enableGeometricTrackLinking=false.");
         }
 
+        offerTrackingPicture(observer, "Tracking · linked points · provisional", pointTracks);
         if (listener != null) {
             listener.onProgressUpdate(90, "Scanning for high-energy anomalies...");
         }
@@ -310,6 +330,34 @@ public class TrackLinker {
         );
         result.cameraFixedGroups = cameraFixedGroups;
         return result;
+    }
+
+    /** Copies a few positions from the tracks found so far, and only when the observer asks. */
+    private static void offerTrackingPicture(PipelineStageObserver observer, String caption, List<Track> tracks) {
+        if (observer == null) {
+            return;
+        }
+        boolean wanted;
+        try {
+            wanted = observer.wantsUpdate();
+        } catch (RuntimeException failure) {
+            return;
+        }
+        if (!wanted || tracks == null || tracks.isEmpty() || tracks.get(0).points.isEmpty()) {
+            return;
+        }
+        int shown = Math.min(3, tracks.get(0).points.size());
+        double[] xs = new double[shown];
+        double[] ys = new double[shown];
+        for (int i = 0; i < shown; i++) {
+            xs[i] = tracks.get(0).points.get(i).x;
+            ys[i] = tracks.get(0).points.get(i).y;
+        }
+        try {
+            observer.liveUpdate(new LiveSnapshot("Tracking", tracks.get(0).points.get(0).sourceFrameIndex, caption, xs, ys));
+        } catch (RuntimeException failure) {
+            // The picture is optional. Linking continues.
+        }
     }
 
     /**

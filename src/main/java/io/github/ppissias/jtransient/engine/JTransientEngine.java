@@ -331,7 +331,7 @@ public class JTransientEngine implements AutoCloseable {
     private List<FrameTransients> detectTransientsInternal(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
         ensureOpen();
         OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkPipelineInput(inputFrames, providedMasterStack));
-        ExtractedFramesContext context = extractSourcesFromFrames(inputFrames, config, listener);
+        ExtractedFramesContext context = extractSourcesFromFrames(inputFrames, config, listener, null);
 
         if (providedMasterStack != null) {
             if (listener != null) OperationContext.notify(listener::onProgressUpdate, 45, "Using pre-computed Master Stack for Veto Mask...");
@@ -389,7 +389,9 @@ public class JTransientEngine implements AutoCloseable {
      * @param listener optional progress listener
      * @return extraction context reused by the full pipeline and transient-only path
      */
-    private ExtractedFramesContext extractSourcesFromFrames(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) throws Exception {
+    private ExtractedFramesContext extractSourcesFromFrames(List<ImageFrame> inputFrames, DetectionConfig config,
+                                                             TransientEngineProgressListener listener,
+                                                             PipelineStageObserver observer) throws Exception {
         long startNanos = System.nanoTime();
         limitWorkToFrames(inputFrames);
         PipelineTelemetry telemetry = new PipelineTelemetry();
@@ -402,6 +404,7 @@ public class JTransientEngine implements AutoCloseable {
         if (DiagnosticContext.enabled()) {
             DiagnosticContext.println("\n--- JTRANSIENT: PHASE 1 (Extraction) ---");
         }
+        notifyStarted(observer, "Source extraction");
 
         // =================================================================
         // --- NEW: DITHER & DRIFT DIAGNOSTICS ---
@@ -444,6 +447,18 @@ public class JTransientEngine implements AutoCloseable {
                     obj.sourceFilename = frame.filename;
                     obj.timestamp = frame.timestamp;
                     obj.exposureDuration = frame.exposureDuration;
+                }
+                if (wantsLiveUpdate(observer)) {
+                    int shown = Math.min(32, objectsInFrame.size());
+                    double[] xs = new double[shown];
+                    double[] ys = new double[shown];
+                    for (int i = 0; i < shown; i++) {
+                        xs[i] = objectsInFrame.get(i).x;
+                        ys[i] = objectsInFrame.get(i).y;
+                    }
+                    notifyLive(observer, new LiveSnapshot("Source extraction", frame.sequenceIndex,
+                            "Source extraction · frame " + (frame.sequenceIndex + 1) + " · "
+                                    + objectsInFrame.size() + " sources · provisional", xs, ys));
                 }
 
                 // 2. Quality Metrics (Passing config down)
@@ -760,11 +775,54 @@ public class JTransientEngine implements AutoCloseable {
         }
     }
 
+    /** Tells the observer a long stage is starting. A failure does not change the run. */
+    private static void notifyStarted(PipelineStageObserver observer, String stage) {
+        if (observer == null) {
+            return;
+        }
+        try {
+            observer.stageStarted(stage);
+        } catch (RuntimeException failure) {
+            if (DiagnosticContext.enabled()) {
+                DiagnosticContext.println("DEBUG: The pipeline stage observer failed; the run continues: " + failure);
+            }
+        }
+    }
+
+    /** Asks whether one in-stage snapshot is wanted. A failure means no snapshot. */
+    private static boolean wantsLiveUpdate(PipelineStageObserver observer) {
+        if (observer == null) {
+            return false;
+        }
+        try {
+            return observer.wantsUpdate();
+        } catch (RuntimeException failure) {
+            if (DiagnosticContext.enabled()) {
+                DiagnosticContext.println("DEBUG: The pipeline stage observer failed; the run continues: " + failure);
+            }
+            return false;
+        }
+    }
+
+    /** Hands over a snapshot that was built only because {@link #wantsLiveUpdate} returned true. */
+    private static void notifyLive(PipelineStageObserver observer, LiveSnapshot snapshot) {
+        if (observer == null || snapshot == null) {
+            return;
+        }
+        try {
+            observer.liveUpdate(snapshot);
+        } catch (RuntimeException failure) {
+            if (DiagnosticContext.enabled()) {
+                DiagnosticContext.println("DEBUG: The pipeline stage observer failed; the run continues: " + failure);
+            }
+        }
+    }
+
     private PipelineResult runPipelineInternal(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener,
                                                short[][] providedMasterStack, PipelineStageObserver observer) throws Exception {
         ensureOpen();
         OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkPipelineInput(inputFrames, providedMasterStack));
-        ExtractedFramesContext context = extractSourcesFromFrames(inputFrames, config, listener);
+        ExtractedFramesContext context = extractSourcesFromFrames(inputFrames, config, listener, observer);
         if (context.cleanFrames.size() < MIN_KEPT_FRAMES) {
             return tooFewFramesResult(context, listener);
         }
@@ -797,6 +855,7 @@ public class JTransientEngine implements AutoCloseable {
                     config.masterSigmaMultiplier, MasterReferenceAnalyzer.effectiveMasterGrowSigma(config), config.masterMinDetectionPixels);
         }
 
+        notifyStarted(observer, "Frame selection and reference");
         if (listener != null) {
             OperationContext.notify(listener::onProgressUpdate, 48, "Extracting Master Star Map...");
         }
@@ -834,6 +893,7 @@ public class JTransientEngine implements AutoCloseable {
         PipelineTelemetry.SlowMoverTelemetry smTelemetry = null;
 
         if (config.enableSlowMoverDetection) {
+            notifyStarted(observer, "Slow movers");
             stageStartedNanos = System.nanoTime();
             if (DiagnosticContext.enabled()) {
                 DiagnosticContext.println("\n--- JTRANSIENT: PHASE 0.5 (Slow Mover Detection) ---");
@@ -943,6 +1003,7 @@ public class JTransientEngine implements AutoCloseable {
         }
 
         stageStartedNanos = System.nanoTime();
+        notifyStarted(observer, "Tracking");
         TrackLinker.TrackingResult trackResult = OperationContext.compute(StageId.TRACKING, null, () -> TrackLinker.findMovingObjects(
                 cleanFramesObjects,
                 masterStars,
@@ -950,7 +1011,8 @@ public class JTransientEngine implements AutoCloseable {
                 trackingProxyListener,
                 sensorWidth,
                 sensorHeight,
-                context.frameRegistrations
+                context.frameRegistrations,
+                observer
         ));
         context.labelTrackerFrames(trackResult.telemetry);
 
@@ -980,6 +1042,7 @@ public class JTransientEngine implements AutoCloseable {
         }
         ResidualTransientAnalysis residual = ResidualTransientAnalysis.empty();
         if (config.enableResidualTransientAnalysis) {
+            notifyStarted(observer, "Residual analysis");
             stageStartedNanos = System.nanoTime();
             if (listener != null) {
                 OperationContext.notify(listener::onProgressUpdate, 92, "Analyzing residual transients...");
@@ -998,6 +1061,7 @@ public class JTransientEngine implements AutoCloseable {
         // =================================================================
         VariableStarAnalysis variableStarAnalysis = VariableStarAnalysis.empty();
         if (config.enableVariableStarDetection) {
+            notifyStarted(observer, "Photometry");
             stageStartedNanos = System.nanoTime();
             if (DiagnosticContext.enabled()) {
                 DiagnosticContext.println("\n--- JTRANSIENT: PHASE 5 (Variable-Star Photometry) ---");
@@ -1019,6 +1083,7 @@ public class JTransientEngine implements AutoCloseable {
                 // Photometry 0-100% maps to 93-99%.
                 photometryInput.progress = (percentage, message) -> OperationContext.notify(listener::onProgressUpdate, 93 + (int) (percentage * 0.06), message);
             }
+            photometryInput.liveView = observer;
             variableStarAnalysis = OperationContext.call(StageId.PHOTOMETRY, null, () -> VariableStarAnalyzer.analyze(photometryInput, config));
             telemetry.photometryTelemetry = variableStarAnalysis.telemetry;
             telemetry.recordStage(PipelineTelemetry.Stage.PHOTOMETRY, stageStartedNanos);

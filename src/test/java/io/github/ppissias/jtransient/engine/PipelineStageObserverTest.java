@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.*;
 
@@ -88,6 +89,27 @@ public class PipelineStageObserverTest {
         assertEquals(snapshot(plain), snapshot(failing));
         assertTrue(Arrays.deepEquals(plain.masterStackData, failing.masterStackData));
         assertTrue(Arrays.deepEquals(plain.masterVetoMask, failing.masterVetoMask));
+    }
+
+    /** One permission produces one snapshot, and the detection result stays the same. */
+    @Test
+    public void anInStageSnapshotIsBuiltOnlyWhenRequested() {
+        DetectionConfig config = new DetectionConfig();
+        AtomicInteger permits = new AtomicInteger(1);
+        AtomicInteger updates = new AtomicInteger();
+        PipelineStageObserver observer = new PipelineStageObserver() {
+            @Override public void stageFinished(PipelineStage stage) { }
+            @Override public boolean wantsUpdate() { return permits.getAndDecrement() > 0; }
+            @Override public void liveUpdate(LiveSnapshot snapshot) { updates.incrementAndGet(); }
+        };
+        PipelineResult plain;
+        PipelineResult watched;
+        try (var engine = new JTransientEngine(1)) {
+            plain = engine.runPipeline(frames(), config, null);
+            watched = engine.runPipeline(frames(), config, null, null, observer);
+        }
+        assertEquals(1, updates.get());
+        assertEquals(snapshot(plain), snapshot(watched));
     }
 
     /** The result as JSON without images, masks and timings. */

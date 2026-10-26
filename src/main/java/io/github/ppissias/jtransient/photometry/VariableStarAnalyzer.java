@@ -102,6 +102,8 @@ public final class VariableStarAnalyzer {
         public DataArea dataArea;
         /** Optional progress listener, 0 to 100 over the photometry stage. */
         public TransientEngineProgressListener progress;
+        /** Optional live view. A frame snapshot is built only when it asks. */
+        public io.github.ppissias.jtransient.engine.PipelineStageObserver liveView;
 
         /**
          * Copies aligned list structure without cloning pixels, measurements or detections.
@@ -153,6 +155,7 @@ public final class VariableStarAnalyzer {
             snapshot.slowMoverCandidates = slowMoverCandidates == null ? null : List.copyOf(slowMoverCandidates);
             snapshot.dataArea = dataArea;
             snapshot.progress = progress;
+            snapshot.liveView = liveView;
             return snapshot;
         }
     }
@@ -607,6 +610,36 @@ public final class VariableStarAnalyzer {
      * similar brightness, not from the star itself: a star contaminated in many frames would otherwise widen
      * its own tolerance until nothing is flagged.
      */
+    /** Copies a few measured-star positions for one frame, and only when the live view asks. */
+    private static void offerPhotometryPicture(Input input, int frame, List<PhotometryStarSelector.Star> stars) {
+        if (input.liveView == null || stars == null || stars.isEmpty()) {
+            return;
+        }
+        boolean wanted;
+        try {
+            wanted = input.liveView.wantsUpdate();
+        } catch (RuntimeException failure) {
+            return;
+        }
+        if (!wanted) {
+            return;
+        }
+        int shown = Math.min(32, stars.size());
+        double[] xs = new double[shown];
+        double[] ys = new double[shown];
+        for (int i = 0; i < shown; i++) {
+            xs[i] = stars.get(i).x;
+            ys[i] = stars.get(i).y;
+        }
+        int sequence = input.frames.get(frame).sequenceIndex;
+        try {
+            input.liveView.liveUpdate(new io.github.ppissias.jtransient.engine.LiveSnapshot("Photometry", sequence,
+                    "Photometry · frame " + (sequence + 1) + " · provisional", xs, ys));
+        } catch (RuntimeException failure) {
+            // The picture is optional. Measurement continues.
+        }
+    }
+
     private static void report(Input input, int percent, String message) {
         if (input.progress != null) {
             OperationContext.notify(input.progress::onProgressUpdate, percent, message);
@@ -732,6 +765,7 @@ public final class VariableStarAnalyzer {
                     report(input, (int) (MEASURING_PROGRESS_SHARE * done / nFrames),
                             "Photometry: measured frame " + done + " of " + nFrames);
                 }
+                offerPhotometryPicture(input, frame, stars);
                 return m;
             }));
         }
