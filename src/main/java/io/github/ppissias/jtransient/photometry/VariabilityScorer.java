@@ -10,11 +10,14 @@
 package io.github.ppissias.jtransient.photometry;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.engine.LiveSnapshot;
+import io.github.ppissias.jtransient.engine.PipelineStageObserver;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Scores every light curve against stars of similar brightness in the same session, then runs the
@@ -124,6 +127,19 @@ final class VariabilityScorer {
                       boolean limited,
                       DetectionConfig config,
                       PipelineTelemetry.PhotometryTelemetry telemetry) {
+        score(stars, usable, smallResidual, largeResidual, localSky, series, limited, config, telemetry, null);
+    }
+
+    static void score(List<StarLightCurve> stars,
+                      boolean[][] usable,
+                      double[][] smallResidual,
+                      double[][] largeResidual,
+                      double[][] localSky,
+                      FrameSeries series,
+                      boolean limited,
+                      DetectionConfig config,
+                      PipelineTelemetry.PhotometryTelemetry telemetry,
+                      PipelineStageObserver liveView) {
         int nStars = stars.size();
         int nFrames = series.zeroPoint.length;
         double[][] curves = new double[nStars][];
@@ -220,6 +236,9 @@ final class VariabilityScorer {
                     : VariabilityTier.REJECTED;
             for (String gate : star.failedGates) {
                 telemetry.gateFailureCounts.merge(gate, 1, Integer::sum);
+            }
+            if (liveView != null && (star.tier == VariabilityTier.HIGH_CONFIDENCE || star.tier == VariabilityTier.POSSIBLE)) {
+                offerCandidatePicture(liveView, star);
             }
         }
 
@@ -630,6 +649,31 @@ final class VariabilityScorer {
             b[k] = second.get(k);
         }
         return PhotometryMath.correlation(a, b);
+    }
+
+    private static void offerCandidatePicture(PipelineStageObserver liveView, StarLightCurve star) {
+        if (liveView == null) {
+            return;
+        }
+        boolean wanted;
+        try {
+            wanted = liveView.wantsUpdate();
+        } catch (RuntimeException failure) {
+            return;
+        }
+        if (!wanted) {
+            return;
+        }
+        String tierName = star.tier == VariabilityTier.HIGH_CONFIDENCE ? "high confidence"
+                : star.tier == VariabilityTier.POSSIBLE ? "possible" : "candidate";
+        String caption = String.format(Locale.US,
+                "Variable-star candidate · %s · provisional\nStar #%d · scatter %.3f mag",
+                tierName, star.id + 1, star.scatter);
+        try {
+            liveView.liveUpdate(new LiveSnapshot("Photometry", -1, caption,
+                    new double[]{star.x}, new double[]{star.y}, star.deltaMag));
+        } catch (RuntimeException ignored) {
+        }
     }
 
     private static double timeSpanMinutes(double[] r, double[] julianDate) {

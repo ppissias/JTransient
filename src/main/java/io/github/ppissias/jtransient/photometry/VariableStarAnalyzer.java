@@ -531,6 +531,7 @@ public final class VariableStarAnalyzer {
         }
 
         report(input, 90, "Photometry: scoring variability...");
+        offerScoringPreview(input, curves);
         // --- Variability scoring ---
         if (readiness.allowsScoring()) {
             EnsembleSolver.Solution small = solveForAperture(measurements, ApertureMeasurer.R_SMALL, flags, starExcluded,
@@ -559,7 +560,7 @@ public final class VariableStarAnalyzer {
                     new double[]{ApertureMeasurer.CI_INNER_FWHM_FACTOR, 1.0, config.photometryApertureFwhmFactor, 2.0},
                     sessionFwhm, telemetry);
             VariabilityScorer.score(curves, usable, small.residual, large.residual, sky, series,
-                    readiness.verdict == PhotometricReadiness.Verdict.LIMITED, config, telemetry);
+                    readiness.verdict == PhotometricReadiness.Verdict.LIMITED, config, telemetry, input.liveView);
         } else {
             for (StarLightCurve curve : curves) {
                 CancellationScope.check();
@@ -627,14 +628,58 @@ public final class VariableStarAnalyzer {
         int shown = Math.min(32, stars.size());
         double[] xs = new double[shown];
         double[] ys = new double[shown];
+        int total = stars.size();
+        int offset = (int) (((long) frame * total / Math.max(1, input.frames.size())) % total);
         for (int i = 0; i < shown; i++) {
-            xs[i] = stars.get(i).x;
-            ys[i] = stars.get(i).y;
+            int index = (int) (((long) i * total / shown + offset) % total);
+            PhotometryStarSelector.Star star = stars.get(index);
+            xs[i] = star.x;
+            ys[i] = star.y;
         }
         int sequence = input.frames.get(frame).sequenceIndex;
         try {
             input.liveView.liveUpdate(new io.github.ppissias.jtransient.engine.LiveSnapshot("Photometry", sequence,
                     "Photometry · frame " + (sequence + 1) + " · provisional", xs, ys));
+        } catch (RuntimeException failure) {
+            // The picture is optional. Measurement continues.
+        }
+    }
+
+    /** Offers a light-curve snapshot of the most variable star so far when the live view asks. */
+    private static void offerScoringPreview(Input input, List<StarLightCurve> curves) {
+        if (input.liveView == null || curves == null || curves.isEmpty()) {
+            return;
+        }
+        boolean wanted;
+        try {
+            wanted = input.liveView.wantsUpdate();
+        } catch (RuntimeException failure) {
+            return;
+        }
+        if (!wanted) {
+            return;
+        }
+        StarLightCurve top = null;
+        double maxScatter = -1;
+        for (StarLightCurve curve : curves) {
+            if (curve.deltaMag == null) {
+                continue;
+            }
+            double sc = PhotometryMath.std(curve.deltaMag);
+            if (Double.isFinite(sc) && sc > maxScatter) {
+                maxScatter = sc;
+                top = curve;
+            }
+        }
+        if (top == null) {
+            return;
+        }
+        String caption = String.format(Locale.US,
+                "Photometry · star #%d · scatter %.3f mag · provisional",
+                top.id + 1, maxScatter);
+        try {
+            input.liveView.liveUpdate(new io.github.ppissias.jtransient.engine.LiveSnapshot("Photometry", -1, caption,
+                    new double[]{top.x}, new double[]{top.y}, top.deltaMag));
         } catch (RuntimeException failure) {
             // The picture is optional. Measurement continues.
         }

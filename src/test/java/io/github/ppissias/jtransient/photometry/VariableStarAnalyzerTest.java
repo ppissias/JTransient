@@ -13,7 +13,10 @@ import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.core.PixelEncoding;
 import io.github.ppissias.jtransient.engine.ImageFrame;
 import io.github.ppissias.jtransient.engine.JTransientEngine;
+import io.github.ppissias.jtransient.engine.LiveSnapshot;
 import io.github.ppissias.jtransient.engine.PipelineResult;
+import io.github.ppissias.jtransient.engine.PipelineStage;
+import io.github.ppissias.jtransient.engine.PipelineStageObserver;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -75,6 +78,28 @@ public class VariableStarAnalyzerTest {
     @AfterClass
     public static void tearDownEngine() {
         engine.shutdown();
+    }
+
+    @Test
+    public void liveObserverReceivesPhotometryMeasurementAndCandidateSnapshots() throws Exception {
+        Session session = createSession(DoubleUnaryOperator.identity());
+        List<LiveSnapshot> snapshots = new ArrayList<>();
+        PipelineStageObserver observer = new PipelineStageObserver() {
+            @Override public void stageFinished(PipelineStage stage) { }
+            @Override public boolean wantsUpdate() { return true; }
+            @Override public void liveUpdate(LiveSnapshot snapshot) {
+                if ("Photometry".equals(snapshot.phase())) {
+                    snapshots.add(snapshot);
+                }
+            }
+        };
+        engine.runPipeline(session.frames, testConfig(), null, null, observer);
+        assertFalse("photometry snapshots must be emitted", snapshots.isEmpty());
+        List<LiveSnapshot> frameSnapshots = snapshots.stream().filter(s -> s.frameIndex() >= 0).toList();
+        assertFalse("frame measurement snapshots must be emitted", frameSnapshots.isEmpty());
+        List<LiveSnapshot> curveSnapshots = snapshots.stream().filter(s -> s.curve() != null && s.curve().length > 0).toList();
+        assertFalse("light-curve snapshots must be emitted", curveSnapshots.isEmpty());
+        assertTrue(curveSnapshots.get(0).caption().contains("provisional"));
     }
 
     @Test
