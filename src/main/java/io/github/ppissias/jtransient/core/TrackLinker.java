@@ -136,11 +136,26 @@ public class TrackLinker {
             TransientEngineProgressListener listener,
             int sensorWidth,
             int sensorHeight) {
+        return filterTransients(allFrames, masterStars, config, listener, sensorWidth, sensorHeight, null);
+    }
+
+    /**
+     * Runs the veto and streak linking with a borrowed, read-only star mask when supplied. A null mask builds one
+     * from {@code masterStars} and the current jitter; a supplied mask keeps the reference fixed across trial edits.
+     */
+    public static TransientsFilterResult filterTransients(
+            List<List<DetectedObject>> allFrames,
+            List<DetectedObject> masterStars,
+            DetectionConfig config,
+            TransientEngineProgressListener listener,
+            int sensorWidth,
+            int sensorHeight,
+            boolean[][] providedMask) {
 
         TrackerTelemetry telemetry = new TrackerTelemetry();
 
         TransientVeto.Result veto = TransientVeto.apply(allFrames, masterStars, config, listener, sensorWidth, sensorHeight,
-                telemetry);
+                telemetry, providedMask);
         List<List<DetectedObject>> transients = veto.pointTransients;
         List<DetectedObject> validMovingStreaks = veto.validMovingStreaks;
         boolean[][] masterVetoMask = veto.masterVetoMask;

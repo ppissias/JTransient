@@ -44,12 +44,12 @@ final class TransientVeto {
     }
 
     /**
-     * Separates streaks from point sources, builds the veto mask from the master stars and removes the detections that
-     * overlap it more than {@code maxMaskOverlapFraction}.
+     * Separates streaks from point sources and removes detections overlapping the star mask more than
+     * {@code maxMaskOverlapFraction}. Borrows a supplied mask without modifying it; otherwise builds the mask.
      */
     static Result apply(List<List<DetectedObject>> allFrames, List<DetectedObject> masterStars, DetectionConfig config,
                         TransientEngineProgressListener listener, int sensorWidth, int sensorHeight,
-                        TrackerTelemetry telemetry) {
+                        TrackerTelemetry telemetry, boolean[][] providedMask) {
         int numFrames = allFrames.size();
 
         // =================================================================
@@ -69,15 +69,18 @@ final class TransientVeto {
         }
 
         if (listener != null) {
-            listener.onProgressUpdate(10, "Building Veto Mask...");
+            listener.onProgressUpdate(10, providedMask == null ? "Building Veto Mask..." : "Applying Kept Veto Mask...");
         }
 
         // =================================================================
         // PHASE 2: BINARY MASK MASTER STAR MAP VETO
         // =================================================================
-        if (DiagnosticContext.enabled()) DiagnosticContext.println("DEBUG: [PHASE 2] Building Binary Footprint Mask from Master Map...");
+        if (DiagnosticContext.enabled()) DiagnosticContext.println(providedMask == null
+                ? "DEBUG: [PHASE 2] Building Binary Footprint Mask from Master Map..."
+                : "DEBUG: [PHASE 2] Applying Kept Binary Footprint Mask...");
 
-        boolean[][] masterVetoMask = MasterVetoMask.build(masterStars, sensorWidth, sensorHeight, config.maxStarJitter);
+        boolean[][] masterVetoMask = providedMask != null ? providedMask
+                : MasterVetoMask.build(masterStars, sensorWidth, sensorHeight, config.maxStarJitter);
 
         // --- PHASE 2A: Veto Point Sources ---
         List<List<DetectedObject>> transients = new ArrayList<>();

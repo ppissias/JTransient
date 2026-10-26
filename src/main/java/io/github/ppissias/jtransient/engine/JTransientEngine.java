@@ -368,7 +368,7 @@ public class JTransientEngine implements AutoCloseable {
         int height = frame.pixelData.length;
         int width = frame.pixelData[0].length;
         TrackLinker.TransientsFilterResult filtered = OperationContext.compute(StageId.TRANSIENT_VETO, null, () -> TrackLinker.filterTransients(
-                List.of(extracted.objects), reference.masterStars(), config, null, width, height));
+                List.of(extracted.objects), reference.masterStars(), config, null, width, height, reference.starMask()));
         return new FrameTransients(frame.filename, filtered.allTransients.get(0), extracted);
     }
 

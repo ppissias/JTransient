@@ -10,9 +10,34 @@ import java.util.List;
 import java.util.Random;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 /** A kept reference re-detects one frame to the same transients as a fresh run. */
 public class TransientInspectionTest {
+
+    /** Master-setting edits cannot replace the mask of a kept reference during a per-frame trial. */
+    @Test
+    public void trialRedetectionKeepsTheOriginalMaskWhenMasterJitterChanges() {
+        DetectionConfig config = new DetectionConfig();
+        config.maxJumpPixels = 1000;
+        config.starCountSigmaDeviation = config.fwhmSigmaDeviation = config.backgroundSigmaDeviation = 100;
+        try (var engine = new JTransientEngine(1)) {
+            TransientInspection inspection = engine.inspectTransients(frames(), config, null);
+            DetectionConfig trial = config.clone();
+            trial.detectionSigmaMultiplier += 0.05;
+            FrameTransients before = engine.redetectFrame(inspection.reference(), 1, trial);
+            assertFalse("the moving source survives the kept mask", before.transients.isEmpty());
+
+            trial.maxStarJitter = 30;
+            FrameTransients after = engine.redetectFrame(inspection.reference(), 1, trial);
+            assertEquals(positions(before), positions(after));
+
+            // A reference newly built with that large jitter really does veto this source.
+            TransientInspection reopened = engine.inspectTransients(frames(), trial, null);
+            assertTrue(reopened.frames().get(1).transients.isEmpty());
+        }
+    }
 
     @Test
     public void startingSettingsMatchTheFirstPassAndOtherSettingsMatchAFreshRun() {
@@ -32,6 +57,7 @@ public class TransientInspectionTest {
         }
     }
 
+    /** Stable source positions used to compare independent extractions. */
     private static List<String> positions(FrameTransients frame) {
         List<String> positions = new ArrayList<>();
         for (DetectedObject object : frame.transients) {

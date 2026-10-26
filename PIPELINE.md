@@ -250,6 +250,8 @@ What it returns:
 
 It returns neither a maximum stack nor a `PipelineResult`. Use this when you want JTransient to do extraction plus stationary-star filtering, but you intend to do your own track assembly.
 
+`inspectTransients(frames, config, listener)` returns those detections together with a `TransientReference` holding the kept frames, data areas, master stars and star mask. `redetectFrame(reference, keptIndex, config)` extracts one kept frame with new per-frame settings and applies that same mask without rebuilding it. Master settings, including `maxStarJitter`, do not change the kept mask; build a new inspection to change the reference. The reference borrows its pixel buffers, mask and detections, which must remain unmodified while it is in use.
+
 ## `JTransientEngine.runPipeline(...)`
 
 Signatures:
