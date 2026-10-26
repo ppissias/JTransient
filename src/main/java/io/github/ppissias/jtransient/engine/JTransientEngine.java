@@ -507,9 +507,12 @@ public class JTransientEngine implements AutoCloseable {
                     int shown = Math.min(32, objectsInFrame.size());
                     double[] xs = new double[shown];
                     double[] ys = new double[shown];
+                    int total = objectsInFrame.size();
                     for (int i = 0; i < shown; i++) {
-                        xs[i] = objectsInFrame.get(i).x;
-                        ys[i] = objectsInFrame.get(i).y;
+                        int index = (int) ((long) i * total / shown);
+                        DetectedObject obj = objectsInFrame.get(index);
+                        xs[i] = obj.x;
+                        ys[i] = obj.y;
                     }
                     notifyLive(observer, new LiveSnapshot("Source extraction", frame.sequenceIndex,
                             "Source extraction · frame " + (frame.sequenceIndex + 1) + " · "

@@ -112,6 +112,35 @@ public class PipelineStageObserverTest {
         assertEquals(snapshot(plain), snapshot(watched));
     }
 
+    /** Extraction snapshots sample across the detected objects so points cover the full field. */
+    @Test
+    public void sourceExtractionSnapshotSamplesAcrossTheField() {
+        DetectionConfig config = new DetectionConfig();
+        List<LiveSnapshot> snapshots = new ArrayList<>();
+        PipelineStageObserver observer = new PipelineStageObserver() {
+            @Override public void stageFinished(PipelineStage stage) { }
+            @Override public boolean wantsUpdate() { return true; }
+            @Override public void liveUpdate(LiveSnapshot snapshot) {
+                if ("Source extraction".equals(snapshot.phase())) {
+                    snapshots.add(snapshot);
+                }
+            }
+        };
+        try (var engine = new JTransientEngine(1)) {
+            engine.runPipeline(frames(), config, null, null, observer);
+        }
+        assertFalse(snapshots.isEmpty());
+        LiveSnapshot sample = snapshots.get(0);
+        assertTrue(sample.caption().contains("Source extraction"));
+        double minY = Double.MAX_VALUE;
+        double maxY = -Double.MAX_VALUE;
+        for (double y : sample.y()) {
+            minY = Math.min(minY, y);
+            maxY = Math.max(maxY, y);
+        }
+        assertTrue("Snapshot points should be spread across y, range=" + (maxY - minY), maxY - minY >= 20.0);
+    }
+
     /** The result as JSON without images, masks and timings. */
     private static String snapshot(PipelineResult result) {
         Gson gson = new GsonBuilder().serializeNulls().serializeSpecialFloatingPointValues()
