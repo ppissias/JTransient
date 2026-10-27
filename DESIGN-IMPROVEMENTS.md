@@ -158,11 +158,13 @@ The phase comments are numbered 0, 0.5, 4 and 5.
 
 ### JA-11. Validate the selected release artifacts
 
-At each SpacePixels release:
-1. Select and pin the JTransient and JPlateSolve versions.
+**Maintainer decision (2026-10-27).** Use ordinary dependency declarations and the API consumer test; separate version-override properties and a staged release-version checker are unnecessary.
+
+At each SpacePixels Maven release:
+1. Declare the required JTransient and JPlateSolve versions once in SpacePixels' dependency declarations.
 2. Make those exact artifacts available in the release repository.
-3. Run the application and consumer checks with both composite builds disabled and without the local validation repository, following the [selected-artifact workflow](../SpacePixels/docs/release-artifacts.md).
-4. Verify the resolved versions, metadata and the headless/desktop separation.
+3. For a Maven release, run SpacePixels' `check apiConsumerTest` with both composite builds disabled, using the versions declared in its dependency declarations. Follow the [SpacePixels publishing guide](../SpacePixels/PUBLISHING.md#maven-central-publishing).
+4. Check publication metadata and the headless/desktop separation through the API consumer test.
 
 Local staging is packaging evidence, not proof that the artifacts are publicly available.
 

@@ -42,9 +42,9 @@ For development, document every new Java class, record, enum and interface at ty
 .\gradlew.bat build
 ```
 
-The project name is `JTransient` and the current library version in `build.gradle` is `1.0.6`. SpacePixels retains its published 1.0.5 dependency until 1.0.6 is released and uses the new isolated-tuner capability when available.
+The project name is `JTransient`, and its version is declared in `build.gradle`. SpacePixels declares the library version it requires in its own dependency declarations; its development composite build uses the sibling checkout directly.
 
-`check` checks adopted config/execution/science bytecode boundaries; `mavenCentralBundle` also compiles and runs a current-version `apiConsumer` (run `apiConsumer` directly after an API change). See the sibling [selected artifact workflow](../SpacePixels/docs/release-artifacts.md) for one pinned engine/solver/application combination without composites. Historical-JAR binary compatibility is not a release requirement; local staging is not public artifact availability.
+`check` checks adopted config/execution/science bytecode boundaries; `mavenCentralBundle` also compiles and runs a current-version `apiConsumer` (run `apiConsumer` directly after an API change). SpacePixels declares its required library versions directly in its dependency declarations and checks its packaged API with `apiConsumerTest`. See the [SpacePixels publishing guide](https://github.com/ppissias/SpacePixels/blob/master/PUBLISHING.md#maven-central-publishing).
 
 To prepare a Maven Central release bundle locally:
 
