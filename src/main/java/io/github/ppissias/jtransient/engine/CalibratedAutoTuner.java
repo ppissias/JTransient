@@ -85,7 +85,7 @@ public final class CalibratedAutoTuner {
     private static final double[] MASTER_GROW_OFFSETS_TO_TEST = {0.0, 0.5, 1.0};
     /** Master minimum-pixel candidates as multiples of the PSF core area, in addition to 3 pixels. */
     private static final double[] MASTER_MIN_PIXEL_AREA_FACTORS = {0.25, 0.5, 1.0};
-    private static final double[] MASK_OVERLAPS_TO_TEST = {0.5, 0.65, 0.75, 0.85, 0.95};
+    private static final double[] MASK_OVERLAPS_TO_TEST = {0.5, 0.65, 0.75, 0.85, 0.90};
 
     /** Injected peak signal-to-noise levels (peak amplitude over background sigma). */
     private static final double[] INJECTION_PEAK_SNR = {2.0, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0, 15.0};

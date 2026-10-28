@@ -1102,7 +1102,7 @@ One calibration measures all profiles. `configFor(...)` applies a chosen profile
 - Detection sigma 2.5 to 6.0; grow sigma = detection sigma minus 0.75 or 1.25.
 - Minimum pixels: 0.3, 0.5, 0.75, 1, 1.5, 2 and 3 times the star core area (pi x (FWHM/2)^2), at least 3 and at most 15 pixels (`MAX_MIN_PIXELS`). Without the upper limit, wide stars would lead to sizes of 25 pixels and more, which reject small faint movers.
 - Master sigma 1.5 to 5.0; master grow = master sigma minus 0, 0.5 or 1.0; master minimum pixels 3 or 0.25, 0.5 and 1 times the core area. The star mask is grown by max(1, round(jitter / 2)) px, and its stars are found in the pipeline's two passes (one sky level, then the local sky), both as in the pipeline.
-- Veto overlap 0.5, 0.65, 0.75, 0.85 and 0.95.
+- Veto overlap 0.5, 0.65, 0.75, 0.85 and 0.90.
 
 Settings that already drown in noise before any veto are skipped. Crop evaluation uses the pipeline's extraction, master-star and star-mask routines. It does not execute the downstream linkers, anomaly/residual stages, slow-mover branch or photometry.
 

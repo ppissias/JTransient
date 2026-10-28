@@ -1,5 +1,9 @@
 # JTransient Release Notes
 
+## 1.0.7 (unreleased)
+
+- **Calibrated auto-tuner mask overlap capped at 0.90.** The candidate star mask overlap grid now tests `{0.5, 0.65, 0.75, 0.85, 0.90}` instead of testing up to `0.95`. At `0.95`, detections embedded up to 95% inside a star mask bypassed veto, producing false-positive single-frame anomalies from seeing fluctuations and star wings.
+
 ## 1.0.6 (unreleased)
 
 - **Kept inspection masks.** `redetectFrame` now applies the star mask captured by `inspectTransients`, including its original jitter footprint. It previously rebuilt the mask from master stars with the current configuration's jitter, so editing master settings could unexpectedly veto different sources in an existing inspection. Ordinary pipeline detection and newly built references are unchanged.
