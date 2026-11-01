@@ -2,6 +2,8 @@
 
 ## 1.0.7 (unreleased)
 
+- **Optional Auto-Tune observation (additive API).** `CalibratedAutoTuner.tune` and explicit-options `calibrate` accept an optional `AutoTuneObserver`. Lazy `AutoTuneSnapshot` callbacks expose read-only borrowed images, masks, sampling regions and actual trial recovery/noise positions on the tuning thread or its joined workers. No snapshots are built when declined; callback failures are diagnosed and ignored. Existing signatures remain supported. Sampling, search grids, measurements and selected settings are unchanged. Registration analysis also offers an optional per-usable-frame callback.
+
 - **Calibrated auto-tuner mask overlap capped at 0.90.** The candidate star mask overlap grid now tests `{0.5, 0.65, 0.75, 0.85, 0.90}` instead of testing up to `0.95`. At `0.95`, detections embedded up to 95% inside a star mask bypassed veto, producing false-positive single-frame anomalies from seeing fluctuations and star wings.
 
 ## 1.0.6 (unreleased)

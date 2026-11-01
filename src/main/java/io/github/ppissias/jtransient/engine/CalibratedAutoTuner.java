@@ -39,6 +39,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
+import static io.github.ppissias.jtransient.engine.AutoTuneSnapshot.Kind.*;
 
 /**
  * Auto-tuner that measures noise and sensitivity directly instead of scoring proxies.
@@ -709,22 +712,35 @@ public final class CalibratedAutoTuner {
      */
     public static AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
             Options options, AutoTuneProfile profile, TransientEngineProgressListener listener) {
+        return tune(poolFrames, baseConfig, options, profile, listener, null);
+    }
+
+    /** Tunes with the default search policy and optional, lazily requested live feedback. */
+    public static AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+            AutoTuneProfile profile, TransientEngineProgressListener listener, AutoTuneObserver observer) {
+        return tune(poolFrames, baseConfig, Options.defaults(), profile, listener, observer);
+    }
+
+    /** Tunes with explicit immutable policy; observer callbacks borrow images only until each callback returns. */
+    public static AutoTunerResult tune(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+            Options options, AutoTuneProfile profile, TransientEngineProgressListener listener, AutoTuneObserver observer) {
         CancellationScope.check();
         java.util.Objects.requireNonNull(options, "options");
         try (WorkerPool workers = WorkerPool.forAvailableProcessors();
              WorkerPool.Scope workerScope = workers.open();
              DiagnosticContext.Scope diagnosticScope = DiagnosticContext.openDefaults()) {
             return OperationContext.execute(StageId.CALIBRATION, () -> tuneCaptured(poolFrames, OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION)),
-                    profile, listener, options, workers));
+                    profile, listener, options, workers, new Preview(observer)));
         }
     }
 
     /** Measures and selects a profile using the validated private settings copy supplied by the entry point. */
     private static AutoTunerResult tuneCaptured(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
-            AutoTuneProfile profile, TransientEngineProgressListener listener, Options options, WorkerPool workers) {
+            AutoTuneProfile profile, TransientEngineProgressListener listener, Options options, WorkerPool workers,
+            Preview preview) {
         AutoTunerResult result = new AutoTunerResult();
         result.optimizedConfig = baseConfig;
-        Calibration calibration = calibrateCaptured(poolFrames, baseConfig, listener, options, workers);
+        Calibration calibration = calibrateCaptured(poolFrames, baseConfig, listener, options, workers, preview);
         result.calibration = calibration;
         StringBuilder report = new StringBuilder("=== JTransient Calibrated Auto-Tuning Report ===\n");
         report.append("Profile: ").append(profile.displayName()).append("\n");
@@ -791,6 +807,12 @@ public final class CalibratedAutoTuner {
      */
     public static Calibration calibrate(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
                                         Options options, TransientEngineProgressListener listener) {
+        return calibrate(poolFrames, baseConfig, options, listener, null);
+    }
+
+    /** Measures all profiles with optional live feedback, without changing sampling, extraction or selection. */
+    public static Calibration calibrate(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
+            Options options, TransientEngineProgressListener listener, AutoTuneObserver observer) {
         CancellationScope.check();
         java.util.Objects.requireNonNull(options, "options");
         try (WorkerPool workers = WorkerPool.forAvailableProcessors();
@@ -798,13 +820,13 @@ public final class CalibratedAutoTuner {
              DiagnosticContext.Scope diagnosticScope = DiagnosticContext.openDefaults()) {
             return OperationContext.execute(StageId.CALIBRATION, () -> calibrateCaptured(poolFrames,
                     OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(baseConfig, DetectionConfigRules.Operation.CALIBRATION)), listener,
-                    options, workers));
+                    options, workers, new Preview(observer)));
         }
     }
 
     /** Performs calibration against captured settings and joins every batch on the operation's workers. */
     private static Calibration calibrateCaptured(List<ImageFrame> poolFrames, DetectionConfig baseConfig,
-                                                 TransientEngineProgressListener listener, Options options, WorkerPool workers) {
+            TransientEngineProgressListener listener, Options options, WorkerPool workers, Preview preview) {
         CancellationScope.check();
         long start = System.currentTimeMillis();
         Calibration calibration = new Calibration();
@@ -815,6 +837,8 @@ public final class CalibratedAutoTuner {
         }
         OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkFrames(poolFrames));
         try {
+            preview.phase(FRAME);
+            progress(listener, 0, "Checking registration and usable image area...");
             List<ImageFrame> pool = new ArrayList<>();
             for (ImageFrame f : poolFrames) {
                 CancellationScope.check();
@@ -823,6 +847,7 @@ public final class CalibratedAutoTuner {
                 } else {
                     pool.add(f);
                 }
+                preview.image(FRAME, "Checking usable pixels · frame " + (f.sequenceIndex + 1), f.pixelData);
             }
             if (pool.size() < 5) {
                 calibration.failureReason = "At least 5 usable frames are needed for calibrated auto-tuning.";
@@ -835,7 +860,8 @@ public final class CalibratedAutoTuner {
             // Frame drift: sizes the border kept clear of alignment padding, and lets detections fixed on the
             // sensor (hot pixels) be recognised although they move across the registered frames.
             FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = OperationContext.compute(StageId.REGISTRATION, null,
-                    () -> FrameDriftAnalyzer.analyze(pool));
+                    () -> FrameDriftAnalyzer.analyze(pool, frame -> preview.image(FRAME,
+                            "Checking registration · frame " + (frame.sequenceIndex + 1), frame.pixelData)));
             Map<Integer, Pixel> driftBySequence = new HashMap<>();
             for (Pixel p : driftAnalysis.driftPoints) {
                 CancellationScope.check();
@@ -877,6 +903,10 @@ public final class CalibratedAutoTuner {
             calibration.measurementFrames = measurementFrames.size();
             calibration.crops = crops.size();
             calibration.cropSize = cropSize;
+            preview.offer(() -> new AutoTuneSnapshot(REGIONS, "Sampling " + crops.size() + " sky regions",
+                    pool.get(0).pixelData, null, List.of(), crops.stream()
+                    .map(c -> new AutoTuneSnapshot.Region(c[0], c[1], c[2])).toList()));
+            preview.phase(REFERENCE);
             progress(listener, 5, "Building pool master stacks...");
 
             // --- Master stacks per crop, from the whole pool, like production ---
@@ -889,9 +919,12 @@ public final class CalibratedAutoTuner {
                 }
                 masters.add(OperationContext.compute(StageId.MEDIAN_STACK, null,
                         () -> MasterMapGenerator.createMedianMasterStack(cropped)));
+                preview.image(REFERENCE, "Median reference · region " + masters.size() + " of " + crops.size(),
+                        masters.get(masters.size() - 1));
             }
 
             // --- PSF and jitter ---
+            preview.phase(STARS);
             progress(listener, 12, "Measuring star size and residual jitter...");
             List<short[][]> measurementCrops = new ArrayList<>();
             List<Integer> measurementCropIndex = new ArrayList<>();
@@ -902,12 +935,13 @@ public final class CalibratedAutoTuner {
                     measurementCropIndex.add(c);
                 }
             }
-            double psfSigma = measurePsfSigma(measurementCrops, baseConfig);
+            double psfSigma = measurePsfSigma(measurementCrops, baseConfig, preview);
             calibration.fwhm = 2.355 * psfSigma;
-            calibration.jitter = measureJitter(measurementCrops, measurementCropIndex, masters, baseConfig);
+            calibration.jitter = measureJitter(measurementCrops, measurementCropIndex, masters, baseConfig, preview);
             double psfCoreArea = Math.PI * (calibration.fwhm / 2.0) * (calibration.fwhm / 2.0);
 
             // --- Negative and injected images ---
+            preview.phase(TEST_SOURCES);
             progress(listener, 18, "Preparing noise and injection images...");
             Random random = new Random(RANDOM_SEED);
             // Frame drift, so that detections fixed on the sensor (hot pixels) can be recognised although they
@@ -931,6 +965,9 @@ public final class CalibratedAutoTuner {
                 if (prepared.backgroundSigma >= MIN_BACKGROUND_SIGMA) {
                     cropFrames.add(prepared);
                 }
+                preview.offer(() -> new AutoTuneSnapshot(TEST_SOURCES, "Artificial test stars · region "
+                        + (prepared.crop + 1) + " · frame " + (sourceFrame.sequenceIndex + 1),
+                        prepared.injected, null, Preview.injections(prepared, null), List.of()));
             }
             if (cropFrames.size() < Math.max(2, measurementCrops.size() / 2)) {
                 calibration.failureReason = String.format(Locale.US,
@@ -942,6 +979,8 @@ public final class CalibratedAutoTuner {
             calibration.skippedCrops = measurementCrops.size() - cropFrames.size();
 
             // --- Masks for every master setting ---
+            preview.phase(MASK);
+            progress(listener, 19, "Building trial star masks...");
             List<FrameSetting> frameSettings = frameSettings(psfCoreArea, options);
             List<MasterSetting> masterSettings = masterSettings(psfCoreArea, options);
             int dilation = (int) Math.max(1, Math.round(calibration.jitter / 2.0)); // production veto-mask rule
@@ -953,6 +992,10 @@ public final class CalibratedAutoTuner {
                 for (int c = 0; c < crops.size(); c++) {
                     masks[m][c] = buildMask(masters.get(c), masterSettings.get(m), dilation, baseConfig);
                     masked += masks[m][c].cardinality();
+                    int maskIndex = m, cropIndex = c;
+                    preview.offer(() -> new AutoTuneSnapshot(MASK, "Trial star mask · region " + (cropIndex + 1)
+                            + " · " + Preview.masterLabel(masterSettings.get(maskIndex)), masters.get(cropIndex),
+                            masks[maskIndex][cropIndex], List.of(), List.of()));
                 }
                 coverage[m] = masked / ((double) crops.size() * cropSize * cropSize);
             }
@@ -970,6 +1013,7 @@ public final class CalibratedAutoTuner {
                 nearStar[c] = dilate(masks[deepestMask][c], cropSize, nearStarRadius);
             }
             // Satellite and meteor trails, found once per frame by a more sensitive streak pass.
+            progress(listener, 19, "Identifying star-neighbourhood and trail regions...");
             List<Callable<BitSet>> streakTasks = new ArrayList<>();
             for (CropFrame cf : cropFrames) {
                 CancellationScope.check();
@@ -993,12 +1037,13 @@ public final class CalibratedAutoTuner {
             double nearStarRecurrenceRadius = Math.max(recurrenceRadius, calibration.fwhm);
 
             // --- Grid ---
+            preview.phase(RECOVERY);
             for (int s = 0; s < frameSettings.size(); s++) {
                 CancellationScope.check();
                 FrameSetting fs = frameSettings.get(s);
                 progress(listener, 20 + (int) (75.0 * s / frameSettings.size()),
                         String.format(Locale.US, "Measuring sigma %.2f, grow %.2f, minPix %d", fs.sigma, fs.grow, fs.minPixels));
-                List<Detection[][]> detections = extractAll(cropFrames, fs, baseConfig, cropSize);
+                List<Detection[][]> detections = extractAll(cropFrames, fs, baseConfig, cropSize, preview, matchRadius);
 
                 // Settings that already drown in noise before any veto can never meet a budget; skip the costly
                 // per-mask evaluation for them (noisy data at low thresholds produces huge detection counts).
@@ -1044,7 +1089,7 @@ public final class CalibratedAutoTuner {
                         for (double ov : options.maskOverlapsToTest) {
                             out.add(evaluate(fs, ms, ov, coverage[mi], cropFrames, detections, overlaps,
                                     owned, ownedMpix, cropSize, crops.size(), nearStar, recurrenceRadius, nearStarRecurrenceRadius,
-                                    matchRadius, options));
+                                    matchRadius, options, preview, masks[mi]));
                         }
                         return out;
                     });
@@ -1214,7 +1259,8 @@ public final class CalibratedAutoTuner {
                                       List<CropFrame> cropFrames, List<Detection[][]> detections, List<double[][]> overlaps,
                                       BitSet[] owned, double[] ownedMpix, int cropSize, int cropCount,
                                       BitSet[] nearStar, double recurrenceRadius,
-                                      double nearStarRecurrenceRadius, double matchRadius, Options options) {
+                                      double nearStarRecurrenceRadius, double matchRadius, Options options,
+                                      Preview preview, BitSet[] masks) {
         int levels = options.injectionPeakSnr.length;
         long noise = 0;
         long realSurvivors = 0;
@@ -1276,6 +1322,7 @@ public final class CalibratedAutoTuner {
                     }
                 }
             }
+            preview.search(cropFrames, detections, overlaps, masks, fs, ms, ov, matchRadius, owned);
         }
         // Leakage: survivors that touch the mask, reappear within the recurrence radius in another frame of the
         // same crop (on the sky, or on the sensor for hot pixels), or lie next to a star and reappear beside it
@@ -1362,18 +1409,23 @@ public final class CalibratedAutoTuner {
     }
 
     private static List<Detection[][]> extractAll(List<CropFrame> cropFrames, FrameSetting fs, DetectionConfig base,
-                                                  int width) throws Exception {
+            int width, Preview preview, double matchRadius) throws Exception {
         DetectionConfig cfg = base.clone();
         cfg.detectionSigmaMultiplier = fs.sigma;
         cfg.growSigmaMultiplier = fs.grow;
         cfg.minDetectionPixels = fs.minPixels;
         List<Callable<Detection[][]>> tasks = new ArrayList<>();
+        CropFrame display = cropFrames.get(preview.focusedIndex(cropFrames, preview.searchPictures.get()));
         for (CropFrame cf : cropFrames) {
             CancellationScope.check();
-            tasks.add(() -> OperationContext.compute(StageId.FRAME_EXTRACTION, cf.sourceFrame, () -> new Detection[][]{
-                    extract(cf.positive, fs, cfg, width),
-                    extract(cf.negative, fs, cfg, width),
-                    extract(cf.injected, fs, cfg, width)}));
+            tasks.add(() -> OperationContext.compute(StageId.FRAME_EXTRACTION, cf.sourceFrame, () -> {
+                Detection[][] detections = {extract(cf.positive, fs, cfg, width),
+                        extract(cf.negative, fs, cfg, width), extract(cf.injected, fs, cfg, width)};
+                if (cf == display) preview.offer(() -> new AutoTuneSnapshot(EXTRACTION, Preview.frameLabel(cf, fs)
+                        + "\nArtificial-star recovery before mask veto", cf.injected, null,
+                        Preview.recovery(cf, detections[2], null, 1.0, matchRadius), List.of()));
+                return detections;
+            }));
         }
         return WorkerPool.invokeAll(tasks);
     }
@@ -1529,7 +1581,7 @@ public final class CalibratedAutoTuner {
     /**
      * PSF Gaussian sigma from second moments of bright, isolated, unsaturated stars.
      */
-    private static double measurePsfSigma(List<short[][]> images, DetectionConfig base) {
+    private static double measurePsfSigma(List<short[][]> images, DetectionConfig base, Preview preview) {
         DetectionConfig probe = base.clone();
         probe.growSigmaMultiplier = 3.0;
         List<Double> sigmas = new ArrayList<>();
@@ -1539,6 +1591,9 @@ public final class CalibratedAutoTuner {
             int w = image[0].length;
             double background = SourceExtractor.calculateBackgroundSigmaClipped(image, w, h, 3.0, base).median;
             List<DetectedObject> objects = extractInCrop(image, 5.0, 5, probe);
+            preview.offer(() -> new AutoTuneSnapshot(STARS, "Measuring star size · detected stars in this sample",
+                    image, null, objects.stream().limit(200).map(star -> new AutoTuneSnapshot.Marker(
+                            star.x, star.y, AutoTuneSnapshot.Mark.DETECTION)).toList(), List.of()));
             for (DetectedObject obj : objects) {
                 CancellationScope.check();
                 if (obj.isStreak || obj.elongation > 1.3 || obj.peakSigma < 20 || obj.peakSigma > 150) continue;
@@ -1589,7 +1644,7 @@ public final class CalibratedAutoTuner {
      * between master-stack stars and frame stars, at least 1 px.
      */
     private static double measureJitter(List<short[][]> images, List<Integer> cropOfImage, List<short[][]> masters,
-                                        DetectionConfig base) {
+                                        DetectionConfig base, Preview preview) {
         DetectionConfig probe = base.clone();
         probe.growSigmaMultiplier = 3.0;
         List<List<DetectedObject>> masterStars = new ArrayList<>();
@@ -1603,6 +1658,7 @@ public final class CalibratedAutoTuner {
         for (int i = 0; i < images.size(); i++) {
             CancellationScope.check();
             List<DetectedObject> frameStars = usable(extractInCrop(images.get(i), 4.0, 5, probe));
+            preview.image(STARS, "Measuring residual registration jitter · region " + (cropOfImage.get(i) + 1), images.get(i));
             List<DetectedObject> reference = masterStars.get(cropOfImage.get(i));
             for (DetectedObject star : reference) {
                 CancellationScope.check();
@@ -1965,6 +2021,132 @@ public final class CalibratedAutoTuner {
 
     private static int clamp(int value) {
         return Math.max(0, Math.min(65535, value));
+    }
+
+    /** One run's optional observations; display matching never contributes to calibration counters or choices. */
+    private static final class Preview {
+        private final AutoTuneObserver observer;
+        private final AtomicInteger searchPictures = new AtomicInteger();
+
+        /** Keeps the observer for this run only; null disables all snapshot construction. */
+        private Preview(AutoTuneObserver observer) { this.observer = observer; }
+
+        /** Drops stale pending pictures without bypassing the observer's cadence. */
+        private void phase(AutoTuneSnapshot.Kind kind) {
+            if (observer == null) return;
+            try { observer.phaseStarted(kind); } catch (RuntimeException failure) { failed(failure); }
+        }
+
+        /** Constructs a snapshot only after the observer reserves it; callbacks cannot fail scientific work. */
+        private void offer(Supplier<AutoTuneSnapshot> maker) {
+            if (observer == null) return;
+            try {
+                if (observer.wantsUpdate()) observer.update(maker.get());
+            } catch (RuntimeException failure) { failed(failure); }
+        }
+
+        /** Offers an existing image without display-only detection or annotations. */
+        private void image(AutoTuneSnapshot.Kind kind, String caption, short[][] image) {
+            offer(() -> new AutoTuneSnapshot(kind, caption, image, null, List.of(), List.of()));
+        }
+
+        /** Offers inside evaluation loops, retaining one sample for six pictures before moving to another region. */
+        private void search(List<CropFrame> frames, List<Detection[][]> allDetections, List<double[][]> allOverlaps,
+                BitSet[] masks, FrameSetting fs, MasterSetting ms, double overlap, double radius, BitSet[] ownership) {
+            if (observer == null) return;
+            try {
+                if (!observer.wantsUpdate()) return;
+                observer.update(searchSnapshot(frames, allDetections, allOverlaps, masks, fs, ms, overlap, radius, ownership));
+            } catch (RuntimeException failure) { failed(failure); }
+        }
+
+        /** Builds a reserved snapshot entirely from the current trial's existing extraction and overlap products. */
+        private AutoTuneSnapshot searchSnapshot(List<CropFrame> frames, List<Detection[][]> allDetections,
+                List<double[][]> allOverlaps, BitSet[] masks, FrameSetting fs, MasterSetting ms,
+                double overlap, double radius, BitSet[] ownership) {
+            int sequence = searchPictures.getAndIncrement();
+            int index = focusedIndex(frames, sequence);
+            CropFrame cf = frames.get(index);
+            Detection[][] detections = allDetections.get(index);
+            double[][] overlaps = allOverlaps.get(index);
+            BitSet mask = masks[cf.crop], owned = ownership[cf.crop];
+            int picture = sequence % 3;
+            String label = frameLabel(cf, fs) + "\n" + masterLabel(ms)
+                    + String.format(Locale.US, ", overlap %.2f", overlap);
+            if (picture == 2) return new AutoTuneSnapshot(MASK, label, cf.positive, mask, List.of(), List.of());
+            if (picture == 1) {
+                List<AutoTuneSnapshot.Marker> markers = new ArrayList<>();
+                int count = 0;
+                for (int k = 0; k < detections[1].length; k++) {
+                    Detection d = detections[1][k];
+                    if (!d.streak && overlaps[1][k] <= overlap && isOwned(d, owned, cf.positive.length)) {
+                        count++;
+                    }
+                }
+                // Spread the bounded sample through the crop, rather than only marking its first (top) rows.
+                int stride = Math.max(1, (count + 199) / 200), survivor = 0;
+                for (int k = 0; k < detections[1].length; k++) {
+                    Detection d = detections[1][k];
+                    if (!d.streak && overlaps[1][k] <= overlap && isOwned(d, owned, cf.positive.length)
+                            && survivor++ % stride == 0) markers.add(new AutoTuneSnapshot.Marker(
+                                    d.x, d.y, AutoTuneSnapshot.Mark.DETECTION));
+                }
+                return new AutoTuneSnapshot(NOISE, label + "\nNoise-control survivors: " + count
+                        + " in this crop · sampled markers", cf.negative, mask, markers, List.of());
+            }
+            List<AutoTuneSnapshot.Marker> markers = recovery(cf, detections[2], overlaps[2], overlap, radius);
+            long recovered = markers.stream().filter(m -> m.mark() == AutoTuneSnapshot.Mark.RECOVERED).count();
+            return new AutoTuneSnapshot(RECOVERY, label + "\nArtificial stars: " + recovered + "/"
+                    + markers.size() + " recovered in this crop", cf.injected, mask, markers, List.of());
+        }
+
+        /** Finds the first usable frame of the focused region; blank/clipped regions have no eligible sample. */
+        private int focusedIndex(List<CropFrame> frames, int picture) {
+            int crops = frames.getLast().crop + 1;
+            int wanted = (picture / 6) % crops;
+            for (int i = 0; i < frames.size(); i++) if (frames.get(i).crop >= wanted) return i;
+            return 0;
+        }
+
+        /** Artificial-source positions, marked with the existing trial's recovery verdict when supplied. */
+        private static List<AutoTuneSnapshot.Marker> injections(CropFrame cf, boolean[] recovered) {
+            List<AutoTuneSnapshot.Marker> markers = new ArrayList<>();
+            for (int s = 0; s < cf.injectX.length; s++) markers.add(new AutoTuneSnapshot.Marker(cf.injectX[s],
+                    cf.injectY[s], recovered == null ? AutoTuneSnapshot.Mark.TEST
+                    : recovered[s] ? AutoTuneSnapshot.Mark.RECOVERED : AutoTuneSnapshot.Mark.MISSED));
+            return markers;
+        }
+
+        /** Reuses extracted sources and overlap measurements; never reruns source extraction for a picture. */
+        private static List<AutoTuneSnapshot.Marker> recovery(CropFrame cf, Detection[] detections,
+                double[] overlaps, double overlap, double radius) {
+            boolean[] recovered = new boolean[cf.injectX.length];
+            for (int s = 0; s < recovered.length; s++) {
+                for (int k = 0; k < detections.length; k++) {
+                    Detection d = detections[k];
+                    if (d.streak || (overlaps != null && overlaps[k] > overlap)) continue;
+                    double dx = d.x - cf.injectX[s], dy = d.y - cf.injectY[s];
+                    if (dx * dx + dy * dy <= radius * radius) { recovered[s] = true; break; }
+                }
+            }
+            return injections(cf, recovered);
+        }
+
+        /** Identifies the frame, region and per-frame settings of a provisional trial. */
+        private static String frameLabel(CropFrame cf, FrameSetting fs) {
+            return String.format(Locale.US, "Testing sigma %.2f, grow %.2f, min %d · region %d · frame %d",
+                    fs.sigma, fs.grow, fs.minPixels, cf.crop + 1, cf.sourceFrame.sequenceIndex() + 1);
+        }
+
+        /** Describes the master-mask settings of the pictured trial. */
+        private static String masterLabel(MasterSetting ms) {
+            return String.format(Locale.US, "Master %.2f/%.2f/%d", ms.seed, ms.grow, ms.minPixels);
+        }
+
+        /** Keeps preview failures in the operation's optional diagnostics. */
+        private static void failed(RuntimeException failure) {
+            if (DiagnosticContext.enabled()) DiagnosticContext.println("DEBUG: Auto-Tune preview skipped: " + failure);
+        }
     }
 
     private static void progress(TransientEngineProgressListener listener, int percent, String message) {

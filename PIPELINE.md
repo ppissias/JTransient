@@ -28,6 +28,16 @@ Photometry's ordinary `analyze` captures/validates aligned containers and a conf
 
 ## Per-operation diagnostics (1.0.6)
 
+### Optional Auto-Tune pictures
+
+`CalibratedAutoTuner.tune(frames, config, profile, progress, observer)` and its explicit-options overload accept an `AutoTuneObserver`; `calibrate(frames, config, options, progress, observer)` exposes the same feedback while retaining the complete sweep. These are additive overloads; existing calls retain their behavior. The library does not render pictures or reference Swing.
+
+`wantsUpdate()` must atomically reserve one update and be thread-safe: extraction and trial-mask evaluation can call it on joined workers. Only a true answer constructs `AutoTuneSnapshot` annotations. `update(snapshot)` runs synchronously while the snapshot's image pixels and `BitSet` mask are valid, read-only borrowed data; detach anything retained after the callback. Small immutable marker/region lists use image-pixel coordinates. Kinds distinguish field frames, sampling regions, references, star measurements, injected test sources, masks, extraction before veto, recovery after veto and noise-control survivors. Recovery uses the existing extracted detections and the pictured mask-overlap trial, not a new extraction or a running best-profile decision. All artificial sources, including missed/vetoed sources, are marked; up to 200 noise positions are sampled across the crop while the caption gives its full count. Search pictures hold one sample for several updates before moving to another usable region. The noise-control image is `2 * master - frame`.
+
+`phaseStarted(kind)` lets a consumer discard pending pictures when work changes phase; it never reserves a snapshot. Callbacks may delay their caller and should remain quick. Runtime callback failures are diagnosed and ignored without changing calibration or cancelling it. Scientific cancellation still propagates through the caller's `CancellationScope`, and all callback-producing workers are joined before return. Without an observer, or when all updates are declined, there is no display-only image copying, source matching or snapshot allocation. Sampling, candidate measurements and profile selection are unchanged.
+
+`FrameDriftAnalyzer.analyze(frames, frameMeasured)` also supports a read-only per-usable-frame callback on the calling thread. Unlike the tuner observer adapter, this direct callback propagates its exception; null preserves the ordinary overload's behavior.
+
 Open `DiagnosticContext.open(new DiagnosticOptions(enabled, sink))` around engine, tuner or standalone science work. All core and tuner text uses the same operation policy. Library defaults are silent: there are no engine debug globals, registration bridges or separate tuner text sink settings. Engine/tuner boundaries inherit scopes; managed workers propagate policy and restore prior state, including failure/cancellation cleanup.
 
 Sinks receive formatted strings synchronously on caller/worker threads and must be thread-safe when shared. They must not mutate scientific inputs; slow/throwing sinks can delay/fail an operation. No asynchronous logger is implied. Sink fields are transient and JSON does not recreate callbacks.

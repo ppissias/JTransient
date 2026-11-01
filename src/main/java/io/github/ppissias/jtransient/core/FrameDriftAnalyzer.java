@@ -18,6 +18,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Measures per-frame border padding caused by alignment drift (the drift and dither path), leaves out blank or
@@ -79,6 +80,14 @@ public final class FrameDriftAnalyzer {
      * Measures the drift, the failed registrations and the coverage of the supplied frames.
      */
     public static DriftAnalysisResult analyze(List<ImageFrame> inputFrames) {
+        return analyze(inputFrames, null);
+    }
+
+    /**
+     * Measures unchanged registration facts and calls {@code frameMeasured} after each usable frame. The callback
+     * borrows that frame read-only on the calling thread; its exception propagates. Null adds no callback work.
+     */
+    public static DriftAnalysisResult analyze(List<ImageFrame> inputFrames, Consumer<ImageFrame> frameMeasured) {
         if (inputFrames == null || inputFrames.isEmpty()) {
             return new DriftAnalysisResult(Collections.emptyList(), 0, Collections.emptyList(), Collections.emptyList());
         }
@@ -102,6 +111,7 @@ public final class FrameDriftAnalyzer {
             if (measurement.maxPaddingExtent > maxDrift) {
                 maxDrift = measurement.maxPaddingExtent;
             }
+            if (frameMeasured != null) frameMeasured.accept(frame);
         }
 
         return new DriftAnalysisResult(driftPoints, maxDrift, failedRegistrationFrames, frameCoverages);

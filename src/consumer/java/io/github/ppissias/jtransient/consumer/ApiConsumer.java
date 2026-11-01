@@ -8,6 +8,8 @@ import io.github.ppissias.jtransient.core.MasterMapGenerator;
 import io.github.ppissias.jtransient.core.PixelEncoding;
 import io.github.ppissias.jtransient.engine.AutoTuneProfile;
 import io.github.ppissias.jtransient.engine.AutoTunerResult;
+import io.github.ppissias.jtransient.engine.AutoTuneObserver;
+import io.github.ppissias.jtransient.engine.AutoTuneSnapshot;
 import io.github.ppissias.jtransient.engine.CalibratedAutoTuner;
 import io.github.ppissias.jtransient.engine.ImageFrame;
 import io.github.ppissias.jtransient.engine.JTransientEngine;
@@ -36,6 +38,14 @@ public final class ApiConsumer {
 
         List<ImageFrame> frames = frames();
         AutoTunerResult calibrated = CalibratedAutoTuner.tune(frames.subList(0, 4), config, AutoTuneProfile.MEDIUM, null);
+        AutoTuneObserver hidden = new AutoTuneObserver() {
+            /** A hidden consumer declines all display-only work. */
+            @Override public boolean wantsUpdate() { return false; }
+            /** No snapshot should be constructed for this observer. */
+            @Override public void update(AutoTuneSnapshot snapshot) { throw new AssertionError("Unexpected preview"); }
+        };
+        require(!CalibratedAutoTuner.tune(frames.subList(0, 4), config, AutoTuneProfile.MEDIUM, null, hidden).success,
+                "Optional observer must preserve insufficient-evidence results");
         require(!calibrated.success && calibrated.optimizedConfig != config, "Calibrated tuning must detach fallback settings");
         require(new com.google.gson.Gson().toJson(calibrated).contains("optimizedConfig"), "Result JSON missing settings");
         require(PixelEncoding.toShiftedPositiveInt(MasterMapGenerator.createMedianMasterStack(frames)[5][5]) == 1000,
