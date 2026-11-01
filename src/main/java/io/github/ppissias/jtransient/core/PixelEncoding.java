@@ -14,7 +14,8 @@ package io.github.ppissias.jtransient.core;
  * and the shifted non-negative intensity domain used by extraction and diagnostics.
  */
 public final class PixelEncoding {
-    private static final int SHIFT = 32768;
+    /** Added to a stored pixel to give its shifted (non-negative) value. */
+    static final int SHIFT = 32768;
 
     private PixelEncoding() {
     }

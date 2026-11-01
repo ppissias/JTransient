@@ -30,6 +30,16 @@ final class StreakLinker {
 
     /** Returns the streak tracks; each one-streak track counts too. */
     static List<Track> link(List<DetectedObject> validMovingStreaks, DetectionConfig config, TrackerTelemetry telemetry) {
+        return link(validMovingStreaks, config, telemetry, config.singleStreakMinPeakSigma);
+    }
+
+    /**
+     * {@link #link(List, DetectionConfig, TrackerTelemetry)} with the peak sigma an unlinked single streak needs. The
+     * faint-streak search passes zero for its own candidates: a streak found only on the smoothed frame needs no
+     * peak gate (JTransient ST-6), while the binary-star shape screen still applies.
+     */
+    static List<Track> link(List<DetectedObject> validMovingStreaks, DetectionConfig config, TrackerTelemetry telemetry,
+                            double singleStreakMinPeakSigma) {
         List<Track> confirmedStreakTracks = new ArrayList<>();
         double angleToleranceRad = Math.toRadians(config.angleToleranceDegrees);
 
@@ -142,7 +152,7 @@ final class StreakLinker {
                 telemetry.rejectedBinaryStarStreakShape++;
             }
 
-            if (!rejectedByBinaryStarVeto && singleStreak.peakSigma >= config.singleStreakMinPeakSigma) {
+            if (!rejectedByBinaryStarVeto && singleStreak.peakSigma >= singleStreakMinPeakSigma) {
                 Track singleStreakTrack = new Track();
                 singleStreakTrack.isStreakTrack = true;
                 singleStreakTrack.addPoint(singleStreak);

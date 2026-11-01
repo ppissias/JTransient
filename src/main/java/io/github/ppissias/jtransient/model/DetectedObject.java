@@ -51,6 +51,13 @@ public class DetectedObject {
     public boolean isStreak;
     /** Whether the footprint should be treated as noise. */
     public boolean isNoise;
+    /**
+     * Whether the faint-streak search found this object, on a copy of its frame smoothed with a Gaussian the size of
+     * the stars. Every measurement of such an object (centroid, footprint, flux, width, {@link #peakSigma} and
+     * {@link #integratedSigma}) is then made on the smoothed frame: the sigmas are in units of the smoothed frame's
+     * noise and are not comparable with those of normal detections.
+     */
+    public boolean fromFaintStreakSearch;
 
     /** Source frame index assigned by the engine after extraction. */
     public int sourceFrameIndex;

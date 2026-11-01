@@ -238,6 +238,28 @@ public class TrackLinker {
             int sensorHeight,
             Map<Integer, FrameRegistration> registrations,
             PipelineStageObserver observer) {
+        return findMovingObjects(allFrames, masterStars, config, listener, sensorWidth, sensorHeight, registrations,
+                observer, null);
+    }
+
+    /**
+     * {@link #findMovingObjects(List, List, DetectionConfig, TransientEngineProgressListener, int, int, Map,
+     * PipelineStageObserver)} that also adds the faint-streak search's candidates to the streak tracks, after the
+     * normal streaks are linked and consolidated ({@link FaintStreakLinking}). The candidates never enter point
+     * linking, anomaly rescue or the exported transient lists.
+     *
+     * @param faintStreaks the search's result, or null when it did not run; its telemetry is completed here
+     */
+    public static TrackingResult findMovingObjects(
+            List<List<DetectedObject>> allFrames,
+            List<DetectedObject> masterStars,
+            DetectionConfig config,
+            TransientEngineProgressListener listener,
+            int sensorWidth,
+            int sensorHeight,
+            Map<Integer, FrameRegistration> registrations,
+            PipelineStageObserver observer,
+            FaintStreakSearch.Result faintStreaks) {
 
         checkUniformTimestamps(allFrames);
         int numFrames = allFrames.size();
@@ -319,6 +341,10 @@ public class TrackLinker {
         );
         List<AnomalyDetection> anomalies = AnomalyRescuer.rescue(anomalyCandidates, assignments, config);
         confirmedTracks = AnomalyRescuer.joinStreakPieces(confirmedTracks, anomalies, config);
+        if (faintStreaks != null) {
+            confirmedTracks = FaintStreakLinking.add(confirmedTracks, filterResult.validMovingStreaks,
+                    faintStreaks.candidates, anomalies, config, faintStreaks.telemetry);
+        }
 
         recordCounts(confirmedTracks, pointTracks, anomalies, telemetry);
         logRejectionStatistics(telemetry);

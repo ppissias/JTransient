@@ -88,6 +88,14 @@ public class DetectionConfig implements Cloneable {
     /** * Maximum perpendicular distance, in pixels, from a same-frame streak line for a faint piece to be joined. */
     public double faintStreakLineTolerance = 2.0;
 
+    /** * Searches every kept frame a second time for faint streaks, on a copy smoothed with a Gaussian the size of
+     * the stars. Only streak-shaped objects are kept. They are linked after the normal streaks, can join or extend
+     * normal streak tracks or form new ones, and a streak found only this way needs no
+     * {@link #singleStreakMinPeakSigma}. A normal streak detection stays in the track it has without the search, and
+     * no other result receives the search's objects.
+     */
+    public boolean enableFaintStreakSearch = true;
+
     // =================================================================
     // 2. MASTER-STACK AND SLOW-MOVER PARAMETERS
     // =================================================================

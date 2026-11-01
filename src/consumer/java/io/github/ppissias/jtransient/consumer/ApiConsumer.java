@@ -51,10 +51,12 @@ public final class ApiConsumer {
         require(PixelEncoding.toShiftedPositiveInt(MasterMapGenerator.createMedianMasterStack(frames)[5][5]) == 1000,
                 "Median pixel encoding changed");
 
+        require(config.enableFaintStreakSearch && !object.fromFaintStreakSearch, "Faint-streak search defaults changed");
         try (JTransientEngine engine = new JTransientEngine()) {
             PipelineResult result = engine.runPipeline(frames, config, null);
             require(result.tracks != null && result.telemetry != null && result.masterStackData != null,
                     "Result fields missing");
+            require(result.telemetry.faintStreakSearchTelemetry != null, "Faint-streak search telemetry missing");
             require(!result.tooFewFrames && engine.runPipeline(frames.subList(0, JTransientEngine.MIN_KEPT_FRAMES - 1),
                     config, null).tooFewFrames, "Too-few-frames result missing");
             require(engine.generateMasterStack(new ArrayList<>(frames), config, null) != null, "Sequential reuse failed");

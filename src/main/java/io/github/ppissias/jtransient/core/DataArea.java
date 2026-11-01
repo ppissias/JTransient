@@ -202,6 +202,43 @@ public final class DataArea {
         return values;
     }
 
+    /**
+     * This area a further distance in from its edge (a square erosion, as the margin), for work that needs a
+     * neighbourhood of that radius inside the area.
+     *
+     * @param pixels distance in pixels, zero or more
+     * @return the smaller area; this area when {@code pixels} is zero
+     */
+    public DataArea inset(int pixels) {
+        if (pixels < 0) {
+            throw new IllegalArgumentException("pixels must not be negative");
+        }
+        if (pixels == 0) {
+            return this;
+        }
+        int[] start = new int[height];
+        int[] end = new int[height];
+        for (int y = 0; y < height; y++) {
+            int s = Integer.MIN_VALUE;
+            int e = Integer.MAX_VALUE;
+            for (int d = -pixels; d <= pixels; d++) {
+                int row = y + d;
+                if (row < 0 || row >= height || rowStart[row] > rowEnd[row]) {
+                    s = width;
+                    e = -1;
+                    break;
+                }
+                s = Math.max(s, rowStart[row]);
+                e = Math.min(e, rowEnd[row]);
+            }
+            s += pixels;
+            e -= pixels;
+            start[y] = s <= e ? s : width;
+            end[y] = s <= e ? e : -1;
+        }
+        return new DataArea(width, height, start, end);
+    }
+
     /** Whether the pixel lies inside the area. */
     public boolean contains(int x, int y) {
         return y >= 0 && y < height && x >= rowStart[y] && x <= rowEnd[y];

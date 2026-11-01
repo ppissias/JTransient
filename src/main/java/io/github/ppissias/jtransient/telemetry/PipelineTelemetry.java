@@ -27,6 +27,7 @@ public class PipelineTelemetry {
         MASTER_REFERENCE("Median master and stationary stars"),
         MAXIMUM_STACK("Maximum stack"),
         SLOW_MOVERS("Slow-mover detection"),
+        FAINT_STREAK_SEARCH("Faint streak search"),
         TRACKING("Star veto, streaks, tracks and anomalies"),
         COMMON_MOTION("Common-motion filtering"),
         RESIDUAL_ANALYSIS("Local rescue and activity clustering"),
@@ -162,6 +163,9 @@ public class PipelineTelemetry {
      * Diagnostic summary for morphology candidates from the slow-mover branch.
      */
     public SlowMoverTelemetry slowMoverTelemetry;
+
+    /** What the faint-streak search did; null when it was switched off or the run stopped before it. */
+    public FaintStreakSearchTelemetry faintStreakSearchTelemetry;
 
     /** Mutable pipeline-facing view of slow-mover morphology and median-mask filtering. */
     public static class SlowMoverTelemetry {
@@ -490,6 +494,19 @@ public class PipelineTelemetry {
                 }
             }
             sb.append("  Parallel phases are elapsed time, not the sum of worker times. Image loading and report export are outside this total.\n\n");
+        }
+
+        if (faintStreakSearchTelemetry != null) {
+            FaintStreakSearchTelemetry f = faintStreakSearchTelemetry;
+            sb.append("--- FAINT STREAK SEARCH ---\n");
+            sb.append(String.format(java.util.Locale.US, "  Smoothing sigma: %.2f px (%s)\n", f.smoothingSigma,
+                    f.widthFromStars ? "star size of " + f.widthFrames + " kept frames" : "no star size measured; fixed width"));
+            sb.append(String.format("  Streak-shaped objects: %d | star mask: %d | duplicates of normal streaks: %d | linked: %d\n",
+                    f.extractedStreaks, f.removedByStarMask, f.duplicatesOfNormalStreaks, f.linkedCandidates));
+            sb.append(String.format("  In streak tracks: %d | discarded: %d | binary-star shape: %d\n",
+                    f.detectionsInTracks, f.discarded, f.rejectedBinaryStarShape));
+            sb.append(String.format("  Streak tracks with faint-search detections: %d (faint only: %d) | anomalies joined: %d\n\n",
+                    f.tracksWithFaintDetections, f.faintOnlyTracks, f.anomaliesJoined));
         }
 
         if (qualityThresholds.available) {

@@ -23,6 +23,7 @@ import io.github.ppissias.jtransient.execution.WorkerPool;
 import io.github.ppissias.jtransient.core.CommonMotionRejector;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.FrameCoverage;
+import io.github.ppissias.jtransient.core.FaintStreakSearch;
 import io.github.ppissias.jtransient.core.FrameDriftAnalyzer;
 import io.github.ppissias.jtransient.core.FrameRegistration;
 import io.github.ppissias.jtransient.core.MasterReferenceAnalyzer;
@@ -825,6 +826,37 @@ public class JTransientEngine implements AutoCloseable {
     }
 
     /** Hands a finished stage to the observer; its failure is reported through the diagnostics and ignored. */
+    /**
+     * Runs the faint-streak search over the kept frames. A worker holds one frame's smoothed 16-bit copy (2 bytes per
+     * pixel), the extraction's pixel marks (1 byte per pixel) and the footprints of that frame's objects of at least
+     * {@code streakMinPixels} (a few bytes per pixel on dense fields), about a third of the normal extraction task the
+     * pool budgets at 16 bytes per pixel; the limit counts half its pixels, and the run's limit is set again afterwards.
+     */
+    private FaintStreakSearch.Result searchFaintStreaks(ExtractedFramesContext context, short[][] masterStackData,
+                                                        DetectionConfig config) throws Exception {
+        List<ImageFrame> keptFrames = context.cleanFrames;
+        long largestFramePixels = 1L;
+        for (ImageFrame frame : keptFrames) {
+            largestFramePixels = Math.max(largestFramePixels, (long) frame.pixelData.length * frame.pixelData[0].length);
+        }
+        List<SourceExtractor.BackgroundMetrics> keptSky = new ArrayList<>();
+        for (SourceExtractor.ExtractionResult extraction : context.cleanFramesData) {
+            keptSky.add(extraction.backgroundMetrics);
+        }
+        int faintWorkers = workers.limitWork(keptFrames.size(), Math.max(1L, largestFramePixels / 2));
+        if (DiagnosticContext.enabled()) {
+            Runtime runtime = Runtime.getRuntime();
+            DiagnosticContext.printf("DEBUG: Faint streak search -> %d workers (heap used %d MB of %d MB)%n", faintWorkers,
+                    (runtime.totalMemory() - runtime.freeMemory()) >> 20, runtime.maxMemory() >> 20);
+        }
+        try {
+            return OperationContext.call(StageId.FAINT_STREAK_SEARCH, null, () -> FaintStreakSearch.search(keptFrames,
+                    context.cleanFrameMetrics, keptSky, masterStackData, context.backgroundArea, context.dataArea, config));
+        } finally {
+            workers.limitWork(keptFrames.size(), largestFramePixels);
+        }
+    }
+
     private static void notifyObserver(PipelineStageObserver observer, PipelineStage stage) {
         try {
             observer.stageFinished(stage);
@@ -1022,6 +1054,28 @@ public class JTransientEngine implements AutoCloseable {
         }
 
         // =================================================================
+        // PHASE 0.75 (Faint Streak Search)
+        // =================================================================
+        FaintStreakSearch.Result faintStreaks = null;
+        if (config.enableFaintStreakSearch) {
+            notifyStarted(observer, "Faint streak search");
+            stageStartedNanos = System.nanoTime();
+            if (listener != null) {
+                OperationContext.notify(listener::onProgressUpdate, 49, "Searching for faint streaks...");
+            }
+            faintStreaks = searchFaintStreaks(context, masterStackData, config);
+            telemetry.recordStage(PipelineTelemetry.Stage.FAINT_STREAK_SEARCH, stageStartedNanos);
+            telemetry.faintStreakSearchTelemetry = faintStreaks.telemetry;
+            if (DiagnosticContext.enabled()) {
+                DiagnosticContext.printf("DEBUG: Faint streak search -> sigma %.2f px, %d streak-shaped, %d after star mask%n",
+                        faintStreaks.telemetry.smoothingSigma, faintStreaks.telemetry.extractedStreaks,
+                        faintStreaks.telemetry.extractedStreaks - faintStreaks.telemetry.removedByStarMask);
+            }
+        }
+
+        FaintStreakSearch.Result faintStreakResult = faintStreaks;
+
+        // =================================================================
         // PHASE 4 (Track Linking)
         // =================================================================
         if (DiagnosticContext.enabled()) {
@@ -1072,7 +1126,8 @@ public class JTransientEngine implements AutoCloseable {
                 sensorWidth,
                 sensorHeight,
                 context.frameRegistrations,
-                observer
+                observer,
+                faintStreakResult
         ));
         context.labelTrackerFrames(trackResult.telemetry);
 

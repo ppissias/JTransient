@@ -461,7 +461,7 @@ public final class DetectionConfigRules {
         add(metadata, Stage.EXTRACTION, Domain.ELONGATION, "streakMinElongation");
         add(metadata, Stage.TRACKING, Domain.POSITIVE, "singleStreakMinPeakSigma");
         add(metadata, Stage.TRACKING, Domain.NON_NEGATIVE, "faintStreakLineTolerance");
-        add(metadata, Stage.EXTRACTION, Domain.BOOLEAN, "enableBinaryStarLikeStreakShapeVeto enableFaintStreakFragments");
+        add(metadata, Stage.EXTRACTION, Domain.BOOLEAN, "enableBinaryStarLikeStreakShapeVeto enableFaintStreakFragments enableFaintStreakSearch");
         add(metadata, Stage.REFERENCE, Domain.POSITIVE, "masterSigmaMultiplier masterMinDetectionPixels");
         add(metadata, Stage.REFERENCE, Domain.MASTER_GROW, "masterGrowSigmaMultiplier");
         add(metadata, Stage.SLOW_MOVERS, Domain.BOOLEAN, "enableSlowMoverDetection");

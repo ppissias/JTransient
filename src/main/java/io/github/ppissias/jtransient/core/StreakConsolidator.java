@@ -127,6 +127,93 @@ final class StreakConsolidator {
     }
 
     /**
+     * Offers new streak tracks to tracks that were already consolidated, without consolidating those again among
+     * themselves. Each addition, in consolidation priority order, merges into the existing or earlier-added track it
+     * fits best, or stays on its own. A track that took an addition may then merge with another track it now fits, so
+     * an addition can join two pieces of one trail; two tracks without additions are never offered to each other
+     * again. Merging never removes a point from a track.
+     *
+     * @param consolidated tracks from {@link #consolidateStreakTracks}; not modified
+     * @param additions new streak tracks; not modified
+     * @param config consolidation settings
+     * @return the consolidated tracks in their order (merged where additions joined them), then the additions that
+     *         joined none
+     */
+    static List<Track> addStreakTracks(List<Track> consolidated, List<Track> additions, DetectionConfig config) {
+        List<Track> tracks = new ArrayList<>();
+        for (Track track : consolidated) {
+            CancellationScope.check();
+            tracks.add(copyTrack(track));
+        }
+        List<Track> ordered = new ArrayList<>();
+        for (Track track : additions) {
+            CancellationScope.check();
+            if (isStreakLike(track)) {
+                ordered.add(copyTrack(track));
+            }
+        }
+        ordered.sort(StreakConsolidator::compareStreakConsolidationPriority);
+
+        Set<Track> changed = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        for (Track addition : ordered) {
+            CancellationScope.check();
+            normalizeStreakTrackOrder(addition);
+            int bestIndex = -1;
+            StreakMergeCandidate best = null;
+            for (int i = 0; i < tracks.size(); i++) {
+                StreakMergeCandidate candidate = evaluateStreakMerge(tracks.get(i), addition, config);
+                if (isBetterStreakMergeCandidate(candidate, best)) {
+                    best = candidate;
+                    bestIndex = i;
+                }
+            }
+            if (bestIndex >= 0) {
+                changed.remove(tracks.get(bestIndex));
+                tracks.set(bestIndex, best.mergedTrack);
+                changed.add(best.mergedTrack);
+            } else {
+                tracks.add(addition);
+                changed.add(addition);
+            }
+        }
+
+        boolean merged = true;
+        while (merged) {
+            CancellationScope.check();
+            merged = false;
+            for (int i = 0; i < tracks.size() && !merged; i++) {
+                Track track = tracks.get(i);
+                if (!changed.contains(track)) {
+                    continue;
+                }
+                int bestIndex = -1;
+                StreakMergeCandidate best = null;
+                for (int j = 0; j < tracks.size(); j++) {
+                    if (j == i) {
+                        continue;
+                    }
+                    StreakMergeCandidate candidate = evaluateStreakMerge(track, tracks.get(j), config);
+                    if (isBetterStreakMergeCandidate(candidate, best)) {
+                        best = candidate;
+                        bestIndex = j;
+                    }
+                }
+                if (bestIndex >= 0) {
+                    int keep = Math.min(i, bestIndex);
+                    int drop = Math.max(i, bestIndex);
+                    changed.remove(tracks.get(i));
+                    changed.remove(tracks.get(bestIndex));
+                    tracks.set(keep, best.mergedTrack);
+                    tracks.remove(drop);
+                    changed.add(best.mergedTrack);
+                    merged = true;
+                }
+            }
+        }
+        return tracks;
+    }
+
+    /**
      * Returns whether a track participates in the streak-only consolidation pass.
      */
     private static boolean isStreakLike(Track track) {
