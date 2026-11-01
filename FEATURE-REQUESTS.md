@@ -11,7 +11,7 @@ These are not authorisations. Keep the existing algorithms until the stated evid
 | QC-1 | Deferred | Star-count rejection has no absolute or relative envelope floor. Counts now share a quality area, but small count changes can still matter. A new floor needs a recovery and false-retention study. |
 | ST-1 | Deferred | A missing exposure duration prevents assigning streak endpoint times, even when capture timestamps exist. A fallback must represent what is actually known. |
 | ST-5 | Deferred | A one-frame streak track can lie on the line of a longer streak track in the same frame and stay separate. On klangwolke-2, with a second profile, a satellite tracked through frames 8–14 also left a separate 12-piece streak in frame 8 and a one-piece streak in frame 11. Establish why the consolidation leaves them apart before changing it. |
-| ST-6 | Agreed; review responses pending confirmation | Faint-streak search: a streak-only extraction on star-size-smoothed frames whose streaks join the normal streak linking. Enabled by default. See [ST-6](#st-6-faint-streak-search). |
+| ST-6 | Implemented 2026-11-01, on by default; awaiting the maintainer's review | Faint-streak search: a streak-only extraction on star-size-smoothed frames whose streaks join the normal streak linking. Enabled by default. See [ST-6](#st-6-faint-streak-search). |
 | PT-2 | Deferred | A small timed-link step can extend a moving seed with nearly stationary detections. Establish the real-data impact before imposing a displacement or velocity gate. |
 | PT-4 | Deferred | The geometric linker's fixed 2-degree direction tolerance can limit short steps. Evaluate uncertainty-scaled alternatives on timed and untimed controls. |
 | PT-5 | Proposed | `maxStarJitter` serves several tolerances. The maintainer preferred a future registration-quality assessment over splitting the tolerances now. The fill-edge registration used by camera-fixed rejection is not a general registration-quality measurement. |
@@ -76,6 +76,14 @@ Requested by the maintainer on 2026-11-01 for SpacePixels [F17](../SpacePixels/F
 - **Smoothing width.** The extraction-FWHM rule gave σ = 0.67–1.41 px across the datasets. On Integral it gave 1.01 px, against 1.25 px from Siril's 2.9 px FWHM, because the extraction FWHM is cut at the grow threshold. At 1.25 px the trail's pieces in frames 4, 7 and 10 link at the streak-linking stage; at 1.01 px they remain pieces in frames 4, 5 and 7 (consolidation may join them later). The regression should compare the rule with a wider kernel.
 
 **Acceptance.** Every reference dataset with the switch off (byte-identical to the base) and on. Per dataset, list every added, extended, merged or lost streak track and single-frame streak, reviewed with its pictures; no new false streak is accepted without the maintainer's review. On Integral-spacecraft-challenge, the trail is found as a streak track over at least the frames of the experiment (4, 5 and 7–10). Run time and peak memory are measured, klangwolke-2 included.
+
+**Implementation status (2026-11-01).** Implemented as agreed, including the review responses, and described in [ALGORITHM.md](ALGORITHM.md), [CONFIG.md](CONFIG.md) and [PIPELINE.md](PIPELINE.md). Results on the 19 reference datasets:
+
+- With the switch off, every report is byte-identical to the base, apart from the allowed volatile fields.
+- With it on, every normal streak keeps its track. New or longer real trails were found on 8 of the 19 datasets; each was reviewed with its pictures. Photometry is unchanged on the three datasets checked.
+- Run time: about a third more detection time on the largest (61-megapixel) frames; the stage takes about 33 s on klangwolke-2. That run fitted in the 10 GB heap of the regression runs. The stage limits itself to two workers there and starts at 8.2 GB of heap in use; its own peak memory was not measured separately.
+
+**Integral-spacecraft-challenge.** The trail is found as a streak track over frames 4, 5, 7 and 10, not over 4, 5 and 7–10 as this acceptance asked. The search smooths with the star-size width, 1.01 px here. The 1.25 px experiment reached frames 8 and 9; the 1.0 px experiment found frames 4–7. In the injection study, wider smoothing gave no consistent gain in recovery, so the star-size width was kept. **Decision (made, 2026-11-01):** "frames 4, 5, 7 and 10 are fine".
 
 ### ST-6 detailed review (2026-11-01)
 

@@ -102,6 +102,18 @@ Enables same-frame faint-fragment assembly before anomaly rescue.
 
 Maximum perpendicular distance, in pixels, for pieces joining a faint streak line. Negative values are treated as zero.
 
+### `enableFaintStreakSearch` (default `true`)
+
+Runs the faint-streak search: a second, streak-only extraction of the kept frames on copies smoothed with a Gaussian the size of the stars, for trails too faint for the normal extraction. See [Faint-streak search](ALGORITHM.md#135-faint-streak-search).
+
+- the width comes from the kept frames' star size; the thresholds are the run's; there is no other setting
+- streaks found this way are linked after the normal streaks and can join or extend normal streak tracks or form new ones; a normal streak detection stays in the track it has without the search
+- a single-frame streak found only this way needs no `singleStreakMinPeakSigma`; the binary-star shape screen still applies
+- its detections are marked `DetectedObject.fromFaintStreakSearch`, and their measurements are those of the smoothed frame
+- no other result receives its objects; photometry flags stars crossed by its streaks, as by any streak
+- independent of `enableFaintStreakFragments`, which works on the normal extraction's pieces
+- with the switch off, results are identical to a run without the search
+
 ### `bgClippingIterations` (default `3`)
 
 Number of sigma-clipping passes for the histogram-based background estimate.

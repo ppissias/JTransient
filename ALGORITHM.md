@@ -36,15 +36,16 @@ The full run is organized into these major phases:
 4. median master-stack generation
 5. master-star extraction
 6. maximum-stack generation and optional slow-mover candidate analysis
-7. stationary-star veto filtering, streak linking and camera-fixed point filtering
-8. time-based point linking
-9. optional geometric point linking
-10. same-frame faint-streak fragment assembly
-11. anomaly rescue, streak consolidation, and joining anomalies on streak paths to their streaks
-12. common-motion filtering of unclassified observations
-13. optional residual analysis: local rescue, then activity clustering
-14. optional stationary-star photometry and variable-star scoring
-15. output assembly and maximum-stack export
+7. optional faint-streak search: a second, streak-only extraction of the kept frames smoothed to the star size
+8. stationary-star veto filtering, streak linking and camera-fixed point filtering
+9. time-based point linking
+10. optional geometric point linking
+11. same-frame faint-streak fragment assembly
+12. anomaly rescue, streak consolidation, and joining anomalies on streak paths to their streaks; then the faint-streak search's streaks join, with normal priority
+13. common-motion filtering of unclassified observations
+14. optional residual analysis: local rescue, then activity clustering
+15. optional stationary-star photometry and variable-star scoring
+16. output assembly and maximum-stack export
 
 ## 1. Border Drift Diagnostics
 
@@ -582,6 +583,36 @@ A faint streak crossing a star changes the star's shape, and a tumbling satellit
 Time is the frames' timestamps when every frame has one, otherwise the frame index. Until October 2026 an anomaly on a same-frame streak stayed an anomaly, marked low confidence; anomalies in frames the streak skipped were not recognised.
 
 On the reference data the joining took 17 of the 39 anomalies of klangwolke-2 (24 of 40 with a second profile) and one of the six of klangwolke-1; the other datasets were unchanged, and no track was added or lost. The joined pieces were mostly a satellite's flashes, in frames where its trail was otherwise missing, and a trail crossing stars. Photometry flags the stars a track crosses, so a few stars lose their measurement in those frames. These are measurements with the recorded profiles, not a benchmark.
+
+### 13.5 Faint-streak search
+
+A trail whose pixels are only 1–2 sigma above the sky never gives a seed in the normal extraction, although the eye sees it along its length. With `enableFaintStreakSearch` on (the default), `FaintStreakSearch` extracts the kept frames a second time on copies smoothed with a Gaussian the size of the stars, and `FaintStreakLinking` adds the streaks it finds to the streak tracks. Smoothing with the star profile (a matched filter) lowers the pixel noise by the sum of the squared one-dimensional kernel weights (about a factor 4 for a sigma of 1.25 px) but a trail's cross-section much less, so the trail rises above the seed threshold. A non-linear stretch such as asinh does not do this: the extraction measures the noise again on the stretched frame, and the stretch compresses everything above the sky relative to that noise.
+
+**The search** runs after the master reference and the slow movers, before tracking, on the frames quality control kept. It does not run quality control again and changes nothing of the normal pass.
+
+- **Width.** Sigma is the median `medianFWHM` of the kept frames with a genuine measurement (finite, positive, below `errorFallbackValue`, from at least 5 stars), divided by √2 (the extraction FWHM convention of EX-3) and by 2.355; 1.0 px without any measurement; bounded to 0.5–3 px. The kernel reaches 3 sigma. The extraction FWHM is cut at the grow threshold, so on Integral-spacecraft-challenge the rule gave 1.01 px against 1.2 px from the stars' flux and peak. Synthetic trails injected into real frames were recovered about as well at the rule's width as at 1.25 or 1.5 times it (better on m81-reg, worse on Integral), so the rule stays.
+- **Smoothing.** A normalised convolution over image pixels: registration fill neither enters the sky nor changes, and an image pixel never drops to the fill level. Where the smoothed noise would be below 4 ADU, the copy is stretched about the sky before rounding to 16 bits, and each candidate's flux and footprint values are scaled back, so the extraction's integer histogram keeps the noise. Rows are smoothed in bands of 256; each worker holds one frame's smoothed copy.
+- **Extraction.** The normal extraction with the run's thresholds, on the smoothed copy. The sky clipping runs 20 passes instead of `bgClippingIterations`: smoothing narrows the noise far more than the star halos, and on a synthetic field 3 passes gave twice the true noise of the smoothed frame (5 or more gave the true value). Blobs smaller than `streakMinPixels` are not analysed. Only streak-shaped objects (`streakMinElongation`, `streakMinPixels`) whose centroid lies inside the data area shrunk by the kernel radius are kept.
+- **Star mask.** The median stack is smoothed the same way and its stars extracted with the master settings; a candidate overlapping that mask more than `maxMaskOverlapFraction` is removed, because smoothing reveals fainter stars and joins close pairs.
+- Every candidate is marked `DetectedObject.fromFaintStreakSearch` and keeps its frame's sequence index, file name, timestamp and exposure. All its measurements are those of the smoothed frame; its `peakSigma` and `integratedSigma` are in the smoothed frame's noise units and are not comparable with normal detections (XC-1 unchanged).
+
+**Normal priority.** The candidates join after the normal streaks have been linked and consolidated and their anomalies joined ([13.3](#133-final-streak-consolidation), [13.4](#134-anomalies-on-a-streaks-path)), exactly as without the search:
+
+1. A candidate that shares footprint pixels with a normal streak detection of its frame, at an angle within `angleToleranceDegrees`, measures the same piece of trail: it is dropped and the normal measurement kept. A candidate crossing a normal streak at another angle stays.
+2. The other candidates are linked among themselves ([9.3](#93-fast-streak-linking)). An unlinked candidate becomes a single-frame streak without a peak gate (no `singleStreakMinPeakSigma`); the binary-star shape screen applies as for normal singles. A chain of two or more pieces needs no peak gate, as for normal streaks.
+3. `StreakConsolidator.addStreakTracks` offers the resulting tracks to the consolidated tracks: each merges into the track it fits best or stays on its own, a track that took one may then merge with another it now fits, and tracks without faint pieces are never offered to each other again. A normal streak detection therefore stays in the track it has without the search; tracks only gain pieces or merge.
+4. Rescued anomalies on the path of a track with faint pieces join it ([13.4](#134-anomalies-on-a-streaks-path)) and leave the anomaly list.
+5. A candidate in no final track is discarded. The search's objects never reach point linking, camera-fixed rejection, fragment assembly, anomaly rescue, `allTransients`, `unclassifiedTransients`, common motion or residual analysis. Photometry flags the stars that any final track crosses, faint pieces included: a trail across a star contaminates its measurement whichever pass found it.
+
+Faint pieces that are not streak-shaped (a faint trail broken into round pieces) are not used. `PipelineTelemetry.faintStreakSearchTelemetry` records the width, its source and the counts; `Stage.FAINT_STREAK_SEARCH` its time. `inspectTransients` and `redetectFrame` do not run the search.
+
+**Measurements (2026-11-01, default profile, the 18 reference datasets and Integral-spacecraft-challenge).**
+
+- With the switch off, every report matched the base apart from the new configuration line and timings.
+- With it on, no normal streak observation left its track on any dataset (checked per detection on the engine results); point detections and point tracks were unchanged and anomalies only joined streaks. The Integral trail (1.3–1.5 sigma per pixel) became a streak track over frames 4, 5, 7 and 10. On 7 other datasets 23 streak findings were new or extended; each was reviewed with its pictures and is a real trail, among them a faint satellite in klangwolke-2 frames 20, 23 and 24 that is absent at the same place in frame 22.
+- Photometry readiness, magnitudes and candidates were unchanged on dc-reg, m81-reg and M81-kumar; on m81-reg 44 light curves changed only which flags were set.
+- Single-frame gate: on the 775 kept frames and on their negated difference frames (`2 × median − frame`), the smoothed frames' noise formed no streak-shaped object; all 9 single and 14 multi-piece detections on the negated frames were real structures that are dark in one frame (dark lines, registration edges, a frame border). This is evidence, not a proof: for zero events in 775 frames a homogeneous Poisson bound is about 3/775 per frame.
+- Cost: 0.3–1.4 s on most datasets, 3.4 s on M81-kumar, 7.8 s on klangwolke-1 and about 33 s on klangwolke-2 (28 kept frames of 61 MP, two workers on a nearly full 10 GB heap), whose normal extraction takes 22 s.
 
 ## 14. Common-Motion Filtering
 
