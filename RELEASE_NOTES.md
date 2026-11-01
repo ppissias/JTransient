@@ -1,6 +1,6 @@
 # JTransient Release Notes
 
-## 1.0.7 (unreleased)
+## 1.0.8 (unreleased)
 
 - **Faint-streak search (detection change, on by default).** A second, streak-only extraction of the kept frames on copies smoothed with a Gaussian the size of the stars finds trails too faint for the normal extraction (1-2 sigma per pixel). Its streaks are added after the normal streaks with normal priority: a normal streak detection stays in its track, tracks only gain faint pieces or merge through them, and a faint-only single-frame streak needs no peak gate. No other result receives its objects. New: `DetectionConfig.enableFaintStreakSearch`, `DetectedObject.fromFaintStreakSearch`, `PipelineTelemetry.faintStreakSearchTelemetry` (`FaintStreakSearchTelemetry`), `PipelineTelemetry.Stage.FAINT_STREAK_SEARCH`, `StageId.FAINT_STREAK_SEARCH`, `DataArea.inset` and a `TrackLinker.findMovingObjects` overload; existing signatures are unchanged. With the switch off, results are identical. On the reference data it found the Integral trail, and new or longer real trails on 7 of the other 18 datasets, lost no normal streak observation and changed no point detection; see [Faint-streak search](ALGORITHM.md#135-faint-streak-search).
 
