@@ -4,21 +4,6 @@ Proposed changes to what JTransient detects, measures or tunes. How the code is 
 
 These are not authorisations. Keep the existing algorithms until the stated evidence is available and the maintainer decides. An algorithm change goes one at a time, with recovery, false positives and run time measured on the reference datasets (see [DEVELOPER.md](DEVELOPER.md#real-data-checks)). Remove proposals when implemented or closed; describe implemented behaviour and current limitations in [ALGORITHM.md](ALGORITHM.md), and use git history for the proposal and its reviews. The binding declined decisions below remain in force.
 
-<!-- root-toc:start -->
-## Contents
-
-- [Open proposals](#open-proposals)
-- [QC-1. Star-count rejection envelope](#qc-1-star-count-rejection-envelope)
-- [PT-5. Registration quality and shared jitter tolerances](#pt-5-registration-quality-and-shared-jitter-tolerances)
-- [SM-F1. Temporal confirmation of slow-mover candidates](#sm-f1-temporal-confirmation-of-slow-mover-candidates)
-- [XC-3. Local background and noise for frame extraction](#xc-3-local-background-and-noise-for-frame-extraction)
-- [VS-2. Convergence of the full ensemble correction](#vs-2-convergence-of-the-full-ensemble-correction)
-- [VS-5. Temporal agreement between photometry apertures](#vs-5-temporal-agreement-between-photometry-apertures)
-- [VS-9. Selected stars and the linearity-check minimum](#vs-9-selected-stars-and-the-linearity-check-minimum)
-- [VS-10. Deterministic streak interpolation for photometry](#vs-10-deterministic-streak-interpolation-for-photometry)
-- [Declined](#declined)
-<!-- root-toc:end -->
-
 ## Open proposals
 
 | ID | Status | Proposal, and the condition for revisiting it |

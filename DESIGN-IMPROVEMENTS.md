@@ -6,19 +6,6 @@ Every item is a proposal until the maintainer decides on it. When an item is com
 
 **How to use the issue reviews (2026-10-24).** Before implementing an item, consider and evaluate its review comments against the current code, tests and documented API. Record which comments are accepted, adjusted or rejected, why, and the relevant verification with the change. They are review input, not authorization to implement the proposal or automatic proof of a current bug. This was a static review; no runtime or real-data checks were run. Scientific parity alone does not establish parity of input acceptance, diagnostics, cancellation or public API behaviour.
 
-<!-- root-toc:start -->
-## Contents
-
-- [Code review of 2026-10-23](#code-review-of-2026-10-23)
-  - [What is good and should stay](#what-is-good-and-should-stay)
-  - [Recommended changes](#recommended-changes)
-  - [JT-01. Remove dead code and compatibility aliases](#jt-01-remove-dead-code-and-compatibility-aliases)
-  - [JT-02. Centralize shared validation and setting rules](#jt-02-centralize-shared-validation-and-setting-rules)
-  - [JT-04. Review logging across the three repositories](#jt-04-review-logging-across-the-three-repositories)
-  - [JT-05. Let the pipeline method read as the algorithm](#jt-05-let-the-pipeline-method-read-as-the-algorithm)
-- [Removed from the previous plan (2026-10-23)](#removed-from-the-previous-plan-2026-10-23)
-<!-- root-toc:end -->
-
 ## Code review of 2026-10-23
 
 A fresh review of the engine (about 20,000 lines of main code and 7,700 of tests), against the principles in [DEVELOPER.md](DEVELOPER.md#principles): readable code, clear boundaries, a few patterns applied consistently, and no abstraction without a real need.
