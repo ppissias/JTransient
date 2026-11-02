@@ -17,7 +17,7 @@ These are not authorisations. Keep the existing algorithms until the stated evid
 | [VS-9](#vs-9-selected-stars-and-the-linearity-check-minimum) | Deferred | The nominal selected-star minimum differs from check B's counted linear-range minimum. With the default 50 required references and a 90 % faint bound, an ideal sample needs at least 55 before further exclusions. Improve cap validation and evaluate the readiness status for insufficient samples; current diagnostics already distinguish them from measured nonlinearity. |
 | [VS-10](#vs-10-deterministic-streak-interpolation-for-photometry) | Rescoped 2026-11-02; evaluate the deterministic correction | Remove piece-order dependence from interpolated streak contamination flags. Expanding masks across the whole unobserved path remains outside this scope. |
 | [VS-11](#vs-11-photometry-strictness-defaults-and-recovery-review) | Initial audit complete 2026-11-02; decisions pending | Review below includes the gate/default assessment, 720 scorer experiments, six real datasets, three isolated setting comparisons and nine new tests. Prioritize correctness and explicit sensitivity limits before recalibrating defaults. |
-| [VS-12](#vs-12-consolidated-photometry-improvement-roadmap) | Plan revised 2026-11-02; stages 1–2 specified; implementation started | [Four-stage implementation plan](#implementation-readiness-and-order) incorporates the agreed review, explaining why each change is needed, its expected benefit and its validation, with [confirmed details](#confirmed-implementation-details-2026-11-02). Baseline and 1A done; 1B next. Later policy/calibration changes remain evidence-dependent. |
+| [VS-12](#vs-12-consolidated-photometry-improvement-roadmap) | Plan revised 2026-11-02; stages 1–2 specified; implementation started | [Four-stage implementation plan](#implementation-readiness-and-order) incorporates the agreed review, explaining why each change is needed, its expected benefit and its validation, with [confirmed details](#confirmed-implementation-details-2026-11-02). Baseline, 1A and 1B done; 2A next. Later policy/calibration changes remain evidence-dependent. |
 | [ST-7](#st-7-elongation-threshold-for-single-faint-streaks) | Investigation requested 2026-11-02 | Evaluate retaining isolated faint-streak detections above a configurable elongation, recommend an evidence-based default, and expose the agreed control as an advanced setting in SpacePixels. |
 
 The descriptions below recover earlier design discussions and reviews from git history, reconciled with current maintainer decisions. Historical reproductions are identified with their sources. VS-11 and VS-12 separately record fresh 2026-11-02 experiments, real-data runs and the subsequent review and plan.
@@ -315,14 +315,13 @@ The agreed order is **product consistency -> evidence isolation and solver corre
 | 3 | Valid cross-aperture support and temporal agreement (VS-5) | Compare curves only after their identity, errors, masks and fitting are reliable. | Reject false agreement such as opposite-phase aperture curves while preserving noisy genuine variability. |
 | 4 | Readiness/subset policies, gap handling, uncertainty coverage, leverage and optional display calibration | These require scientific tradeoffs rather than just consistent state. | Recover useful work or improve reliability only where controlled tests demonstrate that the added complexity earns its cost. |
 
-**Progress.** Step 0 (baseline) and 1A are done; 1B is next. Do not start by changing gain assumptions, adding a new empirical noise floor, lowering variability thresholds, or redesigning the pipeline.
+**Progress.** Step 0 (baseline), 1A and 1B are done; 2A is next. Do not start by changing gain assumptions, adding a new empirical noise floor, lowering variability thresholds, or redesigning the pipeline.
 
 ### Confirmed implementation details (2026-11-02)
 
 The maintainer confirmed these details after a source check of the revised plan. They refine the items below without changing their order.
 
 - **0 — Baseline.** Build installations of the starting revisions (SpacePixels `a90e669`, JTransient `ad349a2`) and keep them outside the repositories. Run `batchDetect` on every reference dataset with a copy of the shipped profile that only enables photometry, and keep the complete report folders. Photometry runs after detection, so one run per dataset supplies both the moving-object comparison and the photometry CSVs for star-by-star checks.
-- **1B — Bad flux.** Add the existing `badFlux` aggregate to the HTML per-frame table together with `contaminated`; the frame CSV already exports it.
 - **2A — Excluded-frame shape flags.** Compute the shape reference and brightness-group statistics from frames still active at that stage, then evaluate every frame's measurements against them. Excluded frames therefore still receive CONTAMINATED flags for inspection, but cannot influence the statistics.
 - **2B — Final frame mask.** Light-curve flags already carry `FRAME_EXCLUDED` for every frame outside the final mask. The gate skips those frames; it needs no new input.
 - **2C — Interpolation policy.** Interpolate between the mean centre of each bounding frame's pieces. Take the footprint from the piece in the nearest observed frame closest to the interpolated position; an equidistant frame tie keeps the earlier frame. Break remaining piece ties by geometry (x, then y, angle and length). Do not merge a frame's pieces into one combined footprint: for a flashing satellite that would mask its whole path in the unobserved frame.
@@ -354,13 +353,9 @@ Every aperture now gets its sky-noise error from the existing formula in the sam
 
 **Verification.** Focused controls force every option, a tie, too small a gain, a missing measurement and frame-varying FWHM, and check the per-aperture error formula and the exported pairing. On all 18 reference datasets, compared with the frozen baseline, only `mag_error`, the new column and the report texts and error bars changed: frame lists, flags, residuals, scores, tiers, `report-data.json` and every picture are identical. For reported candidates measured in a smaller aperture, the median error is 0.59 to 0.90 times the main aperture's, depending on dataset and aperture (Klangwolke-2: 0.59 at 0.7 x and 0.71 at 1.0 x FWHM; M81 Kumar: 0.70 at 1.0 x). Run time is unchanged within noise; the extra error arrays take about 48 MB on Klangwolke-2 (53,914 stars, 28 frames), computed from their size.
 
-#### 1B. Add the contamination aggregate to frame reporting — ready
+#### 1B. Add the contamination aggregate to frame reporting — implemented 2026-11-02
 
-**Why / benefit.** The engine already records `PhotometryFrameStat.contaminated`, but the per-frame HTML and frame CSV omit it. Show the existing aggregate so users can understand measurement losses without inspecting individual flagged curves.
-
-**Contract.** Add the aggregate column to the per-frame table and `photometry_frames.csv`; preserve existing point flags, scientific outputs and category meanings. Explain that flag counts can overlap and count measurements, not distinct objects. Keep this separate from cutout calibration.
-
-**Verification / completion.** Rendering/export tests check the column, headers and exact engine count, including zero and overlapping flags. Use saved result fixtures where possible. No new image processing or full-resolution run is needed solely to verify this presentation-only addition. Document the CSV header change.
+SpacePixels' Per-Frame Measurements table gained **Bad Flux** and **Contaminated** columns and `photometry_frames.csv` a final `contaminated` column, both from the existing engine aggregates; a note says the flag columns count measurements, not objects, and can overlap. Report tests check the headers, zero and overlapping counts, and that each frame's exported counts equal the engine's flags. On five reference datasets only the table note, header and the two new cells per row changed (Klangwolke-2: 17,007 contaminated measurements; M81 Kumar: 4,632). Cutout calibration remains 4H.
 
 ### Stage 2 — Evidence isolation and solver correctness
 
