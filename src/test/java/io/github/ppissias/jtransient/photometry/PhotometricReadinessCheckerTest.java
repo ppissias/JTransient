@@ -156,6 +156,44 @@ public class PhotometricReadinessCheckerTest {
         assertEquals(50, stat.linearStars);
     }
 
+    /**
+     * The star-cap warning's minimum is exactly where check B starts counting enough references: with distinct
+     * magnitudes, one star fewer fails for lack of references, for the default and for custom minima.
+     */
+    @Test
+    public void theStarCapMinimumIsWhereCheckBStartsCountingEnoughReferences() {
+        for (int minimum : new int[]{10, 20, 30, 50}) {
+            DetectionConfig config = new DetectionConfig();
+            config.linearityMinStars = minimum;
+            int enough = io.github.ppissias.jtransient.config.DetectionConfigRules.minimumStarsForLinearityCheck(minimum);
+            PipelineTelemetry.PhotometryFrameStat passing = new PipelineTelemetry.PhotometryFrameStat();
+            PipelineTelemetry.PhotometryFrameStat failing = new PipelineTelemetry.PhotometryFrameStat();
+
+            assertEquals("minimum " + minimum, PhotometricReadiness.CheckStatus.PASS,
+                    PhotometricReadinessChecker.analyzeShape(linearFrame(enough), config, passing).status);
+            assertTrue(passing.linearStars >= minimum);
+            PhotometricReadinessChecker.ShapeResult fewer = PhotometricReadinessChecker.analyzeShape(linearFrame(enough - 1), config, failing);
+            assertEquals("minimum " + minimum, PhotometricReadiness.CheckStatus.FAIL, fewer.status);
+            assertFalse(fewer.departureFound);
+            assertTrue(failing.linearStars < minimum);
+        }
+    }
+
+    /** Stars tied in magnitude at the faint bound all count, so ties can only lower the stars needed. */
+    @Test
+    public void tiesAtTheFaintBoundAllCount() {
+        ApertureMeasurer.FrameMeasurement frame = linearFrame(54);
+        for (int i = 49; i < 54; i++) {
+            for (int r : new int[]{ApertureMeasurer.R_MAIN, ApertureMeasurer.R_CI_OUTER, ApertureMeasurer.R_CI_INNER}) {
+                frame.flux[r][i] = frame.flux[r][48];
+            }
+        }
+        PipelineTelemetry.PhotometryFrameStat stat = new PipelineTelemetry.PhotometryFrameStat();
+        PhotometricReadinessChecker.ShapeResult result = analyze(frame, stat);
+        assertEquals(PhotometricReadiness.CheckStatus.PASS, result.status);
+        assertEquals(54, stat.linearStars);
+    }
+
     /** Builds a constant-concentration control with distinct magnitudes over four magnitudes of range. */
     private static ApertureMeasurer.FrameMeasurement linearFrame(int count) {
         ApertureMeasurer.FrameMeasurement frame = new ApertureMeasurer.FrameMeasurement(3, count);

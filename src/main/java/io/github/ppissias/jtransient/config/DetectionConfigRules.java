@@ -23,6 +23,28 @@ import java.util.Set;
 public final class DetectionConfigRules {
     /** Minimum usable reference-star count required by the photometry ensemble solver. */
     public static final int MIN_ENSEMBLE_STARS = 10;
+    /**
+     * Photometry check B's faint bound: of the stars measured precisely enough in a frame, it counts as linear
+     * references only those up to this brightness rank fraction (the faintest tenth are left out).
+     */
+    public static final double LINEARITY_REFERENCE_FRACTION = 0.9;
+
+    /**
+     * Fewest stars of distinct brightness from which check B can count {@code linearityMinStars} linear references
+     * under its {@link #LINEARITY_REFERENCE_FRACTION} rank bound: 55 for the default 50. This is a lower bound for
+     * the stars check B can use; flagged, imprecise or tied stars, a bright-end departure or a short magnitude range
+     * mean a real field needs more selected stars.
+     *
+     * @param linearityMinStars references check B requires
+     * @return the smallest star count whose rank bound reaches that many references
+     */
+    public static int minimumStarsForLinearityCheck(int linearityMinStars) {
+        int stars = Math.max(1, linearityMinStars);
+        while ((int) Math.ceil(LINEARITY_REFERENCE_FRACTION * stars) < linearityMinStars) {
+            stars++;
+        }
+        return stars;
+    }
     /** Selects the read set; CONFIGURATION checks persistence and CALIBRATION the auto-tuner. */
     public enum Operation { CONFIGURATION, PIPELINE, TRANSIENTS, MASTER_STACK, CALIBRATION, EXTRACTION }
     /** Timestamp availability used to scope geometric-linking advice; UNKNOWN retains conditional diagnostics. */
@@ -236,11 +258,12 @@ public final class DetectionConfigRules {
                         List.of("maxStarJitter", "maxJumpPixels"), values(config, "maxStarJitter", "maxJumpPixels")));
             }
             if (config.enableVariableStarDetection) {
-                int minimum = Math.max(config.linearityMinStars, MIN_ENSEMBLE_STARS);
+                int minimum = Math.max(minimumStarsForLinearityCheck(config.linearityMinStars), MIN_ENSEMBLE_STARS);
                 if (config.photometryMaxStars > 0 && config.photometryMaxStars < minimum) {
                     issues.add(issue(RuleId.PHOTOMETRY_STAR_CAP, Severity.WARNING, Stage.PHOTOMETRY,
                             List.of("photometryMaxStars", "linearityMinStars"),
-                            Map.of("photometryMaxStars", config.photometryMaxStars, "requiredStars", minimum)));
+                            Map.of("photometryMaxStars", config.photometryMaxStars, "requiredStars", minimum,
+                                    "linearityMinStars", config.linearityMinStars, "ensembleMinStars", MIN_ENSEMBLE_STARS)));
                 }
                 if (config.photometryAnnulusInnerFwhmFactor <= Math.max(PhotometryGeometry.LARGEST_COMPARISON_FACTOR, config.photometryApertureFwhmFactor)
                         || config.photometryAnnulusOuterFwhmFactor <= config.photometryAnnulusInnerFwhmFactor) {

@@ -149,7 +149,8 @@ public class DetectionConfigRulesTest {
         config.growSigmaMultiplier = 2;
         config.maxFwhmRatio = -1;
         config.maxSurfaceBrightnessRatio = 0;
-        for (int cap : new int[]{0, -10, 50}) {
+        // 55 is the smallest cap from which check B can count its default 50 references.
+        for (int cap : new int[]{0, -10, 55}) {
             config.photometryMaxStars = cap;
             assertFalse(has(config, RuleId.PHOTOMETRY_STAR_CAP));
             assertTrue(validate(config, Operation.CONFIGURATION).isEmpty());
@@ -159,6 +160,32 @@ public class DetectionConfigRulesTest {
         config.enableVariableStarDetection = false;
         config.photometryMaxStars = 1;
         assertFalse(has(config, RuleId.PHOTOMETRY_STAR_CAP));
+    }
+
+    /**
+     * The star cap warns below the count from which check B's rank bound can supply its references (55 for 50), or
+     * below the ensemble's minimum when that is larger, and stays a warning.
+     */
+    @Test
+    public void starCapWarningFollowsTheReferencesCheckBCanCount() {
+        DetectionConfig config = new DetectionConfig();
+        config.enableVariableStarDetection = true;
+        int[][] cases = {{50, 49, 55}, {50, 54, 55}, {50, 55, 55}, {20, 21, 22}, {20, 22, 22}, {30, 32, 33}, {30, 33, 33},
+                {10, 10, 11}, {5, 9, 10}, {5, 10, 10}};
+        for (int[] c : cases) {
+            config.linearityMinStars = c[0];
+            config.photometryMaxStars = c[1];
+            String label = "minimum " + c[0] + " cap " + c[1];
+            assertEquals(label, c[1] < c[2], has(config, RuleId.PHOTOMETRY_STAR_CAP));
+            validate(config, Operation.CONFIGURATION).stream().filter(issue -> issue.ruleId() == RuleId.PHOTOMETRY_STAR_CAP)
+                    .forEach(issue -> {
+                        assertEquals(label, Severity.WARNING, issue.severity());
+                        assertEquals(label, c[2], issue.values().get("requiredStars"));
+                        assertEquals(label, c[0], issue.values().get("linearityMinStars"));
+                    });
+        }
+        assertEquals(55, DetectionConfigRules.minimumStarsForLinearityCheck(50));
+        assertEquals(1, DetectionConfigRules.minimumStarsForLinearityCheck(1));
     }
 
     /** Finds a rule by its stable identifier in configuration-boundary diagnostics. */

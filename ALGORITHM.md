@@ -955,6 +955,8 @@ Per frame (`PhotometricReadinessChecker.analyzeShape`):
 4. Walk towards brighter bins, starting at the faintest bin that still holds stars brighter than the reference ranks (bins wholly inside the reference scatter around it by definition, so they cannot end the walk). The first bin whose median CI departs from the reference by more than its tolerance marks the end of linearity. The **linear limit** is the brightest magnitude of the next fainter bin. If no bin departs, the limit is the brightest star.
 5. **Linear range** = faint bound − linear limit. The frame passes when the range is at least `linearityMinRangeMag` and at least `linearityMinStars` stars lie inside it. A failing frame with no departing bin is linear over everything it can measure but too short to verify; its exclusion reason and the session message say so instead of calling it non-linear.
 
+Because only stars up to the 90% rank count, `n` usable stars of distinct magnitude give at most `ceil(0.9 n)` references: 50 usable stars give 45, and 55 are the fewest that give the default 50. Stars tied in magnitude at the faint bound all count. `DetectionConfigRules.minimumStarsForLinearityCheck` computes this bound from the same `LINEARITY_REFERENCE_FRACTION` the check uses, and the star-cap warning uses it ([configuration](CONFIG.md#photometrymaxstars-default-0)). It is a lower bound: the cap selects stars over the whole brightness range, and only the precise, unflagged ones reach this check.
+
 In every evaluated frame, including failing ones, all measurements brighter than the frame's linear limit are flagged `NONLINEAR`. Failing frames are excluded.
 
 Session status:

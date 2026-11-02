@@ -10,6 +10,7 @@
 package io.github.ppissias.jtransient.photometry;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
+import io.github.ppissias.jtransient.config.DetectionConfigRules;
 import io.github.ppissias.jtransient.core.PixelEncoding;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 
@@ -27,9 +28,12 @@ final class PhotometricReadinessChecker {
             PhotometryFlags.EDGE_OR_VOID | PhotometryFlags.CROSSING | PhotometryFlags.BAD_FLUX;
     private static final int MIN_STARS_PER_BIN = 15;
     private static final int TARGET_BINS = 15;
-    /** Stars ranked between these brightness fractions define the faint-star reference concentration. */
+    /**
+     * Stars ranked between these brightness fractions define the faint-star reference concentration; the upper
+     * bound is shared with the star-cap warning of {@link DetectionConfigRules}.
+     */
     private static final double REFERENCE_FROM = 0.5;
-    private static final double REFERENCE_TO = 0.9;
+    private static final double REFERENCE_TO = DetectionConfigRules.LINEARITY_REFERENCE_FRACTION;
     /** A frame's slope must also exceed this many standard errors to fail check D. */
     private static final double SLOPE_SIGNIFICANCE = 3.0;
     /** Check B uses only stars whose main-aperture magnitude error is below this (SNR of about 20 or more). */

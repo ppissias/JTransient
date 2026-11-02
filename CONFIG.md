@@ -728,6 +728,8 @@ Master switch for the whole stage.
 
 Maximum number of stars measured; `0` measures every usable star. When a cap is set, each of an 8 x 8 grid of field regions contributes its share, taken at evenly spaced brightness ranks so the whole magnitude range is covered. Stars whose master-stack peak is already above `photometrySaturationFraction` of the saturation level are never measured.
 
+Validation warns when a positive cap is below the fewest stars from which check B can count `linearityMinStars` references, or below the ensemble's 10 stars when that is larger: check B counts only stars up to the 90% brightness rank, so the default 50 needs at least 55 (`DetectionConfigRules.minimumStarsForLinearityCheck`). Only stars measured to an SNR of about 20 and without flags reach check B, so a real field usually needs a cap several times higher. The warning does not change the setting.
+
 ### `photometryMinSnr` (default `10.0`)
 
 Stars whose median per-frame signal-to-noise ratio (main aperture, sky noise only) is below this are still measured and exported, but kept out of the ensemble and the variability scoring. `0` disables the cut.
@@ -776,7 +778,7 @@ Check B. A frame whose linear range is narrower than this is excluded.
 
 ### `linearityMinStars` (default `50`)
 
-Check B. Minimum number of high-SNR stars in a frame (and inside its linear range), and the minimum number of selected stars for the stage to run.
+Check B. Minimum number of high-SNR stars in a frame (and inside its linear range), and the minimum number of selected stars for the stage to run. Check B counts stars only up to the 90% brightness rank of a frame's high-SNR stars, so reaching this number needs more usable stars than the number itself: at least 55 for the default 50 (see [`photometryMaxStars`](#photometrymaxstars-default-0)).
 
 ### `linearityMaxFrameSlope` (default `0.01`)
 
