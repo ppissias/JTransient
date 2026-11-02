@@ -4,6 +4,15 @@ This project stages a Maven Central Portal upload bundle locally by publishing
 to a signed Maven repository under `build/repos/central-staging` and then
 zipping that staged repository for upload.
 
+<!-- root-toc:start -->
+## Contents
+
+- [One-Time Setup](#one-time-setup)
+- [Build The Release Bundle](#build-the-release-bundle)
+- [What Gets Published](#what-gets-published)
+- [Upload](#upload)
+<!-- root-toc:end -->
+
 ## One-Time Setup
 
 1. Verify the `io.github.ppissias` namespace in the Central Publisher Portal.

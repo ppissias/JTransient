@@ -14,6 +14,18 @@ How JTransient is built, how its code is organised, the principles it follows, a
 
 Machine-specific paths (tools, test datasets, scratch folders, memory limits) are in a git-ignored `LOCAL-ENVIRONMENT.txt` at the repository root (see [AGENTS.md](AGENTS.md)).
 
+<!-- root-toc:start -->
+## Contents
+
+- [Principles](#principles)
+- [Working rules](#working-rules)
+- [Build and test](#build-and-test)
+- [The packages](#the-packages)
+- [Changing DetectionConfig](#changing-detectionconfig)
+- [Engine invariants](#engine-invariants)
+- [Real-data checks](#real-data-checks)
+<!-- root-toc:end -->
+
 ## Principles
 
 Scientific correctness and preservation of valid results constrain every design change. Within that constraint, the maintainer's goals for the code, in order:
@@ -33,7 +45,7 @@ The rules that follow for the engine:
 - **Science changes need evidence.** Change one algorithm at a time, with recovery, false positives and run time measured on real data. A refactoring must leave deterministic scientific results byte-identical, excluding measured timings as described below. Input acceptance, warnings, cancellation and callback contracts also need to be preserved or changed by explicit decision.
 - **One coordinated source set with SpacePixels and JPlateSolve.** There is no promise to keep old signatures. Change the API and its SpacePixels callers together, and prefer deleting an old path to keeping an alias. Document intentional public API breaks and update the API consumer checks and usage examples; absence of a SpacePixels caller does not prove a documented library capability is unused.
 
-The principles guide changes; they do not mean all current products are deeply immutable or all operation context is passed as parameters. `WorkerPool` propagates cancellation, failure labels and diagnostics through scopes. The current options, diagnostics and validation contracts are described in [PIPELINE.md](PIPELINE.md); proposals to simplify them in DESIGN-IMPROVEMENTS.md have not changed those contracts.
+The principles guide changes; they do not mean all current products are deeply immutable or all operation context is passed as parameters. `WorkerPool` propagates cancellation, failure labels and diagnostics through scopes. The current options, diagnostics and validation contracts are described in [PIPELINE.md](PIPELINE.md). The [shared-validation review](DESIGN-IMPROVEMENTS.md#jt-02-centralize-shared-validation-and-setting-rules) and [cross-repository logging review](DESIGN-IMPROVEMENTS.md#jt-04-review-logging-across-the-three-repositories) assess future changes; current contracts remain in force.
 
 ## Working rules
 

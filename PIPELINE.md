@@ -10,6 +10,34 @@ The public surface is split into three layers:
 - sequence-level utilities and tracking via `JTransientEngine`
 - configuration search via `CalibratedAutoTuner`
 
+<!-- root-toc:start -->
+## Contents
+
+- [Pipeline Scope](#pipeline-scope)
+  - [Prepared-frame associations (1.0.6)](#prepared-frame-associations-106)
+- [Per-operation tuner options (1.0.6)](#per-operation-tuner-options-106)
+- [Per-operation diagnostics (1.0.6)](#per-operation-diagnostics-106)
+  - [Optional Auto-Tune pictures](#optional-auto-tune-pictures)
+- [Cancellation and worker lifetime](#cancellation-and-worker-lifetime)
+- [Worker threads (1.0.6)](#worker-threads-106)
+- [Structured operation outcomes (1.0.6)](#structured-operation-outcomes-106)
+- [Input Rules](#input-rules)
+- [Configuration snapshots and shared rules](#configuration-snapshots-and-shared-rules)
+- [Entry Point Summary](#entry-point-summary)
+- [SourceExtractor.extractSources(...)](#sourceextractorextractsources)
+- [CalibratedAutoTuner.tune(...)](#calibratedautotunertune)
+- [JTransientEngine.generateMasterStack(...)](#jtransientenginegeneratemasterstack)
+- [JTransientEngine.detectTransients(...)](#jtransientenginedetecttransients)
+- [JTransientEngine.runPipeline(...)](#jtransientenginerunpipeline)
+  - [Photometry outputs and indexing](#photometry-outputs-and-indexing)
+- [Timing And Frame-Exclusion Telemetry](#timing-and-frame-exclusion-telemetry)
+- [What Changes When You Pass providedMasterStack](#what-changes-when-you-pass-providedmasterstack)
+- [Typical Workflows](#typical-workflows)
+- [Progress Reporting](#progress-reporting)
+- [Stage observer (1.0.6)](#stage-observer-106)
+- [Related Documents](#related-documents)
+<!-- root-toc:end -->
+
 ## Pipeline Scope
 
 `runPipeline(...)` executes the complete analysis. `generateMasterStack(...)` shares registration/quality selection but returns only a median stack. `detectTransients(...)` adds extraction and stationary-star/streak filtering, then stops before point linking. Tuners search configurations on sampled crops; `SourceExtractor` works on one image. The [algorithm flow](ALGORITHM.md#high-level-flow) defines stage ordering.

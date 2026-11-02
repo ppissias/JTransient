@@ -10,6 +10,77 @@ This is the current algorithm reference for detection, slow movers, variable-sta
 | Variable stars | [Photometry](#variable-star-photometry), [readiness](#photometry-8), [ensemble](#photometry-9), [scores and gates](#photometry-11), [limitations](#photometry-14) |
 | Auto-Tune | [Calibrated tuner](#calibrated-auto-tuning) |
 
+<!-- root-toc:start -->
+## Contents
+
+<details>
+<summary>Show sections</summary>
+
+- [Input Assumptions](#input-assumptions)
+- [High-Level Flow](#high-level-flow)
+- [1. Border Drift Diagnostics](#1-border-drift-diagnostics)
+- [2. Parallel Extraction And Quality Measurement](#2-parallel-extraction-and-quality-measurement)
+- [3. Single-Frame Extraction Internals](#3-single-frame-extraction-internals)
+  - [3.1 Background estimation](#31-background-estimation)
+  - [3.2 Hysteresis blob detection](#32-hysteresis-blob-detection)
+  - [3.3 Shape analysis](#33-shape-analysis)
+  - [3.4 Per-object filtering](#34-per-object-filtering)
+- [4. Frame Quality Analysis](#4-frame-quality-analysis)
+- [5. Session-Level Frame Rejection](#5-session-level-frame-rejection)
+- [6. Median Master Stack](#6-median-master-stack)
+- [7. Master-Star Extraction](#7-master-star-extraction)
+- [8. Optional Slow-Mover Analysis](#8-optional-slow-mover-analysis)
+  - [Purpose and inputs](#purpose-and-inputs)
+  - [Two stacks with different roles](#two-stacks-with-different-roles)
+  - [Extraction and data areas](#extraction-and-data-areas)
+  - [Geometry and motion estimates](#geometry-and-motion-estimates)
+  - [Candidate gates](#candidate-gates)
+  - [Frame evidence](#frame-evidence)
+  - [Settings and interpretation](#settings-and-interpretation)
+  - [Outputs and ownership](#outputs-and-ownership)
+- [9. Stationary-Star Veto Filtering And Streak Linking](#9-stationary-star-veto-filtering-and-streak-linking)
+  - [9.1 Streak separation](#91-streak-separation)
+  - [9.2 Stationary-star veto mask](#92-stationary-star-veto-mask)
+  - [9.3 Fast streak linking](#93-fast-streak-linking)
+  - [9.4 Camera-fixed sources](#94-camera-fixed-sources)
+- [10. Time-Based Point Linking](#10-time-based-point-linking)
+- [11. Geometric Point Linking](#11-geometric-point-linking)
+- [12. Anti-Hijack Pruning And Rhythm Validation](#12-anti-hijack-pruning-and-rhythm-validation)
+  - [12.1 Anti-hijack pruning](#121-anti-hijack-pruning)
+  - [12.2 Rhythm validation](#122-rhythm-validation)
+- [13. Faint Fragments And Anomaly Rescue](#13-faint-fragments-and-anomaly-rescue)
+  - [13.1 Peak-sigma rescue](#131-peak-sigma-rescue)
+  - [13.2 Integrated-sigma rescue](#132-integrated-sigma-rescue)
+  - [13.3 Final streak consolidation](#133-final-streak-consolidation)
+  - [13.4 Anomalies on a streak's path](#134-anomalies-on-a-streaks-path)
+  - [13.5 Faint-streak search](#135-faint-streak-search)
+- [14. Common-Motion Filtering](#14-common-motion-filtering)
+- [15. Residual Transient Analysis](#15-residual-transient-analysis)
+- [16. Variable-Star Photometry](#16-variable-star-photometry)
+  - [16.1 Design Principles](#161-design-principles)
+  - [16.2 Position In The Pipeline](#162-position-in-the-pipeline)
+  - [16.3 Stage Overview](#163-stage-overview)
+  - [16.4 Session FWHM And Saturation Level](#164-session-fwhm-and-saturation-level)
+  - [16.5 Star Selection](#165-star-selection)
+  - [16.6 Forced Aperture Photometry](#166-forced-aperture-photometry)
+  - [16.7 Crossing Flags](#167-crossing-flags)
+  - [16.8 Readiness Checks](#168-readiness-checks)
+  - [16.9 Star Exclusion And The Ensemble Solve](#169-star-exclusion-and-the-ensemble-solve)
+  - [16.10 Verdict](#1610-verdict)
+  - [16.11 Variability Scoring](#1611-variability-scoring)
+  - [16.12 Outputs](#1612-outputs)
+  - [16.13 Fixed Constants](#1613-fixed-constants)
+  - [16.14 Limitations](#1614-limitations)
+- [17. Output Assembly](#17-output-assembly)
+- [18. Runtime Diagnostics](#18-runtime-diagnostics)
+- [19. Auto-Tuning](#19-auto-tuning)
+  - [19.1 Calibrated tuning](#191-calibrated-tuning)
+  - [19.2 Limits and intended use](#192-limits-and-intended-use)
+- [20. Design Decisions And Future Work](#20-design-decisions-and-future-work)
+
+</details>
+<!-- root-toc:end -->
+
 ## Input Assumptions
 
 The pipeline expects an ordered set of aligned images, and it uses timestamps when available to link motion more accurately.
@@ -328,7 +399,7 @@ Callers must check availability flags. Unavailable scores do not veto a candidat
 
 ### Settings and interpretation
 
-The extraction, morphology, overlap and frame-evidence controls and their engine defaults are listed once in [CONFIG.md](CONFIG.md#2-master-stack-and-slow-mover-extraction). `slowMoverMinFillFactor = 0` disables the fill veto; overlap bounds are fractions, while frame support/stationarity are percentages with availability flags. The maximum-stack sigma is not interchangeable with a per-frame sigma. Neither tuner currently tunes slow-mover extraction thresholds (SM-2 in the improvement plan).
+The extraction, morphology, overlap and frame-evidence controls and their engine defaults are listed once in [CONFIG.md](CONFIG.md#2-master-stack-and-slow-mover-extraction). `slowMoverMinFillFactor = 0` disables the fill veto; overlap bounds are fractions, while frame support/stationarity are percentages with availability flags. The maximum-stack sigma is not interchangeable with a per-frame sigma. Neither tuner currently tunes slow-mover extraction thresholds.
 
 ### Outputs and ownership
 
@@ -1072,11 +1143,11 @@ These values are in the code and are not configurable:
 - **`magError` is a lower bound** (sky noise only). Scoring uses the empirical `expectedScatter`; it is not a calibrated uncertainty on the measured amplitude.
 - **Candidates are not confirmed variables.** Even `HIGH_CONFIDENCE` candidates should be checked against the images and a variable-star catalogue.
 - **Aperture agreement is amplitude-only.** The APERTURE gate compares percentile ranges, not whether aperture light curves brighten/fade together. Non-finite alternative-aperture values can also leave different effective subsets (VS-5).
-- **Usable-point adjacency can bridge gaps.** Persistence and serial statistics do not prove a state continued through missing observations (VS-6).
-- **Saturation is estimated heuristically.** Similar unsaturated maxima can resemble a clipping pile-up; there is no caller-supplied saturation limit (VS-8).
+- **Usable-point adjacency can bridge gaps.** Persistence and serial statistics do not prove a state continued through missing observations.
+- **Saturation is estimated heuristically.** Similar unsaturated maxima can resemble a clipping pile-up; there is no caller-supplied saturation limit.
 - **Reference counts have different meanings.** Check B's default 50 references are counted inside its retained brightness range. An ideal selected sample needs at least 55 before further exclusions; selecting exactly 50 cannot satisfy that default check (VS-9).
 
-These limitations remain deferred by the maintainer; [FEATURE-REQUESTS.md](FEATURE-REQUESTS.md) records them and the decisions. Earlier crossing-coordinate, timestamp/fragment interpolation and undefined-response findings are implemented fixes, not open proposals.
+These are limitations of the current implementation. The remaining proposals are listed in [FEATURE-REQUESTS.md](FEATURE-REQUESTS.md); closing a proposal does not change the documented behaviour. Earlier crossing-coordinate, timestamp/fragment interpolation and undefined-response findings are implemented fixes, not open proposals.
 
 ## 17. Output Assembly
 
@@ -1161,7 +1232,7 @@ The telemetry report lists the measurement area, the star FWHM and jitter, skipp
 
 ### 19.2 Limits and intended use
 
-The tuner provides a starting extraction configuration for a subsequent full pipeline run. They do not link tracks, run slow movers or photometry, export `PipelineResult`, or guarantee an optimum for every frame/downstream stage. Review telemetry and downstream results. AT-3/AT-4 and proposed slow-mover tuning remain in [DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md).
+The tuners provide a starting extraction configuration for a subsequent full pipeline run. They do not link tracks, run slow movers or photometry, export `PipelineResult`, or guarantee an optimum for every frame/downstream stage. False-positive budgets count surviving single-frame detections, not final false tracks or anomalies. Negative controls can retain structural residuals under changing seeing. Review telemetry and downstream results.
 
 ## 20. Design Decisions And Future Work
 

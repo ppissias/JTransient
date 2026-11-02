@@ -8,6 +8,24 @@ JTransient is a Java library for transient extraction, moving-object track linki
 
 It is the core detection engine powering [SpacePixels](https://github.com/ppissias/SpacePixels).
 
+<!-- root-toc:start -->
+## Contents
+
+- [What The Library Exposes](#what-the-library-exposes)
+- [Documentation](#documentation)
+- [Build](#build)
+- [Data Model](#data-model)
+- [Basic Usage](#basic-usage)
+  - [1. Run the full pipeline](#1-run-the-full-pipeline)
+  - [2. Detect variable stars](#2-detect-variable-stars)
+  - [3. Auto-tune a configuration](#3-auto-tune-a-configuration)
+  - [4. Reuse a precomputed master stack](#4-reuse-a-precomputed-master-stack)
+  - [5. Export transients without linking tracks](#5-export-transients-without-linking-tracks)
+  - [6. Use SourceExtractor directly on a single frame](#6-use-sourceextractor-directly-on-a-single-frame)
+- [Choosing The Right Entry Point](#choosing-the-right-entry-point)
+- [License](#license)
+<!-- root-toc:end -->
+
 ## What The Library Exposes
 
 - `CalibratedAutoTuner.tune(...)`: derives a `DetectionConfig` for a session by measuring false positives and sensitivity on its own frames, within the false-positive budget of a profile (low, medium, high, maximum)
