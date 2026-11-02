@@ -480,6 +480,10 @@ public final class VariableStarAnalyzer {
                 stats[j].starsInEnsemble = solution.starsPerFrame[j];
             }
         }
+        telemetry.ensembleIterations = solution.iterations;
+        telemetry.ensembleConverged = solution.converged;
+        telemetry.ensembleLastChangeMag = solution.lastChangeMag;
+        telemetry.ensembleIterationLimit = EnsembleSolver.MAX_ITERATIONS;
 
         // --- Verdict ---
         decideVerdict(readiness, frameActive, config);
@@ -532,6 +536,11 @@ public final class VariableStarAnalyzer {
             }
             EnsembleSolver.Solution tiny = solveForAperture(measurements, ApertureMeasurer.R_CI_INNER, flags, starExcluded,
                     frameActive, xNorm, yNorm, config);
+            for (EnsembleSolver.Solution alternative : new EnsembleSolver.Solution[]{tiny, small, large}) {
+                if (!alternative.converged) {
+                    telemetry.apertureSolvesAtIterationLimit++;
+                }
+            }
             chooseApertures(curves, usable, starExcluded, solution,
                     new EnsembleSolver.Solution[]{tiny, small, solution, large},
                     new double[]{ApertureMeasurer.CI_INNER_FWHM_FACTOR, 1.0, config.photometryApertureFwhmFactor, 2.0},

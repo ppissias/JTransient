@@ -19,6 +19,12 @@ import java.util.Arrays;
  * Z the frame zero point and the optional plane term absorbs gradients that change between frames.
  * Every star with large scatter for its brightness is down-weighted, so variable stars drop out
  * of the reference by themselves.</p>
+ *
+ * <p>The iteration stops when the predicted frame correction {@code Z(j) + a(j)*x(i) + b(j)*y(i)}, in
+ * magnitudes, has stopped changing at every measurement that constrains the fit, so a plane still settling
+ * under the robust reweighting keeps the iteration going even when the zero points have settled. Each
+ * iteration's frame fit uses the weights of the previous one, so a converged correction is stable under its
+ * own final weights. Reaching the iteration limit is reported, not treated as a failure.</p>
  */
 final class EnsembleSolver {
 
@@ -26,8 +32,9 @@ final class EnsembleSolver {
     static final int MIN_STARS_PER_FRAME = io.github.ppissias.jtransient.config.DetectionConfigRules.MIN_ENSEMBLE_STARS;
     /** Fewest usable stars for the plane term; below this only the zero point is fitted. */
     private static final int MIN_STARS_FOR_PLANE = 30;
-    private static final int MAX_ITERATIONS = 15;
-    private static final double CONVERGENCE_MAG = 1e-5;
+    static final int MAX_ITERATIONS = 15;
+    /** Largest change of the predicted correction between iterations at which the fit has converged, in mag. */
+    static final double CONVERGENCE_MAG = 1e-5;
     /** Smallest per-star sigma used in weights, in mag. */
     private static final double SIGMA_FLOOR = 0.001;
     /** Stars of similar magnitude used for the expected-scatter curve in the weights. */
@@ -47,6 +54,12 @@ final class EnsembleSolver {
         double[][] residual;
         /** Effective per-star sigma used for weighting (max of own and expected robust scatter). */
         double[] starSigma;
+        /** True when the correction settled within the tolerance; false when the iteration limit was reached. */
+        boolean converged;
+        /** Iterations run. */
+        int iterations;
+        /** Largest change of the predicted correction in the last iteration, in mag (infinite when a frame's solved state changed). */
+        double lastChangeMag = Double.NaN;
     }
 
     private EnsembleSolver() {
@@ -64,6 +77,18 @@ final class EnsembleSolver {
      */
     static Solution solve(double[][] mag, boolean[][] usable, double[] x, double[] y,
                           boolean[] frameActive, boolean fitPlane) {
+        return solve(mag, usable, x, y, frameActive, fitPlane, MAX_ITERATIONS, CONVERGENCE_MAG);
+    }
+
+    /**
+     * Solves the ensemble with an explicit iteration limit and tolerance; production uses {@link #MAX_ITERATIONS}
+     * and {@link #CONVERGENCE_MAG}, tests vary them.
+     *
+     * @param maxIterations most iterations to run, at least 1
+     * @param tolerance largest change of the predicted correction at which the fit has converged, in mag
+     */
+    static Solution solve(double[][] mag, boolean[][] usable, double[] x, double[] y,
+                          boolean[] frameActive, boolean fitPlane, int maxIterations, double tolerance) {
         int nStars = mag.length;
         int nFrames = frameActive.length;
 
@@ -91,22 +116,25 @@ final class EnsembleSolver {
         }
 
         double[] previousZ = new double[nFrames];
-        for (int iter = 0; iter < MAX_ITERATIONS; iter++) {
+        double[] previousA = new double[nFrames];
+        double[] previousB = new double[nFrames];
+        boolean[] previousSolved = new boolean[nFrames];
+        for (int iter = 0; iter < maxIterations; iter++) {
             CancellationScope.check();
             solveFrames(mag, usable, x, y, frameActive, fitPlane, s, pointWeight);
             fixGauge(s);
             solveStars(mag, usable, x, y, s, pointWeight);
             updateWeights(mag, usable, x, y, s, pointWeight);
 
-            double maxChange = 0;
-            for (int j = 0; j < nFrames; j++) {
-                CancellationScope.check();
-                if (s.frameSolved[j]) {
-                    maxChange = Math.max(maxChange, Math.abs(s.zeroPoint[j] - previousZ[j]));
-                }
-            }
+            double maxChange = correctionChange(s, previousZ, previousA, previousB, previousSolved, mag, usable, x, y);
             System.arraycopy(s.zeroPoint, 0, previousZ, 0, nFrames);
-            if (iter > 0 && maxChange < CONVERGENCE_MAG) {
+            System.arraycopy(s.planeX, 0, previousA, 0, nFrames);
+            System.arraycopy(s.planeY, 0, previousB, 0, nFrames);
+            System.arraycopy(s.frameSolved, 0, previousSolved, 0, nFrames);
+            s.iterations = iter + 1;
+            s.lastChangeMag = maxChange;
+            if (iter > 0 && maxChange < tolerance) {
+                s.converged = true;
                 break;
             }
         }
@@ -123,6 +151,35 @@ final class EnsembleSolver {
             }
         }
         return s;
+    }
+
+    /**
+     * Largest change, in mag, of the predicted correction {@code Z + a*x + b*y} since the previous iteration, over
+     * the usable measurements of solved frames. A frame solved in only one of the two iterations makes the change
+     * infinite. With no plane term this is the largest zero-point change.
+     */
+    private static double correctionChange(Solution s, double[] previousZ, double[] previousA, double[] previousB,
+                                           boolean[] previousSolved, double[][] mag, boolean[][] usable,
+                                           double[] x, double[] y) {
+        double maxChange = 0;
+        for (int j = 0; j < s.zeroPoint.length; j++) {
+            CancellationScope.check();
+            if (s.frameSolved[j] != previousSolved[j]) {
+                return Double.POSITIVE_INFINITY;
+            }
+            if (!s.frameSolved[j]) {
+                continue;
+            }
+            double dz = s.zeroPoint[j] - previousZ[j];
+            double da = s.planeX[j] - previousA[j];
+            double db = s.planeY[j] - previousB[j];
+            for (int i = 0; i < mag.length; i++) {
+                if (usable[i][j] && Double.isFinite(mag[i][j])) {
+                    maxChange = Math.max(maxChange, Math.abs(dz + da * x[i] + db * y[i]));
+                }
+            }
+        }
+        return maxChange;
     }
 
     static double model(Solution s, int star, int frame, double[] x, double[] y) {

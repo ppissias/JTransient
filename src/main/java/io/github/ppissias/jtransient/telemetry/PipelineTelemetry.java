@@ -311,6 +311,19 @@ public class PipelineTelemetry {
         /** Measurements whose star shape departed from the star's own typical shape (hot pixel, cosmic ray). */
         public long measurementsContaminated;
 
+        /**
+         * Ensemble fit of the final main-aperture solution: iterations run (0 when photometry stopped before the fit),
+         * whether the predicted correction settled within the tolerance before the iteration limit, and its change in
+         * the last iteration, in mag.
+         */
+        public int ensembleIterations;
+        public boolean ensembleConverged;
+        public double ensembleLastChangeMag = Double.NaN;
+        /** Iteration limit of every ensemble fit. */
+        public int ensembleIterationLimit;
+        /** Alternative-aperture ensemble fits (0.7, 1.0 and 2.0 x FWHM) that reached the iteration limit. */
+        public int apertureSolvesAtIterationLimit;
+
         /** Variability counters. */
         public int starsScored;
         public int starsNotScored;
@@ -592,6 +605,12 @@ public class PipelineTelemetry {
         sb.append(String.format("Frames: %d analysed, %d used | Excluded: registration %d, star shape %d, spatial residual %d, response %d, too few stars %d\n",
                 p.framesAnalyzed, p.framesUsed, p.framesExcludedRegistration, p.framesExcludedShapeLinearity,
                 p.framesExcludedSpatial, p.framesExcludedResponse, p.framesExcludedTooFewStars));
+        if (p.ensembleIterations > 0) {
+            sb.append(String.format("Ensemble fit: %s after %d of %d iterations, last change %s mag | Alternative apertures at the limit: %d\n",
+                    p.ensembleConverged ? "converged" : "iteration limit reached", p.ensembleIterations,
+                    p.ensembleIterationLimit, Double.isFinite(p.ensembleLastChangeMag) ? String.format("%.1e", p.ensembleLastChangeMag) : "n/a",
+                    p.apertureSolvesAtIterationLimit));
+        }
         sb.append(String.format("Measurements: %d | Saturated %d, non-linear %d, edge/void %d, crossing %d, outlier %d, bad flux %d, contaminated shape %d\n",
                 p.measurementsTotal, p.measurementsSaturated, p.measurementsNonlinear, p.measurementsEdgeOrVoid,
                 p.measurementsCrossing, p.measurementsOutlier, p.measurementsBadFlux, p.measurementsContaminated));

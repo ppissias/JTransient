@@ -133,6 +133,8 @@ public class VariableStarAnalyzerTest {
         assertTrue(report.contains("DETECTION STAGE TIMINGS (WALL CLOCK)"));
         assertTrue(report.contains("included in tracking"));
         assertTrue(report.contains("spatial residual 0"));
+        assertTrue(analysis.telemetry.ensembleIterations > 0);
+        assertTrue(report.contains("Ensemble fit: "));
 
         assertTrue("most stars should be measured", analysis.stars.size() > 150);
 
