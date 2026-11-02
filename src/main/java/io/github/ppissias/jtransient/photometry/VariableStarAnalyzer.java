@@ -962,6 +962,10 @@ public final class VariableStarAnalyzer {
      * interpolated in capture time, or in sequence index when timestamps are missing. Each point is treated
      * as a segment along its footprint (a point source is a segment of length zero), so a long streak flags
      * the stars along its line rather than every star within its length.
+     *
+     * <p>An observed frame enters the interpolation as the length-weighted centre of its pieces, and an
+     * unobserved frame takes the shape of one piece of the nearest observed frame ({@link #footprint}). Pieces
+     * are first put in a fixed geometric order, so the flags never depend on the order of the track's points.</p>
      */
     static void flagTrack(Track track,
                                   List<ImageFrame> frames,
@@ -993,7 +997,8 @@ public final class VariableStarAnalyzer {
             double time = j == null ? Double.NaN : captureTime(frames.get(j));
             points.add(new double[]{p.sourceFrameIndex, p.x - ox, p.y - oy, finiteOrZero(p.angle), halfLength, halfWidth, time});
         }
-        points.sort((a, b) -> Double.compare(a[0], b[0]));
+        points.sort(PIECE_ORDER);
+        List<double[]> references = frameReferences(points);
         int firstSequence = (int) points.get(0)[0];
         int lastSequence = (int) points.get(points.size() - 1)[0];
         for (int j = 0; j < frames.size(); j++) {
@@ -1012,11 +1017,85 @@ public final class VariableStarAnalyzer {
                 }
             }
             if (!observed) {
-                double[] position = interpolate(points, sequence, captureTime(frames.get(j)));
-                flagSegment(position[0], position[1], nearestPoint(points, sequence), annulus,
+                double[] position = interpolate(references, sequence, captureTime(frames.get(j)));
+                flagSegment(position[0], position[1], footprint(points, sequence, position[0], position[1]), annulus,
                         stars, starGrid, measurements[j].flags);
             }
         }
+    }
+
+    /**
+     * Orders track pieces by sequence, then by position, angle, half length and half width, so pieces of the same
+     * frame have one order whatever the order of the track's points. Pieces equal in all of these are identical.
+     */
+    private static final java.util.Comparator<double[]> PIECE_ORDER = java.util.Comparator
+            .<double[]>comparingDouble(p -> p[0])
+            .thenComparingDouble(p -> p[1])
+            .thenComparingDouble(p -> p[2])
+            .thenComparingDouble(p -> p[3])
+            .thenComparingDouble(p -> p[4])
+            .thenComparingDouble(p -> p[5]);
+
+    /**
+     * One reference point per observed frame, in the layout of the pieces and in sequence order: the frame's
+     * sequence and capture time, and the mean centre of its pieces weighted by their length in pixels (a piece
+     * shorter than one pixel, such as a point source, weighs one). For contiguous fragments of one trail this is
+     * the centre of the whole trail. The shape fields are unused.
+     *
+     * @param points pieces in {@link #PIECE_ORDER}
+     */
+    static List<double[]> frameReferences(List<double[]> points) {
+        List<double[]> references = new ArrayList<>();
+        int start = 0;
+        while (start < points.size()) {
+            CancellationScope.check();
+            double sequence = points.get(start)[0];
+            int end = start;
+            double weights = 0;
+            double sumX = 0;
+            double sumY = 0;
+            while (end < points.size() && points.get(end)[0] == sequence) {
+                double[] p = points.get(end);
+                double weight = Math.max(1.0, 2 * p[4]);
+                weights += weight;
+                sumX += weight * p[1];
+                sumY += weight * p[2];
+                end++;
+            }
+            double[] first = points.get(start);
+            references.add(end - start == 1
+                    ? first
+                    : new double[]{sequence, sumX / weights, sumY / weights, 0.0, 0.0, 0.0, first[6]});
+            start = end;
+        }
+        return references;
+    }
+
+    /**
+     * The piece whose shape is drawn at an interpolated position: in the observed frame nearest in sequence (the
+     * earlier one on a tie), the piece whose centre lies closest to (x, y); {@link #PIECE_ORDER} breaks a tie.
+     *
+     * @param points pieces in {@link #PIECE_ORDER}
+     */
+    static double[] footprint(List<double[]> points, int sequence, double x, double y) {
+        double nearest = points.get(0)[0];
+        for (double[] p : points) {
+            if (Math.abs(p[0] - sequence) < Math.abs(nearest - sequence)) {
+                nearest = p[0];
+            }
+        }
+        double[] best = null;
+        double bestDistance = Double.POSITIVE_INFINITY;
+        for (double[] p : points) {
+            if (p[0] == nearest) {
+                double distance = Math.hypot(p[1] - x, p[2] - y);
+                if (distance < bestDistance) {
+                    best = p;
+                    bestDistance = distance;
+                }
+            }
+        }
+        return best;
     }
 
     /** Flags the stars within {@code annulus} plus the shape's half width of a segment centred on (x, y). */
@@ -1041,22 +1120,10 @@ public final class VariableStarAnalyzer {
         return frame.timestamp > 0 ? frame.timestamp : Double.NaN;
     }
 
-    /** The track point closest in sequence to {@code sequence}, the earlier one on a tie. */
-    private static double[] nearestPoint(List<double[]> points, int sequence) {
-        double[] best = points.get(0);
-        for (double[] p : points) {
-            CancellationScope.check();
-            if (Math.abs(p[0] - sequence) < Math.abs(best[0] - sequence)) {
-                best = p;
-            }
-        }
-        return best;
-    }
-
     /**
-     * Position at {@code sequence} between the surrounding track points, sorted by sequence. The fraction
-     * comes from capture times when the frame and both points have one (pauses make the cadence uneven),
-     * otherwise from sequence indices.
+     * Position at {@code sequence} between the surrounding track points, sorted by sequence with one point per
+     * frame ({@link #frameReferences}). The fraction comes from capture times when the frame and both points have
+     * one (pauses make the cadence uneven), otherwise from sequence indices.
      */
     static double[] interpolate(List<double[]> points, int sequence, double time) {
         double[] before = points.get(0);
