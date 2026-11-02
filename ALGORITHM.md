@@ -57,6 +57,7 @@ This is the current algorithm reference for detection, slow movers, variable-sta
 - [14. Common-Motion Filtering](#14-common-motion-filtering)
 - [15. Residual Transient Analysis](#15-residual-transient-analysis)
 - [16. Variable-Star Photometry](#16-variable-star-photometry)
+  - [Photometry in plain English](#photometry-in-plain-english)
   - [16.1 Design Principles](#161-design-principles)
   - [16.2 Position In The Pipeline](#162-position-in-the-pipeline)
   - [16.3 Stage Overview](#163-stage-overview)
@@ -727,10 +728,54 @@ The result is exported as `PipelineResult.residualTransientAnalysis`; it does no
 
 The optional branch measures stationary stars in retained frames, checks whether they support photometry, and looks for excess variability relative to similarly bright stars. It does not mine residual common-motion lists. The implementation lives in `io.github.ppissias.jtransient.photometry`: `VariableStarAnalyzer`, `PhotometryStarSelector`, `ApertureMeasurer`, `PhotometricReadinessChecker`, `EnsembleSolver`, `SpatialFrameFilter`, `VariabilityScorer` and `PhotometryMath`. Configuration fields/defaults are in [CONFIG.md](CONFIG.md#8-variable-star-photometry).
 
+### Photometry in plain English
+
+Photometry measures a star's brightness. Here the aim is to find stars whose brightness changes during one observing session, after correcting for changes shared by other stars. The result is a list of candidates for inspection. The checks and their current limits are explained below; the [strictness review](FEATURE-REQUESTS.md#vs-11-photometry-strictness-defaults-and-recovery-review) evaluates their sensitivity without changing the algorithm.
+
+**What is measured.** A star is spread across several pixels by the atmosphere, optics and sampling. This pattern is its **point-spread function (PSF)**. **FWHM**, full width at half maximum, describes the width of its central profile at half its peak height. It is a width, not an aperture radius. The algorithm measures a representative FWHM in each frame, then uses it to size circular measuring regions.
+
+An **aperture** is the circle in which the star's light is summed. A **sky annulus** is a surrounding ring used to estimate the local background. After subtracting that background, the remaining signal is the star's **flux**. Stars near an edge, bright neighbours or a passing object can have unreliable fluxes; the algorithm either avoids them or flags the affected measurements. A flagged point remains available for display even when it is excluded from the calculations.
+
+A **magnitude** expresses brightness on a logarithmic scale: smaller magnitudes are brighter. An **instrumental magnitude** comes from measured counts and has no catalogue calibration. A **differential magnitude** compares measurements within this session. In a light curve, `deltaMag > 0` means the star was fainter than its fitted mean. **Signal-to-noise ratio (SNR)** compares the signal with its estimated random uncertainty. The reported `magError` uses sky noise and is a lower bound on the full measurement uncertainty; the candidate detector also learns the actual scatter of comparison stars.
+
+**How the comparison works.** An **ensemble** is a group of stars used together as the brightness reference. Its fitted **zero point** is the common magnitude shift of a frame, for example from changing transparency. An optional spatial plane models a brightness correction that changes across the field. A **residual** is what remains after subtracting the star's fitted mean and the frame correction. Real variability should remain in those residuals, while much of the shared change is removed. The ensemble method follows [Honeycutt's inhomogeneous ensemble photometry](https://articles.adsabs.harvard.edu/pdf/1992PASP..104..435H); JTransient's particular thresholds and gates are project choices.
+
+**Can the session support photometry?** The readiness checks come before candidate scoring:
+
+| Check | What it asks, and what the terms mean | Current consequence |
+|---|---|---|
+| Star selection and measurements | Are there sufficiently isolated, unsaturated stars with their aperture and sky ring inside the valid image area? **Crowding** means nearby stars contribute light to the measurement. **Saturation** means the detector or encoding has clipped a bright signal. | Unsuitable stars or measurements are excluded. |
+| Check A: quantisation and floor clipping | Does the image retain enough different pixel levels? **Quantisation** is rounding into discrete brightness steps. **Floor clipping** sets negative background/noise values to zero and can bias faint fluxes. Counting levels is a suitability heuristic, not a measurement of the camera's native bit depth. | Fewer than 1,024 distinct levels fails; excessive zero-floor clipping makes the session LIMITED. |
+| Registration | Do stars have consistent positions after alignment? **Residual registration spread** measures disagreement among the sampled stellar offsets after a common translation is removed. | A measured spread above 0.5 px excludes that frame from photometry. This is separate from the fill-edge camera-motion fit. |
+| Check B: star shape versus brightness | Do bright stars have the same concentration of light as fainter stars? The **concentration index (CI)** is inner-aperture flux divided by larger-aperture flux. A **linear response** means proportional incident light produces proportional measured signal. Flattened bright-star cores can indicate saturation or nonlinear processing. | Determine a usable brightness range, flag brighter measurements, and exclude frames with too little verified range or too few references. The session can still fail if too many frames fail. |
+| Ensemble and spatial residuals | Can enough comparison stars solve each frame? After correction, does one part of the image remain systematically brighter or fainter than the centre? | Unsolvable or sufficiently uneven frames are excluded and the ensemble is recomputed. |
+| Check D: response versus magnitude | Does a change in transparency affect bright and faint stars consistently? A fitted **slope** in mag per mag measures residual dependence on stellar brightness. **Correlation** measures whether two quantities vary together: +1 is perfect agreement, -1 is opposite variation, and 0 is no linear association. | Significant slopes, or slopes tracking the zero point/sky, can fail the session. Too little transparency variation makes this test INCONCLUSIVE. A failure identifies an unresolved response problem; it does not uniquely identify its physical cause. |
+
+There is no check C in the current implementation. **READY** means the tests found no blocking problem; it does not prove perfect linearity. **LIMITED** permits scoring with a higher amplitude requirement. **NOT_READY** stops variability scoring. In particular, too few good references or too little brightness range can prevent a conclusion even when no nonlinear shape departure was measured. A pure power-law stretch remains a documented blind spot; use original, unstretched data.
+
+**Which stars become candidates?** The detector first requires both unusually large residual scatter and unusually strong adjacent-pair variability, relative to stars of similar brightness. **Scatter** measures the spread of the light curve. The **Stetson J index** used here measures whether consecutive usable residuals tend to have the same sign. Both standardized scores must reach the default value of 5. They are complementary statistics of the same measurements; that threshold is not a calibrated five-sigma false-alarm probability.
+
+The following eight **gates** then look for supporting evidence or alternative explanations. These operate on candidate stars; most stars never reach this stage.
+
+| Gate | Plain-English meaning and current default |
+|---|---|
+| DATA | At least 20 usable points, plus at least 30 minutes of span when all their times are available. Missing timing leaves the span test unavailable. |
+| AMPLITUDE | The 95th minus 5th percentile of the residuals must be at least 0.05 mag (0.10 mag for LIMITED data) and four times the expected scatter. A **percentile** is a ranked position in the measurements; this range deliberately ignores the most extreme points and can understate a short eclipse's depth. |
+| PERSISTENCE | At least five successive usable points must deviate from the median in the same direction by more than 1.5 times the expected scatter. This favors changes lasting several exposures. Usable-point adjacency can bridge missing observations. |
+| SPLIT_HALF | The first and second members of consecutive, non-overlapping usable pairs must correlate by at least 0.5. These are interleaved samples, not the early and late halves of the night. It checks whether adjacent measurements support the same pattern. |
+| APERTURE | Smaller and larger apertures should give similar variability amplitudes: their difference, divided by the main amplitude, must be at most 0.3. Currently it compares ranges rather than the time pattern; opposite light curves with equal ranges can pass (VS-5). |
+| SYSTEMATICS | Could seeing, sky brightness, transparency or image-position changes explain the signal? A **systematic** is a repeatable measurement effect rather than independent random noise. This gate checks changes between frames and compares shared trends with responses of constant comparison stars. |
+| LOCAL | Do nearby stars show a substantial share of the same variation? Shared local behavior can indicate clouds or an image/measurement fault. The check needs at least three suitable neighbours; an isolated true variable should retain its own signal. |
+| LINEARITY | Does the star have any saturated or nonlinear measurement? The current gate scans all its flags, including those from already excluded frames; the strictness review records the resulting tier penalty. |
+
+After both initial scores pass, zero failed gates gives **HIGH_CONFIDENCE**, one gives **POSSIBLE**, and two or more gives **REJECTED**. These are evidence tiers, not numerical probabilities or confirmation of an astrophysical variable. **NOT_SCORED** means the star lacked usable measurements or another prerequisite. **CONSTANT** means it did not pass both initial variability scores; a rapidly varying or poorly sampled star can receive that label too.
+
+The current detector is consequently most sensitive to changes well sampled over several consecutive exposures. A single-frame flash, a short eclipse, or a cycle with only a few samples can be missed despite a large true change. The detailed sections below describe the calculations and exclusions; they should be read with that sensitivity limit in mind. For practical observing terminology and time-series diagnostics, see the [AAVSO VPhot guide](https://www.aavso.org/sites/default/files/publications_files/VPHOT%20Users%20Guide%20V3.2.pdf).
+
 <a id="photometry-1"></a>
 ### 16.1 Design Principles
 
-- **A missed variable is better than a false one.** Every stage tends to exclude data or reject candidates rather than keep them. A candidate must pass two independent scores and then eight gates to be reported as high confidence.
+- **A missed variable is better than a false one.** Every stage tends to exclude data or reject candidates rather than keep them. A candidate must pass two complementary scores and then eight gates to be reported as high confidence.
 - **Compare stars with stars of similar brightness in the same session.** The noise model is measured from the session's own stars, not taken from formal errors. A star is variable only if it scatters much more than stars of the same magnitude, measured the same way.
 - **Check the data before trusting it.** Stretched, 8-bit, clipped or non-linear frames make constant stars look variable. The readiness checks look for these problems first, and when they find them nothing is scored.
 - **Flag measurements instead of dropping them.** Every star keeps a value for every frame, and problems are recorded as per-measurement flags, so callers can display the full light curve and see why points were excluded.
@@ -772,7 +817,7 @@ The stage returns early with `NOT_READY` and no light curves when:
 <a id="photometry-4"></a>
 ### 16.4 Session FWHM And Saturation Level
 
-**Session FWHM.** The session FWHM is the median of the per-frame `medianFWHM` values from the quality analysis. A frame without a valid value uses the session median. This extraction FWHM is computed as `sqrt(lambda1 + lambda2)`, which reads about 1.4 times too large for round stars. It is therefore only used for star selection, to size the moment window, and as a fallback. Apertures are sized from the FWHM that `ApertureMeasurer` measures ([registration offset and measured FWHM](#photometry-6-1)).
+**Session FWHM.** The session FWHM is the median of the per-frame `medianFWHM` values from the quality analysis. A frame without a valid value uses the session median. This extraction FWHM is computed as `2.355 * sqrt(lambda1 + lambda2)`, which is about 1.4 times the Gaussian FWHM for an untruncated round Gaussian; thresholded footprints add their own bias. It is therefore only used for star selection, to size the moment window, and as a fallback. Apertures are sized from the FWHM that `ApertureMeasurer` measures ([registration offset and measured FWHM](#photometry-6-1)).
 
 **Saturation level.** `PhotometryStarSelector.estimateSaturationLevel` looks for a pile-up of clipped pixels at the top of each frame's histogram. It counts the pixels within 0.1% of the frame maximum, and five or more count as a pile-up. The frame maximum is then that frame's saturation level. The session level is the median over the frames with a pile-up. When no frame has one, it is 95% of 65535 (all pixel values are in the shifted non-negative domain). Check B still guards against roll-off below full well in that case.
 

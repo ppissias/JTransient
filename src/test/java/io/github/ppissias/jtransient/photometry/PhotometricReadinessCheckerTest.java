@@ -19,6 +19,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+/** Scientific controls for shape linearity, reference counts and response-check evidence. */
 public class PhotometricReadinessCheckerTest {
 
     private static final int STARS = 300;
@@ -132,5 +133,39 @@ public class PhotometricReadinessCheckerTest {
 
         assertEquals(PhotometricReadiness.CheckStatus.FAIL, result.status);
         assertFalse(result.departureFound);
+    }
+
+    /** Fifty selected linear stars leave only forty-five inside the default faint bound (VS-9). */
+    @Test
+    public void nominalMinimumCanFailThroughReferenceCountWithoutShapeDeparture() {
+        PipelineTelemetry.PhotometryFrameStat stat = new PipelineTelemetry.PhotometryFrameStat();
+        PhotometricReadinessChecker.ShapeResult result = analyze(linearFrame(50), stat);
+        assertEquals(PhotometricReadiness.CheckStatus.FAIL, result.status);
+        assertFalse(result.departureFound);
+        assertEquals(45, stat.linearStars);
+        assertTrue(stat.linearRangeMag > new DetectionConfig().linearityMinRangeMag);
+    }
+
+    /** Fifty-five distinct, usable magnitudes supply fifty linear references under the current rank policy. */
+    @Test
+    public void idealFiftyFiveStarSampleSuppliesTheRequiredLinearReferences() {
+        PipelineTelemetry.PhotometryFrameStat stat = new PipelineTelemetry.PhotometryFrameStat();
+        PhotometricReadinessChecker.ShapeResult result = analyze(linearFrame(55), stat);
+        assertEquals(PhotometricReadiness.CheckStatus.PASS, result.status);
+        assertFalse(result.departureFound);
+        assertEquals(50, stat.linearStars);
+    }
+
+    /** Builds a constant-concentration control with distinct magnitudes over four magnitudes of range. */
+    private static ApertureMeasurer.FrameMeasurement linearFrame(int count) {
+        ApertureMeasurer.FrameMeasurement frame = new ApertureMeasurer.FrameMeasurement(3, count);
+        for (int i = 0; i < count; i++) {
+            double flux = Math.pow(10, -0.4 * (-15.0 + 4.0 * i / (count - 1)));
+            frame.flux[ApertureMeasurer.R_MAIN][i] = flux;
+            frame.flux[ApertureMeasurer.R_CI_OUTER][i] = flux;
+            frame.flux[ApertureMeasurer.R_CI_INNER][i] = CI * flux;
+            frame.magError[i] = 0.005;
+        }
+        return frame;
     }
 }
