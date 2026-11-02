@@ -887,7 +887,7 @@ sigma_F = sigma_sky * sqrt(N_ap * (1 + N_ap / N_sky))
 magError = 1.0857 * sigma_F / flux
 ```
 
-Every aperture gets its own error from this formula, NaN when its flux is not positive. Check B and the SNR cut use the main aperture's; a light curve measured in another aperture carries that aperture's ([measuring aperture per brightness](#photometry-11)). The error ignores the star's own photon noise and gain, so it is a lower bound. Scoring uses the empirical noise model instead.
+`sigma_sky` and `N_sky` belong to the same sample: the annulus pixels left after the earlier clipping passes, from which the sky level and its MAD sigma were computed (not the unclipped annulus, and not the pixels the last pass would keep). Every aperture gets its own error from this formula, NaN when its flux is not positive. Check B and the SNR cut use the main aperture's; a light curve measured in another aperture carries that aperture's ([measuring aperture per brightness](#photometry-11)). The error ignores the star's own photon noise and gain, so it is a lower bound. Scoring uses the empirical noise model instead.
 
 Flags set here:
 

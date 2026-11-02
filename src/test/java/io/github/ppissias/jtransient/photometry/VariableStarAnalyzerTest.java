@@ -452,25 +452,27 @@ public class VariableStarAnalyzerTest {
         }
         renderStar(image, 32.3, 31.6, 50_000.0, sigma);
         renderStar(image, 96.4, 95.7, -3_000.0, sigma);
+        image[31][44] += 500; // a hot pixel in the first star's sky annulus, outside every aperture
         List<PhotometryStarSelector.Star> stars = List.of(new PhotometryStarSelector.Star(32.3, 31.6, 50_000.0),
                 new PhotometryStarSelector.Star(96.4, 95.7, 1.0));
         DetectionConfig config = new DetectionConfig();
-        ApertureMeasurer.FrameMeasurement m = ApertureMeasurer.measure(toPixels(image, DoubleUnaryOperator.identity()),
-                2.355 * sigma, stars, null, 70_000, config);
+        short[][] pixels = toPixels(image, DoubleUnaryOperator.identity());
+        ApertureMeasurer.FrameMeasurement m = ApertureMeasurer.measure(pixels, 2.355 * sigma, stars, null, 70_000, config);
         assertEquals("too few stars for an offset", 0.0, m.offsetX, 0);
 
-        // Aperture areas and the sky-pixel count as the measurement sees them around the star.
+        // Aperture areas and the sky annulus as the measurement sees them around the star.
         var geometry = io.github.ppissias.jtransient.config.PhotometryGeometry.resolve(config, m.fwhm);
         double cx = 32.3;
         double cy = 31.6;
         double reach = geometry.largestApertureRadius() + 1;
         double[] areas = new double[ApertureMeasurer.RADIUS_COUNT];
+        double[] annulus = new double[image.length * image[0].length];
         int skyCount = 0;
         for (int y = 0; y < image.length; y++) {
             for (int x = 0; x < image[0].length; x++) {
                 double d = Math.hypot(x - cx, y - cy);
                 if (d >= geometry.annulusInnerRadius() && d <= geometry.annulusOuterRadius()) {
-                    skyCount++;
+                    annulus[skyCount++] = io.github.ppissias.jtransient.core.PixelEncoding.toShiftedPositiveInt(pixels[y][x]);
                 }
                 if (d <= reach) {
                     for (int r = 0; r < ApertureMeasurer.RADIUS_COUNT; r++) {
@@ -479,15 +481,12 @@ public class VariableStarAnalyzerTest {
                 }
             }
         }
-        double mainSkySigma = Double.NaN;
+        // The error uses the clipped sky sample: its noise and its size, which clipping makes smaller than the annulus.
+        double[] sky = ApertureMeasurer.clippedMedianAndSigma(annulus, skyCount);
+        assertTrue("clipped " + sky[2] + " of " + skyCount, sky[2] < skyCount);
         for (int r = 0; r < ApertureMeasurer.RADIUS_COUNT; r++) {
-            double error = m.magError[r][0];
-            double skySigma = error * m.flux[r][0] / 1.0857 / Math.sqrt(areas[r] * (1.0 + areas[r] / skyCount));
-            assertTrue("aperture " + r, skySigma > 0);
-            if (r == 0) {
-                mainSkySigma = skySigma;
-            }
-            assertEquals("aperture " + r, mainSkySigma, skySigma, 1e-9 * mainSkySigma);
+            double expected = 1.0857 * sky[1] * Math.sqrt(areas[r] * (1.0 + areas[r] / sky[2])) / m.flux[r][0];
+            assertEquals("aperture " + r, expected, m.magError[r][0], 1e-9 * expected);
         }
         assertTrue(m.magError[ApertureMeasurer.R_SMALL][0] < m.magError[ApertureMeasurer.R_LARGE][0]);
 

@@ -189,6 +189,8 @@ final class ApertureMeasurer {
             }
             double sky = skyStats[0];
             double skySigma = skyStats[1];
+            // The sky level and noise come from the clipped sample; its size, not the annulus's, sets their error.
+            double skySample = skyStats[2];
             m.sky[i] = sky;
 
             // --- Apertures with sub-pixel weights ---
@@ -239,7 +241,7 @@ final class ApertureMeasurer {
             for (int r = 0; r < RADIUS_COUNT; r++) {
                 if (sums[r] > 0) {
                     double nAp = areas[r];
-                    double fluxSigma = skySigma * Math.sqrt(nAp * (1.0 + nAp / Math.max(1, skyCount)));
+                    double fluxSigma = skySigma * Math.sqrt(nAp * (1.0 + nAp / skySample));
                     m.magError[r][i] = 1.0857 * fluxSigma / sums[r];
                 }
             }
@@ -375,9 +377,10 @@ final class ApertureMeasurer {
     }
 
     /**
-     * Three-pass 3-sigma clipped median and robust sigma of the first {@code count} values.
+     * Three-pass 3-sigma clipped median and robust sigma of the first {@code count} values, with the number of
+     * values they were computed from: the sample after the earlier passes' clipping, not after the last pass's.
      *
-     * @return {@code [median, sigma]}, or null when too few values remain
+     * @return {@code [median, sigma, sample count]}, or null when too few values remain
      */
     static double[] clippedMedianAndSigma(double[] values, int count) {
         if (count < MIN_SKY_PIXELS) {
@@ -386,11 +389,13 @@ final class ApertureMeasurer {
         double[] work = Arrays.copyOf(values, count);
         double[] scratch = new double[count];
         int n = count;
+        int used = count;
         double median = Double.NaN;
         double sigma = Double.NaN;
         for (int iter = 0; iter < 3; iter++) {
             CancellationScope.check();
             // Linear-time selection; this runs once per star and frame, so sorting would dominate.
+            used = n;
             System.arraycopy(work, 0, scratch, 0, n);
             median = PhotometryMath.medianInPlace(scratch, n);
             for (int i = 0; i < n; i++) {
@@ -416,7 +421,7 @@ final class ApertureMeasurer {
         if (!Double.isFinite(median)) {
             return null;
         }
-        return new double[]{median, Double.isFinite(sigma) ? sigma : 0.0};
+        return new double[]{median, Double.isFinite(sigma) ? sigma : 0.0, used};
     }
 
     private static boolean insideImage(short[][] pixels, double cx, double cy, double radius) {
