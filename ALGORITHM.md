@@ -916,9 +916,11 @@ A hot pixel, cosmic ray or faint passing object inside an aperture changes the s
 `VariableStarAnalyzer.flagContaminatedShapes` runs after check B:
 
 1. Per frame, the median concentration index (flux within 0.7 FWHM over flux within 2.5 FWHM) of the clean measurements is the frame's seeing reference.
-2. Each measurement's concentration is divided by that reference, and by the star's own median over frames, giving its fractional departure.
-3. Stars are grouped by brightness (about ten groups, at least 30 stars each). The tolerance of a group is the robust sigma of the departures of all its measurements, at least 2%. Taking it from the group rather than from the star keeps a star contaminated in many frames from widening its own tolerance.
+2. Each measurement's concentration is divided by that reference, and by the star's own median over the active frames, giving its fractional departure. A star needs at least 5 clean measurements on active frames; otherwise none of its measurements is judged.
+3. Stars are grouped by their median magnitude on the active frames (about ten groups, at least 30 stars each). The tolerance of a group is the robust sigma of the departures of all its measurements on active frames, at least 2%. Taking it from the group rather than from the star keeps a star contaminated in many frames from widening its own tolerance.
 4. A measurement departing by more than 5 tolerances is flagged `CONTAMINATED` and left out of the solve and the scoring.
+
+"Active" means not yet excluded by the registration check or check B, which run before. A frame already excluded therefore cannot move a star's typical shape or widen a group's tolerance, but its measurements are still judged in step 4, so the report shows their contaminated measurements too. Frames that check D or the spatial filter exclude later still contribute; whether to recompute without them is an open question ([VS-12](FEATURE-REQUESTS.md#vs-12-consolidated-photometry-improvement-roadmap) 4A). In a session where fewer than 5 frames remain active at this point, no measurement is flagged; such a session is also too short to be scored.
 
 For faint stars the concentration index is noisy, so a hot pixel a few pixels off-centre can still pass; the aperture gate ([gates](#photometry-11-4)) then usually rejects the star.
 
@@ -991,10 +993,12 @@ A pure power-law stretch applied from zero, `f -> f^gamma`, passes all checks. E
 <a id="photometry-9-1"></a>
 #### 16.9.1 Star exclusion
 
-Before the solve, a star is kept out of the ensemble and the scoring when:
+Before the solve, a star is kept out of the ensemble and the scoring when, counting only the frames still active after the registration check and check B (`VariableStarAnalyzer.starExclusions`):
 
 - more than half of its measured frames are flagged `SATURATED` or `NONLINEAR`, or
-- its median per-frame SNR (`1.0857 / magError`) is below `photometryMinSnr` (when that is above 0)
+- its median per-frame SNR (`1.0857 / magError`, main aperture) is below `photometryMinSnr` (when that is above 0); a star with no measurement on those frames has no median and is excluded.
+
+Measurements on frames already excluded count neither for nor against a star: check B flags `NONLINEAR` on the frames it rejects as well, and a star's flags there must not exclude it from the frames that remain.
 
 Excluded stars stay in `VariableStarAnalysis.stars` with their flags, magnitude errors and `notScoredReason`. They never constrain the solve, so they have no `meanMag`, and their `deltaMag` values are `NaN`.
 

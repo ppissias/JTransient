@@ -385,7 +385,7 @@ public final class VariableStarAnalyzer {
         }
 
         // --- Per-measurement shape check (hot pixels, cosmic rays, faint passing objects) ---
-        flagContaminatedShapes(measurements, nStars, nFrames);
+        flagContaminatedShapes(measurements, nStars, nFrames, frameActive);
 
         // --- Ensemble inputs ---
         double[][] mag = new double[nStars][nFrames];
@@ -400,37 +400,10 @@ public final class VariableStarAnalyzer {
                 sky[i][j] = measurements[j].sky[i];
             }
         }
+        String[] starExclusionReason = starExclusions(measurements, mag, flags, frameActive, config, telemetry);
         boolean[] starExcluded = new boolean[nStars];
-        String[] starExclusionReason = new String[nStars];
-        double[] snr = new double[nFrames];
         for (int i = 0; i < nStars; i++) {
-            CancellationScope.check();
-            int measured = 0;
-            int nonlinear = 0;
-            for (int j = 0; j < nFrames; j++) {
-                CancellationScope.check();
-                double error = measurements[j].magError[ApertureMeasurer.R_MAIN][i];
-                snr[j] = (Double.isFinite(mag[i][j]) && error > 0) ? 1.0857 / error : Double.NaN;
-                if (Double.isFinite(mag[i][j])) {
-                    measured++;
-                    if ((flags[i][j] & (PhotometryFlags.SATURATED | PhotometryFlags.NONLINEAR)) != 0) {
-                        nonlinear++;
-                    }
-                }
-            }
-            if (measured > 0 && nonlinear > MAX_NONLINEAR_SHARE * measured) {
-                starExcluded[i] = true;
-                starExclusionReason[i] = "Saturated or non-linear in most frames";
-                telemetry.starsExcludedMostlyNonlinear++;
-                continue;
-            }
-            double medianSnr = PhotometryMath.median(snr);
-            if (config.photometryMinSnr > 0 && !(medianSnr >= config.photometryMinSnr)) {
-                starExcluded[i] = true;
-                starExclusionReason[i] = String.format("Median SNR %.1f below the minimum %.1f",
-                        medianSnr, config.photometryMinSnr);
-                telemetry.starsExcludedLowSnr++;
-            }
+            starExcluded[i] = starExclusionReason[i] != null;
         }
         double[] xNorm = new double[nStars];
         double[] yNorm = new double[nStars];
@@ -609,13 +582,6 @@ public final class VariableStarAnalyzer {
     // Stages
     // =================================================================
 
-    /**
-     * Flags measurements whose concentration index (inner over outer aperture flux) departs from the star's
-     * own typical value. Each concentration is first divided by the frame's median concentration so that
-     * seeing changes, which affect every star alike, are taken out. The allowed departure comes from stars of
-     * similar brightness, not from the star itself: a star contaminated in many frames would otherwise widen
-     * its own tolerance until nothing is flagged.
-     */
     /** Copies a few measured-star positions for one frame, and only when the live view asks. */
     private static void offerPhotometryPicture(Input input, int frame, List<PhotometryStarSelector.Star> stars) {
         if (input.liveView == null || stars == null || stars.isEmpty()) {
@@ -696,7 +662,22 @@ public final class VariableStarAnalyzer {
         }
     }
 
-    private static void flagContaminatedShapes(ApertureMeasurer.FrameMeasurement[] measurements, int nStars, int nFrames) {
+    /**
+     * Flags measurements whose concentration index (inner over outer aperture flux) departs from the star's
+     * own typical value. Each concentration is first divided by the frame's median concentration so that
+     * seeing changes, which affect every star alike, are taken out. The allowed departure comes from stars of
+     * similar brightness, not from the star itself: a star contaminated in many frames would otherwise widen
+     * its own tolerance until nothing is flagged.
+     *
+     * <p>The typical values, brightness groups and tolerances come from the active frames only, so a frame
+     * already excluded cannot shift them. Every frame's measurements are then judged against them, so an
+     * excluded frame still shows its contaminated measurements.</p>
+     *
+     * @param measurements frame measurements; their flags receive {@link PhotometryFlags#CONTAMINATED}
+     * @param frameActive frames still used after the registration and shape checks
+     */
+    static void flagContaminatedShapes(ApertureMeasurer.FrameMeasurement[] measurements, int nStars, int nFrames,
+                                       boolean[] frameActive) {
         double[] frameConcentration = new double[nFrames];
         double[] buffer = new double[Math.max(nStars, nFrames)];
         for (int j = 0; j < nFrames; j++) {
@@ -716,7 +697,8 @@ public final class VariableStarAnalyzer {
         double[][] departure = new double[nStars][nFrames];
         double[] starMag = new double[nStars];
         double[] relative = new double[nFrames];
-        double[] mags = new double[nFrames];
+        double[] activeRelative = new double[nFrames];
+        double[] activeMags = new double[nFrames];
         List<Integer> scored = new ArrayList<>();
         for (int i = 0; i < nStars; i++) {
             CancellationScope.check();
@@ -729,16 +711,18 @@ public final class VariableStarAnalyzer {
                 boolean ok = Double.isFinite(ci) && frameConcentration[j] > 0
                         && (m.flags[i] & SHAPE_REFERENCE_EXCLUDING_FLAGS) == 0;
                 relative[j] = ok ? ci / frameConcentration[j] : Double.NaN;
-                mags[j] = ok ? m.mag(ApertureMeasurer.R_MAIN, i) : Double.NaN;
-                if (ok) {
+                boolean reference = ok && frameActive[j];
+                activeRelative[j] = reference ? relative[j] : Double.NaN;
+                activeMags[j] = reference ? m.mag(ApertureMeasurer.R_MAIN, i) : Double.NaN;
+                if (reference) {
                     n++;
                 }
             }
             if (n < MIN_SHAPE_MEASUREMENTS) {
                 continue;
             }
-            double typical = PhotometryMath.median(relative);
-            starMag[i] = PhotometryMath.median(mags);
+            double typical = PhotometryMath.median(activeRelative);
+            starMag[i] = PhotometryMath.median(activeMags);
             if (!(typical > 0) || !Double.isFinite(starMag[i])) {
                 continue;
             }
@@ -765,12 +749,13 @@ public final class VariableStarAnalyzer {
             int n = 0;
             for (int k = start; k < end; k++) {
                 CancellationScope.check();
-                for (double d : departure[scored.get(k)]) {
-                    if (Double.isFinite(d)) {
+                double[] d = departure[scored.get(k)];
+                for (int j = 0; j < nFrames; j++) {
+                    if (frameActive[j] && Double.isFinite(d[j])) {
                         if (n == pooled.length) {
                             pooled = Arrays.copyOf(pooled, pooled.length * 2);
                         }
-                        pooled[n++] = d;
+                        pooled[n++] = d[j];
                     }
                 }
             }
@@ -786,6 +771,55 @@ public final class VariableStarAnalyzer {
             }
             start = end;
         }
+    }
+
+    /**
+     * Stars left out of the ensemble and scoring: saturated or non-linear in most of their measurements, or below
+     * the minimum median SNR of the main aperture. Both are judged on the frames still active after the registration
+     * and shape checks, so measurements on a frame already excluded count neither for nor against a star.
+     *
+     * @param mag main-aperture magnitudes [star][frame], NaN when not measured
+     * @param flags measurement flags [star][frame]
+     * @param frameActive frames still used after the registration and shape checks
+     * @param telemetry receives the exclusion counters
+     * @return the exclusion reason of each star, null for a star that stays
+     */
+    static String[] starExclusions(ApertureMeasurer.FrameMeasurement[] measurements, double[][] mag, int[][] flags,
+                                   boolean[] frameActive, DetectionConfig config,
+                                   PipelineTelemetry.PhotometryTelemetry telemetry) {
+        int nStars = mag.length;
+        int nFrames = frameActive.length;
+        String[] reasons = new String[nStars];
+        double[] snr = new double[nFrames];
+        for (int i = 0; i < nStars; i++) {
+            CancellationScope.check();
+            int measured = 0;
+            int nonlinear = 0;
+            for (int j = 0; j < nFrames; j++) {
+                CancellationScope.check();
+                boolean counted = frameActive[j] && Double.isFinite(mag[i][j]);
+                double error = measurements[j].magError[ApertureMeasurer.R_MAIN][i];
+                snr[j] = (counted && error > 0) ? 1.0857 / error : Double.NaN;
+                if (counted) {
+                    measured++;
+                    if ((flags[i][j] & (PhotometryFlags.SATURATED | PhotometryFlags.NONLINEAR)) != 0) {
+                        nonlinear++;
+                    }
+                }
+            }
+            if (measured > 0 && nonlinear > MAX_NONLINEAR_SHARE * measured) {
+                reasons[i] = "Saturated or non-linear in most frames";
+                telemetry.starsExcludedMostlyNonlinear++;
+                continue;
+            }
+            double medianSnr = PhotometryMath.median(snr);
+            if (config.photometryMinSnr > 0 && !(medianSnr >= config.photometryMinSnr)) {
+                reasons[i] = String.format("Median SNR %.1f below the minimum %.1f",
+                        medianSnr, config.photometryMinSnr);
+                telemetry.starsExcludedLowSnr++;
+            }
+        }
+        return reasons;
     }
 
     private static ApertureMeasurer.FrameMeasurement[] measureFrames(Input input,

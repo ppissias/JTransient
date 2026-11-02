@@ -17,7 +17,7 @@ These are not authorisations. Keep the existing algorithms until the stated evid
 | [VS-9](#vs-9-selected-stars-and-the-linearity-check-minimum) | Deferred | The nominal selected-star minimum differs from check B's counted linear-range minimum. With the default 50 required references and a 90 % faint bound, an ideal sample needs at least 55 before further exclusions. Improve cap validation and evaluate the readiness status for insufficient samples; current diagnostics already distinguish them from measured nonlinearity. |
 | [VS-10](#vs-10-deterministic-streak-interpolation-for-photometry) | Rescoped 2026-11-02; evaluate the deterministic correction | Remove piece-order dependence from interpolated streak contamination flags. Expanding masks across the whole unobserved path remains outside this scope. |
 | [VS-11](#vs-11-photometry-strictness-defaults-and-recovery-review) | Initial audit complete 2026-11-02; decisions pending | Review below includes the gate/default assessment, 720 scorer experiments, six real datasets, three isolated setting comparisons and nine new tests. Prioritize correctness and explicit sensitivity limits before recalibrating defaults. |
-| [VS-12](#vs-12-consolidated-photometry-improvement-roadmap) | Plan revised 2026-11-02; stages 1–2 specified; implementation started | [Four-stage implementation plan](#implementation-readiness-and-order) incorporates the agreed review, explaining why each change is needed, its expected benefit and its validation, with [confirmed details](#confirmed-implementation-details-2026-11-02). Baseline, 1A and 1B done; 2A next. Later policy/calibration changes remain evidence-dependent. |
+| [VS-12](#vs-12-consolidated-photometry-improvement-roadmap) | Plan revised 2026-11-02; stages 1–2 specified; implementation started | [Four-stage implementation plan](#implementation-readiness-and-order) incorporates the agreed review, explaining why each change is needed, its expected benefit and its validation, with [confirmed details](#confirmed-implementation-details-2026-11-02). Baseline, 1A, 1B and 2A done; 2B next. Later policy/calibration changes remain evidence-dependent. |
 | [ST-7](#st-7-elongation-threshold-for-single-faint-streaks) | Investigation requested 2026-11-02 | Evaluate retaining isolated faint-streak detections above a configurable elongation, recommend an evidence-based default, and expose the agreed control as an advanced setting in SpacePixels. |
 
 The descriptions below recover earlier design discussions and reviews from git history, reconciled with current maintainer decisions. Historical reproductions are identified with their sources. VS-11 and VS-12 separately record fresh 2026-11-02 experiments, real-data runs and the subsequent review and plan.
@@ -315,14 +315,13 @@ The agreed order is **product consistency -> evidence isolation and solver corre
 | 3 | Valid cross-aperture support and temporal agreement (VS-5) | Compare curves only after their identity, errors, masks and fitting are reliable. | Reject false agreement such as opposite-phase aperture curves while preserving noisy genuine variability. |
 | 4 | Readiness/subset policies, gap handling, uncertainty coverage, leverage and optional display calibration | These require scientific tradeoffs rather than just consistent state. | Recover useful work or improve reliability only where controlled tests demonstrate that the added complexity earns its cost. |
 
-**Progress.** Step 0 (baseline), 1A and 1B are done; 2A is next. Do not start by changing gain assumptions, adding a new empirical noise floor, lowering variability thresholds, or redesigning the pipeline.
+**Progress.** Step 0 (baseline), 1A, 1B and 2A are done; 2B is next. Do not start by changing gain assumptions, adding a new empirical noise floor, lowering variability thresholds, or redesigning the pipeline.
 
 ### Confirmed implementation details (2026-11-02)
 
 The maintainer confirmed these details after a source check of the revised plan. They refine the items below without changing their order.
 
 - **0 — Baseline.** Build installations of the starting revisions (SpacePixels `a90e669`, JTransient `ad349a2`) and keep them outside the repositories. Run `batchDetect` on every reference dataset with a copy of the shipped profile that only enables photometry, and keep the complete report folders. Photometry runs after detection, so one run per dataset supplies both the moving-object comparison and the photometry CSVs for star-by-star checks.
-- **2A — Excluded-frame shape flags.** Compute the shape reference and brightness-group statistics from frames still active at that stage, then evaluate every frame's measurements against them. Excluded frames therefore still receive CONTAMINATED flags for inspection, but cannot influence the statistics.
 - **2B — Final frame mask.** Light-curve flags already carry `FRAME_EXCLUDED` for every frame outside the final mask. The gate skips those frames; it needs no new input.
 - **2C — Interpolation policy.** Interpolate between the mean centre of each bounding frame's pieces. Take the footprint from the piece in the nearest observed frame closest to the interpolated position; an equidistant frame tie keeps the earlier frame. Break remaining piece ties by geometry (x, then y, angle and length). Do not merge a frame's pieces into one combined footprint: for a flashing satellite that would mask its whole path in the unobserved frame.
 - **2D — Convergence reporting.** Report the converged/exhausted status of the final main solve, and count exhausted alternative-aperture solves. The corrected stopping rule applies to all four aperture solves, so aperture choices can change; the 2D comparison includes them.
@@ -361,13 +360,19 @@ SpacePixels' Per-Frame Measurements table gained **Bad Flux** and **Contaminated
 
 The following are separate changes. Keep the existing configured thresholds while measuring the consequences of corrected evidence.
 
-#### 2A. Isolate pre-solve star statistics from frames already rejected — ready
+#### 2A. Isolate pre-solve star statistics from frames already rejected — implemented 2026-11-02
 
-**Why / benefit.** Excluded registration/Check-B frames still affect shape-contamination reference statistics, median SNR and the mostly-nonlinear exclusion. Removing that contribution should make star qualification describe the frames actually available at that stage. The M81 SNR comparison gives this item direct practical value.
+The contaminated-shape statistics (typical shape, brightness groups, tolerances), the mostly-nonlinear exclusion and the median-SNR exclusion now count only frames still active after registration and check B; excluded frames keep their flags and are still judged for contamination. A star needs five clean measurements on active frames for the shape check. Behaviour is in [ALGORITHM.md](ALGORITHM.md#photometry-7-1) and [star exclusion](ALGORITHM.md#photometry-9-1).
 
-**Contract.** Use the post-registration/post-Check-B frame mask consistently in shape-reference/group statistics, measured/nonlinear counts and SNR qualification. Keep excluded measurements and their flags available for inspection. Handle empty or insufficient reference sets explicitly. This step does not promise to remove later Check-D/spatial rejections from statistics computed earlier; the late-mask recomputation decision is 4A.
+**Verification.** Controls poison only excluded frames (no change to active-frame flags), the same poison on active frames (tolerance widens), and the SNR and nonlinear-share exclusions in both directions, including a star measured only on excluded frames. All 18 reference datasets compared with 1B:
 
-**Verification / completion.** Poison only an early-excluded frame and show that it cannot change retained-frame shape flags or qualification. Verify that an equally bad active frame still matters. Cover low-SNR, mostly nonlinear, sparse reference and insufficient-data cases. Run all six sequences and compare qualified stars, contamination flags and candidates. Recompute the actual M81 outcome rather than assuming all 73 SNR crossings become accepted/scored stars. Report losses as well as gains.
+- M81 Kumar: exactly the predicted 73 stars move from "low SNR" to scored; five previously unscored stars are now mostly nonlinear on active frames. Candidates 10/18/22 -> 9/19/20. Star 1235 (HIGH, no VSX match) becomes CONSTANT because its Stetson J z-score falls from 5.12 to 4.89 when the magnitude neighbours change; star 431 becomes POSSIBLE (PERSISTENCE); stars 85 and 3347 drop from REJECTED to CONSTANT at J z just under 5. All seven VSX-matched high-confidence candidates stay. Contaminated measurements on used frames rise from 3,466 to 3,571 because excluded frames no longer widen the tolerance.
+- m5-reg: two stars gain and six lose SNR qualification, as the earlier criterion check found; Eagle-noisy: one gains, three lose. No candidate changes.
+- Klangwolke-2 and UG 6524 (no frames excluded before the shape check): byte-identical reports.
+- Not-ready sessions keep their verdicts. Stars no longer excluded as mostly nonlinear through rejected frames (whynot 112, m81-reg 35, m31-g 24) are now not scored only because the session is not ready; the changed ensembles shift some check-D frame decisions in m101, m31-b, m31-g and m81-reg. ic-5070 keeps only four frames after check B, so it now flags no contaminated measurement.
+- Run time unchanged: Klangwolke-2 photometry 223 s (1B) and 216 s (2A) in back-to-back runs.
+
+The late-frame recomputation (Check D and spatial rejections) remains 4A.
 
 #### 2B. Apply LINEARITY only to measurements on final active frames — ready
 
