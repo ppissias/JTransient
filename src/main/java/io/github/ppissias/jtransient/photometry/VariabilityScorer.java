@@ -413,9 +413,11 @@ final class VariabilityScorer {
             star.failedGates.add(GATE_LOCAL);
         }
 
-        // LINEARITY
+        // LINEARITY: a saturated or non-linear measurement on a frame still in the analysis, usable or not, since
+        // the missing bright states can bias the curve. Flags on excluded frames stay for display only.
         for (int flag : star.flags) {
-            if ((flag & (PhotometryFlags.SATURATED | PhotometryFlags.NONLINEAR)) != 0) {
+            if ((flag & PhotometryFlags.FRAME_EXCLUDED) == 0
+                    && (flag & (PhotometryFlags.SATURATED | PhotometryFlags.NONLINEAR)) != 0) {
                 star.failedGates.add(GATE_LINEARITY);
                 break;
             }

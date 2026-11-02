@@ -17,7 +17,7 @@ These are not authorisations. Keep the existing algorithms until the stated evid
 | [VS-9](#vs-9-selected-stars-and-the-linearity-check-minimum) | Deferred | The nominal selected-star minimum differs from check B's counted linear-range minimum. With the default 50 required references and a 90 % faint bound, an ideal sample needs at least 55 before further exclusions. Improve cap validation and evaluate the readiness status for insufficient samples; current diagnostics already distinguish them from measured nonlinearity. |
 | [VS-10](#vs-10-deterministic-streak-interpolation-for-photometry) | Rescoped 2026-11-02; evaluate the deterministic correction | Remove piece-order dependence from interpolated streak contamination flags. Expanding masks across the whole unobserved path remains outside this scope. |
 | [VS-11](#vs-11-photometry-strictness-defaults-and-recovery-review) | Initial audit complete 2026-11-02; decisions pending | Review below includes the gate/default assessment, 720 scorer experiments, six real datasets, three isolated setting comparisons and nine new tests. Prioritize correctness and explicit sensitivity limits before recalibrating defaults. |
-| [VS-12](#vs-12-consolidated-photometry-improvement-roadmap) | Plan revised 2026-11-02; stages 1–2 specified; implementation started | [Four-stage implementation plan](#implementation-readiness-and-order) incorporates the agreed review, explaining why each change is needed, its expected benefit and its validation, with [confirmed details](#confirmed-implementation-details-2026-11-02). Baseline, 1A, 1B and 2A done; 2B next. Later policy/calibration changes remain evidence-dependent. |
+| [VS-12](#vs-12-consolidated-photometry-improvement-roadmap) | Plan revised 2026-11-02; stages 1–2 specified; implementation started | [Four-stage implementation plan](#implementation-readiness-and-order) incorporates the agreed review, explaining why each change is needed, its expected benefit and its validation, with [confirmed details](#confirmed-implementation-details-2026-11-02). Baseline, 1A, 1B, 2A and 2B done; 2C next. Later policy/calibration changes remain evidence-dependent. |
 | [ST-7](#st-7-elongation-threshold-for-single-faint-streaks) | Investigation requested 2026-11-02 | Evaluate retaining isolated faint-streak detections above a configurable elongation, recommend an evidence-based default, and expose the agreed control as an advanced setting in SpacePixels. |
 
 The descriptions below recover earlier design discussions and reviews from git history, reconciled with current maintainer decisions. Historical reproductions are identified with their sources. VS-11 and VS-12 separately record fresh 2026-11-02 experiments, real-data runs and the subsequent review and plan.
@@ -315,14 +315,13 @@ The agreed order is **product consistency -> evidence isolation and solver corre
 | 3 | Valid cross-aperture support and temporal agreement (VS-5) | Compare curves only after their identity, errors, masks and fitting are reliable. | Reject false agreement such as opposite-phase aperture curves while preserving noisy genuine variability. |
 | 4 | Readiness/subset policies, gap handling, uncertainty coverage, leverage and optional display calibration | These require scientific tradeoffs rather than just consistent state. | Recover useful work or improve reliability only where controlled tests demonstrate that the added complexity earns its cost. |
 
-**Progress.** Step 0 (baseline), 1A, 1B and 2A are done; 2B is next. Do not start by changing gain assumptions, adding a new empirical noise floor, lowering variability thresholds, or redesigning the pipeline.
+**Progress.** Step 0 (baseline), 1A, 1B, 2A and 2B are done; 2C is next. Do not start by changing gain assumptions, adding a new empirical noise floor, lowering variability thresholds, or redesigning the pipeline.
 
 ### Confirmed implementation details (2026-11-02)
 
 The maintainer confirmed these details after a source check of the revised plan. They refine the items below without changing their order.
 
 - **0 — Baseline.** Build installations of the starting revisions (SpacePixels `a90e669`, JTransient `ad349a2`) and keep them outside the repositories. Run `batchDetect` on every reference dataset with a copy of the shipped profile that only enables photometry, and keep the complete report folders. Photometry runs after detection, so one run per dataset supplies both the moving-object comparison and the photometry CSVs for star-by-star checks.
-- **2B — Final frame mask.** Light-curve flags already carry `FRAME_EXCLUDED` for every frame outside the final mask. The gate skips those frames; it needs no new input.
 - **2C — Interpolation policy.** Interpolate between the mean centre of each bounding frame's pieces. Take the footprint from the piece in the nearest observed frame closest to the interpolated position; an equidistant frame tie keeps the earlier frame. Break remaining piece ties by geometry (x, then y, angle and length). Do not merge a frame's pieces into one combined footprint: for a flashing satellite that would mask its whole path in the unobserved frame.
 - **2D — Convergence reporting.** Report the converged/exhausted status of the final main solve, and count exhausted alternative-aperture solves. The corrected stopping rule applies to all four aperture solves, so aperture choices can change; the 2D comparison includes them.
 - **2F — Expected size and sample count.** For typical annuli the error changes by well under 1 % (about 0.3 %). The returned median and sigma come from the sample at the start of the last clipping pass; return that count, not the count kept after the final clip.
@@ -374,13 +373,11 @@ The contaminated-shape statistics (typical shape, brightness groups, tolerances)
 
 The late-frame recomputation (Check D and spatial rejections) remains 4A.
 
-#### 2B. Apply LINEARITY only to measurements on final active frames — ready
+#### 2B. Apply LINEARITY only to measurements on final active frames — implemented 2026-11-02
 
-**Why / benefit.** Historical nonlinear/saturated flags should remain visible without penalizing a candidate whose affected frames are absent from the analysis. Clipping on retained frames must still warn because missing bright states can bias a light curve.
+The gate skips frames carrying `FRAME_EXCLUDED`, which the analyzer sets from the final frame mask whichever check excluded the frame, and still counts flagged measurements on active frames that were left out of the curve. Historical flags stay on the curve; the report's gate texts say "on the frames used for photometry". Behaviour is in [ALGORITHM.md](ALGORITHM.md#photometry-11).
 
-**Contract.** Supply/use the final frame mask in the gate. Inspect flags on active frames even when that particular measurement is unusable; do not filter through the `usable` matrix, which already removes SATURATED/NONLINEAR points. Preserve stored historical flags and all other gate rules.
-
-**Verification / completion.** Paired controls differ only in whether a clipped frame is active. The excluded-frame case loses only the historical LINEARITY penalty; the active-frame case retains it. Test interaction with one other failed gate and all exclusion stages. Compare M5, M81 and the remaining sequences, reporting actual tier changes; a history-only flag count is not a recovery claim.
+**Verification.** Paired scorer controls differ only in whether the clipped frame is active: HIGH_CONFIDENCE against POSSIBLE [LINEARITY], and with a DATA failure POSSIBLE [DATA] against REJECTED [DATA, LINEARITY]. An analyzer test checks that every excluded frame is marked on every curve. With the engine change alone, the reports of all 18 reference datasets are byte-identical to 2A, so no candidate there failed LINEARITY only through excluded frames. The new gate texts were checked by the report tests.
 
 #### 2C. Make streak interpolation independent of piece order (VS-10) — ready for bounded design and implementation
 

@@ -373,6 +373,17 @@ public class VariableStarAnalyzerTest {
         assertEquals(PhotometricReadiness.Verdict.NOT_READY, readiness.verdict);
         assertTrue(result.variableStarAnalysis.candidates.isEmpty());
         assertFalse(readiness.messages.isEmpty());
+        // Every excluded frame, whichever check excluded it, is marked on every light curve; LINEARITY relies on it.
+        VariableStarAnalysis analysis = result.variableStarAnalysis;
+        int excluded = 0;
+        for (int j = 0; j < analysis.frames.size(); j++) {
+            boolean used = analysis.frames.get(j).used;
+            excluded += used ? 0 : 1;
+            for (StarLightCurve curve : analysis.stars) {
+                assertEquals("frame " + j, !used, (curve.flags[j] & PhotometryFlags.FRAME_EXCLUDED) != 0);
+            }
+        }
+        assertTrue(excluded > 0);
     }
 
     @Test

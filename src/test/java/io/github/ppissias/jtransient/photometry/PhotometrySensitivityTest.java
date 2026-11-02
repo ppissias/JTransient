@@ -94,6 +94,60 @@ public class PhotometrySensitivityTest {
         assertEquals(0, PhotometryMath.percentile(curve, 0.95) - PhotometryMath.percentile(curve, 0.05), 0);
     }
 
+    /**
+     * Paired controls that differ only in whether the frame holding the target's non-linear measurement is still
+     * in the analysis. On an excluded frame the flag is history and costs nothing; on an active frame it fails
+     * LINEARITY even though that measurement itself is unusable. With one other failure the active case is rejected.
+     */
+    @Test
+    public void linearityCountsClippedMeasurementsOnActiveFramesOnly() {
+        Fixture excluded = fixture(0.03, 40, 2, 1);
+        clipTarget(excluded, 10, false);
+        score(excluded, false, new DetectionConfig());
+        assertEquals(List.of(), excluded.target().failedGates);
+        assertEquals(VariabilityTier.HIGH_CONFIDENCE, excluded.target().tier);
+        assertTrue("the historical flag stays", (excluded.target().flags[10] & PhotometryFlags.NONLINEAR) != 0);
+
+        Fixture active = fixture(0.03, 40, 2, 1);
+        clipTarget(active, 10, true);
+        score(active, false, new DetectionConfig());
+        assertEquals(List.of("LINEARITY"), active.target().failedGates);
+        assertEquals(VariabilityTier.POSSIBLE, active.target().tier);
+
+        Fixture shortExcluded = fixture(0.10, 40, 0.1, 1);
+        clipTarget(shortExcluded, 10, false);
+        score(shortExcluded, false, new DetectionConfig());
+        assertEquals(List.of("DATA"), shortExcluded.target().failedGates);
+        assertEquals(VariabilityTier.POSSIBLE, shortExcluded.target().tier);
+
+        Fixture shortActive = fixture(0.10, 40, 0.1, 1);
+        clipTarget(shortActive, 10, true);
+        score(shortActive, false, new DetectionConfig());
+        assertEquals(List.of("DATA", "LINEARITY"), shortActive.target().failedGates);
+        assertEquals(VariabilityTier.REJECTED, shortActive.target().tier);
+    }
+
+    /**
+     * Flags the target's measurement in {@code frame} as non-linear, as check B does. On an active frame only that
+     * measurement becomes unusable; an excluded frame is unusable and unsolved for every star, as the analyzer
+     * leaves it whichever check excluded it.
+     */
+    private static void clipTarget(Fixture fixture, int frame, boolean frameActive) {
+        fixture.target().flags[frame] |= PhotometryFlags.NONLINEAR;
+        fixture.usable[0][frame] = false;
+        if (frameActive) {
+            return;
+        }
+        for (int i = 0; i < fixture.stars.size(); i++) {
+            StarLightCurve star = fixture.stars.get(i);
+            star.flags[frame] |= PhotometryFlags.FRAME_EXCLUDED;
+            star.deltaMag[frame] = Double.NaN;
+            fixture.small[i][frame] = Double.NaN;
+            fixture.large[i][frame] = Double.NaN;
+            fixture.usable[i][frame] = false;
+        }
+    }
+
     /** Makes a solved-ensemble control; input residuals are magnitudes and cadence is in minutes. */
     private static Fixture fixture(double semiAmplitude, double periodFrames, double cadenceMinutes, int seed) {
         Fixture fixture = new Fixture();
