@@ -32,8 +32,22 @@ public final class StarLightCurve {
 
     /** Per-frame residual from the ensemble model (positive = fainter), NaN when not measured. */
     public double[] deltaMag;
-    /** Per-frame sky-noise magnitude error (a lower bound; scoring uses the empirical noise model). */
+    /**
+     * Per-frame sky-noise magnitude error of the aperture that supplied {@link #deltaMag} (a lower bound;
+     * scoring uses the empirical noise model).
+     */
     public double[] magError;
+    /**
+     * Nominal radius, in units of the FWHM, of the aperture that supplied {@link #deltaMag} and {@link #magError}:
+     * the main aperture's factor unless the brightness range chose another aperture.
+     */
+    public double apertureFwhmFactor = Double.NaN;
+    /**
+     * Smallest and largest radius of that aperture on the frames used, in pixels (NaN without any). Each frame's
+     * radius follows its measured FWHM, with the pixel floor of the photometry geometry.
+     */
+    public double apertureMinRadiusPixels = Double.NaN;
+    public double apertureMaxRadiusPixels = Double.NaN;
     /** Per-frame {@link PhotometryFlags} bit set. */
     public int[] flags;
 

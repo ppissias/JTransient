@@ -95,7 +95,7 @@ final class PhotometricReadinessChecker {
             mags[i] = m.mag(ApertureMeasurer.R_MAIN, i);
             cis[i] = m.concentration(i);
             if ((m.flags[i] & SHAPE_EXCLUDED_FLAGS) == 0 && Double.isFinite(mags[i]) && Double.isFinite(cis[i])
-                    && m.magError[i] <= MAX_SHAPE_MAG_ERROR) {
+                    && m.magError[ApertureMeasurer.R_MAIN][i] <= MAX_SHAPE_MAG_ERROR) {
                 usable[count++] = i;
             }
         }

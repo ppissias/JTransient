@@ -148,8 +148,23 @@ public class VariableStarAnalyzerTest {
         assertEquals(8, apertures.size());
         PipelineTelemetry.PhotometryApertureChoice faintest = apertures.get(apertures.size() - 1);
         assertTrue("faintest range aperture " + faintest.fwhmFactor, faintest.fwhmFactor < 1.5);
-        assertTrue(faintest.radiusPixels >= 2.0);
+        assertTrue(faintest.fwhmFactor * analysis.telemetry.sessionFwhm >= 2.0);
+        assertTrue(faintest.minRadiusPixels >= io.github.ppissias.jtransient.config.PhotometryGeometry.MIN_RADIUS_PIXELS);
+        assertTrue(faintest.minRadiusPixels <= faintest.maxRadiusPixels);
         assertTrue(faintest.scatterChange < 0);
+        // Every light curve records the aperture of its brightness range, with that aperture's radii.
+        for (StarLightCurve curve : analysis.stars) {
+            if (!Double.isFinite(curve.meanMag)) {
+                continue;
+            }
+            int b = 0;
+            while (b < apertures.size() - 1 && curve.meanMag > apertures.get(b).magTo) {
+                b++;
+            }
+            assertEquals(apertures.get(b).fwhmFactor, curve.apertureFwhmFactor, 0);
+            assertEquals(apertures.get(b).minRadiusPixels, curve.apertureMinRadiusPixels, 0);
+            assertEquals(apertures.get(b).maxRadiusPixels, curve.apertureMaxRadiusPixels, 0);
+        }
 
         // The transparency change is absorbed by the zero points, not by the stars.
         double zMin = Double.MAX_VALUE;
@@ -406,6 +421,68 @@ public class VariableStarAnalyzerTest {
         assertEquals(expected, m.flux[ApertureMeasurer.R_MAIN][0], 0.01 * expected);
         assertEquals(SKY, m.sky[0], 1.0);
         assertEquals(0, m.flags[0]);
+    }
+
+    /**
+     * Every aperture's error comes from the same sky-noise formula with its own area and flux, so the sky sigma it
+     * implies is the same for all apertures. An aperture without positive flux has no error.
+     */
+    @Test
+    public void everyApertureCarriesItsOwnSkyNoiseError() {
+        double sigma = 1.3;
+        Random noise = new Random(11);
+        double[][] image = new double[128][128];
+        for (double[] row : image) {
+            for (int x = 0; x < row.length; x++) {
+                row[x] = SKY + 10 * noise.nextGaussian();
+            }
+        }
+        renderStar(image, 32.3, 31.6, 50_000.0, sigma);
+        renderStar(image, 96.4, 95.7, -3_000.0, sigma);
+        List<PhotometryStarSelector.Star> stars = List.of(new PhotometryStarSelector.Star(32.3, 31.6, 50_000.0),
+                new PhotometryStarSelector.Star(96.4, 95.7, 1.0));
+        DetectionConfig config = new DetectionConfig();
+        ApertureMeasurer.FrameMeasurement m = ApertureMeasurer.measure(toPixels(image, DoubleUnaryOperator.identity()),
+                2.355 * sigma, stars, null, 70_000, config);
+        assertEquals("too few stars for an offset", 0.0, m.offsetX, 0);
+
+        // Aperture areas and the sky-pixel count as the measurement sees them around the star.
+        var geometry = io.github.ppissias.jtransient.config.PhotometryGeometry.resolve(config, m.fwhm);
+        double cx = 32.3;
+        double cy = 31.6;
+        double reach = geometry.largestApertureRadius() + 1;
+        double[] areas = new double[ApertureMeasurer.RADIUS_COUNT];
+        int skyCount = 0;
+        for (int y = 0; y < image.length; y++) {
+            for (int x = 0; x < image[0].length; x++) {
+                double d = Math.hypot(x - cx, y - cy);
+                if (d >= geometry.annulusInnerRadius() && d <= geometry.annulusOuterRadius()) {
+                    skyCount++;
+                }
+                if (d <= reach) {
+                    for (int r = 0; r < ApertureMeasurer.RADIUS_COUNT; r++) {
+                        areas[r] += ApertureMeasurer.pixelWeight(x - cx, y - cy, d, m.radii[r]);
+                    }
+                }
+            }
+        }
+        double mainSkySigma = Double.NaN;
+        for (int r = 0; r < ApertureMeasurer.RADIUS_COUNT; r++) {
+            double error = m.magError[r][0];
+            double skySigma = error * m.flux[r][0] / 1.0857 / Math.sqrt(areas[r] * (1.0 + areas[r] / skyCount));
+            assertTrue("aperture " + r, skySigma > 0);
+            if (r == 0) {
+                mainSkySigma = skySigma;
+            }
+            assertEquals("aperture " + r, mainSkySigma, skySigma, 1e-9 * mainSkySigma);
+        }
+        assertTrue(m.magError[ApertureMeasurer.R_SMALL][0] < m.magError[ApertureMeasurer.R_LARGE][0]);
+
+        // A dark spot: no aperture has positive flux, so none has an error, and the main one is flagged.
+        for (int r = 0; r < ApertureMeasurer.RADIUS_COUNT; r++) {
+            assertTrue("aperture " + r, !(m.flux[r][1] > 0) && Double.isNaN(m.magError[r][1]));
+        }
+        assertTrue((m.flags[1] & PhotometryFlags.BAD_FLUX) != 0);
     }
 
     /** Measures Gaussian flux with crossed factors to verify resolved sky clearance follows the measured FWHM. */

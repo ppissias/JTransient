@@ -25,7 +25,9 @@ import java.util.List;
  * FWHM uses sqrt(lambda1 + lambda2) and reads about sqrt(2) too large for round stars. Every star is
  * then measured in five apertures at once (0.7, 1.0, main, 2.0 and 2.5 x FWHM), so the concentration
  * index for check B, the main photometry flux and the aperture-consistency gate all come from the
- * same pass. The sky is a sigma-clipped median of an annulus with the pixels of master stars masked out.</p>
+ * same pass. The sky is a sigma-clipped median of an annulus with the pixels of master stars masked out.
+ * Every aperture gets its own sky-noise magnitude error from the same formula, so a light curve measured
+ * in another aperture than the main one carries that aperture's errors.</p>
  */
 final class ApertureMeasurer {
 
@@ -62,7 +64,11 @@ final class ApertureMeasurer {
         /** Background-subtracted flux per aperture and star. */
         final double[][] flux;
         final double[] sky;
-        final double[] magError;
+        /**
+         * Sky-noise magnitude error per aperture and star, NaN when that aperture's flux is not positive.
+         * Check B and the SNR cut use the main aperture's row.
+         */
+        final double[][] magError;
         final int[] flags;
         double offsetX;
         double offsetY;
@@ -74,14 +80,14 @@ final class ApertureMeasurer {
             this.fwhm = fwhm;
             this.flux = new double[RADIUS_COUNT][starCount];
             this.sky = new double[starCount];
-            this.magError = new double[starCount];
+            this.magError = new double[RADIUS_COUNT][starCount];
             this.flags = new int[starCount];
-            for (double[] f : flux) {
+            for (int r = 0; r < RADIUS_COUNT; r++) {
                 CancellationScope.check();
-                Arrays.fill(f, Double.NaN);
+                Arrays.fill(flux[r], Double.NaN);
+                Arrays.fill(magError[r], Double.NaN);
             }
             Arrays.fill(sky, Double.NaN);
-            Arrays.fill(magError, Double.NaN);
         }
 
         /** Instrumental magnitude in aperture {@code r}, or NaN when the flux is not positive. */
@@ -227,13 +233,15 @@ final class ApertureMeasurer {
             if (peak >= saturationThreshold) {
                 m.flags[i] |= PhotometryFlags.SATURATED;
             }
-            double mainFlux = sums[R_MAIN];
-            if (!(mainFlux > 0)) {
+            if (!(sums[R_MAIN] > 0)) {
                 m.flags[i] |= PhotometryFlags.BAD_FLUX;
-            } else {
-                double nAp = areas[R_MAIN];
-                double fluxSigma = skySigma * Math.sqrt(nAp * (1.0 + nAp / Math.max(1, skyCount)));
-                m.magError[i] = 1.0857 * fluxSigma / mainFlux;
+            }
+            for (int r = 0; r < RADIUS_COUNT; r++) {
+                if (sums[r] > 0) {
+                    double nAp = areas[r];
+                    double fluxSigma = skySigma * Math.sqrt(nAp * (1.0 + nAp / Math.max(1, skyCount)));
+                    m.magError[r][i] = 1.0857 * fluxSigma / sums[r];
+                }
             }
         }
 

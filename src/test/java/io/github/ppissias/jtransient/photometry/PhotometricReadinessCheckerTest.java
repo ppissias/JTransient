@@ -34,7 +34,7 @@ public class PhotometricReadinessCheckerTest {
             m.flux[ApertureMeasurer.R_MAIN][i] = outer;
             m.flux[ApertureMeasurer.R_CI_OUTER][i] = outer;
             m.flux[ApertureMeasurer.R_CI_INNER][i] = outer * concentration.applyAsDouble(i);
-            m.magError[i] = 0.005;
+            m.magError[ApertureMeasurer.R_MAIN][i] = 0.005;
         }
         return m;
     }
@@ -82,7 +82,7 @@ public class PhotometricReadinessCheckerTest {
         // Background-limited frame: only the brightest 1.5 mag reach SNR 50, the next 1.5 mag have SNR 25-50.
         ApertureMeasurer.FrameMeasurement m = frame(3.0, i -> CI);
         for (int i = STARS / 2; i < STARS; i++) {
-            m.magError[i] = 0.04;
+            m.magError[ApertureMeasurer.R_MAIN][i] = 0.04;
         }
         PipelineTelemetry.PhotometryFrameStat stat = new PipelineTelemetry.PhotometryFrameStat();
         PhotometricReadinessChecker.ShapeResult result = analyze(m, stat);
@@ -164,7 +164,7 @@ public class PhotometricReadinessCheckerTest {
             frame.flux[ApertureMeasurer.R_MAIN][i] = flux;
             frame.flux[ApertureMeasurer.R_CI_OUTER][i] = flux;
             frame.flux[ApertureMeasurer.R_CI_INNER][i] = CI * flux;
-            frame.magError[i] = 0.005;
+            frame.magError[ApertureMeasurer.R_MAIN][i] = 0.005;
         }
         return frame;
     }

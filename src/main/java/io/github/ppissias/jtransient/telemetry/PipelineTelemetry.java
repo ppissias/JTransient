@@ -341,9 +341,14 @@ public class PipelineTelemetry {
         /** Brightest and faintest mean instrumental magnitude of the range. */
         public double magFrom;
         public double magTo;
-        /** Aperture radius in units of the session FWHM, and in pixels. */
+        /** Nominal aperture radius in units of the FWHM. */
         public double fwhmFactor;
-        public double radiusPixels;
+        /**
+         * Smallest and largest radius of that aperture on the frames used, in pixels. Each frame's radius follows its
+         * measured FWHM, with the pixel floor of the photometry geometry.
+         */
+        public double minRadiusPixels = Double.NaN;
+        public double maxRadiusPixels = Double.NaN;
         /** Change of the median scatter of the range's stars against the main aperture (negative = less scatter). */
         public double scatterChange;
     }

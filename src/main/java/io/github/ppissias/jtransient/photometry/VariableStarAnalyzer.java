@@ -409,7 +409,7 @@ public final class VariableStarAnalyzer {
             int nonlinear = 0;
             for (int j = 0; j < nFrames; j++) {
                 CancellationScope.check();
-                double error = measurements[j].magError[i];
+                double error = measurements[j].magError[ApertureMeasurer.R_MAIN][i];
                 snr[j] = (Double.isFinite(mag[i][j]) && error > 0) ? 1.0857 / error : Double.NaN;
                 if (Double.isFinite(mag[i][j])) {
                     measured++;
@@ -511,17 +511,21 @@ public final class VariableStarAnalyzer {
         // --- Verdict ---
         decideVerdict(readiness, frameActive, config);
 
-        // --- Light curves ---
+        // --- Light curves, in the main aperture until the aperture choice ---
         List<StarLightCurve> curves = new ArrayList<>(nStars);
+        double[] mainRadii = radiusRange(measurements, ApertureMeasurer.R_MAIN, frameActive);
         for (int i = 0; i < nStars; i++) {
             CancellationScope.check();
             PhotometryStarSelector.Star star = selected.get(i);
             StarLightCurve curve = new StarLightCurve(i, star.x, star.y, star.flux, nFrames);
             curve.meanMag = solution.starMag[i];
+            curve.apertureFwhmFactor = config.photometryApertureFwhmFactor;
+            curve.apertureMinRadiusPixels = mainRadii[0];
+            curve.apertureMaxRadiusPixels = mainRadii[1];
             for (int j = 0; j < nFrames; j++) {
                 CancellationScope.check();
                 curve.deltaMag[j] = solution.residual[i][j];
-                curve.magError[j] = measurements[j].magError[i];
+                curve.magError[j] = measurements[j].magError[ApertureMeasurer.R_MAIN][i];
                 curve.flags[j] = flags[i][j] | (frameActive[j] ? 0 : PhotometryFlags.FRAME_EXCLUDED);
             }
             if (starExcluded[i]) {
@@ -558,7 +562,8 @@ public final class VariableStarAnalyzer {
             chooseApertures(curves, usable, starExcluded, solution,
                     new EnsembleSolver.Solution[]{tiny, small, solution, large},
                     new double[]{ApertureMeasurer.CI_INNER_FWHM_FACTOR, 1.0, config.photometryApertureFwhmFactor, 2.0},
-                    sessionFwhm, telemetry);
+                    new int[]{ApertureMeasurer.R_CI_INNER, ApertureMeasurer.R_SMALL, ApertureMeasurer.R_MAIN, ApertureMeasurer.R_LARGE},
+                    measurements, frameActive, sessionFwhm, telemetry);
             VariabilityScorer.score(curves, usable, small.residual, large.residual, sky, series,
                     readiness.verdict == PhotometricReadiness.Verdict.LIMITED, config, telemetry, input.liveView);
         } else {
@@ -1053,15 +1058,21 @@ public final class VariableStarAnalyzer {
     /**
      * Chooses the measuring aperture per brightness range: the one whose ensemble solution gives the stars of that
      * range (nearly all constant) the smallest median scatter. Faint stars are limited by sky noise and do better in a
-     * small aperture, bright stars in a larger one. Each star's light curve is replaced by the chosen aperture's
-     * residuals; the main aperture stays unless another lowers the scatter by more than {@link #APERTURE_MIN_GAIN}.
+     * small aperture, bright stars in a larger one. Each star's light curve, errors and aperture record are replaced
+     * by the chosen aperture's; the main aperture stays unless another lowers the scatter by more than
+     * {@link #APERTURE_MIN_GAIN}. The mean magnitude stays the main aperture's, the common brightness scale.
      *
+     * @param curves light curves holding the main aperture's residuals and errors; updated in place
      * @param options ensemble solutions, one per aperture
      * @param fwhmFactors aperture radius of each option, in units of the FWHM
+     * @param radiusIndices aperture index of each option in the frame measurements
+     * @param measurements frame measurements supplying each aperture's errors and per-frame radii
+     * @param frameActive frames used by the final solution
      */
-    private static void chooseApertures(List<StarLightCurve> curves, boolean[][] usable, boolean[] starExcluded,
-                                        EnsembleSolver.Solution main, EnsembleSolver.Solution[] options, double[] fwhmFactors,
-                                        double sessionFwhm, PipelineTelemetry.PhotometryTelemetry telemetry) {
+    static void chooseApertures(List<StarLightCurve> curves, boolean[][] usable, boolean[] starExcluded,
+                                EnsembleSolver.Solution main, EnsembleSolver.Solution[] options, double[] fwhmFactors,
+                                int[] radiusIndices, ApertureMeasurer.FrameMeasurement[] measurements, boolean[] frameActive,
+                                double sessionFwhm, PipelineTelemetry.PhotometryTelemetry telemetry) {
         int mainIndex = -1;
         for (int a = 0; a < options.length; a++) {
             CancellationScope.check();
@@ -1095,6 +1106,10 @@ public final class VariableStarAnalyzer {
             return;
         }
         rows.sort((p, q) -> Double.compare(p[0], q[0]));
+        double[][] radii = new double[options.length][];
+        for (int a = 0; a < options.length; a++) {
+            radii[a] = radiusRange(measurements, radiusIndices[a], frameActive);
+        }
         double[] binUpper = new double[APERTURE_BINS];
         int[] binChoice = new int[APERTURE_BINS];
         for (int b = 0; b < APERTURE_BINS; b++) {
@@ -1123,7 +1138,8 @@ public final class VariableStarAnalyzer {
             choice.magFrom = rows.get(from)[0];
             choice.magTo = binUpper[b];
             choice.fwhmFactor = fwhmFactors[binChoice[b]];
-            choice.radiusPixels = fwhmFactors[binChoice[b]] * sessionFwhm;
+            choice.minRadiusPixels = radii[binChoice[b]][0];
+            choice.maxRadiusPixels = radii[binChoice[b]][1];
             choice.scatterChange = (median[binChoice[b]] - median[mainIndex]) / median[mainIndex];
             telemetry.apertureChoices.add(choice);
         }
@@ -1138,11 +1154,33 @@ public final class VariableStarAnalyzer {
                 CancellationScope.check();
                 b++;
             }
-            EnsembleSolver.Solution chosen = options[binChoice[b]];
-            if (chosen != main) {
-                System.arraycopy(chosen.residual[i], 0, curves.get(i).deltaMag, 0, curves.get(i).deltaMag.length);
+            int a = binChoice[b];
+            if (options[a] == main) {
+                continue;
+            }
+            StarLightCurve curve = curves.get(i);
+            System.arraycopy(options[a].residual[i], 0, curve.deltaMag, 0, curve.deltaMag.length);
+            for (int j = 0; j < curve.magError.length; j++) {
+                curve.magError[j] = measurements[j].magError[radiusIndices[a]][i];
+            }
+            curve.apertureFwhmFactor = fwhmFactors[a];
+            curve.apertureMinRadiusPixels = radii[a][0];
+            curve.apertureMaxRadiusPixels = radii[a][1];
+        }
+    }
+
+    /** Smallest and largest radius of aperture {@code radiusIndex} on the active frames, in pixels; NaN without any. */
+    private static double[] radiusRange(ApertureMeasurer.FrameMeasurement[] measurements, int radiusIndex, boolean[] frameActive) {
+        double min = Double.NaN;
+        double max = Double.NaN;
+        for (int j = 0; j < measurements.length; j++) {
+            if (frameActive[j]) {
+                double r = measurements[j].radii[radiusIndex];
+                min = Double.isNaN(min) ? r : Math.min(min, r);
+                max = Double.isNaN(max) ? r : Math.max(max, r);
             }
         }
+        return new double[]{min, max};
     }
 
     /** Star mask for the sky annulus from the footprints of the photometry star list, grown by one pixel. */

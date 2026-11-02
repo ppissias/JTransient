@@ -880,14 +880,14 @@ All five apertures are summed in one pass over the pixels, so the concentration 
 <a id="photometry-6-3"></a>
 #### 16.6.3 Errors and flags
 
-The main-aperture magnitude is `-2.5 log10(flux)`. Its error includes only the sky noise:
+An aperture's magnitude is `-2.5 log10(flux)`. Its error includes only the sky noise, with `N_ap` that aperture's area:
 
 ```text
 sigma_F = sigma_sky * sqrt(N_ap * (1 + N_ap / N_sky))
 magError = 1.0857 * sigma_F / flux
 ```
 
-It ignores the star's own photon noise and gain, so it is a lower bound. Scoring uses the empirical noise model instead ([variability scoring](#photometry-11)).
+Every aperture gets its own error from this formula, NaN when its flux is not positive. Check B and the SNR cut use the main aperture's; a light curve measured in another aperture carries that aperture's ([measuring aperture per brightness](#photometry-11)). The error ignores the star's own photon noise and gain, so it is a lower bound. Scoring uses the empirical noise model instead.
 
 Flags set here:
 
@@ -1053,14 +1053,14 @@ Frames retain `FRAME_EXCLUDED` flags and per-frame reasons such as `Spatial resi
 
 `PhotometricReadiness.messages` explains each finding in plain language.
 
-Light curves are built for every star whatever the verdict. `deltaMag` is the main-aperture ensemble residual, and the flags include `FRAME_EXCLUDED` for inactive frames. Scoring runs only for `READY` and `LIMITED`. In a `NOT_READY` session every star is `NOT_SCORED`.
+Light curves are built for every star whatever the verdict. `deltaMag` is the main-aperture ensemble residual and `magError` the main aperture's error until scoring chooses the measuring aperture, and the flags include `FRAME_EXCLUDED` for inactive frames. Scoring runs only for `READY` and `LIMITED`. In a `NOT_READY` session every star is `NOT_SCORED`.
 
 <a id="photometry-11"></a>
 ### 16.11 Variability Scoring
 
 `VariabilityScorer.score` works on the usable residuals of each star. Before scoring, the ensemble is solved three more times, with the 0.7, 1.0 and 2.0 x FWHM apertures, using the same rules. The 1.0 and 2.0 x FWHM solutions are also used by the APERTURE gate.
 
-**Measuring aperture per brightness.** The scored stars are split into 8 brightness ranges of equal size. In each range the aperture whose solution gives the stars (nearly all constant) the smallest median robust scatter is chosen, and the stars of that range are scored on its residuals. The main aperture stays unless another lowers the scatter by more than 3%, and apertures smaller than 2 px in radius are not used (they turn the centring errors of undersampled stars into noise). Faint stars are limited by sky noise and do best in a small aperture; bright stars keep a larger one. The choice is exported as `apertureChoices` and shown in the report.
+**Measuring aperture per brightness.** The scored stars are split into 8 brightness ranges of equal size. In each range the aperture whose solution gives the stars (nearly all constant) the smallest median robust scatter is chosen, and the stars of that range are scored on its residuals. The main aperture stays unless another lowers the scatter by more than 3%, and apertures smaller than 2 px in radius are not used (they turn the centring errors of undersampled stars into noise). Faint stars are limited by sky noise and do best in a small aperture; bright stars keep a larger one. A star of a range that chose another aperture gets that aperture's residuals and errors together, and records it as `apertureFwhmFactor`, with the smallest and largest radius the aperture had on the frames used (`apertureMinRadiusPixels`, `apertureMaxRadiusPixels`; each frame's radius follows its measured FWHM). `meanMag` stays the main aperture's: it is the common brightness scale for the ranges and the magnitude neighbours. The choice is exported as `apertureChoices`, with the same radius range per brightness range, and shown in the report. The 2 px minimum is checked against the session FWHM, so the radii actually used can be slightly smaller ([VS-12](FEATURE-REQUESTS.md#vs-12-consolidated-photometry-improvement-roadmap) 3A).
 
 <a id="photometry-11-1"></a>
 #### 16.11.1 Light-curve cleaning
