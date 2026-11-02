@@ -17,10 +17,10 @@ These are not authorisations. Keep the existing algorithms until the stated evid
 | [VS-9](#vs-9-selected-stars-and-the-linearity-check-minimum) | Deferred | The nominal selected-star minimum differs from check B's counted linear-range minimum. With the default 50 required references and a 90 % faint bound, an ideal sample needs at least 55 before further exclusions. Improve cap validation and evaluate the readiness status for insufficient samples; current diagnostics already distinguish them from measured nonlinearity. |
 | [VS-10](#vs-10-deterministic-streak-interpolation-for-photometry) | Rescoped 2026-11-02; evaluate the deterministic correction | Remove piece-order dependence from interpolated streak contamination flags. Expanding masks across the whole unobserved path remains outside this scope. |
 | [VS-11](#vs-11-photometry-strictness-defaults-and-recovery-review) | Initial audit complete 2026-11-02; decisions pending | Review below includes the gate/default assessment, 720 scorer experiments, six real datasets, three isolated setting comparisons and nine new tests. Prioritize correctness and explicit sensitivity limits before recalibrating defaults. |
-| [VS-12](#vs-12-consolidated-photometry-improvement-roadmap) | Proposed 2026-11-02; detailed review added | Consolidated roadmap using six real sequences. The [review](#detailed-review-by-codex-2026-11-02) recommends correcting source descriptions and separating bounded consistency fixes from scientific-policy changes before implementation. |
+| [VS-12](#vs-12-consolidated-photometry-improvement-roadmap) | Plan revised 2026-11-02; stages 1–2 specified | [Four-stage implementation plan](#implementation-readiness-and-order) incorporates the agreed review, explaining why each change is needed, its expected benefit and its validation. First slice: selected-aperture error/identity provenance. Later policy/calibration changes remain evidence-dependent. |
 | [ST-7](#st-7-elongation-threshold-for-single-faint-streaks) | Investigation requested 2026-11-02 | Evaluate retaining isolated faint-streak detections above a configurable elongation, recommend an evidence-based default, and expose the agreed control as an advanced setting in SpacePixels. |
 
-The descriptions below recover the earlier design discussions and reviews from git history, reconciled with the current implementation and maintainer decisions on 2026-11-02. Reproduction results belong to the linked historical reviews. They have not been rerun for this documentation update.
+The descriptions below recover earlier design discussions and reviews from git history, reconciled with current maintainer decisions. Historical reproductions are identified with their sources. VS-11 and VS-12 separately record fresh 2026-11-02 experiments, real-data runs and the subsequent review and plan.
 
 ## QC-1. Star-count rejection envelope
 
@@ -286,119 +286,178 @@ Of M5's 253 scored stars, **42 carry saturated/nonlinear flags only in excluded 
 
 ### Architectural assessment and further algorithmic items (2026-11-02 follow-up)
 
-**Overall assessment.** The 4-stage pipeline (**Select & Measure -> Readiness & Frame Filtering -> Iterative WLS + Spatial Plane -> Coherence + Diagnostic Gates**) is sound and well-suited to short, single-session amateur/survey sequences (10-100 frames) without external catalog calibration or flat-field metadata:
-- Alternating WLS (`EnsembleSolver`) with iteratively downweighted variable stars and per-frame 2D spatial plane detrending (`SpatialFrameFilter`) is the appropriate foundational model for raw pixel sequences lacking external reference catalogs.
-- Readiness gates (`PhotometricReadinessChecker` Checks A-D for saturation/linearity, seeing stability, spatial gradients and instrumental magnitude-response linearity) directly diagnose the dominant failure modes of amateur stacks (clouds, dewing, focus drift, stretched/non-linear FITS).
-- Requiring temporal coherence (lag-1 autocorrelation, Von Neumann `eta`, block-binned retention in `VariabilityScorer`) together with multi-aperture agreement and local-comparison checks is the right way to suppress noisy false positives where formal photon+sky errors understate true systematics.
+**Corrected after the agreed R1–R13 review.** Preserve the current architecture: independent star extraction/selection, per-star local sky subtraction, readiness/frame filtering, robust ensemble fitting with an optional spatial plane, then empirical variability scores and diagnostic gates. It targets original linear, appropriately calibrated and registered sequences; defaults require at least 20 quality-filtered frames. Readiness screens do not certify arbitrary uncalibrated inputs.
 
-**Additional algorithmic items to implement/evaluate alongside the code-level fixes:**
+| Source-verified behavior | Consequence for the improvement plan |
+|---|---|
+| `EnsembleSolver` uses empirical own/neighbour scatter, a 0.001-mag floor and Cauchy weights; `VariabilityScorer` actively uses expected scatter in detection and gates. | There is no missing display-only RMS model to wire into detection. Per-point uncertainty coverage and candidate leverage are separate studies. |
+| `ApertureMeasurer` measures a common per-frame X/Y offset and already uses 5 x 5 fractional-pixel integration. R_SMALL is 1.0 FWHM; the concentration/tiny aperture is 0.7 FWHM. | Drop the redundant generic supersampling proposal. Per-star recentering remains in PT-5; any radius change needs measured bias/recovery evidence. |
+| Discovery uses scatter plus adjacent-pair J, followed by eight gates; there is no fixed three-frame retention or Von Neumann rule. | Fast/brief-event sensitivity is a measured policy investigation, not a repair of a nonexistent block-averaging implementation. |
+| SYSTEMATICS already evaluates zero-point and other driver relationships with comparison-star evidence. | Drop the standalone duplicate zero-point-correlation warning; correlation alone is not an extinction diagnosis. |
 
-1. **Magnitude-dependent empirical error floor (`sigma_sys(m)`) in scoring and gating (`EnsembleSolver`, `VariabilityScorer`):**
-   - *Current behavior:* `EnsembleSolver` adds a single constant `SYS_FLOOR = 0.003` mag in quadrature with formal photon+sky error (`magError`), while `VariabilityScorer.rmsExpectedRatio` fits a running-median empirical RMS-vs-magnitude floor only for display/reporting (`rmsExpectedRatio` is unused in scoring or gating).
-   - *Problem:* When camera gain is unknown (`DEFAULT_GAIN = 1.0` in `ApertureMeasurer`) or scintillation/flat-field errors dominate bright stars, `magError` can be off by 2x-5x. Because `chi2Red` (`gateChi2Red`) and `amplitude / medianSigma` (`gateAmplitudeToNoise`) divide by `magError`, bright stars can pass on scintillation alone while faint stars can be over-penalized when true gain `< 1 e-/ADU`.
-   - *Action:* Use the empirical RMS-vs-magnitude locus of constant stars (already computed by `VariabilityScorer.rmsExpectedRatio`) to rescale `magError` or incorporate `rmsExpectedRatio` directly into noise gating.
-2. **Per-frame centroid refinement vs. rigid global transform (`PhotometryStarSelector`, `VariableStarAnalyzer`, `ApertureMeasurer`):**
-   - *Current behavior:* Star positions are measured once on the reference frame and projected into each frame via the global `FrameTrans`. `ApertureMeasurer.measure` integrates the aperture at that exact projected coordinate while passively computing first-moment centroids (`centroidX`, `centroidY`) inside the aperture.
-   - *Problem:* Differential atmospheric refraction or higher-order optical distortion combined with tracking drift can shift stars near field edges by 0.3-1.5 px relative to a rigid global transform. In small apertures (`0.7x` or `1.0x FWHM`), a systematic sub-pixel centering drift creates a smooth, coherent light-curve trend that passes coherence checks and triggers the `CENTROID` gate.
-   - *Action:* Recenter bright/high-SNR stars per frame within a small windowed search radius around the projected coordinate (while keeping fixed projected offsets for faint stars) to eliminate centering-drift trends at the source.
-3. **Adaptive coherence block size and fast/eclipsing variable recovery (`VariabilityScorer`):**
-   - *Current behavior:* Every candidate must satisfy `coherencePass` (lag-1 autocorrelation or low Von Neumann `eta`, plus `binnedRetention >= photometryMinBinnedRetention` over fixed 3-frame blocks), and `removeIsolatedOutliers` strips single-frame excursions before scoring.
-   - *Problem:* In slower-cadence or shorter sequences (e.g., 15-20 frames), sharp eclipsing binary minima, flares, or short-period pulsators whose half-cycle spans only 2-3 frames are washed out by fixed 3-frame block averaging.
-   - *Action:* Make the block size adaptive to cadence/active frame count (e.g., 2-frame blocks when `activeFrames < 20`) or provide a secondary multi-aperture-confirmed path for high-SNR short-duration dips/flares.
-4. **Sub-pixel integration accuracy for small comparison apertures (`ApertureMeasurer`):**
-   - *Current behavior:* `ApertureMeasurer` uses a linear radial boundary ramp `w = clamp(r_ap + 0.5 - r, 0, 1)` based on pixel-center distance `r`.
-   - *Problem:* While accurate for `r_ap >= 2.5` px, tight undersampled PSFs (`FWHM ~ 2.2` px) produce a `0.7x` `R_SMALL` aperture of `r_ap ~ 1.5` px, where the linear radial ramp's effective area varies by several percent with sub-pixel center phase (`(0.0, 0.0)` vs. `(0.5, 0.5)`). This injects phase noise specifically into `R_SMALL`, inflating `|smallAmplitude - largeAmplitude|` and causing false `APERTURE` gate flags on undersampled setups.
-   - *Action:* Enforce a safe minimum radius for `R_SMALL` or use sub-pixel oversampling (e.g., 5x5) when `r_ap < 3` px.
-5. **Differential color extinction / zero-point correlation check (`VariabilityScorer`, `PhotometricReadinessChecker`):**
-   - *Current behavior:* `SpatialFrameFilter` removes spatial `(x, y)` gradients and Check D removes global magnitude-dependent response nonlinearity.
-   - *Problem:* In unfiltered broadband sequences spanning a significant altitude change, very red or blue stars dim at a different rate with airmass than the ensemble average, producing a smooth, monotonic 0.02-0.05 mag trend that correlates linearly with frame zero point `z_j`.
-   - *Action:* Measure correlation between a candidate's light curve `deltaMag_j` and the frame zero point `z_j` (analogous to Check D's slope-vs-`z_j` check) and flag/warn when variability is explained by differential extinction tracking `z_j`.
-
-**Summary recommendation.** Retain the 4-stage architecture; do not redesign the pipeline. Implement the bounded correctness fixes in `VS-11` together with empirical RMS-vs-magnitude noise scaling and small-aperture sub-pixel/centroid handling to cover the remaining practical edge cases.
+The earlier descriptions of a gain-based error model, 3-millimag quadrature floor, FrameTrans/CENTROID handling and fixed-block coherence were incorrect; their correction and the accepted follow-up are recorded under [VS-12](#vs-12-consolidated-photometry-improvement-roadmap). The current plan below supersedes those proposed actions.
 
 ## VS-12. Consolidated photometry improvement roadmap
 
-**Purpose (2026-11-02).** Consolidate all open stationary-star photometry proposals ([VS-2](#vs-2-convergence-of-the-full-ensemble-correction), [VS-5](#vs-5-temporal-agreement-between-photometry-apertures), [VS-9](#vs-9-selected-stars-and-the-linearity-check-minimum), [VS-10](#vs-10-deterministic-streak-interpolation-for-photometry) and [VS-11](#vs-11-photometry-strictness-defaults-and-recovery-review)), the Romanishin (2002) and Stetson (1996) comparison, the code-level defects and the architectural review into one prioritized improvement plan, backed by six real reference sequences including `klangwolke-2` and `M81-kumar-L-dataset-registered`.
+**Plan revised (2026-11-02).** The maintainer agreed with R1–R13 and their follow-up. This is the current plan; it replaces the earlier three-phase draft and its incorrect implementation descriptions. The review and follow-up below retain the decision record. Canonical algorithm details remain under VS-2, VS-5, VS-9 and VS-10; this item owns their order, shared contracts and verification.
 
-### Big-picture diagnosis
+### Implementation readiness and order
 
-1. **The 4-stage architecture is sound and does not need a redesign.** Independent master-star extraction and grid/brightness selection (`PhotometryStarSelector`), per-star local sky-annulus subtraction (`ApertureMeasurer`), pre-solve readiness and frame filtering (`PhotometricReadinessChecker`), alternating robust WLS with a 2D spatial plane (`EnsembleSolver`, `SpatialFrameFilter`), and coherence-plus-gate candidate scoring (`VariabilityScorer`) are well-matched to uncalibrated 10-100 frame amateur/survey sequences lacking external reference catalogs.
-2. **Correctness and internal consistency defects currently distort evidence before policy thresholds act.** Across the pipeline, several steps mix state across apertures or across already-excluded frames:
-   - `VariableStarAnalyzer.chooseApertures` replaces `deltaMag` for 88 % of scored stars on `klangwolke-2` and `M81-kumar-L-dataset-registered` while leaving `magError`, `meanMag`, measurement flags and the `APERTURE` gate denominator tied to the `1.5x FWHM` main aperture.
-   - Already-excluded frames still participate in `flagContaminatedShapes`, pre-solve star exclusions (`MAX_NONLINEAR_SHARE`, `photometryMinSnr`) and the `LINEARITY` candidate gate.
-   - `removeIsolatedOutliers`, `stetsonJ`, `longestDeviatingRun`, `splitHalfCorrelation` and `differenceCorrelation` bridge across excluded/`NaN` frames and timestamp gaps as if non-adjacent frames were consecutive exposures.
-3. **Readiness and `LIMITED` policy combine distinct physical causes under one broad penalty.** A session with rock-steady atmospheric transparency (`zeroPointRangeMag < 0.05` mag, as on `M81-kumar-L-dataset-registered` at `0.036` mag, or `klangwolke-2` at `0.056` mag with only `0.006` mag margin) gets `responseCheck = INCONCLUSIVE` -> `LIMITED`, which doubles the candidate amplitude floor from `0.05` to `0.10` mag (`LIMITED_MIN_AMPLITUDE`) even when frame shapes and residuals are clean.
+**Yes: there is enough evidence to start.** Stages 1 and 2 contain bounded corrections whose purpose and expected behavior can be specified now. Implement one change at a time, verify it, and record its effects before moving on. Stage 3 has a demonstrated problem and is ready for focused test/design work, but its temporal metric and acceptance limits still need calibration. Stage 4 contains investigations; their proposed policies are not ready to become defaults merely because they appear in this plan.
 
-### Real-data baseline across six reference sequences
+The agreed order is **product consistency -> evidence isolation and solver correctness -> temporal aperture evidence -> measured policy/calibration work**. This order repairs what is being measured and displayed before using the resulting measurements to judge sensitivity or tune acceptance. Do not combine a correction with threshold relaxation in the same change.
 
-All six sequences were run through the public SpacePixels headless API with the shipped profile and photometry enabled (no Auto-Tune, no source modifications):
+| Order | Work | Why it comes here | Expected benefit |
+|---|---|---|---|
+| 0 | Freeze the development baseline and comparison contract | Establish which differences each subsequent change is allowed to cause. | Makes effects attributable and prevents an increase in candidates from being mistaken for improved science. |
+| 1 | Selected-aperture error/identity provenance; missing contamination aggregates | Make reported evidence accurately describe the current algorithm first. | Trustworthy error/curve associations and visible reasons for excluded measurements. Candidate selection should initially stay identical. |
+| 2 | Rejected-frame isolation, convergence, deterministic crossing flags, then small count/warning corrections | Remove known ways unrelated or unstable evidence influences a result. | Cleaner star qualification and more reproducible corrections and masks, with measured scientific changes. |
+| 3 | Valid cross-aperture support and temporal agreement (VS-5) | Compare curves only after their identity, errors, masks and fitting are reliable. | Reject false agreement such as opposite-phase aperture curves while preserving noisy genuine variability. |
+| 4 | Readiness/subset policies, gap handling, uncertainty coverage, leverage and optional display calibration | These require scientific tradeoffs rather than just consistent state. | Recover useful work or improve reliability only where controlled tests demonstrate that the added complexity earns its cost. |
 
-| Dataset | Frames (input / analyzed / used) | Session FWHM (px) | Readiness verdict & primary reason | Selected / scored stars | Candidates (`HIGH` / `POSSIBLE` / `REJECTED`) | Key diagnostic evidence on this dataset |
-|---|---|---|---|---|---|---|
-| `klangwolke-2` | 33 / 28 / 28 | 3.70 | `READY` (`zeroPointRangeMag = 0.056` mag, just `0.006` mag above `INCONCLUSIVE`) | 53,914 / 43,603 | 47 / 22 / 27 (96 total) | **38,288 / 43,603 scored stars (87.8 %)** and **42 / 69 reported candidates (60.9 %)** choose `1.0x` (`10,936`) or `0.7x FWHM` (`27,352`) while keeping `1.5x` `magError`/flags. `17,007` `CONTAMINATED` measurements omitted from report/CSV. `13` `HIGH` and `5` `POSSIBLE` candidates have `0.05 <= amp < 0.10` mag and would be demoted if transparency were `0.007` mag steadier (`LIMITED`). |
-| `M81-kumar-L-dataset-registered` | 41 / 39 / 32 | 2.24 | `LIMITED` (median linear range `2.14` mag; `7` shape-failing frames; `responseCheck = INCONCLUSIVE` at `zeroPointRangeMag = 0.036` mag) | 6,155 / 3,435 | 10 / 18 / 22 (50 total) | **3,026 / 3,435 scored stars (88.1 %)** and **28 / 28 reported candidates (100 %)** choose `1.0x FWHM` (`r = 2.24` px) while keeping `1.5x` `magError`/flags. Tight PSF (`FWHM = 2.24` px) puts `0.7x` `R_SMALL` at `r = 1.57` px (sub-pixel ramp regime). All `50 / 50` candidates have internal `NaN` gaps from the 7 excluded Check-B frames. `6` scored stars carry `SATURATED`/`NONLINEAR` flags only on excluded frames. `4,632` `CONTAMINATED` measurements omitted from report/CSV. `PERSISTENCE` is the sole failed gate for `14 / 18` `POSSIBLE` candidates. |
-| `m5-reg` | 36 / 32 / 26 | 3.81 | `LIMITED` (median linear range `2.20` mag; `6` shape-failing frames) | 418 / 253 | 0 / 0 / 1 (1 total) | `42 / 253` scored stars carry `SATURATED`/`NONLINEAR` flags only on the 6 excluded frames. |
-| `helix-reg` | 45 / 39 / 28 | 4.86 | `NOT_READY` (`11 / 39` frames = `28.2 %` fail Check B, above `20 %` session cap, though 28 passing frames remain) | 354 / 0 | 0 / 0 / 0 | Allowing the 28 passing frames (`35 %` cap) yields `LIMITED` with 174 scored stars (`27` carrying `NONLINEAR` only on excluded frames). |
-| `dc-reg` | 59 / 52 / 48 | 2.51 | `NOT_READY` (Check D slopes track sky at `r = -0.706`, just beyond `-0.70`) | 8,081 / 0 | 0 / 0 / 0 | Unweighted slope fit in `PhotometricReadinessChecker.tracks` gives equal leverage to noisy frames; Check D is not re-evaluated after excluding the 3 failing Check-D frames. |
-| `m31-red-reg` | 49 / 43 / 16 | 3.92 | `NOT_READY` (`27` response-failing frames, slope tracking, `< 20` final frames) | 429 / 0 | 0 / 0 / 0 | Genuine multi-barrier rejection control (`NOT_READY` should be preserved). |
+**First implementation slice: 1A.** Add chosen-aperture error/identity provenance, preserve the common reference magnitude and all current selection decisions, and verify exported curves against the chosen errors. Do not start by changing gain assumptions, adding a new empirical noise floor, lowering variability thresholds, or redesigning the pipeline.
 
----
+### Real-data evidence used to prioritize the work
 
-### Prioritized improvements to implement
+Use the [VS-11 six-sequence table](#real-data-crosschecks) as the single baseline for frame, star and candidate counts; use [R13](#r13-correct-baseline-labels-and-strengthen-the-verification-protocol) for the distinction between the extraction guide FWHM and measured frame FWHM. The complete native-resolution runs used the shipped profile with photometry enabled, no Auto-Tune and no report export. They completed sequentially and all 263 checked source files were unchanged.
 
-#### Phase 1: Bounded correctness and internal consistency (implement first; zero policy looseness)
+| Evidence | What it supports | What it does not establish |
+|---|---|---|
+| Klangwolke-2: READY; 47 HIGH_CONFIDENCE and 22 POSSIBLE; 42 of those 69 curves use an alternative aperture | Aperture provenance is an exercised production path, so 1A has immediate reporting value. | The 69 candidates are not confirmed variables, and their count is not a completeness or false-alarm measurement. |
+| M81 Kumar: LIMITED; 10 HIGH_CONFIDENCE and 18 POSSIBLE; all 28 use the 1.0-FWHM alternative | Matching the chosen errors matters for every reported candidate in this run. | LIMITED alone does not establish bad data. M81 has both a narrow shape range and inconclusive response leverage. |
+| 73 M81 stars excluded for median SNR meet the SNR criterion on final active frames; M5 has two crossings upwards and six downwards | Already-rejected frames can change star qualification in either direction. Prioritize early-mask isolation. | These are criterion changes; they are not 73 newly recovered variables or the output of a changed full pipeline. |
+| 42 M5 scored stars have nonlinear/saturated flags only on excluded frames; six M81 stars have that pattern | Check the final-frame scope of LINEARITY and keep historical flags separate from scored evidence. | No M81 candidate was demoted solely by that historical-flag pattern. These counts are not lost-variable counts. |
+| Opposite aperture curves pass HIGH_CONFIDENCE in all 30 scorer controls | VS-5 has a concrete false-agreement counterexample. | A new correlation cutoff or independent-error model has not been calibrated by that example. |
+| Helix and DC can enter LIMITED after isolated scratch changes; m31-red has several current blocking criteria | Readiness policies deserve controlled investigation after the correctness work. | More scored stars or candidates does not prove that a relaxed readiness policy is safe. |
 
-These items fix internal state mismatches where the code does not evaluate what it intends to evaluate:
+No fresh full-sequence rerun is needed just to rewrite this plan. The existing results establish priorities. Each engine change below gets its own before/after comparison using an explicitly captured baseline.
 
-1. **Selected-aperture consistency (`VariableStarAnalyzer.chooseApertures`, `StarLightCurve`, `VariabilityScorer.runGates`) — from [VS-11](#comparison-with-romanishin-2002-and-stetson-1996-2026-11-02) Finding 1 & [follow-up](#additional-code-level-findings-2026-11-02-follow-up) #1:**
-   - *Fix:* Carry `magError`, `starMag` (`meanMag`) and per-measurement quality flags (`BAD_FLUX`, `SATURATED`, `NONLINEAR`) per aperture solution; when `chooseApertures` selects an alternative aperture (`0.7x`, `1.0x` or `2.0x FWHM`) for a brightness bin, update `curve.deltaMag`, `curve.magError` and `curve.meanMag` together, record the selected aperture factor/radius on `StarLightCurve`, and normalize the `APERTURE` gate against a consistent reference amplitude.
-   - *Real-data impact:* Directly corrects the error bars, mean magnitudes and gate denominators for **87.8 % of scored stars (`42 / 69` reported candidates) on `klangwolke-2`** and **88.1 % of scored stars (`28 / 28` reported candidates) on `M81-kumar-L-dataset-registered`**.
-2. **Exclude already-rejected frames from pre-solve star exclusions, shape contamination and the `LINEARITY` gate (`VariableStarAnalyzer`, `VariabilityScorer`) — from [VS-11](#gate-and-default-assessment) & [follow-up](#additional-code-level-findings-2026-11-02-follow-up) #2:**
-   - *Fix:* Guard `flagContaminatedShapes`, the star-level `MAX_NONLINEAR_SHARE` (`> 50 %` nonlinear) and `photometryMinSnr` exclusions, and `VariabilityScorer`'s `LINEARITY` gate by `frameActive[j]` so that frames already rejected by registration or Check B/D cannot distort `typical` concentration, inflate shape `spread`, exclude stars before the solve, or demote candidates via `LINEARITY`. Retain `LINEARITY` warnings for saturated/nonlinear measurements that occur on *active* frames.
-   - *Real-data impact:* Removes excluded-frame leakage on `M81-kumar-L-dataset-registered` (7 excluded Check-B frames, 6 history-only stars), `m5-reg` (6 excluded frames, 42 history-only stars) and `helix-reg` (11 excluded frames, 27 history-only stars).
-3. **Deterministic streak-piece interpolation (`VariableStarAnalyzer.flagTrack`) — from [VS-10](#vs-10-deterministic-streak-interpolation-for-photometry):**
-   - *Fix:* When a streak track skips a frame and multiple streak pieces share a bounding frame, select the interpolation reference and footprint geometry deterministically (independent of input piece list order) without expanding masks into a full path-wide veto.
-   - *Real-data impact:* Eliminates permutation dependence in unobserved-frame streak masking on `klangwolke-2`.
-4. **Retained sky pixel count in `magError` (`ApertureMeasurer`) — from [VS-11 follow-up](#additional-code-level-findings-2026-11-02-follow-up) #4:**
-   - *Fix:* Return the post-clipping `kept` sky pixel count from `clippedMedianAndSigma` and use `kept` (rather than the unclipped annulus count `skyCount`) in `fluxSigma = skySigma * sqrt(nAp * (1 + nAp / kept))`.
-5. **Report/CSV `CONTAMINATED` column and spatial-plane cutout scaling (`PhotometryReportSectionWriter`) — from [VS-11 follow-up](#additional-code-level-findings-2026-11-02-follow-up) #6:**
-   - *Fix:* Include `PhotometryFrameStat.contaminated` in both the HTML Per-Frame Measurements table and `photometry_frames.csv`, and include the fitted spatial plane term `planeX * xNorm + planeY * yNorm` alongside `faintZeroPoint - brightZeroPoint` when scaling the faintest-frame comparison cutout in `matchedCutouts`.
-   - *Real-data impact:* Surfaces `17,007` previously hidden frame-table exclusions on `klangwolke-2` and `4,632` on `M81-kumar-L-dataset-registered`.
+### Stage 1 — Product consistency
 
----
+#### 1A. Associate each curve with its chosen aperture and errors — ready
 
-#### Phase 2: Solver convergence, temporal aperture agreement and readiness policy (`VS-2`, `VS-5`, `VS-9`, `VS-11`)
+**Why / benefit.** `chooseApertures` can replace the main residuals while leaving main-aperture errors attached. Correcting that association makes plots, exported uncertainties and API products describe the same measurements. It does not claim to turn the existing background-based error approximation into a calibrated total uncertainty.
 
-1. **Full-correction convergence in `EnsembleSolver` — from [VS-2](#vs-2-convergence-of-the-full-ensemble-correction):**
-   - *Fix:* Check convergence on the maximum change in predicted frame correction `|Delta Z(j) + Delta a(j) * x + Delta b(j) * y|` across usable stars (covering both zero points and spatial plane coefficients in magnitude units), and record whether the solver converged or hit `MAX_ITERATIONS`.
-2. **Temporal agreement in the `APERTURE` gate and small-aperture sub-pixel safety (`VariabilityScorer`, `ApertureMeasurer`) — from [VS-5](#vs-5-temporal-agreement-between-photometry-apertures) & [VS-11 architectural item](#architectural-assessment-and-further-algorithmic-items-2026-11-02-follow-up) #4:**
-   - *Fix:* Evaluate `APERTURE` on the intersection of frames where small, main and large aperture residuals are all finite; require uncertainty-aware temporal agreement (not just equal 5th-95th percentile range, which currently passes reversed curves in 30/30 controls); and enforce a minimum effective pixel radius or sub-pixel oversampling when `R_SMALL` falls below `~2.0` px (as on `M81-kumar-L-dataset-registered`, where `FWHM = 2.24` px gives `0.7x` `r_ap = 1.57` px).
-   - *Real-data impact:* `APERTURE` is the #1 failing gate on `klangwolke-2` (`29 / 96` candidates) and fails `8 / 50` candidates on `M81-kumar-L-dataset-registered`.
-3. **Check B effective reference-star count and Check D weighted slope tracking + post-exclusion re-evaluation (`PhotometricReadinessChecker`, `DetectionConfigRules`, `VariableStarAnalyzer`) — from [VS-9](#vs-9-selected-stars-and-the-linearity-check-minimum) & [VS-11 follow-up](#additional-code-level-findings-2026-11-02-follow-up) #5:**
-   - *Fix:*
-     - Account for the `90 %` faint bound when validating `photometryMaxStars` against `linearityMinStars` (`>= 55` ideal distinct stars for 50 counted references) and distinguish insufficient reference count (`INCONCLUSIVE`) from measured bright-end shape nonlinearity (`FAIL`).
-     - Weight the slope regressions in `PhotometricReadinessChecker.tracks` by `1 / responseSlopeError^2` instead of uniform `1.0` weights, and re-evaluate `readiness.responseCheck` on the retained frames after excluding frames where `response.frameFails[j]` is true.
-     - Decouple `responseCheck = INCONCLUSIVE` caused solely by stable sky transparency (`zeroPointRangeMag < 0.05` mag, as on `M81-kumar-L-dataset-registered` and nearly on `klangwolke-2`) from doubling the candidate amplitude floor (`LIMITED_MIN_AMPLITUDE = 0.10` mag); stable transparency is benign when frame slopes are flat.
+**Contract.** Use the same current error formula separately for each measured aperture, reusing the existing measurement pass. Retain the main-aperture error for the existing pre-solve SNR and Check-B decisions. After the existing aperture choice, associate the selected residuals with the selected errors and record the nominal aperture factor/identity. Keep `meanMag` as the common main-reference brightness coordinate for binning and magnitude-neighbour comparisons. Preserve main quality flags and their current meaning at this step; do not copy a main-magnitude NONLINEAR threshold to an unmapped alternative magnitude. Actual radii come from frame FWHM and `PhotometryGeometry`, including its floors; do not present one guide radius as the radius used on every frame.
 
----
+**Implementation boundary.** Keep one authoritative error result per measured aperture, with clear main versus selected consumers. Avoid another extraction pass, retaining extra full-frame images, or creating a second aperture-selection policy in the report. Update JTransient products and their SpacePixels/API/CSV/report consumers together where the metadata is exposed. Review additive export fields and documentation as part of the same change.
 
-#### Phase 3: Gap-aware serial statistics, empirical noise calibration and centroid/extinction refinements
+**Verification / completion.** Force main, tiny, small and large choices in focused controls, including unchanged-main, tied/equal aperture options, nonfinite errors and frame-varying FWHM. Assert correct selected residual/error pairing and preserved reference-magnitude semantics. A report/export control checks the same association. On Klangwolke-2 and M81, expected changes are errors and explicit aperture metadata; chosen apertures, flags, residuals, scores, candidate identities and tiers must remain unchanged. Complete the engine/API/application checks and remaining required reference comparisons before sign-off. Measure added memory and time on the large sequence.
 
-1. **Gap-aware outlier filtering and serial statistics (`VariabilityScorer`) — from [VS-11](#comparison-with-romanishin-2002-and-stetson-1996-2026-11-02) Finding 3 & [follow-up](#additional-code-level-findings-2026-11-02-follow-up) #3:**
-   - *Fix:* Do not bridge across excluded/`NaN` frames (or large timestamp gaps when timestamps are available) in `removeIsolatedOutliers`, `stetsonJ`, `longestDeviatingRun`, `splitHalfCorrelation` and `differenceCorrelation`. Only immediately adjacent active frames (or pairs within a bounded cadence multiple) should count as serial neighbors.
-   - *Real-data impact:* Directly affects `M81-kumar-L-dataset-registered`, where all `50 / 50` score candidates contain internal `NaN` gaps from the 7 excluded Check-B frames.
-2. **Empirical magnitude-dependent error floor and candidate self-leverage check (`ApertureMeasurer`, `EnsembleSolver`, `VariabilityScorer`) — from [VS-11](#comparison-with-romanishin-2002-and-stetson-1996-2026-11-02) Findings 2 & 4, and [architectural item](#architectural-assessment-and-further-algorithmic-items-2026-11-02-follow-up) #1:**
-   - *Fix:* Use the empirical RMS-vs-magnitude locus of constant stars (already estimated by `VariabilityScorer`) to calibrate per-point `magError` / noise gating when camera gain or scintillation floor is unknown, and exclude or leave-one-out adjust high-leverage candidate stars from the final ensemble reference so a bright variable cannot attenuate its own residual by `(1 - f)`.
-3. **Per-frame windowed centroid refinement and differential extinction warning (`VariableStarAnalyzer`, `ApertureMeasurer`, `VariabilityScorer`) — from [VS-11 architectural items](#architectural-assessment-and-further-algorithmic-items-2026-11-02-follow-up) #2 & #5:**
-   - *Fix:* Evaluate a small windowed per-frame centroid refinement for high-SNR stars to prevent edge-of-field differential refraction/distortion drift from masquerading as smooth variability in `0.7x`/`1.0x` apertures, and flag candidates whose `deltaMag` correlates strongly with frame zero point `z_j` (second-order color/airmass extinction).
+#### 1B. Add the contamination aggregate to frame reporting — ready
 
----
+**Why / benefit.** The engine already records `PhotometryFrameStat.contaminated`, but the per-frame HTML and frame CSV omit it. Show the existing aggregate so users can understand measurement losses without inspecting individual flagged curves.
 
-### Verification protocol for VS-12
+**Contract.** Add the aggregate column to the per-frame table and `photometry_frames.csv`; preserve existing point flags, scientific outputs and category meanings. Explain that flag counts can overlap and count measurements, not distinct objects. Keep this separate from cutout calibration.
 
-Every phase must be verified against:
-1. **Unit and synthetic sensitivity suite:** `PhotometrySensitivityTest` and `PhotometricReadinessCheckerTest` (covering selected-aperture error/flag propagation, excluded-frame isolation, deterministic streak-piece permutations, `EnsembleSolver` spatial-plane convergence, opposite-phase vs. noisy coherent `APERTURE` curves, and gap-aware `removeIsolatedOutliers` / `stetsonJ`).
-2. **Real-data regression batch:** Run all six reference sequences (`klangwolke-2`, `M81-kumar-L-dataset-registered`, `m5-reg`, `helix-reg`, `dc-reg`, `m31-red-reg`) before and after each phase, recording readiness verdicts, retained frames, aperture choices, gate failure counts, candidate lists (`HIGH_CONFIDENCE`, `POSSIBLE`, `REJECTED`), and processing time.
+**Verification / completion.** Rendering/export tests check the column, headers and exact engine count, including zero and overlapping flags. Use saved result fixtures where possible. No new image processing or full-resolution run is needed solely to verify this presentation-only addition. Document the CSV header change.
+
+### Stage 2 — Evidence isolation and solver correctness
+
+The following are separate changes. Keep the existing configured thresholds while measuring the consequences of corrected evidence.
+
+#### 2A. Isolate pre-solve star statistics from frames already rejected — ready
+
+**Why / benefit.** Excluded registration/Check-B frames still affect shape-contamination reference statistics, median SNR and the mostly-nonlinear exclusion. Removing that contribution should make star qualification describe the frames actually available at that stage. The M81 SNR comparison gives this item direct practical value.
+
+**Contract.** Use the post-registration/post-Check-B frame mask consistently in shape-reference/group statistics, measured/nonlinear counts and SNR qualification. Keep excluded measurements and their flags available for inspection. Handle empty or insufficient reference sets explicitly. This step does not promise to remove later Check-D/spatial rejections from statistics computed earlier; the late-mask recomputation decision is 4A.
+
+**Verification / completion.** Poison only an early-excluded frame and show that it cannot change retained-frame shape flags or qualification. Verify that an equally bad active frame still matters. Cover low-SNR, mostly nonlinear, sparse reference and insufficient-data cases. Run all six sequences and compare qualified stars, contamination flags and candidates. Recompute the actual M81 outcome rather than assuming all 73 SNR crossings become accepted/scored stars. Report losses as well as gains.
+
+#### 2B. Apply LINEARITY only to measurements on final active frames — ready
+
+**Why / benefit.** Historical nonlinear/saturated flags should remain visible without penalizing a candidate whose affected frames are absent from the analysis. Clipping on retained frames must still warn because missing bright states can bias a light curve.
+
+**Contract.** Supply/use the final frame mask in the gate. Inspect flags on active frames even when that particular measurement is unusable; do not filter through the `usable` matrix, which already removes SATURATED/NONLINEAR points. Preserve stored historical flags and all other gate rules.
+
+**Verification / completion.** Paired controls differ only in whether a clipped frame is active. The excluded-frame case loses only the historical LINEARITY penalty; the active-frame case retains it. Test interaction with one other failed gate and all exclusion stages. Compare M5, M81 and the remaining sequences, reporting actual tier changes; a history-only flag count is not a recovery claim.
+
+#### 2C. Make streak interpolation independent of piece order (VS-10) — ready for bounded design and implementation
+
+**Why / benefit.** A permutation of identical physical fragments should not change which photometry measurements are masked. Stable contamination flags make scientific outputs reproducible and later comparisons interpretable.
+
+**Contract.** State the deterministic bounding-frame reference, footprint selection and tie-breaking policy in tests before wiring it into `flagTrack`. Preserve original frame IDs/times, observed-frame behavior and mask extent. Keep track finding/linking and candidate thresholds unchanged; do not introduce a full predicted-path mask.
+
+**Verification / completion.** Compare original, reversed and shuffled piece order, shared-frame fragments, equidistant choices, missing middle frames, non-contiguous indices and available/missing timing. The same geometry must yield identical flags. Revisit the recorded Klangwolke-2 geometry and compare all affected light-curve/candidate products, not just a screenshot. Close the original VS-10 item only when this bounded requirement is met.
+
+#### 2D. Converge the full fitted correction and report exhaustion (VS-2) — ready
+
+**Why / benefit.** A stable zero point alone does not establish a stable spatial correction. Gate calibration should use residuals from a demonstrably settled fit rather than compensate for an early stopping defect.
+
+**Contract.** Compare predicted corrections at usable positions in a consistent gauge, covering zero points and spatial terms in magnitude units. Start with the existing magnitude tolerance and iteration cap; test the final correction against the final robust weights and observe weight stability. Report converged versus exhausted status. Do not silently add a new readiness failure, change the fitting model, or increase the cap to hide an unresolved stopping rule.
+
+**Verification / completion.** Reproduce the symmetric-gradient failure and test zero-point-only fits, changing weights/outliers, missing observations, sparse spatial leverage, cancellation and exhaustion. Check that an additional fit under final weights does not materially move a declared-converged correction. Compare residual trends, retained frames, readiness and candidates on all six sequences and the required remaining reference set. Report any cost increase and any exhaustion cases separately.
+
+#### 2E. Align the star-cap warning with Check B's effective reference requirement (VS-9, warning portion) — ready
+
+**Why / benefit.** A cap equal to the nominal reference minimum can be insufficient after the faint-bound selection. A useful warning avoids wasted runs and explains a limitation without rejecting otherwise acceptable inputs.
+
+**Contract.** Preserve warning severity. Explain selected, measurable and counted references, the actual rank policy and ties. The distinct-magnitude 50/55 case is an illustrative bound, not a promise that 55 arbitrary stars pass. Reuse the authoritative engine validation rule and its application metadata; do not add a parallel GUI rule. Do not change per-frame FAIL/INCONCLUSIVE classification or its session denominator here; those belong to 4B.
+
+**Verification / completion.** Extend the existing 50/55 controls to caps around the boundary, ties, custom minima, flags and insufficient range. Compare warnings and confirm unchanged scientific output for the unlimited shipped cap. A full image rerun solely for the warning is unnecessary if the engine acceptance/analysis path is unchanged; run the relevant validation and application tests.
+
+#### 2F. Return the sky sample count that produced the estimator — implement with numerical validation
+
+**Why / benefit.** The uncertainty approximation currently uses the pre-clipping annulus count. Keeping count, sky level and sky scatter associated improves the internal basis of that approximation.
+
+**Contract.** Return the final sample count corresponding to the returned median/scatter and use it in the existing count term. Handle early termination/minimum-sample cases consistently. Keep this distinct from new source-Poisson, median-variance, squared-weight or correlation models. Because the main error feeds SNR and Check B, this is an error calculation change with possible scientific-selection effects, not just metadata repair.
+
+**Verification / completion.** Use known sky samples with and without clipping, contaminated annuli and minimum-sample cases. Verify the no-clipping control, the direction and size of changed uncertainties, and downstream SNR/shape decisions. Recompare all six real datasets and the required regression set before adoption. Retain the documented approximation and record remaining calibration limitations rather than implying a full error budget is now solved.
+
+### Stage 3 — Temporal aperture evidence (VS-5)
+
+#### 3A. Define valid matching support before comparing or adopting apertures — test/design first
+
+**Why / benefit.** A smaller scatter is not evidence of a better aperture if that aperture merely lacks the difficult measurements. A consistency comparison also needs the same observation identities on each curve.
+
+**Contract to settle in controls.** Define eligible alternatives, matched finite measurements, minimum comparison support and main-aperture fallback. Test an alternative with missing/noisy points so it cannot appear superior through selective loss alone. Do not let a weak optional aperture remove good main-aperture measurements silently. Preserve the common reference magnitude, effective geometry and current mask protections unless a separately recorded change is justified.
+
+**Verification / completion.** Main-only, fully matched, partly missing, different missing-frame subsets, low-flux, clipping and edge cases must have explicit expected outcomes. Measure changed aperture choices on Klangwolke-2 and M81 and inspect their consequences before selecting a coverage rule. This can be developed independently of a new temporal statistic, but a changed aperture-selection policy needs its own result comparison.
+
+#### 3B. Require temporal agreement with noise/covariance-aware controls — validation before a new gate/default
+
+**Why / benefit.** Equal amplitudes can hide opposite or unrelated curves. A temporal test should reject that false support while preserving genuine variation measured with different noise in concentric apertures.
+
+**Contract.** Compare the selected curve and fixed comparison curves on defined shared observations. State the statistic, noise treatment and unavailable-evidence result. Account for correlated errors from overlapping apertures and shared ensemble fitting; do not assume independent formal errors or make a complete physical error model a prerequisite to testing the known counterexample. Retain the current normalization until its replacement, if any, is separately justified.
+
+**Verification / completion.** Require coherent and opposite-phase controls, time-shifted curves, heteroscedastic noise, low amplitude, unequal missing measurements, blending, seeing changes and sky errors. Include pixel-level injections through measurement/fitting, not only post-ensemble scorer fixtures. Select the metric/limits from recovery and false-acceptance comparisons, record that choice, then integrate it. The 29 Klangwolke-2 and eight M81 APERTURE failures are examples to inspect; they are not a target number of rejections to remove. Verify proposed thresholds on additional controls not used to choose them.
+
+**No generic supersampling change is planned.** R_SMALL is 1.0 FWHM, the tiny/CI aperture is 0.7 FWHM, and 5 x 5 fractional-pixel integration already exists. Revisit radius/integration accuracy only if phase/PSF controls demonstrate a consequential error; use actual frame geometry and recalibrate any changed CI or comparison measurement.
+
+### Stage 4 — Measured policy and calibration work
+
+These are separate investigations with adoption criteria. Failure to show a useful benefit is a valid reason to defer or close an item; do not add every possible refinement to the pipeline.
+
+| Item | Why / expected benefit | Required evidence and adoption decision |
+|---|---|---|
+| 4A. Late-frame population lifecycle | Check D/spatial rejection can happen after star statistics. A defined final-mask policy could remove residual evidence leakage. | After Stage 2, compare frozen early statistics with at most one explicitly bounded recomputation. Preserve original and final reasons. Define dependencies and stopping behavior; do not loop rejection/refitting until READY. Measure qualified stars and false candidates before selecting a policy. |
+| 4B. Check-B low-count status and retained-subset readiness | Distinguish insufficient evidence from measured nonlinearity and potentially retain a trustworthy subset. | Test FAIL versus INCONCLUSIVE denominator effects, known-linear data with controlled bad frames, and known response faults. Preserve the original-session diagnosis separately. Helix's 28 remaining frames motivate the study but do not certify its retained photometry. Keep the insufficient-final-frame guard. |
+| 4C. Check-D slope-tracking weights | Frame slopes have different precision; consistent weighting might improve reliability. | Compare weighted correlation and regression together with current tracking. Handle invalid/zero errors and correlated ensemble estimates; test real faults and clean controls. DC's near-threshold correlation is a diagnostic case, not proof of a wrong rejection. Choose weights only after the residual model is stable. |
+| 4D. Reason-specific LIMITED handling | A single amplitude penalty combines distinct limitations. A more specific policy might improve useful sensitivity. | Test stable transparency separately from clipping, inadequate shape range and response faults. M81 still has a 2.14-mag shape-range limitation even if its response reason is treated differently. Use physical image injections rather than assuming an unchanged light curve when transparency changes. No blanket 0.10-to-0.05 relaxation is specified. |
+| 4E. Gap-aware outlier support and serial evidence | Prevent artifacts from supporting each other across gaps while retaining useful evidence of smooth variation. | Study outlier-survival support separately from J, persistence, split pairs and driver differences. Use original frame IDs, timing, irregular cadence and untimed cases. Quantify both missed variables and false support. Record the new scope/decision without silently reopening the closed VS-6 proposal or choosing an arbitrary cadence multiple. |
+| 4F. Per-point uncertainty coverage | Better calibrated errors would improve interpretation and any future uncertainty-aware tests. | After 1A/2F, compare blank apertures, constant-star repeatability, known gain/scaling where available, variable observing conditions and resampling. Separate formal per-point errors from empirical total residual scatter. Do not double-count background/read components, assign one empirical RMS as every exposure's uncertainty, or add an unsupported numerical correlation correction. |
+| 4G. Candidate self-leverage | Determine whether the current robust ensemble materially attenuates important candidates. | Compare a bounded sample of ordinary and high-leverage candidate-excluded/held-out fits, especially with uneven spatial weights. Report measured amplitude differences and cost. Adopt extra fits only if the benefit matters; the simplified `(1 - f)` argument is not a measured attenuation for this solver and does not justify per-star refitting of every source. |
+| 4H. Spatial correction of comparison cutouts | Make visual comparisons easier to interpret under changing field gradients. | After aperture identity is reliable, choose an explicit main-reference display or selected-solution display contract. Use the star's original normalized coordinates and the appropriate `Z + a*x + b*y` difference. A main-plane addition cannot claim exact selected-curve calibration. Test constant stars under injected gradients, missing corrections, captions and unchanged pixels/measurements. If the extra selected-model plumbing is disproportionate, document the display limitation and defer it. |
+| 4I. Fast/brief variability coverage | Determine whether extending the discovery scope would recover useful eclipses/rapid variables. | Use periods, durations, phases, cadence, missingness, realistic artifacts and image-level truth. Compare a bounded alternative with the existing conservative search. Do not respond to scorer-only misses by lowering all correlated evidence requirements or adding an unmeasured parallel pipeline. |
+
+**Outside this roadmap's implementation scope:** per-star recentering remains a PT-5 investigation; a duplicate standalone zero-point-correlation warning is dropped. The current empirical noise model remains active. There is no new gain assumption, fixed three-frame coherence scheme, generic supersampling layer, full Stetson/Cepheid pipeline, or requirement for catalogue-certified constant stars.
+
+### Per-change verification and completion
+
+| Type of change | Verification and expected interpretation |
+|---|---|
+| Reporting/metadata only (1A/1B) | Focused measurement/product/export tests; JTransient API and affected SpacePixels checks where applicable. Reuse saved results for presentation tests. For 1A compare both large native sequences and required engine regressions: scientific selection/residuals must be unchanged while errors/identity change as specified. No image rerun for a column-only change. |
+| Evidence, fitting, masks or numerical error changes (Stage 2) | Add a focused reproducer first; run JTransient `check`/`apiConsumer`, SpacePixels tests and per-change real comparisons. The six reviewed sequences are the minimum development set; complete the remaining applicable reference comparisons required by DEVELOPER.md before sign-off. Record star-by-star and frame-by-frame changes, not only totals. |
+| Aperture selection or gate changes (Stage 3) | Positive/negative controls, image-level injections and held-out cases; then the real comparisons above. Report HIGH_CONFIDENCE and POSSIBLE recovery separately, false candidates per field/session, missing-evidence outcomes and cost. Real unlabelled candidates supplement the study; they do not supply its truth labels. |
+| Policy/calibration studies (Stage 4) | State the hypothesis, intended benefit, metrics, accepted failure modes and comparison data before choosing the rule. Preserve diagnostics of the original data. Record a clear adopt/defer decision and numerical policy before production integration. |
+
+**Baseline and regression contract.** Before the first engine edit, preserve the effective profile/options, source revision and deterministic products needed for its allowed-difference check. The existing audit files are a starting point; add masks, stack hashes or other full-result products when a change needs comparisons not captured by the original photometry-only harness. Include unaffected moving-object results in engine checks. Normalize only documented nondeterministic timing/generation fields. A phase is a sequence of independently reviewable changes, not one combined patch.
+
+**Real-data execution.** Use Klangwolke-2's converted sequence and M81 Kumar at native resolution as the principal large checks. Retain m5-reg, helix-reg, dc-reg and m31-red-reg as contrasting development cases, then the other applicable reference datasets. Keep one processing JVM/dataset at a time within the machine's documented memory limit, with scratch `user.home` and all diagnostic outputs outside the repositories. Preserve originals and settings and verify input hashes. No external service upload is needed for this work. Do not rerun unrelated heavy checks merely because a document or display label changed.
+
+**Close-out for each implemented item.** Record why the change was made, its intended and observed effects, unit/API/application results, real-data differences, runtime/memory and remaining limitations. Update current behavior in ALGORITHM.md/CONFIG.md and SpacePixels documentation/API/export contracts as applicable; remove completed proposal entries and update this ordering map. Do not leave an implemented rule described differently in several open proposals.
+
+The review and follow-up below concern the superseded draft. Their agreements are incorporated into the plan above; the old phase numbers in those comments are historical references.
 
 ### Detailed review by Codex (2026-11-02)
 
