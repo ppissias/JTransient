@@ -128,6 +128,60 @@ public class PhotometrySensitivityTest {
     }
 
     /**
+     * The aperture difference is the share of the scored pattern by which the large and small curves differ: 0 when
+     * they agree, -2 for opposite curves, -0.5 when the large aperture shows half, and the leak pattern when only the
+     * large aperture carries most of it. Fewer than three shared frames give no measurement.
+     */
+    @Test
+    public void apertureDifferenceMeasuresTheShareOfThePatternTheAperturesDisagreeOn() {
+        double[] r = new double[FRAMES];
+        double[] half = new double[FRAMES];
+        double[] opposite = new double[FRAMES];
+        double[] faint = new double[FRAMES];
+        for (int j = 0; j < FRAMES; j++) {
+            r[j] = 0.1 * Math.sin(2 * Math.PI * j / 20.0);
+            half[j] = 0.5 * r[j];
+            opposite[j] = -r[j];
+            faint[j] = 0.2 * r[j];
+        }
+        assertEquals(0.0, VariabilityScorer.aperturePatternDifference(r, r, r)[0], 1e-12);
+        assertEquals(0.0, VariabilityScorer.aperturePatternDifference(r, r, r)[1], 1e-12);
+        assertEquals(-2.0, VariabilityScorer.aperturePatternDifference(r, r, opposite)[0], 1e-12);
+        assertEquals(-0.5, VariabilityScorer.aperturePatternDifference(r, r, half)[0], 1e-12);
+        assertEquals(0.8, VariabilityScorer.aperturePatternDifference(r, faint, r)[0], 1e-12);
+        double[] two = Arrays.copyOf(r, FRAMES);
+        Arrays.fill(two, 2, FRAMES, Double.NaN);
+        assertTrue(Double.isNaN(VariabilityScorer.aperturePatternDifference(two, r, r)[0]));
+    }
+
+    /** The gate fails a difference beyond the allowed share only when it is also beyond two standard errors. */
+    @Test
+    public void apertureGateNeedsADifferenceBeyondTheShareAndTwoStandardErrors() {
+        assertFalse(VariabilityScorer.apertureFails(new double[]{0.2, 0.01}, 0.3));
+        assertFalse("a noisy difference is not evidence", VariabilityScorer.apertureFails(new double[]{0.45, 0.25}, 0.3));
+        assertTrue(VariabilityScorer.apertureFails(new double[]{0.45, 0.10}, 0.3));
+        assertTrue(VariabilityScorer.apertureFails(new double[]{-0.45, 0.10}, 0.3));
+        assertTrue("an unmeasurable difference fails", VariabilityScorer.apertureFails(new double[]{Double.NaN, Double.NaN}, 0.3));
+    }
+
+    /**
+     * VS-11's counterexample: the large curve is the opposite of the main and small curves, with equal ranges. The
+     * old amplitude comparison passed it; the temporal comparison fails it, and only APERTURE fails.
+     */
+    @Test
+    public void oppositeApertureCurvesFailTheApertureGate() {
+        for (int seed = 1; seed <= 5; seed++) {
+            Fixture fixture = fixture(0.03, 40, 2, seed);
+            for (int j = 0; j < FRAMES; j++) fixture.large[0][j] = -fixture.target().deltaMag[j];
+            score(fixture, false, new DetectionConfig());
+            assertEquals(List.of("APERTURE"), fixture.target().failedGates);
+            assertEquals(VariabilityTier.POSSIBLE, fixture.target().tier);
+            assertEquals(-2.0, fixture.target().aperturePatternDifference, 0.1);
+            assertNoQuietCandidates(fixture);
+        }
+    }
+
+    /**
      * Flags the target's measurement in {@code frame} as non-linear, as check B does. On an active frame only that
      * measurement becomes unusable; an excluded frame is unusable and unsolved for every star, as the analyzer
      * leaves it whichever check excluded it.

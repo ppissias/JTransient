@@ -830,7 +830,7 @@ SPLIT_HALF gate: correlation between consecutive non-overlapping measurement pai
 
 ### `variableMaxApertureAmplitudeDifference` (default `0.3`)
 
-APERTURE gate: amplitudes from the 1.0 x and 2.0 x FWHM apertures may differ by at most this fraction of the main amplitude.
+APERTURE gate: the largest share of a candidate's variation by which its 1.0 x and 2.0 x FWHM curves may differ through time (the slope of their difference against the scored curve). A larger difference fails the gate only when it is also beyond two standard errors; a difference that cannot be measured fails it. The name is kept for profile compatibility; it compared percentile amplitudes until JTransient 1.0.8.
 
 ### `variableMaxSystematicsCorrelation` (default `0.6`)
 

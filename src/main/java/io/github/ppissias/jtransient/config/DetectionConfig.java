@@ -591,8 +591,8 @@ public class DetectionConfig implements Cloneable {
     /** * Minimum correlation between consecutive measurement pairs (split-half test against white noise). */
     public double variableMinSplitHalfCorrelation = 0.5;
 
-    /** * Largest allowed difference between the amplitudes measured with 1.0 x and 2.0 x FWHM apertures,
-     * as a fraction of the main-aperture amplitude.
+    /** * Largest share of a candidate's variation by which its 1.0 x and 2.0 x FWHM curves may differ through
+     * time (APERTURE gate); a larger difference fails only when it also exceeds two standard errors.
      */
     public double variableMaxApertureAmplitudeDifference = 0.3;
 

@@ -74,7 +74,12 @@ public final class StarLightCurve {
     /** Gate diagnostics, filled only for candidates. */
     public int longestDeviatingRun;
     public double splitHalfCorrelation = Double.NaN;
-    public double apertureAmplitudeDifference = Double.NaN;
+    /**
+     * Share of the scored pattern by which the 1.0 and 2.0 x FWHM curves differ through time (0 when they agree,
+     * -2 for opposite curves), and its standard error; candidates only.
+     */
+    public double aperturePatternDifference = Double.NaN;
+    public double aperturePatternDifferenceError = Double.NaN;
     public double maxSystematicsCorrelation = Double.NaN;
     public String maxSystematicsSource;
     /**

@@ -58,6 +58,11 @@ final class VariabilityScorer {
      * variable into a neighbour's aperture) or a slight common trend correlates without sharing the amplitude.
      */
     private static final double LOCAL_MIN_SHARED_FRACTION = 0.3;
+    /**
+     * The APERTURE gate fails a candidate only when its aperture difference also exceeds this many standard errors,
+     * so a faint real variable whose noisy apertures disagree by chance is not failed.
+     */
+    static final double APERTURE_SIGNIFICANCE = 2.0;
     /** In a sparse field the local comparison stars may come from up to this multiple of the local radius. */
     private static final double LOCAL_MAX_RADIUS_FACTOR = 3.0;
 
@@ -313,18 +318,13 @@ final class VariabilityScorer {
             star.failedGates.add(GATE_SPLIT_HALF);
         }
 
-        // APERTURE
-        double[] smallCurve = new double[r.length];
-        double[] largeCurve = new double[r.length];
-        for (int j = 0; j < r.length; j++) {
-            boolean ok = Double.isFinite(r[j]);
-            smallCurve[j] = ok ? small[j] : Double.NaN;
-            largeCurve[j] = ok ? large[j] : Double.NaN;
-        }
-        double smallAmplitude = PhotometryMath.percentile(smallCurve, 0.95) - PhotometryMath.percentile(smallCurve, 0.05);
-        double largeAmplitude = PhotometryMath.percentile(largeCurve, 0.95) - PhotometryMath.percentile(largeCurve, 0.05);
-        star.apertureAmplitudeDifference = Math.abs(smallAmplitude - largeAmplitude) / star.amplitude;
-        if (!(star.apertureAmplitudeDifference <= config.variableMaxApertureAmplitudeDifference)) {
+        // APERTURE: the 1.0 and 2.0 x FWHM curves must follow the scored pattern alike through time. A star fails when
+        // they differ by more than the allowed share of the pattern and by more than APERTURE_SIGNIFICANCE standard
+        // errors, or when the difference cannot be measured.
+        double[] difference = aperturePatternDifference(r, small, large);
+        star.aperturePatternDifference = difference[0];
+        star.aperturePatternDifferenceError = difference[1];
+        if (apertureFails(difference, config.variableMaxApertureAmplitudeDifference)) {
             star.failedGates.add(GATE_APERTURE);
         }
 
@@ -422,6 +422,65 @@ final class VariabilityScorer {
                 break;
             }
         }
+    }
+
+    /**
+     * Share of the scored pattern by which the large and small aperture curves differ, with its standard error: the
+     * least-squares slope of (large − small) against the scored curve {@code r}, on the frames where all three are
+     * finite. It is 0 when both apertures show the pattern alike, −2 when the large curve is the opposite of the small
+     * one, and −0.5 when the large aperture shows half the variation. The standard error is the slope's regression
+     * error from the residual scatter of (large − small) itself, so noise the overlapping apertures share is included.
+     *
+     * @return {@code [difference, standard error]}, NaN when fewer than three frames or no variation are available
+     */
+    static double[] aperturePatternDifference(double[] r, double[] small, double[] large) {
+        int n = 0;
+        double meanR = 0;
+        double meanD = 0;
+        for (int j = 0; j < r.length; j++) {
+            if (Double.isFinite(r[j]) && Double.isFinite(small[j]) && Double.isFinite(large[j])) {
+                n++;
+                meanR += r[j];
+                meanD += large[j] - small[j];
+            }
+        }
+        if (n < 3) {
+            return new double[]{Double.NaN, Double.NaN};
+        }
+        meanR /= n;
+        meanD /= n;
+        double srr = 0;
+        double sdr = 0;
+        double sdd = 0;
+        for (int j = 0; j < r.length; j++) {
+            if (Double.isFinite(r[j]) && Double.isFinite(small[j]) && Double.isFinite(large[j])) {
+                double dr = r[j] - meanR;
+                double dd = large[j] - small[j] - meanD;
+                srr += dr * dr;
+                sdr += dd * dr;
+                sdd += dd * dd;
+            }
+        }
+        if (!(srr > 0)) {
+            return new double[]{Double.NaN, Double.NaN};
+        }
+        double slope = sdr / srr;
+        double residual = Math.max(0.0, sdd - slope * sdr);
+        return new double[]{slope, Math.sqrt(residual / (n - 2) / srr)};
+    }
+
+    /**
+     * APERTURE decision: fails when the difference cannot be measured, or when it exceeds both {@code maxShare} and
+     * {@link #APERTURE_SIGNIFICANCE} standard errors.
+     *
+     * @param difference {@code [share of the pattern, standard error]} from {@link #aperturePatternDifference}
+     */
+    static boolean apertureFails(double[] difference, double maxShare) {
+        if (!Double.isFinite(difference[0]) || !Double.isFinite(difference[1])) {
+            return true;
+        }
+        double size = Math.abs(difference[0]);
+        return size > maxShare && size > APERTURE_SIGNIFICANCE * difference[1];
     }
 
     /**
