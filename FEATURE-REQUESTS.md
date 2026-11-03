@@ -281,7 +281,7 @@ The agreed order is **product consistency -> evidence isolation and solver corre
 | 3 | Valid cross-aperture support and temporal agreement (VS-5) | Compare curves only after their identity, errors, masks and fitting are reliable. | Reject false agreement such as opposite-phase aperture curves while preserving noisy genuine variability. |
 | 4 | Readiness/subset policies, gap handling, uncertainty coverage, leverage and optional display calibration | These require scientific tradeoffs rather than just consistent state. | Recover useful work or improve reliability only where controlled tests demonstrate that the added complexity earns its cost. |
 
-**Progress.** Step 0 (baseline) and Stages 1-3 are done; Stage 4 (investigations, each ending in a maintainer decision) is next. The [implementation log](#implementation-log) records each stage. Do not start by changing gain assumptions, adding a new empirical noise floor, lowering variability thresholds, or redesigning the pipeline.
+**Progress.** Step 0 (baseline) and Stages 1-3 are done. The Stage 4 investigations are done and await the maintainer's decisions; see the [Stage 4 findings](#stage-4-findings-2026-11-03). The [implementation log](#implementation-log) records each stage. Do not start by changing gain assumptions, adding a new empirical noise floor, lowering variability thresholds, or redesigning the pipeline.
 
 ### Confirmed implementation details (2026-11-02)
 
@@ -414,6 +414,54 @@ These are separate investigations with adoption criteria. Failure to show a usef
 
 **Outside this roadmap's implementation scope:** per-star recentering remains a PT-5 investigation; a duplicate standalone zero-point-correlation warning is dropped. The current empirical noise model remains active. There is no new gain assumption, fixed three-frame coherence scheme, generic supersampling layer, full Stetson/Cepheid pipeline, or requirement for catalogue-certified constant stars.
 
+### Stage 4 findings (2026-11-03)
+
+The evidence for all nine items was gathered before any decision. Sources: the 3B runs of the 18 reference datasets; one temporary probe build (not committed), which reproduces 3B byte for byte on the 12 datasets it ran, both with its switches off and with only its measurements on; a scorer-level injection study; and scripts on the real frames and curves. The scored sessions are Klangwolke-2 and Eagle-noisy (Ready) and M81 Kumar, UG 6524 and m5-reg (Limited). Nothing below changes the pipeline yet. Each item ends with a recommendation for the maintainer.
+
+- **4A. Late-frame lifecycle: recommend defer.** Check D and spatial exclusions happen only in sessions that are not ready (dc-reg 4 frames, m101 47, m31-b 5, m31-g 9, m31-red 27, m81-reg 9). None of the five scored sessions has one, so no scored result on the reference data can change. In those six sessions, recomputing the star statistics and contamination flags on the final frames would change 0.6–5 % of the kept stars and 0.2–2.3 % of the contamination flags on the final frames. Examples: on dc-reg 9 stars leave and 9 join out of 3,188; on m101, 4 and 3 out of 369; on m81-reg, 16 and 8 out of 480, with 7 frames left. Revisit if a ready or limited session with late exclusions appears.
+- **4B. Check B low-count status and retained subset: recommend defer.**
+  - *Low-count status.* Only M81 Kumar has frames that fail for lack of range: five "High-SNR stars span only" frames. No session has a "too few stars" frame. Counting those five as inconclusive gives 2 of 34 failing frames instead of 7 of 39. Both are below the 20 % limit, and the frames are excluded either way.
+  - *Retained subset.* Among the not-ready sessions, only Helix keeps 20 or more frames after check B (28 of 39) and passes check D. whynot-nocalibration (14), m31-b (14), m81-reg (7), ic-5070 (4) and m31-g (2) keep too few, and dc-reg, m101 and m31-red fail check D. A probe made check B Limited when the departing frames are excluded and at least 20 remain. With it, Helix scores 171 stars and finds no candidate.
+  - Adopting the retained subset would first need the controlled bad-frame injection test, and the reference data show no gain to justify it.
+- **4C. Weighted check D tracking: recommend close.** All slope errors are positive. Inverse-variance weights move dc-reg's slope–sky correlation from −0.705 to −0.704 (limit 0.7), and the slope change over the sky range stays 0.0125 mag/mag (limit 0.01). On the other 13 sessions where check D ran, the weighted |r| differs by at most 0.11 (Helix zero point, −0.23 to −0.34). No correlation reaches 0.7 apart from dc-reg's sky, which tracks with and without weights. The per-frame failure rule already uses each slope's error.
+- **4D. Reason-specific Limited: recommend defer.** All three limited sessions are limited by check B's linear range: M81 Kumar 2.14 mag, m5-reg 2.19, UG 6524 2.77 (Limited below 3.0). M81 Kumar is also inconclusive in check D (zero-point range 0.036 mag; 0.05 is needed). No session is limited for a transparency reason alone, so a separate policy for stable transparency would change nothing. The 0.10 mag floor itself affects no current candidate: none of their candidates fails AMPLITUDE, and the smallest candidate amplitude there is 0.107 mag. Showing a benefit would need physical injections of 0.05–0.10 mag variables into these sessions.
+- **4E. Gap-aware outlier support and serial statistics: decision needed.** The outlier support, Stetson J, the persistence runs and the split-half pairs all treat the next usable point as adjacent: across missing measurements, excluded frames and time gaps alike. The probe tried four variants on the five scored sessions; tiers below are high/possible/rejected against 3B.
+  - *Time gaps.* A pair more than twice the median cadence apart is not adjacent. M81 Kumar, observed in 3-frame bursts about 20 minutes apart, goes from 10/17/21 to 0/41/23: every high-confidence star fails PERSISTENCE, including the seven VSX-matched ones. Klangwolke-2 goes from 53/16/29 to 53/15/32. A cadence-gap rule is therefore not usable.
+  - *Any missing frame, excluded frames included.* High-confidence stars change only on UG 6524, as in the next variant. M81 Kumar's possible list exchanges three brief 3-frame excursions for two others, none VSX-matched.
+  - *A missing measurement on a used frame, in all four statistics.* Klangwolke-2 53/16/29 to 53/17/32; M81 Kumar 10/17/21 to 10/17/22; Eagle-noisy 0/1/1 to 0/0/0; UG 6524 0/1/1 to 1/0/2; m5-reg unchanged.
+  - *The same rule applied to the outlier support only.* Klangwolke-2 and m5-reg unchanged; Eagle-noisy 0/1/1 to 0/0/0; M81 Kumar 10/17/21 to 10/18/22; UG 6524 0/1/1 to 1/0/2.
+
+  The one demonstrated false support is Eagle-noisy's possible candidate 720. Two deviations of 1.2 and 1.3 mag, separated by a crossing-flagged frame, support each other as outliers and form a J pair. Under the support rule both are removed as isolated outliers and the star is constant. The other changes are indirect:
+  - M81 Kumar's star 1285, a 3-frame excursion, becomes possible because its neighbours' J statistics drop.
+  - UG 6524's star 117 passes SYSTEMATICS after other stars lose outliers.
+
+  No VSX-matched star changes in any variant other than time gaps.
+- **4F. Per-point uncertainty coverage: decision needed.** The reported error is the sky term σ·sqrt(n(1 + n/n_sky)), which assumes independent pixels. Measured against the constant stars:
+  - *Coverage.* 42–59 % of residuals lie within one formal error on Klangwolke-2, M81 Kumar and UG 6524, and 21–27 % on Eagle-noisy and m5-reg; 68 % is expected. The robust spread of residual/error is 1.22–3.97.
+  - *Faintest stars.* Here the sky term should dominate. Their scatter is 1.14–1.17 times the formal error on the Kumar sessions, 1.46–1.52 on Klangwolke-2, 2.35–2.41 on m5-reg and 2.72–2.91 on Eagle-noisy.
+  - *Blank-sky apertures* on one frame per session explain this. At the 0.7–1.0 FWHM apertures those stars use, the measured noise is 1.13–1.17 times the formula on UG 6524 and M81 Kumar, 1.56 on Klangwolke-2, 2.17–2.33 on Eagle-noisy and 2.32 on m5-reg. It rises slowly with aperture size (m5-reg: 2.32 at 0.7 FWHM to 2.77 at 2.0 FWHM). Registration interpolates, so neighbouring pixels share noise; the lag-1 pixel correlation reaches 0.9.
+  - *Brighter stars* show a further excess (up to 2.9 times on Klangwolke-2 and 11 times on Eagle-noisy at the bright end). Its causes are star photon noise, scintillation and flat-field errors, which would need a gain or an empirical model; that is outside this roadmap.
+  - *Where the errors are used.* Scoring uses the empirical noise model, so candidates do not depend on these errors. They do feed the median-SNR star cut (`photometryMinSnr` 10), check B's choice of high-SNR shape stars, the error bars and the CSV.
+
+  The options:
+  - (a) Keep the current errors and document them as a lower bound.
+  - (b) Measure a blank-sky factor per frame and aperture, and apply it to the reported errors only.
+  - (c) Apply it everywhere, so the SNR cut and check B use the corrected errors. Fewer stars would pass on m5-reg and Eagle-noisy, verdicts could change, and a full regression would be needed.
+- **4G. Candidate self-leverage: recommend close.** Each of the 151 candidates on the five scored sessions was refitted with the candidate held out of the ensemble. The in-fit amplitude is at least 0.997 of the held-out one (median 0.9996–1.0000). The fitted correction at the star moves by at most 0.0005 mag. That holds at the field corners (M81 Kumar's star 568 at −0.87, −0.81) and in the small ensembles of UG 6524 (197 stars per frame) and m5-reg (246). The Cauchy-weighted ensemble does not measurably attenuate candidates, so per-candidate refits are not needed; they would cost 95 s for Klangwolke-2's 98 candidates.
+- **4H. Plane correction for the cutouts: recommend defer.** The cutouts match the local sky and the zero point Z, but leave out the plane term a·x + b·y. Over the 98 reported candidates, that term between each candidate's brightest and faintest frame, at its position, has a median of 0.003 mag and a maximum of 0.020 mag (M81 Kumar). That is a median of 1 % and at most 12 % of the brightness change shown. This is not visible on the display scale, and the caption ("matched local backgrounds and transparency") stays accurate.
+- **4I. Brief and fast variability: recommend defer.**
+  - *Current coverage.* Scorer-level injections used 28 and 40 frames, 40 seeds per case and 9–18 mmag noise:
+    - Single-frame events are removed as isolated outliers.
+    - Dips of 2–4 frames reach at most possible, because PERSISTENCE needs 5 frames (0–15 % of 4-frame dips reach high).
+    - Dips of 6 frames or more are high confidence from 0.05–0.10 mag up.
+    - Flares with short decays are mostly possible or rejected.
+    - Pulsations with periods of 3–4 frames are never candidates, because J is negative for alternating points. Periods of 6–8 frames reach possible, and 12 frames reach high confidence.
+  - *Alternative tested.* The largest mean of 1–6 consecutive points against the star's robust scatter, thresholded at one false alarm per 1,000 real constant stars. It recovers 0.10 mag dips of 1–4 frames in 43–68 % of cases on Klangwolke-2 and 57–86 % on UG 6524, but almost none on M81 Kumar, Eagle-noisy and m5-reg. There, constant stars have heavy-tailed brief excursions: on M81 Kumar, 11 % exceed 5 sigma, and the threshold rises to 24.5.
+  - *A related observation.* 14 of M81 Kumar's 17 possible candidates are 1–4-point excursions in a few 3-frame groups.
+  - A brief-event search would first need image-level vetting of such excursions. The current limit (variation must last about five frames) can be stated in the manual.
+
+**Decisions put to the maintainer (2026-11-03):** 4E (support rule only, all four statistics, or defer), 4F (option a, b or c), and confirmation of the recommendations to defer 4A, 4B, 4D, 4H and 4I and to close 4C and 4G.
+
 ### Implementation log
 
 What was done at each stage, how it was checked, what it changed and anything that needed a decision. Commits are in JTransient (JT) and SpacePixels (SP); none has been pushed.
@@ -433,7 +481,12 @@ What was done at each stage, how it was checked, what it changed and anything th
 - **3A, investigation.** The probe measured lost measurements and actual radii (see the 3A findings): matched comparison and a main-aperture fallback change nothing on the reference data, while checking the 2-pixel minimum on actual radii costs M81 Kumar a VSX-matched high-confidence variable. The radius rule was put to the maintainer before implementation.
 - **3A, implementation (JT `6455aec`, SP `b2ee13d`).** The maintainer chose the 1.5 px floor on the smallest actual radius. Implemented with matched comparison and the main-aperture fallback; all 18 reference reports are byte-identical to 2F. Tests: JTransient 322, SpacePixels 745.
 - **3B, study.** As in the 3B study above: a probe build, scorer-level controls with held-out variants, pixel-level sessions and the 151 real candidates. The statistic and its thresholds were put to the maintainer before implementation.
-- **3B, implementation (this change).** The maintainer chose |difference| > 0.3 and > 2 standard errors. Real-data tier changes match the probe's predictions exactly; the SpacePixels setting is now labelled *Max Aperture Difference* (same profile key) with a tooltip, gate texts and a card metric for the new statistic. Tests: JTransient 325, SpacePixels 745. Closes VS-5.
+- **3B, implementation (JT `a3c6460`, SP `f8e72f3`).** The maintainer chose |difference| > 0.3 and > 2 standard errors. Real-data tier changes match the probe's predictions exactly; the SpacePixels setting is now labelled *Max Aperture Difference* (same profile key) with a tooltip, gate texts and a card metric for the new statistic. Tests: JTransient 325, SpacePixels 745. Closes VS-5.
+- **Stage 4, investigations (2026-11-03).** As in the Stage 4 findings above.
+  - *Probe build.* One temporary probe build (not committed) added measurements for 4A, 4F and 4G and switches for 4B and 4E. It reproduced 3B byte for byte on 12 datasets with only its measurements on. It then ran the retained-subset switch on Helix and four gap variants on the five scored sessions; Klangwolke-2 ran alone at 10 GB, in the foreground.
+  - *Other evidence.* A scorer-level injection study (4I), and scripts on the 3B frames, curves and FITS frames for 4C, 4D, 4F (blank-sky apertures), 4H and the 4I alternative.
+  - *Afterwards.* The sources were restored, and the SpacePixels install was rebuilt and checked against 3B's classes.
+  - *Recommendations.* Defer 4A, 4B, 4D, 4H and 4I; close 4C and 4G. Decisions on 4E and 4F were put to the maintainer.
 
 ### Per-change verification and completion
 
