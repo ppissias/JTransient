@@ -525,9 +525,11 @@ public final class VariableStarAnalyzer {
             series.offsetX = new double[nFrames];
             series.offsetY = new double[nFrames];
             series.julianDate = new double[nFrames];
+            series.used = new boolean[nFrames];
             for (int j = 0; j < nFrames; j++) {
                 CancellationScope.check();
                 boolean on = frameActive[j] && solution.frameSolved[j];
+                series.used[j] = on;
                 series.zeroPoint[j] = on ? solution.zeroPoint[j] : Double.NaN;
                 series.fwhm[j] = on ? measurements[j].fwhm : Double.NaN;
                 series.offsetX[j] = on ? measurements[j].offsetX : Double.NaN;

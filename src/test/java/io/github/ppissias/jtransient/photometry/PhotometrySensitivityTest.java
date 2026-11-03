@@ -227,6 +227,8 @@ public class PhotometrySensitivityTest {
         fixture.series.offsetY = new double[FRAMES];
         fixture.series.julianDate = new double[FRAMES];
         for (int j = 0; j < FRAMES; j++) fixture.series.julianDate[j] = 2459000 + j * cadenceMinutes / 1440;
+        fixture.series.used = new boolean[FRAMES];
+        Arrays.fill(fixture.series.used, true);
         return fixture;
     }
 

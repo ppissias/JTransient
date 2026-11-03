@@ -1072,7 +1072,7 @@ Light curves are built for every star whatever the verdict. `deltaMag` is the ma
 #### 16.11.1 Light-curve cleaning
 
 - A star with fewer than `variableMinFrames` usable measurements is `NOT_SCORED`.
-- **Isolated outliers.** A point more than 4 robust sigmas from the median is removed and flagged `OUTLIER`, unless a neighbouring usable point deviates by more than 2 sigmas on the same side. Single-frame events (cosmic rays, hot pixels, satellite glints that were not detected) are dropped. Real dips or flares that span several frames are kept.
+- **Isolated outliers.** A point more than 4 robust sigmas from the median is removed and flagged `OUTLIER`, unless a neighbouring usable point deviates by more than 2 sigmas on the same side. A neighbour counts only when the star has no missing measurement on a used frame between the two: deviations either side of a crossing-flagged or contaminated measurement do not keep each other, while a frame left out of the photometry does not separate them. Single-frame events (cosmic rays, hot pixels, satellite glints that were not detected) are dropped. Real dips or flares that span several frames are kept.
 - From the cleaned curve: `scatter` (sample standard deviation), `amplitude` (95th minus 5th percentile), and `timeSpanMinutes` (first to last usable mid-exposure Julian date; `NaN` if any usable frame has no timestamp).
 
 <a id="photometry-11-2"></a>
@@ -1136,6 +1136,8 @@ Each candidate is tested against eight gates:
 | `NOT_SCORED` | Excluded star, too few measurements, no noise model, or session not ready |
 
 `VariableStarAnalysis.candidates` holds the `HIGH_CONFIDENCE`, `POSSIBLE` and `REJECTED` stars, best tier first, then by descending `scatterZ`. `highConfidenceCandidates()` returns the first tier only. `failedGates` lists the gates each candidate failed, in the order of `VariableStarAnalysis.GATE_NAMES`.
+
+**Brief and fast variation.** A change must last about `variableMinPersistenceFrames` consecutive frames (5) to pass `PERSISTENCE`, so briefer dips and flares are at best `POSSIBLE`, and a change in one frame is removed as an outlier. Variation that alternates within three or four frames gives a negative Stetson J and does not become a candidate. In scorer-level injections with 28 and 40 frames and 9-18 mmag noise, dips lasting 6 frames or more and pulsations with a period of 12 frames were mostly `HIGH_CONFIDENCE` from 0.1 mag. A search for briefer events would first need checks of the brief excursions that constant stars show in real sessions ([VS-12](FEATURE-REQUESTS.md#vs-12-consolidated-photometry-improvement-roadmap) 4I).
 
 <a id="photometry-12"></a>
 ### 16.12 Outputs

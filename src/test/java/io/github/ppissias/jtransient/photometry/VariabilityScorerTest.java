@@ -12,6 +12,7 @@ package io.github.ppissias.jtransient.photometry;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class VariabilityScorerTest {
@@ -33,6 +34,51 @@ public class VariabilityScorerTest {
         assertEquals(0.03, VariabilityScorer.regressionSlope(candidate, faintCopy), 1e-9);
         assertEquals(1.0, VariabilityScorer.regressionSlope(candidate, fullCopy), 0.01);
         assertTrue(Double.isNaN(VariabilityScorer.regressionSlope(new double[]{1, 1, 1}, new double[]{1, 2, 3})));
+    }
+
+    @Test
+    public void deviationsEitherSideOfAMissingMeasurementDoNotSupportEachOther() {
+        int n = 20;
+        boolean[] used = new boolean[n];
+        java.util.Arrays.fill(used, true);
+
+        // Frame 9 is used but the star has no measurement there (a crossing, say): 8 and 10 are both dropped.
+        double[] r = quietCurve(n);
+        r[8] = 1.0;
+        r[9] = Double.NaN;
+        r[10] = 1.1;
+        StarLightCurve star = new StarLightCurve(0, 0, 0, 1000, n);
+        VariabilityScorer.removeIsolatedOutliers(r, used, star);
+        assertTrue(Double.isNaN(r[8]) && Double.isNaN(r[10]));
+        assertTrue((star.flags[8] & PhotometryFlags.OUTLIER) != 0 && (star.flags[10] & PhotometryFlags.OUTLIER) != 0);
+
+        // A frame the photometry left out does not break support: the two deviations keep each other.
+        used[9] = false;
+        r = quietCurve(n);
+        r[8] = 1.0;
+        r[9] = Double.NaN;
+        r[10] = 1.1;
+        VariabilityScorer.removeIsolatedOutliers(r, used, new StarLightCurve(0, 0, 0, 1000, n));
+        assertFalse(Double.isNaN(r[8]) || Double.isNaN(r[10]));
+
+        // Adjacent deviations keep each other; a lone one is dropped.
+        used[9] = true;
+        r = quietCurve(n);
+        r[8] = 1.0;
+        r[9] = 1.1;
+        r[15] = 1.2;
+        VariabilityScorer.removeIsolatedOutliers(r, used, new StarLightCurve(0, 0, 0, 1000, n));
+        assertFalse(Double.isNaN(r[8]) || Double.isNaN(r[9]));
+        assertTrue(Double.isNaN(r[15]));
+    }
+
+    /** Small alternating residuals with a robust scatter of about 0.01 mag. */
+    private static double[] quietCurve(int n) {
+        double[] r = new double[n];
+        for (int j = 0; j < n; j++) {
+            r[j] = (j % 2 == 0 ? 0.01 : -0.01) * (1 + 0.1 * (j % 3));
+        }
+        return r;
     }
 
     @Test
@@ -121,6 +167,8 @@ public class VariabilityScorerTest {
         for (int j = 0; j < frames; j++) {
             series.julianDate[j] = 2459000 + j / 720.0;
         }
+        series.used = new boolean[frames];
+        java.util.Arrays.fill(series.used, true);
         VariabilityScorer.score(stars, usable, small, large, sky, series, false,
                 new io.github.ppissias.jtransient.config.DetectionConfig(),
                 new io.github.ppissias.jtransient.telemetry.PipelineTelemetry.PhotometryTelemetry());

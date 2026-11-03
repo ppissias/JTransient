@@ -281,7 +281,7 @@ The agreed order is **product consistency -> evidence isolation and solver corre
 | 3 | Valid cross-aperture support and temporal agreement (VS-5) | Compare curves only after their identity, errors, masks and fitting are reliable. | Reject false agreement such as opposite-phase aperture curves while preserving noisy genuine variability. |
 | 4 | Readiness/subset policies, gap handling, uncertainty coverage, leverage and optional display calibration | These require scientific tradeoffs rather than just consistent state. | Recover useful work or improve reliability only where controlled tests demonstrate that the added complexity earns its cost. |
 
-**Progress.** Step 0 (baseline) and Stages 1-3 are done. The Stage 4 investigations are done and await the maintainer's decisions; see the [Stage 4 findings](#stage-4-findings-2026-11-03). The [implementation log](#implementation-log) records each stage. Do not start by changing gain assumptions, adding a new empirical noise floor, lowering variability thresholds, or redesigning the pipeline.
+**Progress.** Step 0 (baseline) and Stages 1-3 are done. The Stage 4 investigations are done and decided; see the [Stage 4 findings](#stage-4-findings-2026-11-03). 4E is implemented; 4F (a reported-error factor from blank sky) is next. The [implementation log](#implementation-log) records each stage. Do not start by changing gain assumptions, adding a new empirical noise floor, lowering variability thresholds, or redesigning the pipeline.
 
 ### Confirmed implementation details (2026-11-02)
 
@@ -460,7 +460,25 @@ The evidence for all nine items was gathered before any decision. Sources: the 3
   - *A related observation.* 14 of M81 Kumar's 17 possible candidates are 1–4-point excursions in a few 3-frame groups.
   - A brief-event search would first need image-level vetting of such excursions. The current limit (variation must last about five frames) can be stated in the manual.
 
-**Decisions put to the maintainer (2026-11-03):** 4E (support rule only, all four statistics, or defer), 4F (option a, b or c), and confirmation of the recommendations to defer 4A, 4B, 4D, 4H and 4I and to close 4C and 4G.
+**Maintainer's decisions (2026-11-03).**
+- 4E: the outlier-support rule only (implemented below).
+- 4F: option (b), a measured blank-sky factor applied to the reported errors only.
+- 4A, 4B, 4D, 4H and 4I are deferred, and 4C and 4G are closed, as recommended. Their evidence stays above.
+- For 4I, the limit on brief and fast variation is now stated in ALGORITHM.md and the SpacePixels manual.
+
+#### 4E. Gap-aware outlier support — implemented 2026-11-03
+
+An extreme point keeps its neighbour's support only when the star has no missing measurement on a used frame between the two. Two deviations either side of a crossing-flagged or contaminated measurement are therefore both removed as isolated outliers, while a frame left out of the photometry still does not separate them. Stetson J, the persistence runs and the split-half pairs are unchanged, and so is the treatment of time gaps. `VariabilityScorer.FrameSeries` carries the used frames. Behaviour is in [ALGORITHM.md](ALGORITHM.md#photometry-11-1).
+
+**Verification.**
+- *Tests.* Two deviations around a missing measurement on a used frame are both removed, and both are kept when that frame is not used. Adjacent deviations keep each other, and a lone one is removed. JTransient's 326 tests, `check` and `apiConsumer` pass.
+- *Reference data.* On the 18 reference datasets the results are byte-identical to the probe's support-only runs on the five scored sessions, and to 3B on the other 13. Against 3B (high/possible/rejected):
+  - Eagle-noisy 0/1/1 to 0/0/0;
+  - M81 Kumar 10/17/21 to 10/18/22;
+  - UG 6524 0/1/1 to 1/0/2;
+  - Klangwolke-2 and m5-reg unchanged.
+
+  Verdicts, frames, star exclusions and contamination are unchanged everywhere, and so are all moving-object findings. The global map changes only through its variable-star circles. The 851 input files are unchanged.
 
 ### Implementation log
 
@@ -486,7 +504,11 @@ What was done at each stage, how it was checked, what it changed and anything th
   - *Probe build.* One temporary probe build (not committed) added measurements for 4A, 4F and 4G and switches for 4B and 4E. It reproduced 3B byte for byte on 12 datasets with only its measurements on. It then ran the retained-subset switch on Helix and four gap variants on the five scored sessions; Klangwolke-2 ran alone at 10 GB, in the foreground.
   - *Other evidence.* A scorer-level injection study (4I), and scripts on the 3B frames, curves and FITS frames for 4C, 4D, 4F (blank-sky apertures), 4H and the 4I alternative.
   - *Afterwards.* The sources were restored, and the SpacePixels install was rebuilt and checked against 3B's classes.
-  - *Recommendations.* Defer 4A, 4B, 4D, 4H and 4I; close 4C and 4G. Decisions on 4E and 4F were put to the maintainer.
+  - *Recommendations.* Defer 4A, 4B, 4D, 4H and 4I; close 4C and 4G. Decisions on 4E and 4F were put to the maintainer, who accepted every recommendation: the outlier-support rule for 4E, and option (b) for 4F.
+- **4E, implementation (this change).** As in 4E above.
+  - *Verification.* The build matches the probe's support-only runs byte for byte. The tier changes against 3B are Eagle-noisy 0/1/1 to 0/0/0, M81 Kumar 10/17/21 to 10/18/22 and UG 6524 0/1/1 to 1/0/2, with no VSX-matched change.
+  - *Documentation.* ALGORITHM.md and the SpacePixels manual now state the limit on brief variation (the accepted 4I follow-up).
+  - *Tests.* JTransient 326.
 
 ### Per-change verification and completion
 

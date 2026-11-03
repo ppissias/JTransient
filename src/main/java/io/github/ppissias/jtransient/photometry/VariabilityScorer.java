@@ -105,6 +105,8 @@ final class VariabilityScorer {
         double[] offsetY;
         /** Julian dates, NaN when timestamps are missing. */
         double[] julianDate;
+        /** Frames the photometry uses (still active and solved). */
+        boolean[] used;
     }
 
     private VariabilityScorer() {
@@ -172,7 +174,7 @@ final class VariabilityScorer {
                 star.usableFrames = n;
                 continue;
             }
-            removeIsolatedOutliers(r, star);
+            removeIsolatedOutliers(r, series.used, star);
             int usableCount = 0;
             for (double v : r) {
                 if (Double.isFinite(v)) {
@@ -585,8 +587,13 @@ final class VariabilityScorer {
     /**
      * Removes points beyond {@link #OUTLIER_SIGMA} unless a neighbouring point deviates on the same side,
      * so single-frame events are dropped while real dips or flares spanning several frames survive.
+     * A neighbour supports a point only when the star has no missing measurement on a used frame between
+     * them, so two deviations either side of a crossing or contaminated measurement do not keep each other;
+     * frames left out of the photometry do not break support.
+     *
+     * @param frameUsed frames the photometry uses
      */
-    static void removeIsolatedOutliers(double[] r, StarLightCurve star) {
+    static void removeIsolatedOutliers(double[] r, boolean[] frameUsed, StarLightCurve star) {
         double median = PhotometryMath.median(r);
         double sigma = PhotometryMath.robustSigma(r);
         if (!(sigma > 0)) {
@@ -605,7 +612,7 @@ final class VariabilityScorer {
             int prev = previousFinite(r, j);
             int next = nextFinite(r, j);
             for (int k : new int[]{prev, next}) {
-                if (k >= 0) {
+                if (k >= 0 && !usedFrameBetween(frameUsed, k, j)) {
                     double neighbourDev = r[k] - median;
                     if (Math.signum(neighbourDev) == Math.signum(dev)
                             && Math.abs(neighbourDev) > OUTLIER_SUPPORT_SIGMA * sigma) {
@@ -753,6 +760,16 @@ final class VariabilityScorer {
             last = julianDate[j];
         }
         return Double.isFinite(first) ? (last - first) * 24.0 * 60.0 : Double.NaN;
+    }
+
+    /** True when a used frame lies strictly between frames {@code a} and {@code b}. */
+    private static boolean usedFrameBetween(boolean[] frameUsed, int a, int b) {
+        for (int m = Math.min(a, b) + 1; m < Math.max(a, b); m++) {
+            if (frameUsed[m]) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static int previousFinite(double[] r, int j) {
