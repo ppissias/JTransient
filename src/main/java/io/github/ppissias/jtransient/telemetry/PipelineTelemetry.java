@@ -339,6 +339,8 @@ public class PipelineTelemetry {
 
         /** Measuring aperture chosen for each brightness range, brightest first; empty when the session was not scored. */
         public final List<PhotometryApertureChoice> apertureChoices = new ArrayList<>();
+        /** Stars of a range that chose another aperture but kept the main one, because the other lacked some of their measurements. */
+        public int apertureMainFallbacks;
 
         /** Per-frame diagnostics in chronological order; light-curve arrays are aligned with this list. */
         public final List<PhotometryFrameStat> frames = new ArrayList<>();

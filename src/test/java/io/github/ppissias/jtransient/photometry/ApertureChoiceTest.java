@@ -21,14 +21,15 @@ import static org.junit.Assert.assertTrue;
 
 /**
  * Checks that the aperture chosen for a brightness range supplies a light curve's residuals, errors and aperture
- * record together, and that the main aperture's mean magnitude stays the common brightness scale.
+ * record together; that apertures are compared on the same measurements and judged eligible on the radii actually
+ * used; that a star whose chosen aperture lacks a measurement keeps the main one; and that the main aperture's mean
+ * magnitude stays the common brightness scale.
  */
 public class ApertureChoiceTest {
 
     /** Eight brightness ranges of 20 stars: the fewest the choice runs on. */
     private static final int STARS = 160;
     private static final int FRAMES = 10;
-    private static final double SESSION_FWHM = 4.0;
     private static final double[] FACTORS = {ApertureMeasurer.CI_INNER_FWHM_FACTOR, 1.0, 1.5, 2.0};
     private static final int[] RADII = {ApertureMeasurer.R_CI_INNER, ApertureMeasurer.R_SMALL, ApertureMeasurer.R_MAIN, ApertureMeasurer.R_LARGE};
     private static final double[] RADIUS_FACTORS = {ApertureMeasurer.CI_INNER_FWHM_FACTOR, 1.0, 1.5, 2.0, ApertureMeasurer.CI_OUTER_FWHM_FACTOR};
@@ -42,7 +43,7 @@ public class ApertureChoiceTest {
             {0.5, 1, 1, 1}, {0.5, 1, 1, 1}, {1, 1, 1, 1}, {1, 0.98, 1, 1},
             {1, 0.5, 1, 1}, {1, 0.5, 1, 1}, {1, 1, 1, 0.5}, {1, 1, 1, 0.5}};
     private static final int[] EXPECTED = {0, 0, MAIN, MAIN, 1, 1, 3, 3};
-    /** A small-aperture star whose flux in frame 3 is not positive: neither residual nor error exists there. */
+    /** A small-aperture star whose flux in frame 3 is not positive: it keeps the main aperture. */
     private static final int MISSING_STAR = 85;
     private static final int MISSING_FRAME = 3;
 
@@ -57,12 +58,12 @@ public class ApertureChoiceTest {
         final PipelineTelemetry.PhotometryTelemetry telemetry = new PipelineTelemetry.PhotometryTelemetry();
 
         /** Builds residuals, errors and per-frame radii; the curves hold the main aperture's values. */
-        Fixture() {
+        Fixture(double[] frameFwhm, double[][] scatter) {
             for (int j = 0; j < FRAMES; j++) {
                 frameActive[j] = j < FRAMES - 1;
-                ApertureMeasurer.FrameMeasurement m = new ApertureMeasurer.FrameMeasurement(FRAME_FWHM[j], STARS);
+                ApertureMeasurer.FrameMeasurement m = new ApertureMeasurer.FrameMeasurement(frameFwhm[j], STARS);
                 for (int r = 0; r < ApertureMeasurer.RADIUS_COUNT; r++) {
-                    m.radii[r] = RADIUS_FACTORS[r] * FRAME_FWHM[j];
+                    m.radii[r] = RADIUS_FACTORS[r] * frameFwhm[j];
                     for (int i = 0; i < STARS; i++) {
                         m.magError[r][i] = 0.001 * (r + 1) + 1e-5 * j + 1e-8 * i;
                     }
@@ -76,21 +77,25 @@ public class ApertureChoiceTest {
                 for (int i = 0; i < STARS; i++) {
                     s.starMag[i] = 10 + 0.01 * i;
                     for (int j = 0; j < FRAMES; j++) {
-                        s.residual[i][j] = frameActive[j] ? SCATTER[i / 20][a] * 0.01 * PATTERN[j] + 0.001 * a : Double.NaN;
+                        s.residual[i][j] = frameActive[j] ? scatter[i / 20][a] * 0.01 * PATTERN[j] + 0.001 * a : Double.NaN;
                     }
                 }
                 options[a] = s;
             }
-            options[1].residual[MISSING_STAR][MISSING_FRAME] = Double.NaN;
-            measurements[MISSING_FRAME].magError[ApertureMeasurer.R_SMALL][MISSING_STAR] = Double.NaN;
+            for (int i = 0; i < STARS; i++) {
+                for (int j = 0; j < FRAMES; j++) {
+                    usable[i][j] = frameActive[j];
+                }
+            }
+        }
+
+        /** Copies the main aperture's values into the curves, as the analyzer does before the choice. */
+        void buildCurves() {
             for (int i = 0; i < STARS; i++) {
                 StarLightCurve curve = new StarLightCurve(i, i, 0, 1, FRAMES);
                 curve.meanMag = options[MAIN].starMag[i];
                 curve.apertureFwhmFactor = FACTORS[MAIN];
-                curve.apertureMinRadiusPixels = 1.5 * 3.6;
-                curve.apertureMaxRadiusPixels = 1.5 * 4.4;
                 for (int j = 0; j < FRAMES; j++) {
-                    usable[i][j] = frameActive[j];
                     curve.deltaMag[j] = options[MAIN].residual[i][j];
                     curve.magError[j] = measurements[j].magError[ApertureMeasurer.R_MAIN][i];
                 }
@@ -100,14 +105,28 @@ public class ApertureChoiceTest {
 
         /** Runs the choice under test. */
         void choose() {
+            buildCurves();
             VariableStarAnalyzer.chooseApertures(curves, usable, starExcluded, options[MAIN], options, FACTORS, RADII,
-                    measurements, frameActive, SESSION_FWHM, telemetry);
+                    measurements, frameActive, telemetry);
         }
+
+        /** The factor chosen for each brightness range. */
+        double[] chosenFactors() {
+            return telemetry.apertureChoices.stream().mapToDouble(c -> c.fwhmFactor).toArray();
+        }
+    }
+
+    /** The default fixture, with one small-aperture star missing a measurement. */
+    private static Fixture standard() {
+        Fixture fixture = new Fixture(FRAME_FWHM, SCATTER);
+        fixture.options[1].residual[MISSING_STAR][MISSING_FRAME] = Double.NaN;
+        fixture.measurements[MISSING_FRAME].magError[ApertureMeasurer.R_SMALL][MISSING_STAR] = Double.NaN;
+        return fixture;
     }
 
     @Test
     public void chosenApertureSuppliesResidualsErrorsAndRecordTogether() {
-        Fixture fixture = new Fixture();
+        Fixture fixture = standard();
         fixture.choose();
 
         assertEquals(8, fixture.telemetry.apertureChoices.size());
@@ -119,25 +138,71 @@ public class ApertureChoiceTest {
         }
         for (int i = 0; i < STARS; i++) {
             StarLightCurve curve = fixture.curves.get(i);
-            int a = EXPECTED[i / 20];
+            int a = i == MISSING_STAR ? MAIN : EXPECTED[i / 20];
             assertEquals("main magnitude stays the brightness scale", 10 + 0.01 * i, curve.meanMag, 0);
             assertArrayEquals("star " + i, fixture.options[a].residual[i], curve.deltaMag, 0);
             for (int j = 0; j < FRAMES; j++) {
                 assertEquals("star " + i + " frame " + j, fixture.measurements[j].magError[RADII[a]][i], curve.magError[j], 0);
             }
             assertEquals("star " + i, FACTORS[a], curve.apertureFwhmFactor, 0);
-            assertEquals("star " + i, FACTORS[a] * 3.6, curve.apertureMinRadiusPixels, 1e-12);
-            assertEquals("star " + i, FACTORS[a] * 4.4, curve.apertureMaxRadiusPixels, 1e-12);
+            if (a != MAIN) {
+                assertEquals("star " + i, FACTORS[a] * 3.6, curve.apertureMinRadiusPixels, 1e-12);
+                assertEquals("star " + i, FACTORS[a] * 4.4, curve.apertureMaxRadiusPixels, 1e-12);
+            }
         }
+    }
+
+    /** The small aperture lacks one of star 85's measurements, so star 85 keeps all of its main-aperture ones. */
+    @Test
+    public void aStarWhoseChosenApertureLacksAMeasurementKeepsTheMainOne() {
+        Fixture fixture = standard();
+        fixture.choose();
+
         StarLightCurve missing = fixture.curves.get(MISSING_STAR);
-        assertTrue(Double.isNaN(missing.deltaMag[MISSING_FRAME]) && Double.isNaN(missing.magError[MISSING_FRAME]));
-        assertEquals(fixture.measurements[MISSING_FRAME + 1].magError[ApertureMeasurer.R_SMALL][MISSING_STAR],
-                missing.magError[MISSING_FRAME + 1], 0);
+        assertEquals(1, fixture.telemetry.apertureMainFallbacks);
+        assertEquals(FACTORS[MAIN], missing.apertureFwhmFactor, 0);
+        assertTrue(Double.isFinite(missing.deltaMag[MISSING_FRAME]) && Double.isFinite(missing.magError[MISSING_FRAME]));
+        assertEquals(FACTORS[1], fixture.curves.get(MISSING_STAR + 1).apertureFwhmFactor, 0);
+    }
+
+    /**
+     * Without its three most deviant measurements the tiny aperture's scatter would be about 30 % lower; compared on
+     * the same measurements it is no better than the main aperture, which stays.
+     */
+    @Test
+    public void anApertureCannotWinByLackingDifficultMeasurements() {
+        double[][] equal = new double[8][];
+        for (int b = 0; b < 8; b++) equal[b] = new double[]{1, 1, 1, 1};
+        Fixture fixture = new Fixture(FRAME_FWHM, equal);
+        for (int i = 0; i < STARS; i++) {
+            for (int j : new int[]{0, 4, 5}) fixture.options[0].residual[i][j] = Double.NaN;
+        }
+        fixture.choose();
+
+        for (double factor : fixture.chosenFactors()) assertEquals(FACTORS[MAIN], factor, 0);
+        assertEquals(0, fixture.telemetry.apertureMainFallbacks);
+    }
+
+    /**
+     * In an undersampled field like M81 Kumar's the guide FWHM overstates the radii: the 1.0 x FWHM aperture is
+     * 1.73-2.41 px and eligible, the 0.7 x FWHM aperture is 1.21-1.69 px and not, whatever its scatter.
+     */
+    @Test
+    public void eligibilityFollowsTheRadiiActuallyUsed() {
+        double[] fwhm = {1.73, 1.90, 2.00, 2.10, 2.20, 2.30, 2.41, 2.00, 2.05, 1.00};
+        Fixture fixture = new Fixture(fwhm, SCATTER);
+        fixture.choose();
+
+        double tinyMin = ApertureMeasurer.CI_INNER_FWHM_FACTOR * 1.73;
+        assertTrue(tinyMin < VariableStarAnalyzer.APERTURE_MIN_RADIUS_PIXELS);
+        assertTrue(1.73 >= VariableStarAnalyzer.APERTURE_MIN_RADIUS_PIXELS);
+        assertArrayEquals(new double[]{1.5, 1.5, 1.5, 1.5, 1.0, 1.0, 2.0, 2.0}, fixture.chosenFactors(), 0);
+        assertEquals(1.73, fixture.telemetry.apertureChoices.get(4).minRadiusPixels, 1e-12);
     }
 
     @Test
     public void tooFewStarsKeepTheMainApertureEverywhere() {
-        Fixture fixture = new Fixture();
+        Fixture fixture = standard();
         fixture.starExcluded[0] = true;
         fixture.choose();
 

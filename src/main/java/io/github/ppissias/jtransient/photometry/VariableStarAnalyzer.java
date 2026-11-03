@@ -545,7 +545,7 @@ public final class VariableStarAnalyzer {
                     new EnsembleSolver.Solution[]{tiny, small, solution, large},
                     new double[]{ApertureMeasurer.CI_INNER_FWHM_FACTOR, 1.0, config.photometryApertureFwhmFactor, 2.0},
                     new int[]{ApertureMeasurer.R_CI_INNER, ApertureMeasurer.R_SMALL, ApertureMeasurer.R_MAIN, ApertureMeasurer.R_LARGE},
-                    measurements, frameActive, sessionFwhm, telemetry);
+                    measurements, frameActive, telemetry);
             VariabilityScorer.score(curves, usable, small.residual, large.residual, sky, series,
                     readiness.verdict == PhotometricReadiness.Verdict.LIMITED, config, telemetry, input.liveView);
         } else {
@@ -1162,8 +1162,12 @@ public final class VariableStarAnalyzer {
     private static final int APERTURE_MIN_STARS_PER_BIN = 20;
     /** Another aperture replaces the main one only when it lowers the median scatter by more than this fraction. */
     private static final double APERTURE_MIN_GAIN = 0.03;
-    /** Smallest aperture radius allowed, in pixels: smaller ones turn centring errors of undersampled stars into noise. */
-    private static final double APERTURE_MIN_RADIUS_PIXELS = 2.0;
+    /**
+     * Smallest radius, in pixels, another aperture may have on any frame used: smaller ones turn the centring errors
+     * of undersampled stars into noise. It is checked on the radii actually measured, which follow each frame's FWHM.
+     * Above it, the constant stars' scatter that decides the choice already shows any such noise.
+     */
+    static final double APERTURE_MIN_RADIUS_PIXELS = 1.5;
 
     /**
      * Chooses the measuring aperture per brightness range: the one whose ensemble solution gives the stars of that
@@ -1172,17 +1176,23 @@ public final class VariableStarAnalyzer {
      * by the chosen aperture's; the main aperture stays unless another lowers the scatter by more than
      * {@link #APERTURE_MIN_GAIN}. The mean magnitude stays the main aperture's, the common brightness scale.
      *
+     * <p>Every aperture's scatter is measured on the same measurements, those the main aperture can use and every
+     * aperture has, so an aperture cannot look better by lacking difficult points. Another aperture is eligible only
+     * when its smallest radius on the frames used is at least {@link #APERTURE_MIN_RADIUS_PIXELS}. A star whose chosen
+     * aperture lacks a measurement its main aperture has keeps the main aperture, and is counted.</p>
+     *
      * @param curves light curves holding the main aperture's residuals and errors; updated in place
      * @param options ensemble solutions, one per aperture
      * @param fwhmFactors aperture radius of each option, in units of the FWHM
      * @param radiusIndices aperture index of each option in the frame measurements
      * @param measurements frame measurements supplying each aperture's errors and per-frame radii
      * @param frameActive frames used by the final solution
+     * @param telemetry receives the choices and the count of stars kept on the main aperture
      */
     static void chooseApertures(List<StarLightCurve> curves, boolean[][] usable, boolean[] starExcluded,
                                 EnsembleSolver.Solution main, EnsembleSolver.Solution[] options, double[] fwhmFactors,
                                 int[] radiusIndices, ApertureMeasurer.FrameMeasurement[] measurements, boolean[] frameActive,
-                                double sessionFwhm, PipelineTelemetry.PhotometryTelemetry telemetry) {
+                                PipelineTelemetry.PhotometryTelemetry telemetry) {
         int mainIndex = -1;
         for (int a = 0; a < options.length; a++) {
             CancellationScope.check();
@@ -1203,7 +1213,7 @@ public final class VariableStarAnalyzer {
             for (int a = 0; a < options.length && ok; a++) {
                 CancellationScope.check();
                 for (int j = 0; j < residuals.length; j++) {
-                    residuals[j] = usable[i][j] ? options[a].residual[i][j] : Double.NaN;
+                    residuals[j] = usable[i][j] && measuredInEvery(options, i, j) ? options[a].residual[i][j] : Double.NaN;
                 }
                 sigma[i][a] = PhotometryMath.robustSigma(residuals);
                 ok = Double.isFinite(sigma[i][a]);
@@ -1239,7 +1249,7 @@ public final class VariableStarAnalyzer {
             int best = mainIndex;
             for (int a = 0; a < options.length; a++) {
                 CancellationScope.check();
-                if (fwhmFactors[a] * sessionFwhm >= APERTURE_MIN_RADIUS_PIXELS && median[a] < median[best]) {
+                if (radii[a][0] >= APERTURE_MIN_RADIUS_PIXELS && median[a] < median[best]) {
                     best = a;
                 }
             }
@@ -1268,6 +1278,10 @@ public final class VariableStarAnalyzer {
             if (options[a] == main) {
                 continue;
             }
+            if (lacksMainMeasurements(options[a], main, usable[i], i)) {
+                telemetry.apertureMainFallbacks++;
+                continue;
+            }
             StarLightCurve curve = curves.get(i);
             System.arraycopy(options[a].residual[i], 0, curve.deltaMag, 0, curve.deltaMag.length);
             for (int j = 0; j < curve.magError.length; j++) {
@@ -1277,6 +1291,27 @@ public final class VariableStarAnalyzer {
             curve.apertureMinRadiusPixels = radii[a][0];
             curve.apertureMaxRadiusPixels = radii[a][1];
         }
+    }
+
+    /** True when every aperture's solution has a residual for star {@code i} in frame {@code j}. */
+    private static boolean measuredInEvery(EnsembleSolver.Solution[] options, int i, int j) {
+        for (EnsembleSolver.Solution option : options) {
+            if (!Double.isFinite(option.residual[i][j])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** True when {@code option} lacks a residual for star {@code i} in a frame where the main aperture has a usable one. */
+    private static boolean lacksMainMeasurements(EnsembleSolver.Solution option, EnsembleSolver.Solution main,
+                                                 boolean[] usable, int i) {
+        for (int j = 0; j < usable.length; j++) {
+            if (usable[j] && Double.isFinite(main.residual[i][j]) && !Double.isFinite(option.residual[i][j])) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Smallest and largest radius of aperture {@code radiusIndex} on the active frames, in pixels; NaN without any. */
