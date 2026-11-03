@@ -1194,6 +1194,7 @@ public class JTransientEngine implements AutoCloseable {
             photometryInput.tracks = trackResult.tracks;
             photometryInput.slowMoverCandidates = slowMoverCandidates;
             photometryInput.dataArea = context.dataArea;
+            photometryInput.frameRegistrations = context.frameRegistrations;
             if (listener != null) {
                 // Photometry 0-100% maps to 93-99%.
                 photometryInput.progress = (percentage, message) -> OperationContext.notify(listener::onProgressUpdate, 93 + (int) (percentage * 0.06), message);

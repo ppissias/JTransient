@@ -23,6 +23,7 @@ import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.config.PhotometryGeometry;
 import io.github.ppissias.jtransient.core.DataArea;
+import io.github.ppissias.jtransient.core.FrameRegistration;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 import io.github.ppissias.jtransient.engine.ImageFrame;
 import io.github.ppissias.jtransient.engine.TransientEngineProgressListener;
@@ -51,7 +52,7 @@ public final class VariableStarAnalyzer {
     /** Flags that keep a measurement out of the ensemble and scoring. */
     private static final int EXCLUDING_FLAGS = PhotometryFlags.SATURATED | PhotometryFlags.NONLINEAR
             | PhotometryFlags.EDGE_OR_VOID | PhotometryFlags.CROSSING | PhotometryFlags.BAD_FLUX
-            | PhotometryFlags.FRAME_EXCLUDED | PhotometryFlags.CONTAMINATED;
+            | PhotometryFlags.FRAME_EXCLUDED | PhotometryFlags.CONTAMINATED | PhotometryFlags.PEAK_REMOVED;
     /** Flags that make a measurement unfit as a reference for the shape check. */
     private static final int SHAPE_REFERENCE_EXCLUDING_FLAGS = PhotometryFlags.SATURATED | PhotometryFlags.NONLINEAR
             | PhotometryFlags.EDGE_OR_VOID | PhotometryFlags.CROSSING | PhotometryFlags.BAD_FLUX;
@@ -100,6 +101,11 @@ public final class VariableStarAnalyzer {
         public List<DetectedObject> slowMoverCandidates = new ArrayList<>();
         /** Where every kept frame has image data; stars are measured only inside it. Null to use the image edge. */
         public DataArea dataArea;
+        /**
+         * How registration moved each frame, measured from its fill, by sequence index; may be null. It tells the
+         * pointings apart for the check for star peaks removed before registration.
+         */
+        public Map<Integer, FrameRegistration> frameRegistrations;
         /** Optional progress listener, 0 to 100 over the photometry stage. */
         public TransientEngineProgressListener progress;
         /** Optional live view. A frame snapshot is built only when it asks. */
@@ -154,6 +160,7 @@ public final class VariableStarAnalyzer {
             snapshot.tracks = tracks == null ? null : List.copyOf(tracks);
             snapshot.slowMoverCandidates = slowMoverCandidates == null ? null : List.copyOf(slowMoverCandidates);
             snapshot.dataArea = dataArea;
+            snapshot.frameRegistrations = frameRegistrations == null ? null : Map.copyOf(frameRegistrations);
             snapshot.progress = progress;
             snapshot.liveView = liveView;
             return snapshot;
@@ -549,6 +556,8 @@ public final class VariableStarAnalyzer {
                     new double[]{ApertureMeasurer.CI_INNER_FWHM_FACTOR, 1.0, config.photometryApertureFwhmFactor, 2.0},
                     new int[]{ApertureMeasurer.R_CI_INNER, ApertureMeasurer.R_SMALL, ApertureMeasurer.R_MAIN, ApertureMeasurer.R_LARGE},
                     measurements, frameActive, telemetry);
+            PeakRemovalCheck.run(curves, usable, measurements, selected, frames,
+                    PeakRemovalCheck.pointings(frames, input.frameRegistrations), config.variableMinAmplitudeMag, readiness, telemetry);
             VariabilityScorer.score(curves, usable, small.residual, large.residual, sky, series,
                     readiness.verdict == PhotometricReadiness.Verdict.LIMITED, config, telemetry, input.liveView);
         } else {
@@ -579,6 +588,7 @@ public final class VariableStarAnalyzer {
                 if ((f & PhotometryFlags.OUTLIER) != 0) { telemetry.measurementsOutlier++; stat.outliers++; }
                 if ((f & PhotometryFlags.BAD_FLUX) != 0) { telemetry.measurementsBadFlux++; stat.badFlux++; }
                 if ((f & PhotometryFlags.CONTAMINATED) != 0) { telemetry.measurementsContaminated++; stat.contaminated++; }
+                if ((f & PhotometryFlags.PEAK_REMOVED) != 0) { telemetry.measurementsPeakRemoved++; stat.peakRemoved++; }
             }
         }
         for (int j = 0; j < nFrames; j++) {

@@ -310,6 +310,18 @@ public class PipelineTelemetry {
         public long measurementsBadFlux;
         /** Measurements whose star shape departed from the star's own typical shape (hot pixel, cosmic ray). */
         public long measurementsContaminated;
+        /** Measurements flagged PEAK_REMOVED: brief fadings left by star peaks removed before registration. */
+        public long measurementsPeakRemoved;
+
+        /**
+         * Check for star peaks removed before registration: brief fadings within one pointing that were tested, those
+         * and the brightenings whose change sits in the brightest pixel, and whether the session counts as having had
+         * its star peaks removed (only then are the concentrated fadings flagged PEAK_REMOVED).
+         */
+        public int peakCheckFadings;
+        public int peakCheckConcentratedFadings;
+        public int peakCheckConcentratedBrightenings;
+        public boolean peakRemovalFound;
 
         /**
          * Ensemble fit of the final main-aperture solution: iterations run (0 when photometry stopped before the fit),
@@ -465,6 +477,7 @@ public class PipelineTelemetry {
         public int outliers;
         public int badFlux;
         public int contaminated;
+        public int peakRemoved;
 
         /** Whether the frame was used for the ensemble and scoring. */
         public boolean used = true;
@@ -628,6 +641,11 @@ public class PipelineTelemetry {
                     p.ensembleConverged ? "converged" : "iteration limit reached", p.ensembleIterations,
                     p.ensembleIterationLimit, Double.isFinite(p.ensembleLastChangeMag) ? String.format("%.1e", p.ensembleLastChangeMag) : "n/a",
                     p.apertureSolvesAtIterationLimit));
+        }
+        if (p.peakCheckFadings > 0) {
+            sb.append(String.format("Peak-removal check: %d of %d brief fadings and %d brightenings concentrated in the brightest pixel | Star peaks removed: %s, measurements flagged %d\n",
+                    p.peakCheckConcentratedFadings, p.peakCheckFadings, p.peakCheckConcentratedBrightenings,
+                    p.peakRemovalFound ? "yes" : "no", p.measurementsPeakRemoved));
         }
         if (Double.isFinite(p.skyNoiseFactorMedian)) {
             sb.append(String.format("Sky-noise factor (main aperture, blank sky): median %.2f, range %.2f-%.2f | Frames without one: %d\n",

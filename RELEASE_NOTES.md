@@ -12,6 +12,15 @@
 
 ## 1.0.8 (unreleased)
 
+- **Brief fadings left by star peaks removed before registration are flagged (photometry change; additive API).** Hot-pixel removal on undersampled frames can take a star's peak pixel for a hot pixel and remove its light. With dithering, a different random subset of stars fades for exactly one pointing each time. On M81 Kumar (2.9"/px, FWHM 2 px) this made 16 of the 18 possible candidates and a high-confidence candidate without a catalogue match.
+  - *The check.* Before scoring, each star's brief fadings and brightenings within one pointing are compared with its nearest clean pointings in the frame cutouts. A change counts as concentrated when its lost or gained light sits in the brightest pixel; a real change in brightness scales the whole profile.
+  - *The session decision.* When concentrated fadings are at least 20 and at least five times the brightenings plus one, the session counts as affected. Its concentrated fadings are then flagged `PEAK_REMOVED`, left out of scoring, kept for display, and explained in a readiness message.
+  - *New API.* `PhotometryFlags.PEAK_REMOVED`, `VariableStarAnalyzer.Input.frameRegistrations` (set by the engine), `PhotometryTelemetry.peakCheckFadings`, `peakCheckConcentratedFadings`, `peakCheckConcentratedBrightenings`, `peakRemovalFound` and `measurementsPeakRemoved`, and `PhotometryFrameStat.peakRemoved`.
+  - *Effect on the reference data.* On M81 Kumar, 414 concentrated fadings stood against 17 brightenings, and 625 measurements are flagged. Candidates go from 10/18/22 to 9/9/13 high/possible/rejected. The other nine high-confidence candidates, all VSX-matched, are unchanged. The check finds nothing on the other 17 datasets, whose results are unchanged.
+  - *Limitation.* A genuine dimming within one pointing can be taken for one in about 3 % of cases on such data. The photometry stage's run time is unchanged within the machine's variation.
+
+  See [the algorithm](ALGORITHM.md#photometry-11-1).
+
 - **Reported photometry errors include the noise that neighbouring pixels share (photometry change; additive API).** The sky-noise error treats pixels as independent, but registration interpolates the frames, so neighbouring pixels share noise and the errors were 1.1–2.9 times too small even for faint, sky-limited stars. Each frame now measures a factor per aperture on a grid of blank-sky apertures: their noise over the noise the formula predicts, at least 1. `StarLightCurve.magError` includes it, while check B and the SNR cut keep the formula's error; stars, verdicts, scores and candidates are therefore unchanged.
   - A frame with fewer than 50 blank positions takes the session median of each aperture's factor.
   - New: `PhotometryFrameStat.skyNoiseFactor` (main aperture), and `PhotometryTelemetry.skyNoiseFactorMedian`, `skyNoiseFactorMin`, `skyNoiseFactorMax` and `framesWithoutSkyNoiseFactor`, which also appear in the text report.

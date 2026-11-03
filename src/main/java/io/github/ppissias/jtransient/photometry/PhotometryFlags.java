@@ -37,6 +37,12 @@ public final class PhotometryFlags {
      * Real variability changes the flux, not the shape.
      */
     public static final int CONTAMINATED = 1 << 7;
+    /**
+     * A brief fading within one pointing whose lost light sits in the star's brightest pixel, in a session where such
+     * fadings far outnumber brightenings: the star's peak was most likely removed before registration (hot-pixel
+     * removal on undersampled frames).
+     */
+    public static final int PEAK_REMOVED = 1 << 8;
 
     private PhotometryFlags() {
     }
@@ -54,6 +60,7 @@ public final class PhotometryFlags {
         if ((flags & FRAME_EXCLUDED) != 0) names.add("FRAME_EXCLUDED");
         if ((flags & BAD_FLUX) != 0) names.add("BAD_FLUX");
         if ((flags & CONTAMINATED) != 0) names.add("CONTAMINATED");
+        if ((flags & PEAK_REMOVED) != 0) names.add("PEAK_REMOVED");
         return names;
     }
 }

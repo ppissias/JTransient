@@ -1090,6 +1090,23 @@ Light curves are built for every star whatever the verdict. `deltaMag` is the ma
 #### 16.11.1 Light-curve cleaning
 
 - A star with fewer than `variableMinFrames` usable measurements is `NOT_SCORED`.
+- **Star peaks removed before registration** (`PeakRemovalCheck`, before scoring). Hot-pixel removal replaces a pixel that stands far above its neighbours with their level. On undersampled frames, the peak pixel of a star centred on a pixel looks the same, so the star loses that pixel's light while the sky stays as it was. Dithering moves the stars to other pixels at the next pointing, so the loss lasts one pointing and the light curve shows a brief fading.
+  - *Pointings.* Consecutive frames share a pointing while the camera position of the image centre ([`FrameRegistration`](#1-border-drift-diagnostics), from the fill) moves by at most 1 px. A frame without a usable registration starts its own pointing.
+  - *Brief fadings and brightenings.* The frames of one pointing that are fainter (or brighter) than the star's median by more than 4 robust sigmas and more than `variableMinAmplitudeMag` form a fading (or brightening).
+  - *The one-pixel test.* Each fading or brightening is compared with the star's two nearest pointings that have neither. The change is the reference's mean sky-subtracted cutout minus the episode's, within max(3 px, 2 x FWHM). Its concentration is the largest single-pixel share of the change over the largest single-pixel share of the reference's light. A real change in brightness scales the whole profile and gives about 1; a removed peak gives about 2 to 4. A change counts as concentrated when its concentration is at least 1.8 against every reference.
+  - *The session decision.* Noise, cosmic rays and hot pixels make concentrated changes in both directions. The session counts as having had its star peaks removed only when at least 20 fadings are concentrated, and at least 5 times as many as brightenings plus one. Only then are the concentrated fadings flagged `PEAK_REMOVED`: left out of scoring, kept for display, and explained in a readiness message.
+  - *Telemetry:* `peakCheckFadings`, `peakCheckConcentratedFadings`, `peakCheckConcentratedBrightenings`, `peakRemovalFound`, `measurementsPeakRemoved`, and `PhotometryFrameStat.peakRemoved` per frame.
+  - *Limitation.* Pixel phase differs between pointings, so a real dimming within one pointing whose references caught the star on a sharper pixel position can look concentrated. This happened to 3 % of synthetic profile-shaped dimmings on M81 Kumar's real frames. The check therefore acts only in sessions with the one-sided signature.
+  - *Reference data.*
+
+    | Session | Concentrated fadings | Concentrated brightenings | Result |
+    |---|---|---|---|
+    | M81 Kumar (2.9"/px, FWHM 2 px) | 414 of 710 | 17 | found: 625 measurements flagged |
+    | Klangwolke-2 | 393 of 1360 | 180 | not found |
+    | Eagle-noisy | 8 of 47 | 40 | not found |
+    | m5-reg | 12 of 27 | 3 | not found |
+
+    On M81 Kumar, a high-confidence candidate without a catalogue match that was made entirely of such fadings becomes constant, and 13 of the 16 possible candidates of that kind become constant, as do 9 rejected ones. The other high-confidence candidates, all VSX-matched, are unchanged.
 - **Isolated outliers.** A point more than 4 robust sigmas from the median is removed and flagged `OUTLIER`, unless a neighbouring usable point deviates by more than 2 sigmas on the same side. A neighbour counts only when the star has no missing measurement on a used frame between the two: deviations either side of a crossing-flagged or contaminated measurement do not keep each other, while a frame left out of the photometry does not separate them. Single-frame events (cosmic rays, hot pixels, satellite glints that were not detected) are dropped. Real dips or flares that span several frames are kept.
 - From the cleaned curve: `scatter` (sample standard deviation), `amplitude` (95th minus 5th percentile), and `timeSpanMinutes` (first to last usable mid-exposure Julian date; `NaN` if any usable frame has no timestamp).
 
