@@ -285,6 +285,7 @@ public final class VariableStarAnalyzer {
                 telemetry.framesExcludedRegistration++;
             }
         }
+        resolveSkyNoiseFactors(measurements, stats, telemetry);
 
         // --- Check A: zero-floor clipping ---
         readiness.medianFloorClippedFraction = PhotometryMath.median(floorFractions);
@@ -502,7 +503,7 @@ public final class VariableStarAnalyzer {
             for (int j = 0; j < nFrames; j++) {
                 CancellationScope.check();
                 curve.deltaMag[j] = solution.residual[i][j];
-                curve.magError[j] = measurements[j].magError[ApertureMeasurer.R_MAIN][i];
+                curve.magError[j] = measurements[j].reportedMagError(ApertureMeasurer.R_MAIN, i);
                 curve.flags[j] = flags[i][j] | (frameActive[j] ? 0 : PhotometryFlags.FRAME_EXCLUDED);
             }
             if (starExcluded[i]) {
@@ -1287,7 +1288,7 @@ public final class VariableStarAnalyzer {
             StarLightCurve curve = curves.get(i);
             System.arraycopy(options[a].residual[i], 0, curve.deltaMag, 0, curve.deltaMag.length);
             for (int j = 0; j < curve.magError.length; j++) {
-                curve.magError[j] = measurements[j].magError[radiusIndices[a]][i];
+                curve.magError[j] = measurements[j].reportedMagError(radiusIndices[a], i);
             }
             curve.apertureFwhmFactor = fwhmFactors[a];
             curve.apertureMinRadiusPixels = radii[a][0];
@@ -1400,6 +1401,43 @@ public final class VariableStarAnalyzer {
             if (frameActive[j] && !solution.frameSolved[j]) {
                 exclude(j, stats[j], frameActive, "Too few usable stars for the ensemble");
                 telemetry.framesExcludedTooFewStars++;
+            }
+        }
+    }
+
+    /**
+     * Records each frame's main-aperture sky-noise factor, and gives a frame without factors (too few blank-sky
+     * apertures) the session median of each aperture's factor, so the reported errors of all frames include one.
+     * The factors scale only the errors reported with the light curves.
+     */
+    static void resolveSkyNoiseFactors(ApertureMeasurer.FrameMeasurement[] measurements,
+                                               PipelineTelemetry.PhotometryFrameStat[] stats,
+                                               PipelineTelemetry.PhotometryTelemetry telemetry) {
+        int nFrames = measurements.length;
+        double[] main = new double[nFrames];
+        for (int j = 0; j < nFrames; j++) {
+            main[j] = measurements[j].skyNoiseFactor[ApertureMeasurer.R_MAIN];
+            stats[j].skyNoiseFactor = main[j];
+            if (Double.isFinite(main[j])) {
+                telemetry.skyNoiseFactorMin = Double.isFinite(telemetry.skyNoiseFactorMin)
+                        ? Math.min(telemetry.skyNoiseFactorMin, main[j]) : main[j];
+                telemetry.skyNoiseFactorMax = Double.isFinite(telemetry.skyNoiseFactorMax)
+                        ? Math.max(telemetry.skyNoiseFactorMax, main[j]) : main[j];
+            } else {
+                telemetry.framesWithoutSkyNoiseFactor++;
+            }
+        }
+        telemetry.skyNoiseFactorMedian = PhotometryMath.median(main);
+        double[] factors = new double[nFrames];
+        for (int r = 0; r < ApertureMeasurer.RADIUS_COUNT; r++) {
+            for (int j = 0; j < nFrames; j++) {
+                factors[j] = measurements[j].skyNoiseFactor[r];
+            }
+            double median = PhotometryMath.median(factors);
+            for (int j = 0; j < nFrames; j++) {
+                if (!Double.isFinite(measurements[j].skyNoiseFactor[r])) {
+                    measurements[j].skyNoiseFactor[r] = median;
+                }
             }
         }
     }

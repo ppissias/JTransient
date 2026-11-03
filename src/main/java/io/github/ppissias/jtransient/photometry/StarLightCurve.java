@@ -33,8 +33,9 @@ public final class StarLightCurve {
     /** Per-frame residual from the ensemble model (positive = fainter), NaN when not measured. */
     public double[] deltaMag;
     /**
-     * Per-frame sky-noise magnitude error of the aperture that supplied {@link #deltaMag} (a lower bound;
-     * scoring uses the empirical noise model).
+     * Per-frame sky-noise magnitude error of the aperture that supplied {@link #deltaMag}, including the noise
+     * neighbouring pixels share as measured on blank sky (still a lower bound: the star's own photon noise is
+     * not included; scoring uses the empirical noise model).
      */
     public double[] magError;
     /**

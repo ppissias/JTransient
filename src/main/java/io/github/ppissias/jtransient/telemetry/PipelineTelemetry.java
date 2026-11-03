@@ -324,6 +324,17 @@ public class PipelineTelemetry {
         /** Alternative-aperture ensemble fits (0.7, 1.0 and 2.0 x FWHM) that reached the iteration limit. */
         public int apertureSolvesAtIterationLimit;
 
+        /**
+         * Main-aperture sky-noise factor over the frames that measured one on blank sky: median, smallest and largest
+         * (NaN when none did). It is the measured noise of blank-sky apertures over the noise the sky-noise formula
+         * predicts; the errors reported with the light curves include each frame's factor for their aperture.
+         */
+        public double skyNoiseFactorMedian = Double.NaN;
+        public double skyNoiseFactorMin = Double.NaN;
+        public double skyNoiseFactorMax = Double.NaN;
+        /** Frames with too few blank-sky apertures; their reported errors use the session's median factors. */
+        public int framesWithoutSkyNoiseFactor;
+
         /** Variability counters. */
         public int starsScored;
         public int starsNotScored;
@@ -411,6 +422,11 @@ public class PipelineTelemetry {
         public double apertureRadius = Double.NaN;
         /** Median local sky level of the measured stars (shifted pixel domain). */
         public double skyMedian = Double.NaN;
+        /**
+         * Main-aperture sky-noise factor measured on blank sky, NaN when too few blank apertures were found. The
+         * errors reported for this frame are the sky-noise errors times their aperture's factor.
+         */
+        public double skyNoiseFactor = Double.NaN;
 
         /** Median residual registration offset of bright stars, in pixels. */
         public double registrationOffsetX = Double.NaN;
@@ -612,6 +628,10 @@ public class PipelineTelemetry {
                     p.ensembleConverged ? "converged" : "iteration limit reached", p.ensembleIterations,
                     p.ensembleIterationLimit, Double.isFinite(p.ensembleLastChangeMag) ? String.format("%.1e", p.ensembleLastChangeMag) : "n/a",
                     p.apertureSolvesAtIterationLimit));
+        }
+        if (Double.isFinite(p.skyNoiseFactorMedian)) {
+            sb.append(String.format("Sky-noise factor (main aperture, blank sky): median %.2f, range %.2f-%.2f | Frames without one: %d\n",
+                    p.skyNoiseFactorMedian, p.skyNoiseFactorMin, p.skyNoiseFactorMax, p.framesWithoutSkyNoiseFactor));
         }
         sb.append(String.format("Measurements: %d | Saturated %d, non-linear %d, edge/void %d, crossing %d, outlier %d, bad flux %d, contaminated shape %d\n",
                 p.measurementsTotal, p.measurementsSaturated, p.measurementsNonlinear, p.measurementsEdgeOrVoid,

@@ -281,7 +281,7 @@ The agreed order is **product consistency -> evidence isolation and solver corre
 | 3 | Valid cross-aperture support and temporal agreement (VS-5) | Compare curves only after their identity, errors, masks and fitting are reliable. | Reject false agreement such as opposite-phase aperture curves while preserving noisy genuine variability. |
 | 4 | Readiness/subset policies, gap handling, uncertainty coverage, leverage and optional display calibration | These require scientific tradeoffs rather than just consistent state. | Recover useful work or improve reliability only where controlled tests demonstrate that the added complexity earns its cost. |
 
-**Progress.** Step 0 (baseline) and Stages 1-3 are done. The Stage 4 investigations are done and decided; see the [Stage 4 findings](#stage-4-findings-2026-11-03). 4E is implemented; 4F (a reported-error factor from blank sky) is next. The [implementation log](#implementation-log) records each stage. Do not start by changing gain assumptions, adding a new empirical noise floor, lowering variability thresholds, or redesigning the pipeline.
+**Progress.** All stages are done. Step 0 (baseline) and Stages 1-3 are implemented. The Stage 4 investigations are decided ([Stage 4 findings](#stage-4-findings-2026-11-03)): 4E and 4F are implemented, 4C and 4G are closed, and 4A, 4B, 4D, 4H and 4I are deferred with their evidence. The deferred items stay open proposals. The [implementation log](#implementation-log) records each stage. Do not start by changing gain assumptions, adding a new empirical noise floor, lowering variability thresholds, or redesigning the pipeline.
 
 ### Confirmed implementation details (2026-11-02)
 
@@ -480,6 +480,28 @@ An extreme point keeps its neighbour's support only when the star has no missing
 
   Verdicts, frames, star exclusions and contamination are unchanged everywhere, and so are all moving-object findings. The global map changes only through its variable-star circles. The 851 input files are unchanged.
 
+#### 4F. Blank-sky factor for the reported errors — implemented 2026-11-03
+
+Each frame measures, for every aperture, `skyNoiseFactor`: how much noisier sky-subtracted apertures on blank sky are than the sky-noise formula predicts for independent pixels, at least 1. The positions form a 32 x 32 grid over the frame. A position counts when its annulus gives a sky estimate as a star's would and its largest aperture is free of master-star pixels, registration fill and anything 5 sky sigmas above the sky. A frame needs at least 50 such positions; one with fewer takes the session median of each aperture's factor.
+
+The errors reported with the light curves (`StarLightCurve.magError`: error bars, tooltips and `mag_error`) are the formula's error times the factor of their aperture on that frame. Check B and the SNR cut keep the formula's error (option (b)).
+
+New telemetry:
+- `PhotometryFrameStat.skyNoiseFactor` (main aperture);
+- `PhotometryTelemetry.skyNoiseFactorMedian`, `skyNoiseFactorMin`, `skyNoiseFactorMax` and `framesWithoutSkyNoiseFactor`, also shown in the text report.
+
+SpacePixels shows the main aperture's factor in the readiness diagnostics as **Sky-noise factor**, adds a final `sky_noise_factor` column to `photometry_frames.csv`, and says in the error-bar note what the bars include. Behaviour is in [ALGORITHM.md](ALGORITHM.md#photometry-6-3).
+
+**Verification.**
+- *Tests.* Independent pixels give factors of 1.0–1.12; the median sky makes the largest apertures read about 1.05. A frame shifted by half a pixel with bilinear interpolation gives 1.6–2.2 at 2.0 FWHM, with factors growing with the aperture, and the reported error is the formal one times the factor. A frame without enough blank sky has no factor and keeps the formal error, and frames without a factor take the session median. JTransient's 330 tests, `check` and `apiConsumer` pass; SpacePixels' 746 tests pass.
+- *Reference data.* On the 18 reference datasets against 4E:
+  - The stars CSV, scores, tiers, verdicts, frames and moving-object findings are identical. Only `mag_error`, the new column, the diagnostics line and the light-curve charts and notes change, and every light-curve cell other than `mag_error` is unchanged.
+  - Main-aperture session medians: Eagle-noisy 2.89, ic-5070 2.78, helix 2.73, m5-reg 2.71, whynot 1.97, Klangwolke-2 1.82, the m31 sets, m81-reg, m101 and dc-reg 1.48–1.52, and M81 Kumar and UG 6524 1.14. Frame ranges are about ±15 % around the median.
+  - The reported candidate errors grew by the factor of their aperture: on Klangwolke-2 by 1.47 at 0.7 FWHM, 1.61 at 1.0 and 1.82 at 1.5; on m5-reg by 2.26 at 0.7; on M81 Kumar and UG 6524 by 1.08–1.14. For the faintest constant stars of the 4F study, the measured excess was 1.46–1.52 (Klangwolke-2), 2.35–2.41 (m5-reg) and 1.14–1.17 (Kumar sessions). Most of it is now in the errors, and the rest is noise the factor does not model.
+  - The datasets with fewer than 20 frames do not run the measurement and leave the column empty.
+- *Grid size.* A first build with a 48 x 48 grid gave the same session medians within 1 % (per-frame values within 14 %), but cost up to 1.4 s on UG 6524's photometry stage. With 32 x 32 positions and plain square roots, back-to-back runs add 0.1–0.7 s to the photometry stage (UG 6524 1.4–1.6 s to 1.9–2.2 s; M81 Kumar 4.4–4.9 s to 5.0–5.1 s); total run times are unchanged within the machine's variation.
+- *Inputs.* The 851 input files are unchanged.
+
 ### Implementation log
 
 What was done at each stage, how it was checked, what it changed and anything that needed a decision. Commits are in JTransient (JT) and SpacePixels (SP); none has been pushed.
@@ -505,10 +527,14 @@ What was done at each stage, how it was checked, what it changed and anything th
   - *Other evidence.* A scorer-level injection study (4I), and scripts on the 3B frames, curves and FITS frames for 4C, 4D, 4F (blank-sky apertures), 4H and the 4I alternative.
   - *Afterwards.* The sources were restored, and the SpacePixels install was rebuilt and checked against 3B's classes.
   - *Recommendations.* Defer 4A, 4B, 4D, 4H and 4I; close 4C and 4G. Decisions on 4E and 4F were put to the maintainer, who accepted every recommendation: the outlier-support rule for 4E, and option (b) for 4F.
-- **4E, implementation (this change).** As in 4E above.
+- **4E, implementation (JT `af55e07`, SP docs `ecf8e0d`).** As in 4E above.
   - *Verification.* The build matches the probe's support-only runs byte for byte. The tier changes against 3B are Eagle-noisy 0/1/1 to 0/0/0, M81 Kumar 10/17/21 to 10/18/22 and UG 6524 0/1/1 to 1/0/2, with no VSX-matched change.
   - *Documentation.* ALGORITHM.md and the SpacePixels manual now state the limit on brief variation (the accepted 4I follow-up).
   - *Tests.* JTransient 326.
+- **4F, implementation (this change).** As in 4F above.
+  - *Measurement.* A first build measured blank sky on a 48 x 48 grid; its results were right, but it nearly doubled UG 6524's short photometry stage. The final build uses a 32 x 32 grid and plain square roots, which gives the same session factors within 1 %. Timings were compared back to back, because the machine's load varies; Klangwolke-2's photometry stage took 201 s against 189 s for 4E.
+  - *Outputs.* Candidates and every other result are unchanged; only the reported errors and their documentation change.
+  - *Tests.* JTransient 330, SpacePixels 746.
 
 ### Per-change verification and completion
 

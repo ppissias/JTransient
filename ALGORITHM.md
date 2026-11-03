@@ -889,6 +889,24 @@ magError = 1.0857 * sigma_F / flux
 
 `sigma_sky` and `N_sky` belong to the same sample: the annulus pixels left after the earlier clipping passes, from which the sky level and its MAD sigma were computed (not the unclipped annulus, and not the pixels the last pass would keep). Every aperture gets its own error from this formula, NaN when its flux is not positive. Check B and the SNR cut use the main aperture's; a light curve measured in another aperture carries that aperture's ([measuring aperture per brightness](#photometry-11)). The error ignores the star's own photon noise and gain, so it is a lower bound. Scoring uses the empirical noise model instead.
 
+**Sky-noise factor.** The formula treats pixels as independent, but registration interpolates the frames, so neighbouring pixels share noise and an aperture sum is noisier than the formula says. Each frame therefore measures the factor on blank sky. A 32 x 32 grid of positions covers the frame. A position counts when:
+- its annulus gives a sky estimate as a star's would;
+- its largest aperture lies inside the image;
+- that aperture is free of master-star pixels, registration fill and any pixel 5 sky sigmas above the sky.
+
+For every aperture, `skyNoiseFactor` is the robust spread of the sky-subtracted sums over the median spread the formula predicts for them, at least 1. It stays unset with fewer than 50 positions, and such a frame takes the session median of each aperture's factor.
+
+The factor scales only the errors reported with the light curves (`StarLightCurve.magError`): check B and the SNR cut keep the formula's error, so stars, verdicts and candidates do not depend on it. Telemetry records it: `PhotometryFrameStat.skyNoiseFactor` holds the main aperture's factor per frame, and `PhotometryTelemetry.skyNoiseFactorMedian`, `skyNoiseFactorMin`, `skyNoiseFactorMax` and `framesWithoutSkyNoiseFactor` summarise it.
+
+On the reference data, the session median for the main aperture ranges from 1.14 (M81 Kumar, UG 6524) and 1.82 (Klangwolke-2) to 2.71 (m5-reg) and 2.89 (Eagle-noisy). It is smaller for smaller apertures; on Klangwolke-2 it is 1.47 at 0.7 FWHM. For the faintest constant stars, where sky noise dominates, the scatter was 1.14–2.9 times the unscaled error. The factors at the apertures those stars use compare as follows ([VS-12](FEATURE-REQUESTS.md#vs-12-consolidated-photometry-improvement-roadmap) 4F):
+
+| Session | Factor | Faint-star scatter ÷ unscaled error |
+|---|---|---|
+| M81 Kumar, UG 6524 | 1.08 | 1.14–1.17 |
+| Klangwolke-2 | 1.47 | 1.46–1.52 |
+| m5-reg | 2.26 | 2.35–2.41 |
+ Bright stars still scatter more than their error, because their own photon noise, scintillation and flat-field errors are not modelled.
+
 Flags set here:
 
 | Flag | Condition |
@@ -1194,7 +1212,7 @@ These values are in the code and are not configurable:
 - **Variability must show within the session.** A star that changes on timescales much longer than the session looks constant. A star that changes only during the gap between sessions is not visible at all.
 - **Crowded, bright and edge stars are not measured.** A variable whose neighbours add more than 2% light to its aperture, one saturated in the master stack, or one whose sky ring reaches outside the session data area is never selected.
 - **Power-law stretches are not detected** ([what the checks cannot see](#photometry-8-5)).
-- **`magError` is a lower bound** (sky noise only). Scoring uses the empirical `expectedScatter`; it is not a calibrated uncertainty on the measured amplitude.
+- **`magError` is a lower bound** (sky noise, including the measured noise neighbouring pixels share). Scoring uses the empirical `expectedScatter`; it is not a calibrated uncertainty on the measured amplitude.
 - **Candidates are not confirmed variables.** Even `HIGH_CONFIDENCE` candidates should be checked against the images and a variable-star catalogue.
 - **Aperture agreement assumes white noise.** The APERTURE gate's standard error treats successive frames as independent; noise correlated in time, for example from seeing changes, makes a difference look more significant than it is. A real variable blended with a neighbour that dilutes it in the large aperture can fail.
 - **Usable-point adjacency can bridge gaps.** Persistence and serial statistics do not prove a state continued through missing observations.

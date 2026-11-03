@@ -27,7 +27,10 @@ import java.util.List;
  * index for check B, the main photometry flux and the aperture-consistency gate all come from the
  * same pass. The sky is a sigma-clipped median of an annulus with the pixels of master stars masked out.
  * Every aperture gets its own sky-noise magnitude error from the same formula, so a light curve measured
- * in another aperture than the main one carries that aperture's errors.</p>
+ * in another aperture than the main one carries that aperture's errors. The formula treats pixels as
+ * independent; apertures on blank sky measure how much noisier a real aperture is on this frame
+ * ({@link FrameMeasurement#skyNoiseFactor}), and the errors reported with the light curves include that
+ * factor.</p>
  */
 final class ApertureMeasurer {
 
@@ -56,6 +59,12 @@ final class ApertureMeasurer {
     /** An annulus with more floor pixels than this share is treated as void padding. */
     private static final double MAX_FLOOR_SHARE_IN_ANNULUS = 0.5;
     private static final int SUPERSAMPLE = 5;
+    /** Blank-sky positions form a grid of this many positions along each side of the frame. */
+    private static final int BLANK_GRID = 32;
+    /** Fewest blank-sky apertures for a frame's sky-noise factors. */
+    static final int MIN_BLANK_APERTURES = 50;
+    /** A blank-sky position is rejected when a pixel inside its largest aperture is this many sky sigmas above the sky. */
+    private static final double BLANK_SOURCE_SIGMA = 5.0;
 
     /** Measurements of every selected star on one frame. */
     static final class FrameMeasurement {
@@ -75,6 +84,14 @@ final class ApertureMeasurer {
         double registrationSpread = Double.NaN;
         double floorClippedFraction = Double.NaN;
         double skyMedian = Double.NaN;
+        /**
+         * Noise of sky-subtracted apertures on blank sky over the noise the sky-noise formula predicts for them,
+         * per aperture, at least 1; NaN when too few blank positions were found. Registration interpolates the
+         * frames, so neighbouring pixels share noise, which the formula leaves out.
+         */
+        final double[] skyNoiseFactor = new double[RADIUS_COUNT];
+        /** Blank-sky apertures the factors came from. */
+        int blankApertures;
 
         FrameMeasurement(double fwhm, int starCount) {
             this.fwhm = fwhm;
@@ -88,6 +105,16 @@ final class ApertureMeasurer {
                 Arrays.fill(magError[r], Double.NaN);
             }
             Arrays.fill(sky, Double.NaN);
+            Arrays.fill(skyNoiseFactor, Double.NaN);
+        }
+
+        /**
+         * Error reported with a light curve: the sky-noise error of aperture {@code r} times its sky-noise factor
+         * on this frame (none when the factor is unknown). Check B and the SNR cut use {@link #magError} itself.
+         */
+        double reportedMagError(int r, int star) {
+            double factor = skyNoiseFactor[r];
+            return magError[r][star] * (Double.isFinite(factor) ? factor : 1.0);
         }
 
         /** Instrumental magnitude in aperture {@code r}, or NaN when the flux is not positive. */
@@ -249,7 +276,112 @@ final class ApertureMeasurer {
 
         m.floorClippedFraction = PhotometryMath.median(floorShares);
         m.skyMedian = PhotometryMath.median(m.sky);
+        measureBlankSky(pixels, otherStarMask, innerRadius, outerRadius, maxApertureRadius, m);
         return m;
+    }
+
+    /**
+     * Measures the sky-noise factors of a frame on apertures placed on blank sky. The positions form a fixed
+     * {@link #BLANK_GRID} x {@link #BLANK_GRID} grid; a position counts when its annulus gives a sky estimate as
+     * a star's would, and its largest aperture lies inside the image, free of master-star pixels, registration
+     * fill and anything {@link #BLANK_SOURCE_SIGMA} sky sigmas above the sky. Each aperture's factor is the robust
+     * spread of its sky-subtracted sums over the median spread the sky-noise formula predicts for them, at least 1.
+     */
+    private static void measureBlankSky(short[][] pixels, boolean[][] otherStarMask, double innerRadius,
+                                        double outerRadius, double maxApertureRadius, FrameMeasurement m) {
+        int height = pixels.length;
+        int width = pixels[0].length;
+        double[][] sums = new double[RADIUS_COUNT][BLANK_GRID * BLANK_GRID];
+        double[][] predicted = new double[RADIUS_COUNT][BLANK_GRID * BLANK_GRID];
+        double[] skyBuffer = new double[(int) (Math.PI * outerRadius * outerRadius) + 64];
+        double[] sum = new double[RADIUS_COUNT];
+        double[] area = new double[RADIUS_COUNT];
+        int ro = (int) Math.ceil(outerRadius);
+        int ra = (int) Math.ceil(maxApertureRadius + 1);
+        double inner2 = innerRadius * innerRadius;
+        double outer2 = outerRadius * outerRadius;
+        int accepted = 0;
+        for (int gy = 0; gy < BLANK_GRID; gy++) {
+            for (int gx = 0; gx < BLANK_GRID; gx++) {
+                CancellationScope.check();
+                double cx = (gx + 0.5) * width / BLANK_GRID;
+                double cy = (gy + 0.5) * height / BLANK_GRID;
+                if (!insideImage(pixels, cx, cy, outerRadius)) {
+                    continue;
+                }
+                int x0 = (int) Math.round(cx);
+                int y0 = (int) Math.round(cy);
+                int skyCount = 0;
+                int floorCount = 0;
+                int annulusCount = 0;
+                for (int y = y0 - ro; y <= y0 + ro; y++) {
+                    for (int x = x0 - ro; x <= x0 + ro; x++) {
+                        double d2 = (x - cx) * (x - cx) + (y - cy) * (y - cy);
+                        if (d2 < inner2 || d2 > outer2) {
+                            continue;
+                        }
+                        int v = PixelEncoding.toShiftedPositiveInt(pixels[y][x]);
+                        annulusCount++;
+                        if (v == 0) {
+                            floorCount++;
+                        }
+                        if ((otherStarMask == null || !otherStarMask[y][x]) && skyCount < skyBuffer.length) {
+                            skyBuffer[skyCount++] = v;
+                        }
+                    }
+                }
+                if (annulusCount == 0 || (double) floorCount / annulusCount > MAX_FLOOR_SHARE_IN_ANNULUS) {
+                    continue;
+                }
+                double[] skyStats = clippedMedianAndSigma(skyBuffer, skyCount);
+                if (skyStats == null || !(skyStats[1] > 0)) {
+                    continue;
+                }
+                double sky = skyStats[0];
+                double skySigma = skyStats[1];
+                Arrays.fill(sum, 0);
+                Arrays.fill(area, 0);
+                boolean blank = true;
+                for (int y = y0 - ra; y <= y0 + ra && blank; y++) {
+                    for (int x = x0 - ra; x <= x0 + ra; x++) {
+                        double d = Math.sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+                        if (d > maxApertureRadius + 1) {
+                            continue;
+                        }
+                        int v = PixelEncoding.toShiftedPositiveInt(pixels[y][x]);
+                        if (d <= maxApertureRadius && ((otherStarMask != null && otherStarMask[y][x])
+                                || v <= DataArea.FILL_LEVEL || v > sky + BLANK_SOURCE_SIGMA * skySigma)) {
+                            blank = false;
+                            break;
+                        }
+                        for (int r = 0; r < RADIUS_COUNT; r++) {
+                            double w = pixelWeight(x - cx, y - cy, d, m.radii[r]);
+                            if (w > 0) {
+                                sum[r] += w * (v - sky);
+                                area[r] += w;
+                            }
+                        }
+                    }
+                }
+                if (!blank) {
+                    continue;
+                }
+                for (int r = 0; r < RADIUS_COUNT; r++) {
+                    sums[r][accepted] = sum[r];
+                    predicted[r][accepted] = skySigma * Math.sqrt(area[r] * (1.0 + area[r] / skyStats[2]));
+                }
+                accepted++;
+            }
+        }
+        m.blankApertures = accepted;
+        if (accepted < MIN_BLANK_APERTURES) {
+            return;
+        }
+        for (int r = 0; r < RADIUS_COUNT; r++) {
+            double spread = PhotometryMath.robustSigma(sums[r], accepted);
+            double expected = PhotometryMath.median(predicted[r], accepted);
+            m.skyNoiseFactor[r] = spread > 0 && expected > 0 ? Math.max(1.0, spread / expected) : Double.NaN;
+        }
     }
 
     /**
