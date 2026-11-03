@@ -31,6 +31,7 @@ public class PipelineTelemetry {
         TRACKING("Star veto, streaks, tracks and anomalies"),
         COMMON_MOTION("Common-motion filtering"),
         RESIDUAL_ANALYSIS("Local rescue and activity clustering"),
+        FAINT_MOVER_SEARCH("Faint-mover search"),
         PHOTOMETRY("Variable-star photometry");
 
         private final String label;
@@ -166,6 +167,9 @@ public class PipelineTelemetry {
 
     /** What the faint-streak search did; null when it was switched off or the run stopped before it. */
     public FaintStreakSearchTelemetry faintStreakSearchTelemetry;
+
+    /** What the faint-mover search did; null when it was switched off or the run stopped before it. */
+    public FaintMoverSearchTelemetry faintMoverSearchTelemetry;
 
     /** Mutable pipeline-facing view of slow-mover morphology and median-mask filtering. */
     public static class SlowMoverTelemetry {
@@ -595,6 +599,10 @@ public class PipelineTelemetry {
             sb.append("\n");
         }
 
+        if (faintMoverSearchTelemetry != null) {
+            appendFaintMoverReport(sb, faintMoverSearchTelemetry);
+        }
+
         if (photometryTelemetry != null) {
             appendPhotometryReport(sb, photometryTelemetry);
         }
@@ -609,6 +617,30 @@ public class PipelineTelemetry {
         sb.append("==================================================\n");
 
         return sb.toString();
+    }
+
+    /** Appends the faint-mover search section of the text report. */
+    private static void appendFaintMoverReport(StringBuilder sb, FaintMoverSearchTelemetry f) {
+        sb.append("--- FAINT-MOVER SEARCH (EXPERIMENTAL) ---\n");
+        if (f.skippedReason != null) {
+            sb.append("  Not run: ").append(f.skippedReason).append("\n\n");
+            return;
+        }
+        sb.append(String.format(java.util.Locale.US,
+                "  Frames: %d over %.1f min%s | Star size: %.2f px (%s)\n", f.frames, f.sessionMinutes,
+                f.framesOutsideSession > 0 ? " (" + f.framesOutsideSession + " left out: another session)" : "",
+                f.fwhmPixels, f.fwhmFromStars ? "measured" : "fixed; no star size measured"));
+        sb.append(String.format(java.util.Locale.US,
+                "  Speeds: %.3f-%.3f px/min | Grid: %d motions, step %.3f px/min, refined to %.4f\n",
+                f.minSpeedPixelsPerMinute, f.maxSpeedPixelsPerMinute, f.coarseMotions, f.coarseStepPixelsPerMinute,
+                f.fineStepPixelsPerMinute));
+        sb.append(String.format(java.util.Locale.US, "  Tiles searched: %d of %d%s | Pixels searched: %d | %.1f s\n",
+                f.tilesSearched, f.tiles, f.truncated ? " (time limit reached)" : "", f.searchedPixels,
+                f.elapsedMs / 1000.0));
+        sb.append(String.format("  Peaks refined: %d | below score: %d | one half: %d | stationary: %d | duplicates: %d\n",
+                f.refinedPeaks, f.belowScore, f.rejectedSplitHalf, f.rejectedStationary, f.duplicates));
+        sb.append(String.format("  Moving tracks: %d | side lobes: %d | camera-fixed: %d | Candidates: %d\n\n",
+                f.matchedTracks, f.nearStronger, f.followingCamera, f.candidates));
     }
 
     /**

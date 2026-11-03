@@ -11,6 +11,7 @@ package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.model.DetectedObject;
 import io.github.ppissias.jtransient.model.Pixel;
+import io.github.ppissias.jtransient.model.Track;
 import io.github.ppissias.jtransient.execution.DiagnosticContext;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
@@ -23,6 +24,8 @@ import io.github.ppissias.jtransient.execution.WorkerPool;
 import io.github.ppissias.jtransient.core.CommonMotionRejector;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.FrameCoverage;
+import io.github.ppissias.jtransient.core.FaintMoverCandidate;
+import io.github.ppissias.jtransient.core.FaintMoverSearch;
 import io.github.ppissias.jtransient.core.FaintStreakSearch;
 import io.github.ppissias.jtransient.core.FrameDriftAnalyzer;
 import io.github.ppissias.jtransient.core.FrameRegistration;
@@ -857,6 +860,67 @@ public class JTransientEngine implements AutoCloseable {
         }
     }
 
+    /**
+     * Runs the faint-mover search over the kept frames, with the run's streaks masked: the normal streak detections,
+     * the faint-streak search's candidates and the streak tracks' detections. A worker holds one tile's residuals of
+     * every kept frame ({@link FaintMoverSearch.Plan#bytesPerTile}); the run's limit is set again afterwards.
+     */
+    private FaintMoverSearch.Result searchFaintMovers(ExtractedFramesContext context, short[][] masterStackData,
+                                                      TrackLinker.TrackingResult trackResult,
+                                                      FaintStreakSearch.Result faintStreaks, DetectionConfig config,
+                                                      TransientEngineProgressListener listener) throws Exception {
+        List<ImageFrame> keptFrames = context.cleanFrames;
+        Map<Integer, Integer> keptIndex = new HashMap<>();
+        List<List<DetectedObject>> streaks = new ArrayList<>();
+        for (int i = 0; i < keptFrames.size(); i++) {
+            keptIndex.put(keptFrames.get(i).sequenceIndex, i);
+            List<DetectedObject> frameStreaks = new ArrayList<>();
+            for (DetectedObject object : context.cleanFramesData.get(i).objects) {
+                if (object.isStreak) {
+                    frameStreaks.add(object);
+                }
+            }
+            if (faintStreaks != null && i < faintStreaks.candidates.size()) {
+                frameStreaks.addAll(faintStreaks.candidates.get(i));
+            }
+            streaks.add(frameStreaks);
+        }
+        for (Track track : trackResult.tracks) {
+            if (track.isStreakTrack) {
+                for (DetectedObject point : track.points) {
+                    Integer index = keptIndex.get(point.sourceFrameIndex);
+                    if (index != null) {
+                        streaks.get(index).add(point);
+                    }
+                }
+            }
+        }
+        FaintMoverSearch.Input input = new FaintMoverSearch.Input();
+        input.frames = keptFrames;
+        input.frameMetrics = context.cleanFrameMetrics;
+        input.masterStack = masterStackData;
+        input.dataArea = context.dataArea;
+        input.registrations = context.frameRegistrations;
+        input.streaks = streaks;
+        input.tracks = trackResult.tracks;
+        if (listener != null) {
+            input.progress = (percentage, message) -> OperationContext.notify(listener::onProgressUpdate, 92, message);
+        }
+        FaintMoverSearch.Plan plan = FaintMoverSearch.plan(input, config);
+        if (plan.skippedReason == null) {
+            int moverWorkers = workers.limitWork(plan.tileCount, Math.max(1L, plan.bytesPerTile / 16));
+            if (DiagnosticContext.enabled()) {
+                DiagnosticContext.printf("DEBUG: Faint-mover search -> %d tiles, %d workers%n", plan.tileCount,
+                        moverWorkers);
+            }
+        }
+        try {
+            return OperationContext.call(StageId.FAINT_MOVER_SEARCH, null, () -> FaintMoverSearch.search(plan));
+        } finally {
+            limitWorkToFrames(keptFrames);
+        }
+    }
+
     private static void notifyObserver(PipelineStageObserver observer, PipelineStage stage) {
         try {
             observer.stageFinished(stage);
@@ -1172,6 +1236,23 @@ public class JTransientEngine implements AutoCloseable {
                 residual.localRescueCandidates, residual.localActivityClusters, commonMotionGroups);
 
         // =================================================================
+        // PHASE 4.8 (Faint-Mover Search, experimental)
+        // =================================================================
+        List<FaintMoverCandidate> faintMoverCandidates = List.of();
+        if (config.enableFaintMoverSearch) {
+            notifyStarted(observer, "Faint-mover search");
+            stageStartedNanos = System.nanoTime();
+            if (listener != null) {
+                OperationContext.notify(listener::onProgressUpdate, 92, "Searching for faint movers...");
+            }
+            FaintMoverSearch.Result faintMovers = searchFaintMovers(context, masterStackData, trackResult,
+                    faintStreakResult, config, listener);
+            faintMoverCandidates = faintMovers.candidates;
+            telemetry.faintMoverSearchTelemetry = faintMovers.telemetry;
+            telemetry.recordStage(PipelineTelemetry.Stage.FAINT_MOVER_SEARCH, stageStartedNanos);
+        }
+
+        // =================================================================
         // PHASE 5 (Variable-Star Photometry)
         // =================================================================
         VariableStarAnalysis variableStarAnalysis = VariableStarAnalysis.empty();
@@ -1237,6 +1318,7 @@ public class JTransientEngine implements AutoCloseable {
                 .variableStarAnalysis(variableStarAnalysis)
                 .dataArea(context.dataArea)
                 .cameraFixedGroups(trackResult.cameraFixedGroups)
+                .faintMoverCandidates(faintMoverCandidates)
                 .build();
     }
 

@@ -14,6 +14,7 @@ import io.github.ppissias.jtransient.model.DetectedObject;
 import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.model.Track;
 import io.github.ppissias.jtransient.core.CameraFixedRejector;
+import io.github.ppissias.jtransient.core.FaintMoverCandidate;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.ResidualTransientAnalysis;
 import io.github.ppissias.jtransient.core.SlowMoverAnalysis;
@@ -89,6 +90,12 @@ public class PipelineResult {
     /** Detections removed before tracking because they stay at one camera position (hot pixels, dust). */
     public final List<CameraFixedRejector.Group> cameraFixedGroups;
 
+    /**
+     * Candidates of the experimental faint-mover search, strongest first; empty when it was switched off. What the
+     * search did is in {@link PipelineTelemetry#faintMoverSearchTelemetry}.
+     */
+    public final List<FaintMoverCandidate> faintMoverCandidates;
+
     /** Starts an empty builder; an unset slow-mover or variable-star analysis is empty, other unset fields stay null. */
     public static Builder builder() {
         return new Builder();
@@ -116,6 +123,7 @@ public class PipelineResult {
         builder.variableStarAnalysis = variableStarAnalysis;
         builder.dataArea = dataArea;
         builder.cameraFixedGroups = cameraFixedGroups;
+        builder.faintMoverCandidates = faintMoverCandidates;
         return builder;
     }
 
@@ -139,6 +147,7 @@ public class PipelineResult {
         this.variableStarAnalysis = builder.variableStarAnalysis != null ? builder.variableStarAnalysis : VariableStarAnalysis.empty();
         this.dataArea = builder.dataArea;
         this.cameraFixedGroups = builder.cameraFixedGroups != null ? builder.cameraFixedGroups : List.of();
+        this.faintMoverCandidates = builder.faintMoverCandidates != null ? builder.faintMoverCandidates : List.of();
     }
 
     /**
@@ -165,6 +174,7 @@ public class PipelineResult {
         private VariableStarAnalysis variableStarAnalysis;
         private DataArea dataArea;
         private List<CameraFixedRejector.Group> cameraFixedGroups;
+        private List<FaintMoverCandidate> faintMoverCandidates;
 
         private Builder() {
         }
@@ -280,6 +290,12 @@ public class PipelineResult {
         /** Sets {@link PipelineResult#cameraFixedGroups}. */
         public Builder cameraFixedGroups(List<CameraFixedRejector.Group> cameraFixedGroups) {
             this.cameraFixedGroups = cameraFixedGroups;
+            return this;
+        }
+
+        /** Sets {@link PipelineResult#faintMoverCandidates}. */
+        public Builder faintMoverCandidates(List<FaintMoverCandidate> faintMoverCandidates) {
+            this.faintMoverCandidates = faintMoverCandidates;
             return this;
         }
 

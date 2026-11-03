@@ -130,8 +130,14 @@ All fields are public and mutable. A few implementation details matter when you 
   - [variableMaxSystematicsCorrelation (default 0.6)](#variablemaxsystematicscorrelation-default-06)
   - [variableSystematicsResponseFactor (default 2.0)](#variablesystematicsresponsefactor-default-20)
   - [variableLocalRadiusPixels / variableMaxLocalCorrelation (defaults 100.0 / 0.3)](#variablelocalradiuspixels--variablemaxlocalcorrelation-defaults-1000--03)
-- [9. Auto-Tuners](#9-auto-tuners)
-- [10. Practical Starting Point](#10-practical-starting-point)
+- [9. Faint-Mover Search (Experimental)](#9-faint-mover-search-experimental)
+  - [enableFaintMoverSearch (default false)](#enablefaintmoversearch-default-false)
+  - [faintMoverMinDisplacementFwhm (default 2.0)](#faintmovermindisplacementfwhm-default-20)
+  - [faintMoverMaxSpeedPixelsPerMinute (default 1.0)](#faintmovermaxspeedpixelsperminute-default-10)
+  - [faintMoverMinScore (default 8.0)](#faintmoverminscore-default-80)
+  - [faintMoverMaxSeconds (default 600.0)](#faintmovermaxseconds-default-6000)
+- [10. Auto-Tuners](#10-auto-tuners)
+- [11. Practical Starting Point](#11-practical-starting-point)
 
 </details>
 <!-- root-toc:end -->
@@ -852,7 +858,31 @@ LOCAL gate: compare with up to 10 sufficiently precise nearby stars, including o
 
 Candidates that pass every gate are `HIGH_CONFIDENCE`, one failure gives `POSSIBLE`, more give `REJECTED`. A LINEARITY gate also fails when the star was flagged saturated or non-linear in any frame.
 
-## 9. Auto-Tuners
+## 9. Faint-Mover Search (Experimental)
+
+Digital tracking of point-like movers too faint for the single frames: the kept frames are shifted along trial motions and added, so a mover's light adds up while the noise averages down. Its candidates are a separate, unverified list (`PipelineResult.faintMoverCandidates`), not tracks, and no other result changes. The method, its checks and measurements are in [ALGORITHM.md](ALGORITHM.md#faint-mover-search).
+
+### `enableFaintMoverSearch` (default `false`)
+
+Runs the search after residual analysis. It needs capture times on the kept frames and at least 8 kept frames in one session; frames separated from the others by a gap of over two hours are left out. Its run time grows with the number of trial motions, frames and pixels: about 70-90 s for 28 frames of 60 megapixels over 75 minutes and 300 s for 106 frames of 5 megapixels over four hours on a 16-core desktop.
+
+### `faintMoverMinDisplacementFwhm` (default `2.0`)
+
+Slowest motion searched, as the distance moved over the session in star widths (FWHM). A slower object stays inside its own median-stack footprint and is subtracted with the static field.
+
+### `faintMoverMaxSpeedPixelsPerMinute` (default `1.0`)
+
+Fastest motion searched, in pixels per minute. The number of trial motions grows with its square, and the search is not run when it would need more than 100,000 or one tile's work more than a quarter of the heap.
+
+### `faintMoverMinScore` (default `8.0`)
+
+Score a candidate must reach: its PSF-filtered stack over the noise of such stacks in its tile. Empirical, not a calibrated significance. On the reference sessions, null controls (shuffled times, mirrored residuals) left at most about one candidate at 8 away from bright movers.
+
+### `faintMoverMaxSeconds` (default `600.0`)
+
+Time limit, in seconds from the start of the search. When it is reached, the remaining tiles are not searched and the telemetry says so (`truncated`, `tilesSearched` of `tiles`).
+
+## 10. Auto-Tuners
 
 The tuners return settings for a subsequent pipeline run; neither changes the base configuration while searching. [ALGORITHM.md](ALGORITHM.md#auto-tuning) defines both methods and their objectives, and [PIPELINE.md](PIPELINE.md#calibratedautotunertune) defines result/fallback contracts.
 
@@ -861,9 +891,9 @@ The tuners return settings for a subsequent pipeline run; neither changes the ba
 | Calibrated | `detectionSigmaMultiplier`, `growSigmaMultiplier`, `minDetectionPixels`, `masterSigmaMultiplier`, `masterGrowSigmaMultiplier`, `masterMinDetectionPixels`, `maxMaskOverlapFraction`, `maxStarJitter` |
 | Legacy | The three per-frame fields, `maxMaskOverlapFraction` and `maxStarJitter`; master settings are preserved |
 
-Fields outside the tuned set retain their base values. Auto-Tune does not set the slow-mover thresholds or photometry controls. Sampling-side quality/background/streak settings can affect recommendations. Profile budgets and search grids are algorithm parameters, not additional `DetectionConfig` fields.
+Fields outside the tuned set retain their base values. Auto-Tune does not set the slow-mover thresholds, photometry controls or faint-mover search. Sampling-side quality/background/streak settings can affect recommendations. Profile budgets and search grids are algorithm parameters, not additional `DetectionConfig` fields.
 
-## 10. Practical Starting Point
+## 11. Practical Starting Point
 
 If you do not have strong prior knowledge of the dataset:
 

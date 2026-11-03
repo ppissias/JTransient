@@ -78,6 +78,7 @@ This is the current algorithm reference for detection, slow movers, variable-sta
   - [19.1 Calibrated tuning](#191-calibrated-tuning)
   - [19.2 Limits and intended use](#192-limits-and-intended-use)
 - [20. Design Decisions And Future Work](#20-design-decisions-and-future-work)
+- [21. Experimental Faint-Mover Search](#21-experimental-faint-mover-search)
 
 </details>
 <!-- root-toc:end -->
@@ -116,8 +117,9 @@ The full run is organized into these major phases:
 12. anomaly rescue, streak consolidation, and joining anomalies on streak paths to their streaks; then the faint-streak search's streaks join, with normal priority
 13. common-motion filtering of unclassified observations
 14. optional residual analysis: local rescue, then activity clustering
-15. optional stationary-star photometry and variable-star scoring
-16. output assembly and maximum-stack export
+15. optional experimental faint-mover search ([section 21](#faint-mover-search))
+16. optional stationary-star photometry and variable-star scoring
+17. output assembly and maximum-stack export
 
 ## 1. Border Drift Diagnostics
 
@@ -1330,3 +1332,59 @@ The tuners provide a starting extraction configuration for a subsequent full pip
 ## 20. Design Decisions And Future Work
 
 [FEATURE-REQUESTS.md](FEATURE-REQUESTS.md) records algorithm proposals, deferred limitations and maintainer decisions, including the declined ones. This reference combines the former detection, slow-mover, variable-star and auto-tuner guides; public entry points remain in [PIPELINE.md](PIPELINE.md) and field defaults in [CONFIG.md](CONFIG.md).
+
+<a id="faint-mover-search"></a>
+## 21. Experimental Faint-Mover Search
+
+When `enableFaintMoverSearch` is on (it is off by default), `FaintMoverSearch` looks for point-like movers too faint for the single frames by digital tracking: the kept frames are shifted along trial motions and added, so a mover's light adds up while the noise averages down. It runs after residual analysis and before photometry, so it can mask the run's streaks and recognise its moving tracks. Its candidates are a separate list, `PipelineResult.faintMoverCandidates`, strongest first; no track, anomaly or other result changes. A candidate is unverified: its score is empirical, not a calibrated significance.
+
+**Frames and times.** Every kept frame needs a capture time; mid-exposure times are used. A gap of over 120 minutes between consecutive kept frames separates sessions, since one constant motion does not hold across nights, and only the session with the most frames is searched (`framesOutsideSession` counts the others). At least 8 frames are needed.
+
+**Search domain.** The star size is the kept frames' median measured FWHM converted to a Gaussian FWHM, as for the [faint-streak search](#135-faint-streak-search). Motions range from `faintMoverMinDisplacementFwhm` FWHM over the session to `faintMoverMaxSpeedPixelsPerMinute`, on a square grid whose step is the FWHM divided by the largest time from the session's mean mid-exposure, so that half a step moves the end frames by at most half the FWHM. The data area is searched in tiles of 512 px, each read with a margin for the largest shift.
+
+**Residuals.** Per tile and frame:
+1. the frame minus the median stack (the static field);
+2. minus its local background: a 41 px running mean of the residual clipped to 3 robust sigmas about its centre, over unmasked pixels (the sky level changes during a session);
+3. divided by the residual's robust sigma and clipped to ±5, so that one exceptional pixel or frame cannot dominate;
+4. set to zero where masked: outside the data area or registration fill in any frame (grown 4 px), star cores of the median stack (more than 8 sky sigmas above the tile's sky, grown 3 px), and in its own frame each of the run's streaks (normal streak detections, faint-streak search candidates and streak-track detections), grown by one FWHM;
+5. filtered with a Gaussian of the star size. Filtering commutes with whole-pixel shifts, so adding shifted filtered residuals gives the filtered stack of each motion.
+
+**Score and peaks.** A motion's score at a position is its stack over the robust spread of such stacks in the tile (taken at a motion halfway through the speed range). The coarse search keeps each position's best motion; local maxima within 6 px that reach 0.7 × `faintMoverMinScore` are refined on a grid four times finer, one coarse step to either side and within 2 px, and must then reach `faintMoverMinScore`.
+
+**Checks.** A refined peak is reported only when:
+1. *both halves of the session support it.* The first and second half of the frames (in time) are stacked along its motion and must each reach 3 on the full-stack scale, counting only frames whose path position is unmasked. A half with fewer than a third of its frames (at least 3) unmasked cannot be tested, as when the path crosses a bright star; at least one half must be tested.
+2. *it moves on the sky.* Its score exceeds the best stationary stack within 4 px by at least 2.
+3. *it is not fixed on the camera.* Each frame is read where its [registration](#1-border-drift-diagnostics) puts one camera pixel, within 4 px of the median camera position of the peak's path. The score must exceed that camera-fixed stack by at least 2, and the camera-fixed stack must stay below half the score. A hot pixel or defect adds up best at one camera position; it can add up along a straight sky path only partly, when the frames moved steadily. Needs usable registrations for at least half of the frames.
+4. *it is not a duplicate, a tracked object or a side lobe.* A weaker peak within 2.5 FWHM and 1.5 coarse steps of another repeats it (neighbouring tiles). A peak whose path passes a point track's timed detections within 2 FWHM (median) is that track's object. A peak whose path comes within 2 FWHM of a point track's detection, or of a peak at least twice as strong, at the same time in any frame is a side lobe: that frame's light makes it.
+
+Each candidate carries its position at the session's mean mid-exposure time, its motion, its score, half scores (NaN when a half cannot be tested), stationary and camera-fixed scores and a 31 × 31 px cut-out of its filtered stack. `PipelineTelemetry.faintMoverSearchTelemetry` records the search domain and, in order, how many peaks each check removed; the text report shows them.
+
+**Resources.** Tiles are searched in parallel in batches of 32. One tile's work holds every searched frame's residual of the tile with its margin, about (512 + 2 × margin)² × (4 × frames + 12) bytes, and the engine limits the workers to fit. The search is not run when it would need more than 100,000 coarse motions or a quarter of the heap for one tile, and it stops after `faintMoverMaxSeconds`, reporting `truncated` and the tiles searched. The run time grows with coarse motions × frames × pixels, about 7 × 10⁻¹¹ s per unit on a 16-core desktop: for a fixed cadence and speed range, with the cube of the session length.
+
+**Reference data (2026-11-03, shipped profile with the search on).**
+
+| Session | Frames, span | Motions | Search time | Candidates |
+|---|---|---|---|---|
+| Klangwolke-2 | 28, 75 min | 720 | 74 s | 11 |
+| Klangwolke-1 | 9 kept; 7 in the largest session | - | - | not searched: fewer than 8 frames |
+| Africano | 12, 155 min | 7,140 | 10 s | 0; shuffled times: 2 |
+| Apophis | 14, 17 min | 16 | 0 s | 0; shuffled times: 2 |
+| Eagle-noisy | 43, 117 min | 1,988 | 8 s | 1; shuffled times: 1 |
+| Iwamoto-huge | 14, 20 min | 64 | 1 s | 0; shuffled times: 0 |
+| dc-reg | 52, 87 min | 2,140 | 18 s | 0; shuffled times: 0 |
+| helix-reg | 39, 115 min | 2,072 | 11 s | 1; shuffled times: 0 |
+| ic-5070-reg | 45, 118 min | 1,308 | 8 s | 0; shuffled times: 0 |
+| m101-reg | 106, 233 min | 10,116 | 313 s | 1; shuffled times: 0 |
+| m31-b-reg | 32, 89 min | 1,824 | 7 s | 0; shuffled times: 0 |
+| m31-g-reg | 33, 96 min | 2,864 | 13 s | 0; shuffled times: 0 |
+| m31-red-reg | 43, 94 min | 1,612 | 14 s | 0; shuffled times: 0 |
+| m5-reg | 32, 94 min | 1,604 | 9 s | 0; shuffled times: 0 |
+| m81-reg | 97, 189 min | 5,700 | 201 s | 0; shuffled times: 0 |
+| M81 Kumar | 39, 353 min | 39,340 | 878 s, before the time limit was checked within tiles; now stopped at 600 s | 6 |
+| whynot (uncalibrated) | 59, 87 min | 1,004 | 17 s | 2; shuffled times: 2 |
+
+On Klangwolke-2, the search finds all five known asteroids of predicted magnitude 18.5-19.0 that the profile misses, without using their predictions: 74326 (score 22.7), 25729 (21.4), 43283 Robinbock (14.5), 77716 (13.9) and 26239 (13.5). It also finds 4767 Sutoku (17.7 mag, 47.5), which this profile does not track; 611 Valeria matches its track. Five candidates match no known object above the 19.0 mag limit of the session's catalogue fetch; one of them (score 15.3) moves visibly in the early, middle and late frames.
+
+Injected movers (352 on Klangwolke-2, Gaussian of the star size, flux scaled from Sutoku's, 0.15-0.5 px/min in any direction) were recovered at a score of 8 or more in 89-95 % at magnitude 18.0, 91-93 % at 18.5, 93 % at 19.0 and 80-82 % at 19.5. Most misses lie mainly in star masks. Null controls (shuffled frame times, and residuals mirrored about the median stack) left 0-2 candidates per session at 8 or more on the other sessions; on Klangwolke-2, 2-4 per control, all but one next to Sutoku, Valeria or 194 Prokne, whose light a shuffled or mirrored control turns into peaks that real frame times do not make.
+
+**Limitations.** One constant motion, whole-pixel shifts and one star size per run. Paths mostly inside star masks are lost. On frames that drifted steadily without dither, a mover moving with the drift cannot be told from a hot pixel. Uncalibrated data still gives a few candidates from hot pixels lined up by chance. The cost grows quickly with long sessions and fast speed limits.

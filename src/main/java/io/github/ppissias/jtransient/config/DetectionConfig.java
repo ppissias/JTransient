@@ -613,6 +613,32 @@ public class DetectionConfig implements Cloneable {
     /** * Largest allowed median absolute correlation with nearby comparison stars. */
     public double variableMaxLocalCorrelation = 0.3;
 
+    // =================================================================
+    // 9. FAINT-MOVER SEARCH (EXPERIMENTAL)
+    // =================================================================
+
+    /** * Searches for point-like movers too faint for the single frames by shifting the kept frames along trial
+     * motions and adding them (digital tracking). Experimental: its candidates are a separate, unverified list, and
+     * it adds run time that grows with the square of {@link #faintMoverMaxSpeedPixelsPerMinute}. Needs capture times.
+     */
+    public boolean enableFaintMoverSearch = false;
+
+    /** * Slowest motion searched, as the distance moved over the session in star widths (FWHM). Slower objects stay
+     * in the median stack and cannot be told from the static field.
+     */
+    public double faintMoverMinDisplacementFwhm = 2.0;
+
+    /** * Fastest motion searched, in pixels per minute. */
+    public double faintMoverMaxSpeedPixelsPerMinute = 1.0;
+
+    /** * Score a candidate's stack must reach: the PSF-filtered stack along its motion over the noise of such
+     * stacks. Empirical, not a calibrated significance.
+     */
+    public double faintMoverMinScore = 8.0;
+
+    /** * Time limit for the search, in seconds; the search then stops and reports the part it searched. */
+    public double faintMoverMaxSeconds = 600.0;
+
     /**
      * Creates a configuration initialized with the library defaults.
      */

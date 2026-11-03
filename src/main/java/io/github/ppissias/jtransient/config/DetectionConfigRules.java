@@ -50,7 +50,7 @@ public final class DetectionConfigRules {
     /** Timestamp availability used to scope geometric-linking advice; UNKNOWN retains conditional diagnostics. */
     public enum Timing { UNKNOWN, AVAILABLE, MISSING }
     /** Engine responsibility associated with a setting or diagnostic, independent of GUI page layout. */
-    public enum Stage { BACKGROUND, EXTRACTION, QUALITY, REFERENCE, SLOW_MOVERS, TRACKING, RESIDUAL, PHOTOMETRY }
+    public enum Stage { BACKGROUND, EXTRACTION, QUALITY, REFERENCE, SLOW_MOVERS, TRACKING, RESIDUAL, PHOTOMETRY, FAINT_MOVERS }
     /** Distinguishes blocking errors from advisory warnings and informational findings. */
     public enum Severity { ERROR, WARNING, INFO }
     /** Whether alignment lowers a pair's first field or raises its second field. */
@@ -406,6 +406,7 @@ public final class DetectionConfigRules {
             case TRACKING -> operation == Operation.CONFIGURATION || operation == Operation.PIPELINE;
             case RESIDUAL -> config.enableResidualTransientAnalysis && (operation == Operation.CONFIGURATION || operation == Operation.PIPELINE);
             case PHOTOMETRY -> config.enableVariableStarDetection && (operation == Operation.CONFIGURATION || operation == Operation.PIPELINE);
+            case FAINT_MOVERS -> config.enableFaintMoverSearch && (operation == Operation.CONFIGURATION || operation == Operation.PIPELINE);
         };
     }
 
@@ -519,6 +520,8 @@ public final class DetectionConfigRules {
         add(metadata, Stage.PHOTOMETRY, Domain.NON_NEGATIVE, "photometryMaxRegistrationSpreadPixels linearityMaxConcentrationDrift linearityMinRangeMag linearityMaxFrameSlope linearityMinZeroPointRangeMag variableMinSpanMinutes variableScoreSigma variableMinAmplitudeMag variableLimitedMinAmplitudeMag variableAmplitudeNoiseFactor variableMaxApertureAmplitudeDifference variableSystematicsResponseFactor variableLocalRadiusPixels");
         add(metadata, Stage.PHOTOMETRY, Domain.ENCODING_LEVELS, "linearityMinDistinctLevels");
         add(metadata, Stage.PHOTOMETRY, Domain.CORRELATION, "variableMinSplitHalfCorrelation");
+        add(metadata, Stage.FAINT_MOVERS, Domain.BOOLEAN, "enableFaintMoverSearch");
+        add(metadata, Stage.FAINT_MOVERS, Domain.POSITIVE, "faintMoverMinDisplacementFwhm faintMoverMaxSpeedPixelsPerMinute faintMoverMinScore faintMoverMaxSeconds");
         if (!metadata.keySet().equals(FIELDS.keySet())) {
             throw new IllegalStateException("DetectionConfig metadata must cover every instance field exactly once.");
         }

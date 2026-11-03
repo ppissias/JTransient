@@ -11,7 +11,7 @@ These are not authorisations. Keep the existing algorithms until the stated evid
 | [QC-1](#qc-1-star-count-rejection-envelope) | Deferred | Star-count rejection has no absolute or relative envelope floor. Counts now share a quality area, but small count changes can still matter. A new floor needs a recovery and false-retention study. |
 | [PT-5](#pt-5-registration-quality-and-shared-jitter-tolerances) | Proposed | `maxStarJitter` serves several tolerances. The maintainer preferred a future registration-quality assessment over splitting the tolerances now. The fill-edge registration used by camera-fixed rejection is not a general registration-quality measurement. |
 | [SM-F1](#sm-f1-temporal-confirmation-of-slow-mover-candidates) | Proposed | Three-bin temporal stacks, or a measured slow-mover path, are not implemented. Compare real-mover recovery, false positives and run time before introducing either; the current frame-support and stationarity screens do not establish motion. |
-| [SM-F2](#sm-f2-experimental-high-sensitivity-moving-object-detection) | Full-frame experiments completed 2026-11-03; design proposed (off by default); integration pending | All three prototypes recover the three magnitude-18.5 Klangwolke-2 asteroids in blind full-field searches. Digital tracking has the best recovery in both injection experiments and finds all five faint known asteroids in the independent series. A first version, digital tracking only and off by default, is proposed; control artifacts remain open. |
+| [SM-F2](#sm-f2-experimental-high-sensitivity-moving-object-detection) | Digital tracking implemented 2026-11-03 as an engine stage, off by default; SpacePixels F25 and open points pending | All three prototypes recover the three magnitude-18.5 Klangwolke-2 asteroids in blind full-field searches. Digital tracking has the best recovery in both injection experiments and finds all five faint known asteroids in the independent series. A first version, digital tracking only and off by default, is proposed; control artifacts remain open. |
 | [XC-3](#xc-3-local-background-and-noise-for-frame-extraction) | Partly implemented; frame work deferred | Master-star extraction adds a local-sky pass. Per-frame extraction still uses one sky level and noise estimate. Preserve extended emission and propagate local noise consistently before proposing a frame-sky redesign. |
 | [VS-9](#vs-9-selected-stars-and-the-linearity-check-minimum) | Deferred policy only; warning implemented | Check-B insufficient-count/range classification and separately validated retained-subset readiness; the completed star-cap warning is not pending. |
 | [VS-11](#vs-11-photometry-strictness-defaults-and-recovery-review) | Four deferred investigations and two follow-ups remain | Late-frame population lifecycle, reason-specific LIMITED handling, spatial correction of comparison cutouts and brief/fast variability; the peak-removal check's open questions and the blank-sky factor in star selection. The initial audit and adopted VS-12 work are complete. |
@@ -312,6 +312,27 @@ The grid step, tile size, clipping, star-mask level, half-session and moving-ver
 - The score threshold is calibrated on the other reference sessions, so that null controls give at most about one false candidate per session.
 - Run time and memory are measured on those sessions.
 - The 18-dataset regression is byte-identical with the stage off.
+
+### Implementation (2026-11-03)
+
+**Implemented.** Digital tracking as the engine stage `FaintMoverSearch`, off by default, with the settings of the design above. The algorithm, its checks and its measurements are in [ALGORITHM.md](ALGORITHM.md#faint-mover-search). Before release, the application side ([SpacePixels F25](../SpacePixels/FEATURE-REQUESTS.md#f25-experimental-faint-mover-search-settings-and-presentation)) is needed: until then the stage can be switched on only through a saved profile, and its candidates appear only in the API result and the text telemetry.
+
+**Changes from the design, from the measurements.**
+- *Camera check.* The design proposed the two-fit comparison of camera-fixed groups. A candidate has no per-frame positions to fit, and testing its path's camera spread failed both ways:
+  - a real candidate on Klangwolke-2 moves at the frames' mean drift rate, so the trend of its camera path is under 1 FWHM over the 28 kept frames, although the dither scatters it by 3.8 px;
+  - on whynot, a straight path follows hot pixels only partly because the field rotates, so their camera paths spread by more than the limit.
+
+  The check now stacks the frames at one camera position near the path, reading each frame where its registration puts that camera pixel, and requires the candidate to score at least 2 above that stack and twice as high. Real and injected movers on Klangwolke-2 reach 0.16 (median) to 0.42 of their score in that stack; whynot's hot-pixel candidates reach 0.34-0.78. The whynot candidates fell from 239 with a camera-spread limit of 0.5 FWHM, and 20 with 1 FWHM, to 2.
+- *Split-half check.* A half counts only frames whose path position is unmasked. Injected movers crossing a bright star in one half had lost that half to the star mask; recovery at 19.0 mag rose from 75-84 % to 93 %, and 18.0 mag from 86-93 % to 89-95 %.
+- *Side lobes.* A distance of 7 FWHM from a stronger object's path did not catch side lobes 25-40 px from 611 Valeria, 194 Prokne and 4767 Sutoku. The check now asks whether the candidate's path meets the stronger object in any frame, within 2 FWHM; it removed all seven on Klangwolke-2.
+- *Sessions and limits.* Klangwolke-1 contains frames a month apart; one motion over a month made the grid and the tile margins enormous, and the run ran out of memory. Only the session with the most frames is searched now (a gap of over two hours separates sessions), and the search is not run beyond 100,000 trial motions or a quarter of the heap per tile. Klangwolke-1 keeps 7 frames in its largest session and is not searched.
+- *Not implemented:* down-weighting pixels by their temporal variance near bright stars. The bright-star residual candidate at (5273, 400) on Klangwolke-2 remains.
+
+**Open.**
+1. *SpacePixels F25*: settings section, report category, viewer layer, run-time estimate (`FaintMoverSearch.Plan.estimatedWork`).
+2. *Run time of long sessions.* The cost is trial motions × frames × pixels and grows with the cube of the session length: 313 s for m101-reg (106 frames over 233 minutes, 10,116 motions) against 70-90 s for Klangwolke-2. A hierarchical shift-and-add (half-session stacks combined on a coarser motion grid) would make it nearly independent of the frame count, at the cost of memory.
+3. *Ground truth for the unmatched candidates.* A catalogue fetch beyond magnitude 19.0 is needed before the five unmatched Klangwolke-2 candidates and those on Eagle-noisy, helix-reg and m101-reg can be called new or false.
+4. *Other mechanisms* (temporal bins, PSF-filtered frame points) only if they recover objects that digital tracking misses.
 
 ## XC-3. Local background and noise for frame extraction
 

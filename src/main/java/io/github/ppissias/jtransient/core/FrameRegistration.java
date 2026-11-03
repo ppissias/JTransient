@@ -77,6 +77,18 @@ public final class FrameRegistration {
         return new double[]{c * dx + s * dy, -s * dx + c * dy};
     }
 
+    /**
+     * Frame position of a camera pixel, as {@code {x, y}}: the inverse of {@link #toCamera}.
+     *
+     * @param u camera x
+     * @param v camera y
+     */
+    public double[] toFrame(double u, double v) {
+        double c = Math.cos(theta);
+        double s = Math.sin(theta);
+        return new double[]{tx + c * u - s * v, ty + s * u + c * v};
+    }
+
     /** Fits the shift and rotation to the edges of a frame's fill. */
     public static FrameRegistration fit(FrameCoverage coverage) {
         int width = coverage.getWidth();
