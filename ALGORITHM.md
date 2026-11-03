@@ -730,7 +730,7 @@ The optional branch measures stationary stars in retained frames, checks whether
 
 ### Photometry in plain English
 
-Photometry measures a star's brightness. Here the aim is to find stars whose brightness changes during one observing session, after correcting for changes shared by other stars. The result is a list of candidates for inspection. The checks and their current limits are explained below; the [strictness review](FEATURE-REQUESTS.md#vs-11-photometry-strictness-defaults-and-recovery-review) evaluates their sensitivity without changing the algorithm.
+Photometry measures a star's brightness. Here the aim is to find stars whose brightness changes during one observing session, after correcting for changes shared by other stars. The result is a list of candidates for inspection. The checks and their current limits are explained below; the [remaining photometry investigations](FEATURE-REQUESTS.md#vs-11-photometry-strictness-defaults-and-recovery-review) track deferred policy and sensitivity work.
 
 **What is measured.** A star is spread across several pixels by the atmosphere, optics and sampling. This pattern is its **point-spread function (PSF)**. **FWHM**, full width at half maximum, describes the width of its central profile at half its peak height. It is a width, not an aperture radius. The algorithm measures a representative FWHM in each frame, then uses it to size circular measuring regions.
 
@@ -898,7 +898,7 @@ For every aperture, `skyNoiseFactor` is the robust spread of the sky-subtracted 
 
 The factor scales only the errors reported with the light curves (`StarLightCurve.magError`): check B and the SNR cut keep the formula's error, so stars, verdicts and candidates do not depend on it. Telemetry records it: `PhotometryFrameStat.skyNoiseFactor` holds the main aperture's factor per frame, and `PhotometryTelemetry.skyNoiseFactorMedian`, `skyNoiseFactorMin`, `skyNoiseFactorMax` and `framesWithoutSkyNoiseFactor` summarise it.
 
-On the reference data, the session median for the main aperture ranges from 1.14 (M81 Kumar, UG 6524) and 1.82 (Klangwolke-2) to 2.71 (m5-reg) and 2.89 (Eagle-noisy). It is smaller for smaller apertures; on Klangwolke-2 it is 1.47 at 0.7 FWHM. For the faintest constant stars, where sky noise dominates, the scatter was 1.14–2.9 times the unscaled error. The factors at the apertures those stars use compare as follows ([VS-12](FEATURE-REQUESTS.md#vs-12-consolidated-photometry-improvement-roadmap) 4F):
+On the reference data, the session median for the main aperture ranges from 1.14 (M81 Kumar, UG 6524) and 1.82 (Klangwolke-2) to 2.71 (m5-reg) and 2.89 (Eagle-noisy). It is smaller for smaller apertures; on Klangwolke-2 it is 1.47 at 0.7 FWHM. For the faintest constant stars, where sky noise dominates, the scatter was 1.14–2.9 times the unscaled error. The factors at the apertures those stars use compare as follows ([release notes](RELEASE_NOTES.md#108-unreleased)):
 
 | Session | Factor | Faint-star scatter ÷ unscaled error |
 |---|---|---|
@@ -938,7 +938,7 @@ A hot pixel, cosmic ray or faint passing object inside an aperture changes the s
 3. Stars are grouped by their median magnitude on the active frames (about ten groups, at least 30 stars each). The tolerance of a group is the robust sigma of the departures of all its measurements on active frames, at least 2%. Taking it from the group rather than from the star keeps a star contaminated in many frames from widening its own tolerance.
 4. A measurement departing by more than 5 tolerances is flagged `CONTAMINATED` and left out of the solve and the scoring.
 
-"Active" means not yet excluded by the registration check or check B, which run before. A frame already excluded therefore cannot move a star's typical shape or widen a group's tolerance, but its measurements are still judged in step 4, so the report shows their contaminated measurements too. Frames that check D or the spatial filter exclude later still contribute; whether to recompute without them is an open question ([VS-12](FEATURE-REQUESTS.md#vs-12-consolidated-photometry-improvement-roadmap) 4A). In a session where fewer than 5 frames remain active at this point, no measurement is flagged; such a session is also too short to be scored.
+"Active" means not yet excluded by the registration check or check B, which run before. A frame already excluded therefore cannot move a star's typical shape or widen a group's tolerance, but its measurements are still judged in step 4, so the report shows their contaminated measurements too. Frames that check D or the spatial filter exclude later still contribute; whether to recompute without them remains part of the [late-frame population lifecycle investigation](FEATURE-REQUESTS.md#late-frame-population-lifecycle). In a session where fewer than 5 frames remain active at this point, no measurement is flagged; such a session is also too short to be scored.
 
 For faint stars the concentration index is noisy, so a hot pixel a few pixels off-centre can still pass; the aperture gate ([gates](#photometry-11-4)) then usually rejects the star.
 
@@ -1172,7 +1172,7 @@ Each candidate is tested against eight gates:
 
 `VariableStarAnalysis.candidates` holds the `HIGH_CONFIDENCE`, `POSSIBLE` and `REJECTED` stars, best tier first, then by descending `scatterZ`. `highConfidenceCandidates()` returns the first tier only. `failedGates` lists the gates each candidate failed, in the order of `VariableStarAnalysis.GATE_NAMES`.
 
-**Brief and fast variation.** A change must last about `variableMinPersistenceFrames` consecutive frames (5) to pass `PERSISTENCE`, so briefer dips and flares are at best `POSSIBLE`, and a change in one frame is removed as an outlier. Variation that alternates within three or four frames gives a negative Stetson J and does not become a candidate. In scorer-level injections with 28 and 40 frames and 9-18 mmag noise, dips lasting 6 frames or more and pulsations with a period of 12 frames were mostly `HIGH_CONFIDENCE` from 0.1 mag. A search for briefer events would first need checks of the brief excursions that constant stars show in real sessions ([VS-12](FEATURE-REQUESTS.md#vs-12-consolidated-photometry-improvement-roadmap) 4I).
+**Brief and fast variation.** A change must last about `variableMinPersistenceFrames` consecutive frames (5) to pass `PERSISTENCE`, so briefer dips and flares are at best `POSSIBLE`, and a change in one frame is removed as an outlier. Variation that alternates within three or four frames gives a negative Stetson J and does not become a candidate. In scorer-level injections with 28 and 40 frames and 9-18 mmag noise, dips lasting 6 frames or more and pulsations with a period of 12 frames were mostly `HIGH_CONFIDENCE` from 0.1 mag. A search for briefer events would first need checks of the brief excursions that constant stars show in real sessions; this is deferred under the [brief/fast variability investigation](FEATURE-REQUESTS.md#brief-and-fast-variability).
 
 <a id="photometry-12"></a>
 ### 16.12 Outputs
