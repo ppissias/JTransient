@@ -531,7 +531,7 @@ What was done at each stage, how it was checked, what it changed and anything th
   - *Verification.* The build matches the probe's support-only runs byte for byte. The tier changes against 3B are Eagle-noisy 0/1/1 to 0/0/0, M81 Kumar 10/17/21 to 10/18/22 and UG 6524 0/1/1 to 1/0/2, with no VSX-matched change.
   - *Documentation.* ALGORITHM.md and the SpacePixels manual now state the limit on brief variation (the accepted 4I follow-up).
   - *Tests.* JTransient 326.
-- **4F, implementation (this change).** As in 4F above.
+- **4F, implementation (JT `da0b6eb`, SP `53978f9`).** As in 4F above.
   - *Measurement.* A first build measured blank sky on a 48 x 48 grid; its results were right, but it nearly doubled UG 6524's short photometry stage. The final build uses a 32 x 32 grid and plain square roots, which gives the same session factors within 1 %. Timings were compared back to back, because the machine's load varies; Klangwolke-2's photometry stage took 201 s against 189 s for 4E.
   - *Outputs.* Candidates and every other result are unchanged; only the reported errors and their documentation change.
   - *Tests.* JTransient 330, SpacePixels 746.
