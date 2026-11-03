@@ -31,6 +31,10 @@ import java.util.Set;
  * median camera position, whose positions in the frames spread over at least {@link #MIN_SKY_SPREAD_PX}; with less, the
  * frames did not move enough to tell a camera position from a position on the sky. Frames whose registration is not
  * known or not usable are left out.</p>
+ *
+ * <p>A slow mover can stay within the tolerance on the camera when the frames move little. A group whose positions
+ * follow a straight line in the registered frames much better than in camera coordinates follows the sky: it is left
+ * to linking.</p>
  */
 public final class CameraFixedRejector {
     /** Largest distance of a member from the group's median camera position, in pixels. */
@@ -39,6 +43,12 @@ public final class CameraFixedRejector {
     static final double MIN_SKY_SPREAD_PX = 4.0;
     /** Fewest frames in a group. */
     static final int MIN_FRAMES = 3;
+    /** Fewest frames in a group that can be found to follow the sky. */
+    static final int MIN_FRAMES_TO_FOLLOW_SKY = 4;
+    /** Largest rms of the straight-line fit in the registered frames of a group that follows the sky, in pixels. */
+    static final double MAX_SKY_FIT_RMS_PX = 1.0;
+    /** Largest ratio of that rms to the rms of the straight-line fit in camera coordinates. */
+    static final double MAX_SKY_TO_CAMERA_FIT_RATIO = 0.5;
 
     private CameraFixedRejector() {
     }
@@ -80,6 +90,20 @@ public final class CameraFixedRejector {
      */
     public static List<Group> reject(List<List<DetectedObject>> frames,
                                      Map<Integer, FrameRegistration> registrations) {
+        return reject(frames, registrations, null);
+    }
+
+    /**
+     * Finds the groups and removes their detections from the frames' lists.
+     *
+     * @param frames point detections per frame; a detection's {@code sourceFrameIndex} is its frame's sequence index
+     * @param registrations the frames' registrations by sequence index
+     * @param followingSky when not null, receives the groups that follow the sky; their detections stay in the frames
+     * @return the groups, ordered by their first frame and position
+     */
+    public static List<Group> reject(List<List<DetectedObject>> frames,
+                                     Map<Integer, FrameRegistration> registrations,
+                                     List<Group> followingSky) {
         if (frames == null || registrations == null || registrations.isEmpty()) {
             return List.of();
         }
@@ -130,7 +154,12 @@ public final class CameraFixedRejector {
                 assigned.add(member);
                 points.add(member.detection);
             }
-            groups.add(new Group(median(members, true), median(members, false), points));
+            Group group = new Group(median(members, true), median(members, false), points);
+            if (!followsSky(members)) {
+                groups.add(group);
+            } else if (followingSky != null) {
+                followingSky.add(group);
+            }
         }
 
         if (!groups.isEmpty()) {
@@ -179,6 +208,82 @@ public final class CameraFixedRejector {
             }
         }
         return new ArrayList<>(best.values());
+    }
+
+    /**
+     * Whether a group follows the sky rather than the camera. A straight line against time is fitted to the members'
+     * positions twice: in camera coordinates and in the registered frames. A hot pixel fits tightly on the camera and
+     * jumps with the dither in the frames; a slow mover does the opposite. When both fit tightly (a steady drift
+     * without dither) the two cannot be told apart, and the group stays camera-fixed.
+     */
+    private static boolean followsSky(List<Entry> members) {
+        int n = members.size();
+        if (n < MIN_FRAMES_TO_FOLLOW_SKY) {
+            return false;
+        }
+        // Capture times when every member has one and they differ, frame order otherwise.
+        double[] t = new double[n];
+        boolean timed = true;
+        long first = members.get(0).detection.timestamp;
+        boolean varies = false;
+        for (Entry member : members) {
+            timed &= member.detection.timestamp > 0;
+            varies |= member.detection.timestamp != first;
+        }
+        timed &= varies;
+        for (int i = 0; i < n; i++) {
+            DetectedObject d = members.get(i).detection;
+            t[i] = timed ? d.timestamp : d.sourceFrameIndex;
+        }
+        double[] cameraX = new double[n];
+        double[] cameraY = new double[n];
+        double[] skyX = new double[n];
+        double[] skyY = new double[n];
+        for (int i = 0; i < n; i++) {
+            Entry member = members.get(i);
+            cameraX[i] = member.u;
+            cameraY[i] = member.v;
+            skyX[i] = member.detection.x;
+            skyY[i] = member.detection.y;
+        }
+        double skyRms = lineFitRms(t, skyX, skyY);
+        return skyRms < MAX_SKY_FIT_RMS_PX
+                && skyRms < MAX_SKY_TO_CAMERA_FIT_RATIO * lineFitRms(t, cameraX, cameraY);
+    }
+
+    /** Rms per axis of the residuals of straight-line fits of x and y against t, with n - 2 degrees of freedom. */
+    private static double lineFitRms(double[] t, double[] x, double[] y) {
+        int n = t.length;
+        double meanT = 0;
+        double meanX = 0;
+        double meanY = 0;
+        for (int i = 0; i < n; i++) {
+            meanT += t[i];
+            meanX += x[i];
+            meanY += y[i];
+        }
+        meanT /= n;
+        meanX /= n;
+        meanY /= n;
+        double stt = 0;
+        double stx = 0;
+        double sty = 0;
+        for (int i = 0; i < n; i++) {
+            double dt = t[i] - meanT;
+            stt += dt * dt;
+            stx += dt * (x[i] - meanX);
+            sty += dt * (y[i] - meanY);
+        }
+        double slopeX = stt > 0 ? stx / stt : 0;
+        double slopeY = stt > 0 ? sty / stt : 0;
+        double rss = 0;
+        for (int i = 0; i < n; i++) {
+            double dt = t[i] - meanT;
+            double rx = x[i] - meanX - slopeX * dt;
+            double ry = y[i] - meanY - slopeY * dt;
+            rss += rx * rx + ry * ry;
+        }
+        return Math.sqrt(rss / (2.0 * Math.max(1, n - 2)));
     }
 
     private static double median(List<Entry> entries, boolean u) {

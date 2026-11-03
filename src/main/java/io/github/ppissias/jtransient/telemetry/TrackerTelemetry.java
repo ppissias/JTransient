@@ -34,6 +34,9 @@ public class TrackerTelemetry {
     /** Camera-fixed groups found after the star mask (hot pixels, dust), and the detections they removed. */
     public int cameraFixedGroups = 0;
     public int cameraFixedDetections = 0;
+    /** Groups at one camera position that followed the sky (slow movers), left to linking, and their detections. */
+    public int cameraFixedGroupsFollowingSky = 0;
+    public int cameraFixedDetectionsFollowingSky = 0;
     public int totalStationaryStreaksPurged = 0;
 
     /**

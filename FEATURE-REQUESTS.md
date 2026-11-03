@@ -10,7 +10,6 @@ These are not authorisations. Keep the existing algorithms until the stated evid
 |---|---|---|
 | [QC-1](#qc-1-star-count-rejection-envelope) | Deferred | Star-count rejection has no absolute or relative envelope floor. Counts now share a quality area, but small count changes can still matter. A new floor needs a recovery and false-retention study. |
 | [PT-5](#pt-5-registration-quality-and-shared-jitter-tolerances) | Proposed | `maxStarJitter` serves several tolerances. The maintainer preferred a future registration-quality assessment over splitting the tolerances now. The fill-edge registration used by camera-fixed rejection is not a general registration-quality measurement. |
-| [PT-6](#pt-6-slow-movers-taken-for-camera-fixed-sources) | Proposed 2026-11-03; the maintainer wants it fixed | Slow asteroids can be grouped as camera-fixed sources when the frames move little (Sutoku lost 9 detections on Klangwolke-2). Rule: keep a group camera-fixed unless a straight line in the registered frames fits it clearly better than one in camera coordinates; it releases only Sutoku among 168 measured groups. |
 | [SM-F1](#sm-f1-temporal-confirmation-of-slow-mover-candidates) | Proposed | Three-bin temporal stacks, or a measured slow-mover path, are not implemented. Compare real-mover recovery, false positives and run time before introducing either; the current frame-support and stationarity screens do not establish motion. |
 | [SM-F2](#sm-f2-experimental-high-sensitivity-moving-object-detection) | Full-frame experiments completed 2026-11-03; design proposed (off by default); integration pending | All three prototypes recover the three magnitude-18.5 Klangwolke-2 asteroids in blind full-field searches. Digital tracking has the best recovery in both injection experiments and finds all five faint known asteroids in the independent series. A first version, digital tracking only and off by default, is proposed; control artifacts remain open. |
 | [XC-3](#xc-3-local-background-and-noise-for-frame-extraction) | Partly implemented; frame work deferred | Master-star extraction adds a local-sky pass. Per-frame extraction still uses one sky level and noise estimate. Preserve extended emission and propagate local noise consistently before proposing a frame-sky redesign. |
@@ -49,44 +48,6 @@ The photometry backlog was reconciled with the completed VS-12 work on 2026-11-0
 **Evidence needed.** Compare well-registered and poorly registered sessions, spatially varying residuals, true slow movers and stationary false tracks. Check whether the proposed quality measure predicts failures and whether any tolerance change improves recovery without admitting registration noise as motion. Agree any new settings and migration separately.
 
 **Recovered source:** [original coupling analysis and the decision to assess registration quality](https://github.com/ppissias/JTransient/blob/b37cecf519cbb73609ff56d30fcf00855b550908/docs/archive/code-review-2026-10.md#L792-L829). Current contracts: [registration and coverage](ALGORITHM.md#1-border-drift-diagnostics), [configuration](CONFIG.md).
-
-## PT-6. Slow movers taken for camera-fixed sources
-
-**Status.** Proposed 2026-11-03 with measured evidence; the maintainer wants this fixed. Implementation follows agreement on the rule below.
-
-**Problem.** `CameraFixedRejector` groups point detections that stay within 2 px of one camera position in at least 3 frames, provided their positions in the registered frames spread over at least 4 px. When the frames move only a little between exposures, a slow asteroid's camera positions can stay within that radius for several frames too.
-
-On Klangwolke-2 with the saved Maximum Auto-Tune settings, 4767 Sutoku (17.7 mag, 0.2 px/min, about 0.45 px per frame) lost 9 of its detections to camera-fixed group FC65, and 7 to FC38 with the sigma-2.5 setting; the rest formed track T1. Its frames shifted 0–9 px horizontally and not vertically. A fainter slow asteroid could lose its whole track this way.
-
-**Why "no motion on the camera" alone is not enough.** The camera positions come from the registration fill fit (`FrameRegistration`), which is not exact. Eagle-noisy's 90 genuine hot-pixel groups drift by a median of 1.25 px, and up to 3 px, over their time spans in the reconstructed camera coordinates. 22 of them would count as moving at a threshold of 1.5 px and 3 standard errors.
-
-**Proposed rule.** For each group, fit a straight line against time to the members' positions twice, once in camera coordinates and once in the registered frames. Each fit absorbs a linear trend.
-- A hot pixel follows the camera: its camera fit is tight, while its registered positions jump with every dither.
-- A slow asteroid follows the sky: its registered fit is tight, while its camera positions jump with the dither.
-
-Keep the group camera-fixed unless it has at least 4 members and its registered fit's rms is below 1 px and below half the camera fit's rms. Otherwise, return its detections to point linking.
-
-When both fits are tight, there is no dither, only a steady drift, as with whynot's hot pixels. The geometry then cannot tell a hot pixel from an asteroid moving with the drift, and the group stays camera-fixed, as now.
-
-**Evidence (temporary probe, 2026-11-03).**
-
-| Dataset | Camera-fixed groups | Median rms, camera fit / registered fit | Released by the rule |
-|---|---|---|---|
-| Eagle-noisy, shipped profile | 90 (1,896 detections) | 0.33 / 10.5 px | none |
-| whynot, shipped profile | 2 | 0.20–0.27 / 0.28–0.54 px | none |
-| Klangwolke-2, Maximum configuration | 76 | 0.80 / 3.07 px | 1: Sutoku's FC65 (0.77 / 0.24 px, 0.198 px/min) |
-
-M81 Kumar, UG 6524 and m5-reg had no camera-fixed groups with the shipped profile.
-
-**To settle when implementing.**
-- The time base: capture times, with frame order only when no member has a timestamp.
-- The 4-member minimum.
-- Telemetry for released groups.
-- The 18-dataset regression with the shipped profile, plus Klangwolke-2 with the Maximum configuration. Only Sutoku-like groups should change, and the returned detections should join the existing track.
-
-The same two-fit comparison is the camera-fixed check proposed for [SM-F2](#sm-f2-experimental-high-sensitivity-moving-object-detection)'s faint-mover candidates.
-
-Current behavior: [camera-fixed sources](ALGORITHM.md#94-camera-fixed-sources).
 
 ## SM-F1. Temporal confirmation of slow-mover candidates
 
@@ -248,7 +209,7 @@ Away from real movers, at most one control candidate per run reaches a score of 
 - *Raw signal.* At the predicted positions, the raw peak pixel of the five faint asteroids is 2.6–3.5 sky sigma (median per frame).
 - *Maximum configuration.* It finds Prokne, Valeria and Sutoku but none of the five.
 - *Lower thresholds.* The auto-tune's sigma-2.5 setting (grow 1.75, 4 px minimum, mask overlap 0.65) also finds none of them, and breaks Prokne's track into five single-frame anomalies (Valeria keeps 9 frames instead of 12). Lowering the per-frame thresholds is therefore counterproductive.
-- *Slow movers taken for camera-fixed sources.* Sutoku moves about 0.45 px per frame (0.2 px/min) while the frames shift 0–9 px horizontally. Of its detections, 9 frames (Maximum) and 7 frames (sigma 2.5) went to camera-fixed groups (FC65, FC38). A fainter slow asteroid could lose its whole track this way.
+- *Slow movers taken for camera-fixed sources.* Sutoku moves about 0.5 px per frame (0.2 px/min) while the frames shift 0–9 px horizontally. Of its detections, 9 frames (Maximum) and 7 frames (sigma 2.5) went to camera-fixed groups (FC65, FC38). A fainter slow asteroid could lose its whole track this way. Fixed on 2026-11-03: see [camera-fixed sources](ALGORITHM.md#94-camera-fixed-sources).
 
 **Unmatched real-data candidates.** Image strips were made for the strongest isolated candidates: the shift-and-stack, then the early, middle and late thirds unshifted, then the median.
 
@@ -300,7 +261,7 @@ The session's JPL fetch stops at magnitude 19.0. Candidates scoring like Robinbo
    - Suppress peaks near a much stronger peak, and require motion versus stationary and split-half consistency.
    - Report a separate candidate category with the stacked cutout and the path.
    - Measure it in Java on Klangwolke-2 and the other reference sessions before setting thresholds.
-3. *Camera-fixed rule* fixed for slow movers: [PT-6](#pt-6-slow-movers-taken-for-camera-fixed-sources).
+3. *Camera-fixed rule* fixed for slow movers: implemented 2026-11-03, see [camera-fixed sources](ALGORITHM.md#94-camera-fixed-sources).
 4. *Temporal bins of 4–6 frames and PSF-filtered frame points* only as optional proposal routes, after (2), if they recover objects digital tracking misses.
 
 ### Proposed design: experimental faint-mover search (2026-11-03)
@@ -326,7 +287,7 @@ The session's JPL fetch stops at magnitude 19.0. Candidates scoring like Robinbo
    - suppressed when a much stronger peak is near (sidelobes of bright movers);
    - both halves of the session positive;
    - moving score above the best stationary score nearby;
-   - the two-fit camera-fixed check of [PT-6](#pt-6-slow-movers-taken-for-camera-fixed-sources), so that hot pixels riding a steady drift are not reported.
+   - the camera-fixed two-fit comparison ([camera-fixed sources](ALGORITHM.md#94-camera-fixed-sources)) applied to the candidate's path, so that hot pixels are not reported.
 5. *Output:* a separate candidate list, not tracks. Each candidate has a fitted path (position at a reference time and motion), score, half scores, per-frame contributions, a shift-stacked cutout, and the generating mechanism.
 6. *Resources:*
    - tiles processed in parallel within the engine's worker pool and memory estimate;

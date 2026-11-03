@@ -647,6 +647,7 @@ Sets aside the point detections that stay at one camera position while the sky m
 
 - each frame's shift and rotation are measured from its registration fill (`FrameRegistration`); frames without usable fill are not checked
 - a group is at least 3 frames, within 2 px of one camera position, whose positions in the frames spread over at least 4 px
+- a group of at least 4 frames whose positions follow a straight line against time in the registered frames much better than on the camera (rms below 1 px and below half the camera fit's) is a slow mover: it stays for linking
 - frames of the two sides of a meridian flip only match frames of their own side
 
 ### `enableCommonMotionRejection` (default `true`)

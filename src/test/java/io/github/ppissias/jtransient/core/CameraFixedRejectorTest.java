@@ -36,6 +36,16 @@ public class CameraFixedRejectorTest {
         return new double[]{r.tx + u * c - v * s, r.ty + u * s + v * c};
     }
 
+    /** Six frames drifting 0.8 px a frame in x with up to 0.6 px of dither around the drift. */
+    private static Map<Integer, FrameRegistration> drifting() {
+        double[] dither = {0, 0.6, -0.5, 0.5, -0.6, 0.2};
+        Map<Integer, FrameRegistration> registrations = new HashMap<>();
+        for (int i = 0; i < 6; i++) {
+            registrations.put(i, FrameRegistration.of(i, 0.8 * i + dither[i], 0, 0));
+        }
+        return registrations;
+    }
+
     private static List<List<DetectedObject>> frames(int n) {
         List<List<DetectedObject>> frames = new ArrayList<>();
         for (int i = 0; i < n; i++) {
@@ -70,6 +80,59 @@ public class CameraFixedRejectorTest {
                 assertFalse(hot.contains(d));
             }
         }
+    }
+
+    @Test
+    public void aSlowMoverFollowsTheSkyAndStaysInTheFrames() {
+        Map<Integer, FrameRegistration> registrations = drifting();
+        List<List<DetectedObject>> frames = frames(6);
+        List<DetectedObject> hot = new ArrayList<>();
+        List<DetectedObject> mover = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            double[] p = onFrame(registrations.get(i), 1500, 900);
+            DetectedObject h = point(p[0] + 0.05 * (i % 2), p[1], i);
+            DetectedObject m = point(1000 + 1.0 * i - 0.05 * (i % 2), 800, i);  // 1 px a frame on the sky
+            hot.add(h);
+            mover.add(m);
+            frames.get(i).add(h);
+            frames.get(i).add(m);
+        }
+        List<CameraFixedRejector.Group> followingSky = new ArrayList<>();
+
+        List<CameraFixedRejector.Group> groups = CameraFixedRejector.reject(frames, registrations, followingSky);
+
+        assertEquals(1, groups.size());
+        assertEquals(hot, groups.get(0).points);
+        assertEquals(1, followingSky.size());
+        assertEquals(mover, followingSky.get(0).points);
+        for (int i = 0; i < 6; i++) {
+            assertEquals(List.of(mover.get(i)), frames.get(i));
+        }
+    }
+
+    @Test
+    public void fewerThanFourFramesStayCameraFixed() {
+        Map<Integer, FrameRegistration> registrations = drifting();
+        List<List<DetectedObject>> frames = frames(6);
+        for (int i : new int[]{0, 3, 5}) {
+            frames.get(i).add(point(1000 + 1.0 * i, 800, i));
+        }
+        List<CameraFixedRejector.Group> followingSky = new ArrayList<>();
+        assertEquals(1, CameraFixedRejector.reject(frames, registrations, followingSky).size());
+        assertTrue(followingSky.isEmpty());
+    }
+
+    @Test
+    public void aMoverRidingASteadyDriftCannotBeToldFromAHotPixel() {
+        Map<Integer, FrameRegistration> registrations = new HashMap<>();
+        List<List<DetectedObject>> frames = frames(6);
+        for (int i = 0; i < 6; i++) {
+            registrations.put(i, FrameRegistration.of(i, 0.8 * i, 0, 0));
+            frames.get(i).add(point(1000 + 1.0 * i + 0.1 * (i % 2), 800, i));
+        }
+        List<CameraFixedRejector.Group> followingSky = new ArrayList<>();
+        assertEquals(1, CameraFixedRejector.reject(frames, registrations, followingSky).size());
+        assertTrue(followingSky.isEmpty());
     }
 
     @Test

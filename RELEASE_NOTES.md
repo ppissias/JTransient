@@ -12,6 +12,13 @@
 
 ## 1.0.8 (unreleased)
 
+- **Slow movers are no longer taken for camera-fixed sources (detection change; additive API).** When the frames move little between exposures, a slow asteroid can stay within the 2 px camera tolerance in several frames, and its detections were set aside as a hot pixel. A group of at least 4 frames is now fitted with a straight line against time twice, on the camera and in the registered frames. When the registered fit's rms is below 1 px and below half the camera fit's, the group follows the sky and its detections stay for linking.
+  - *New API.* `CameraFixedRejector.reject(frames, registrations, followingSky)`, and `TrackerTelemetry.cameraFixedGroupsFollowingSky` and `cameraFixedDetectionsFollowingSky`.
+  - *Effect on the reference data.* With the shipped profile, Klangwolke-2's two camera-fixed groups were 611 Valeria: its track grows from 16 to 27 frames. The other 17 datasets are unchanged. With the Maximum Auto-Tune configuration on Klangwolke-2, one of 76 groups is released, 9 detections of 4767 Sutoku: its track grows from 14 to 20 frames, and the other three form a local rescue candidate on its path.
+  - *Limitation.* On frames that drift steadily without dither, a mover moving with the drift still cannot be told from a hot pixel.
+
+  See [the algorithm](ALGORITHM.md#94-camera-fixed-sources).
+
 - **Brief fadings left by star peaks removed before registration are flagged (photometry change; additive API).** Hot-pixel removal on undersampled frames can take a star's peak pixel for a hot pixel and remove its light. With dithering, a different random subset of stars fades for exactly one pointing each time. On M81 Kumar (2.9"/px, FWHM 2 px) this made 16 of the 18 possible candidates and a high-confidence candidate without a catalogue match.
   - *The check.* Before scoring, each star's brief fadings and brightenings within one pointing are compared with its nearest clean pointings in the frame cutouts. A change counts as concentrated when its lost or gained light sits in the brightest pixel; a real change in brightness scales the whole profile.
   - *The session decision.* When concentrated fadings are at least 20 and at least five times the brightenings plus one, the session counts as affected. Its concentrated fadings are then flagged `PEAK_REMOVED`, left out of scoring, kept for display, and explained in a readiness message.

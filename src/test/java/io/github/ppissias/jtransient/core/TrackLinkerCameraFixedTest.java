@@ -20,22 +20,24 @@ public class TrackLinkerCameraFixedTest {
         List<List<DetectedObject>> frames = new ArrayList<>();
         for (int i = 0; i < 6; i++) {
             registrations.put(i, FrameRegistration.of(i, 6 * i, 0, 0));
-            List<DetectedObject> frame = new ArrayList<>();
-            DetectedObject obj = new DetectedObject(100 + 6 * i, 100, 100.0, 4);
-            obj.sourceFrameIndex = i;
-            obj.timestamp = -1L;
-            obj.exposureDuration = -1L;
-            obj.peakSigma = 7.0;
-            obj.integratedSigma = 7.0;
-            obj.pixelArea = 12.0;
-            obj.fwhm = 2.0;
-            obj.elongation = 1.1;
-            obj.rawPixels = new ArrayList<>();
-            obj.rawPixels.add(new Pixel(100 + 6 * i, 100, 200));
-            frame.add(obj);
-            frames.add(frame);
+            frames.add(new ArrayList<>(List.of(point(100 + 6 * i, 100, i))));
         }
         return frames;
+    }
+
+    private static DetectedObject point(double x, double y, int frame) {
+        DetectedObject obj = new DetectedObject(x, y, 100.0, 4);
+        obj.sourceFrameIndex = frame;
+        obj.timestamp = -1L;
+        obj.exposureDuration = -1L;
+        obj.peakSigma = 7.0;
+        obj.integratedSigma = 7.0;
+        obj.pixelArea = 12.0;
+        obj.fwhm = 2.0;
+        obj.elongation = 1.1;
+        obj.rawPixels = new ArrayList<>();
+        obj.rawPixels.add(new Pixel((int) Math.round(x), (int) Math.round(y), 200));
+        return obj;
     }
 
     @Test
@@ -54,6 +56,25 @@ public class TrackLinkerCameraFixedTest {
         for (List<DetectedObject> frame : result.allTransients) {
             assertEquals(0, frame.size());
         }
+    }
+
+    @Test
+    public void aSlowMoverOnDitheredFramesIsLeftToLinking() {
+        Map<Integer, FrameRegistration> registrations = new HashMap<>();
+        double[] dither = {0, 0.6, -0.5, 0.5, -0.6, 0.2};
+        List<List<DetectedObject>> frames = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            registrations.put(i, FrameRegistration.of(i, 0.8 * i + dither[i], 0, 0));
+            frames.add(new ArrayList<>(List.of(point(100 + 1.0 * i, 100, i))));
+        }
+
+        TrackLinker.TrackingResult result = TrackLinker.findMovingObjects(
+                frames, new ArrayList<>(), new DetectionConfig(), null, 256, 256, registrations);
+
+        assertEquals(0, result.cameraFixedGroups.size());
+        assertEquals(0, result.telemetry.cameraFixedGroups);
+        assertEquals(1, result.telemetry.cameraFixedGroupsFollowingSky);
+        assertEquals(6, result.telemetry.cameraFixedDetectionsFollowingSky);
     }
 
     @Test

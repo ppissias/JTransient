@@ -404,6 +404,7 @@ public class TrackLinker {
     /**
      * Removes detections fixed on the camera (hot pixels, dust) from the point transients and from the exported
      * transients, so they leave every later stage; skipped when the switch is off or there are no registrations.
+     * Groups that follow the sky (slow movers) stay and are only counted.
      */
     private static List<CameraFixedRejector.Group> removeCameraFixed(List<List<DetectedObject>> transients,
                                                                     List<List<DetectedObject>> allTransients,
@@ -412,7 +413,12 @@ public class TrackLinker {
                                                                     TrackerTelemetry telemetry) {
         List<CameraFixedRejector.Group> cameraFixedGroups = List.of();
         if (config.enableCameraFixedRejection && registrations != null && !registrations.isEmpty()) {
-            cameraFixedGroups = CameraFixedRejector.reject(transients, registrations);
+            List<CameraFixedRejector.Group> followingSky = new ArrayList<>();
+            cameraFixedGroups = CameraFixedRejector.reject(transients, registrations, followingSky);
+            telemetry.cameraFixedGroupsFollowingSky = followingSky.size();
+            for (CameraFixedRejector.Group group : followingSky) {
+                telemetry.cameraFixedDetectionsFollowingSky += group.points.size();
+            }
             if (!cameraFixedGroups.isEmpty()) {
                 Set<DetectedObject> removed = Collections.newSetFromMap(new IdentityHashMap<>());
                 for (CameraFixedRejector.Group group : cameraFixedGroups) {
