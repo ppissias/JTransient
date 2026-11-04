@@ -72,51 +72,19 @@ The Lagoon track/local-rescue association request is captured as [SpacePixels F2
 
 ## SM-F3. Improvements to maximum-stack slow-mover detection
 
-**Priority (2026-11-04).** The maintainer selected this as the next investigation after SpacePixels F26's faint-mover presentation work. Its algorithm proposals still require their evidence and review; this priority does not implement them.
+**Status and decision (2026-11-04).** The maintainer selected this investigation after SpacePixels F26. Full-size experiments cover Klangwolke-2, Eagle-noisy, M81 Kumar, helix-reg and m101-reg. Source-row caching (P4), copied temporal review evidence and post-tracking correspondence measurements are implemented without changing detection gates/settings or suppressing findings. The initial 150 moving injections are supplemented by 975 broader controls, including curved motion and shuffled source positions. The remaining scientific proposals stay open; implementation, measured results and limitations are in [ALGORITHM.md](ALGORITHM.md#maximum-stack-investigation).
 
-**Status and decision.** Proposed (investigated 2026-11-03). The maintainer requested a thorough review of the maximum-stack slow-mover detection algorithm (`SlowMoverAnalyzer`, `SlowMoverFrameEvidence`, `MasterMapGenerator`) and proposals for improvements. This item records the investigation findings, edge-case limitations, and concrete improvement directions.
+**Review corrections.** The original 5–6 px motion corridor was an illustrative capsule calculation, not a general bound: footprint width is measured, and Prokne passes the current gates after about 16 px of actual motion. For 30 independent Gaussian samples the expected maximum is about 2.04 sigma above sky; `sqrt(2 log N) = 2.61` is only a leading asymptotic term. This does not establish a universal single-frame SNR limit. Subtracting one static median commutes with the maximum: `max(I - m) = max(I) - m`. It changes extraction contrast, but cannot change raw-frame aperture lock-on unless frame evidence also changes.
 
-**Problem analysis and investigation findings.**
+**Remaining proposals and decisions.**
 
-1. *Narrow motion corridor between axis ratio and stationary clustering.*
-   `slowMoverMinAxisRatio = 1.2` and `slowMoverMaxAxisRatio = 2.8` define the primary morphological window. For a typical seeing profile with minor extent ~3.5 px, `axisRatio <= 2.8` limits total displacement to at most (2.8 - 1) * 3.5 ≈ 6.3 px. Faster movers are rejected by `rejectedAboveMaxAxisRatio`. Meanwhile, `slowMoverMaxStationaryLikelihood = 60.0%` with clustering radius ≈ 1.5 px requires that no single location contains more than 60% of supported frame centroids. For uniform motion, spending <= 60% of N frames in a 3 px diameter requires total motion:
-   $$\Delta x = N \cdot v \ge \frac{3\text{ px}}{0.60} = 5.0\text{ px}$$
-   Consequently, the combination of default settings allows only objects with total displacement in a narrow corridor of roughly **5.0 to 6.3 px** to pass both gates. Slower objects fail stationary likelihood (> 60%), while slightly faster objects fail axis ratio (> 2.8).
+1. **P1 — A validated temporal gate.** Original-frame centroids, timed drift, RMS, correlation and covered span are now available for review, with explicit missing/duplicate-clock states. In the broader controls, the proposed `abs(r) >= 0.70` preserves all 201 shape-relaxed straight recoveries and rejects all 48 injection-associated shuffled-position survivors, but loses one of 51 curved recoveries (M81, r = 0.696). Six earlier M81 residual candidates also have high correlation without a confirmed moving identity. Correlation is not calibrated confidence. Test centroid uncertainty, exposure-midpoint timing, seeing/registration trends and independent held-out sessions before choosing a veto. No temporal cutoff is implemented.
 
-2. *Absence of chronological / temporal progression validation.*
-   `SlowMoverFrameEvidence` measures spatial clustering of frame centroids, but does not examine sequence order or capture timestamps (`DATE-OBS`). If seeing fluctuations or noise spikes cause the best-aperture position to jump back and forth randomly between frames, the spatial cluster size can remain below 60%, allowing an unmoving, noisy artifact to pass as a slow mover. The algorithm lacks a test for monotonic physical displacement over time.
+2. **P2 — Broader shapes with explicit duplicate ownership.** Raising only the maximum axis ratio from 2.8 to 5 recovers 54/150 injected movers versus 38/150 initially, and 252/780 versus 164/780 on the broader straight/curved grid. It adds one Eagle candidate and Valeria on the original five full fields; Valeria already has a 27-frame ordinary track. `SlowMoverTrackMatcher` now provides post-tracking spatial screening and actual common-frame distances, including ambiguous-ID/time counts, without claiming identity. Crossings, reversed/parallel/partial tracks are covered by controls. Define adequate coverage, uncertainty-normalized agreement and competing-track ambiguity before any automatic duplicate suppression or default change. The maximum axis ratio stays 2.8.
 
-3. *Noise elevation in maximum stacks (Gumbel extreme-value effect).*
-   The per-pixel maximum across N Gaussian noise frames has an expected value $\mu_{\max} \approx \mu_{\text{sky}} + \sigma_{\text{sky}}\sqrt{2 \ln N}$ (elevated by ≈ 2.6 sigma for N = 30). Because a moving source only illuminates a given pixel in a small subset of frames, faint slow movers with single-frame SNR ~ 1-2 do not rise above the maximum-stack background median. The maximum stack is therefore suited for moderately bright slow movers (single-frame SNR >= 4-5), while faint targets require coherent integration (such as the implemented [digital-tracking stage](ALGORITHM.md#faint-mover-search)).
+3. **P3 — An additional residual route, not a replacement.** At the current axis limit, residual extraction with raw-frame evidence recovers only 25/150 injections; residual extraction plus residual frame evidence recovers 35/150, compared with 38/150 currently. With the wider axis limit, the full residual route recovers 60/150 but produces many additional full-field candidates (108 in M81). None of the three approximately magnitude-18.5 Klangwolke-2 targets is recovered by the frozen maximum-stack variants. Evaluate an additive route, local residual/PSF normalization, self-subtraction at low displacement, star-crossing lock-on and independent negative controls. Do not simplify median-mask vetoing or describe residual subtraction as removing all star wings/gradients. [SM-F4](#sm-f4-bright-star-residuals-in-faint-mover-searches) and [XC-3](#xc-3-local-background-and-noise-for-frame-extraction) remain separate work.
 
-4. *Lock-on by stationary background stars inside the candidate footprint.*
-   `SlowMoverFrameEvidence.findBestAperture` searches for the maximum SNR aperture within the candidate's footprint in each frame. If a moving object grazes a faint background star (or residual hot pixel), that star is present in all frames and yields the highest SNR in every frame. The search locks onto the stationary star, driving `stationaryLikelihood` to 100% and causing false rejection of genuine movers.
-
-5. *Redundant row indexing in stack generation.*
-   In `MasterMapGenerator.createMaximumMasterStack`, `frames.get(i).pixelData[y][x]` dereferences the 1D row array inside the innermost x loop, performing millions of redundant pointer lookups on large multi-megapixel sequences.
-
-**Proposed improvements.**
-
-1. **Temporal progression check in `SlowMoverFrameEvidence` (P1):**
-   Project supported centroids $(x_i, y_i)$ onto the candidate's principal moment axis $\theta$:
-   $$s_i = (x_i - x_0)\cos\theta + (y_i - y_0)\sin\theta$$
-   Compute the rank or linear correlation between projected coordinate $s_i$ and frame timestamp $t_i$: $|r(s_i, t_i)| \ge 0.70$. Real physical motion progresses monotonically over time ($|r| \approx 1.0$), whereas seeing jitter and noise scatter randomly around zero ($r \approx 0$). This provides a robust physical motion filter without restricting the allowable speed range.
-
-2. **Widen axis ratio corridor with TrackLinker hand-off (P2):**
-   Increase `slowMoverMaxAxisRatio` to 4.0–5.0. If a candidate has $axisRatio > 2.8$, verify whether `TrackLinker` already claimed it into a moving track. If `TrackLinker` missed it (e.g., due to dropped intermediate frames or sub-jitter steps), retain it in the slow-mover branch.
-
-3. **Residual maximum stack / median subtraction (P3):**
-   Form a median-subtracted maximum stack:
-   $$M_{\text{diff}}(x, y) = \max_t \left( I_t(x, y) - m(x, y) \right)$$
-   Subtracting the static median stack $m(x, y)$ removes stationary stars and background gradients before taking the maximum. This prevents faint stationary stars from distorting `findBestAperture`, removes star wing bleed, and simplifies stationary-mask overlap filtering.
-
-4. **Row buffer hoisting in `MasterMapGenerator` (P4):**
-   Cache `short[] rowI = frames.get(i).pixelData[y]` outside the column loop, eliminating $W \times N$ array indexing operations per row.
-
-**Evidence needed before implementation.**
-- Test candidate recovery and false-candidate rates across reference sessions (Klangwolke-2, Eagle-noisy, M81-Kumar, helix-reg, m101-reg).
-- Validate that the temporal monotonicity check rejects seeing/noise artifacts on real sessions without rejecting curved or slightly uneven asteroid paths.
-- Profile stack generation runtime before and after row buffer hoisting.
+**Before scientific gate/default changes.** Freeze independent held-out sessions and an uncertainty/coverage-aware association policy; measure incremental recovery, unverified candidate load, runtime and memory one algorithm change at a time. The initial controls and the broader 975-case grid do not establish a survey false-positive rate. No science/default change or claim of motion is justified solely by these counts. The implemented measurements are for review, with both findings preserved.
 
 ## SM-F4. Bright-star residuals in faint-mover searches
 

@@ -52,6 +52,8 @@ public final class SlowMoverCandidateDiagnostics {
     public final double minFrameSupportThreshold;
     /** Effective stationary-likelihood percentage ceiling; 100 disables the veto. */
     public final double maxStationaryLikelihoodThreshold;
+    /** Supported original-frame centroids and descriptive timed drift; never a detection gate or motion confirmation. */
+    public final SlowMoverMotionEvidence motionEvidence;
 
     /**
      * Captures the accepted object's morphology and the mask overlap used for filtering.
@@ -76,6 +78,7 @@ public final class SlowMoverCandidateDiagnostics {
                 SlowMoverFrameEvidence.unavailable(), 0.0, 100.0);
     }
 
+    /** Captures filtering measurements and copied review evidence, without retaining the source image frames. */
     SlowMoverCandidateDiagnostics(DetectedObject object,
                                   double medianMaskOverlapFraction,
                                   double minAxisRatioThreshold,
@@ -110,5 +113,6 @@ public final class SlowMoverCandidateDiagnostics {
         this.stationaryLikelihoodAvailable = frameEvidence.stationaryLikelihoodAvailable;
         this.minFrameSupportThreshold = minFrameSupportThreshold;
         this.maxStationaryLikelihoodThreshold = maxStationaryLikelihoodThreshold;
+        this.motionEvidence = frameEvidence.motionEvidence;
     }
 }

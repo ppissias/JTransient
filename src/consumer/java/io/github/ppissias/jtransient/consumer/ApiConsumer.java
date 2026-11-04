@@ -35,6 +35,15 @@ public final class ApiConsumer {
         Track track = new Track();
         track.addPoint(object);
         require(track.points.get(0) == object, "Detection identity changed");
+        var slowDiagnostics = new io.github.ppissias.jtransient.core.SlowMoverCandidateDiagnostics(
+                object, 0, 1.2, 2.8, .5, 0, .8);
+        require(!slowDiagnostics.motionEvidence.fitAvailable && slowDiagnostics.motionEvidence.positions.isEmpty(),
+                "Stack-only timed evidence must be explicitly unavailable");
+        var correspondence = io.github.ppissias.jtransient.core.SlowMoverTrackMatcher.match(
+                object, slowDiagnostics.motionEvidence, track);
+        require(correspondence != null && !correspondence.frameComparisonAvailable(),
+                "Spatial overlap alone must not imply common-frame evidence");
+        new com.google.gson.Gson().toJson(slowDiagnostics.motionEvidence);
 
         List<ImageFrame> frames = frames();
         AutoTunerResult calibrated = CalibratedAutoTuner.tune(frames.subList(0, 4), config, AutoTuneProfile.MEDIUM, null);

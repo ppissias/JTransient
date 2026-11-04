@@ -18,7 +18,7 @@ import java.util.List;
  * is the percentage of supported centroids in the largest cluster around one observed position.
  * These are screening heuristics, not a calibrated probability or proof of motion. The search
  * accepts any localized signal inside the footprint, so a persistent star there may dominate
- * the frame positions. This class does not build temporal stacks or fit a motion path.</p>
+ * the frame positions. A descriptive timed fit is exported for inspection, without affecting these gates.</p>
  *
  * <p>Frame support can have a numeric value with only one usable frame but is unavailable until
  * at least two frames are usable. Stationary likelihood is zero when unavailable. Callers must
@@ -40,10 +40,13 @@ final class SlowMoverFrameEvidence {
     final double frameSupportPercentage;
     /** Largest stationary centroid cluster as a percentage of supported frames, or zero if unavailable. */
     final double stationaryLikelihoodPercentage;
+    /** Copied supported centroids and a descriptive fit, never used by the acceptance gates. */
+    final SlowMoverMotionEvidence motionEvidence;
 
     /** Stores the measured counts and derives the frame-support percentage and availability. */
     private SlowMoverFrameEvidence(int supportedFrameCount, int usableFrameCount,
-                                   boolean stationaryLikelihoodAvailable, double stationaryLikelihoodPercentage) {
+                                   boolean stationaryLikelihoodAvailable, double stationaryLikelihoodPercentage,
+                                   SlowMoverMotionEvidence motionEvidence) {
         this.supportedFrameCount = supportedFrameCount;
         this.usableFrameCount = usableFrameCount;
         this.frameSupportAvailable = usableFrameCount >= 2;
@@ -51,11 +54,12 @@ final class SlowMoverFrameEvidence {
         this.frameSupportPercentage = usableFrameCount > 0
                 ? 100.0 * supportedFrameCount / usableFrameCount : 0.0;
         this.stationaryLikelihoodPercentage = stationaryLikelihoodPercentage;
+        this.motionEvidence = motionEvidence;
     }
 
     /** Returns a result with no measurable frame evidence. */
     static SlowMoverFrameEvidence unavailable() {
-        return new SlowMoverFrameEvidence(0, 0, false, 0.0);
+        return new SlowMoverFrameEvidence(0, 0, false, 0.0, SlowMoverMotionEvidence.unavailable());
     }
 
     /**
@@ -138,8 +142,14 @@ final class SlowMoverFrameEvidence {
             stationaryLikelihood = 100.0 * largestStationaryCluster / supported.size();
         }
 
+        List<SlowMoverMotionEvidence.Position> positions = new ArrayList<>(supported.size());
+        for (FrameMeasurement measurement : supported) {
+            ImageFrame frame = frames.get(measurement.frameIndex);
+            positions.add(new SlowMoverMotionEvidence.Position(measurement.frameIndex, frame.sequenceIndex,
+                    frame.timestamp, measurement.x, measurement.y, measurement.signalToNoise));
+        }
         return new SlowMoverFrameEvidence(supported.size(), usable,
-                stationaryAvailable, stationaryLikelihood);
+                stationaryAvailable, stationaryLikelihood, SlowMoverMotionEvidence.measure(positions, frames, object.angle));
     }
 
     /**
