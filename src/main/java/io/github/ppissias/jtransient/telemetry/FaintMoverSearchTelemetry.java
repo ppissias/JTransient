@@ -18,6 +18,8 @@ package io.github.ppissias.jtransient.telemetry;
  * {@link #matchedTracks} + {@link #nearStronger} + {@link #candidates}.</p>
  */
 public class FaintMoverSearchTelemetry {
+    /** Original sequence indices of the selected search session, in kept order; empty when it was not selected. */
+    public java.util.List<Integer> searchedFrameIndices = java.util.List.of();
     /** Why the search did not run, or null when it ran. */
     public String skippedReason;
     /** Kept frames searched: those of the longest session, without a gap of over two hours. */

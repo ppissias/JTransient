@@ -323,6 +323,7 @@ public final class FaintMoverSearch {
             frames.add(kept.get(index));
             meanMillis += midMillis[index] / n;
         }
+        telemetry.searchedFrameIndices = frames.stream().map(frame -> frame.sequenceIndex).toList();
         long reference = Math.round(meanMillis);
         double[] minutes = new double[n];
         double first = Double.MAX_VALUE;

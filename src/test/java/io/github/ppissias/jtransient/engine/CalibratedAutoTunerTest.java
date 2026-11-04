@@ -119,6 +119,11 @@ public class CalibratedAutoTunerTest {
     @Test
     public void tuneReturnsTheChosenSettings() {
         DetectionConfig base = new DetectionConfig();
+        base.enableFaintMoverSearch = true;
+        base.faintMoverMinDisplacementFwhm = 3;
+        base.faintMoverMaxSpeedPixelsPerMinute = 0.75;
+        base.faintMoverMinScore = 9;
+        base.faintMoverMaxSeconds = 47;
         DetectionConfig original = base.clone();
         AutoTunerResult result = CalibratedAutoTuner.tune(createFrames(), base,
                 AutoTuneProfile.MEDIUM, (percent, message) -> base.qualitySigmaMultiplier = 17);
@@ -127,6 +132,11 @@ public class CalibratedAutoTunerTest {
         assertTrue(result.optimizedConfig.growSigmaMultiplier < result.optimizedConfig.detectionSigmaMultiplier);
         assertTrue("the result carries the measurement of every profile", result.calibration != null && result.calibration.success);
         assertEquals(original.qualitySigmaMultiplier, result.optimizedConfig.qualitySigmaMultiplier, 0);
+        assertTrue(result.optimizedConfig.enableFaintMoverSearch);
+        assertEquals(original.faintMoverMinDisplacementFwhm, result.optimizedConfig.faintMoverMinDisplacementFwhm, 0);
+        assertEquals(original.faintMoverMaxSpeedPixelsPerMinute, result.optimizedConfig.faintMoverMaxSpeedPixelsPerMinute, 0);
+        assertEquals(original.faintMoverMinScore, result.optimizedConfig.faintMoverMinScore, 0);
+        assertEquals(original.faintMoverMaxSeconds, result.optimizedConfig.faintMoverMaxSeconds, 0);
         assertEquals(original.detectionSigmaMultiplier, base.detectionSigmaMultiplier, 0);
         assertEquals(original.growSigmaMultiplier, base.growSigmaMultiplier, 0);
         assertEquals(original.masterSigmaMultiplier, base.masterSigmaMultiplier, 0);

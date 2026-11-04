@@ -54,6 +54,8 @@ public final class ApiConsumer {
         require(config.enableFaintStreakSearch && !object.fromFaintStreakSearch, "Faint-streak search defaults changed");
         try (JTransientEngine engine = new JTransientEngine()) {
             PipelineResult result = engine.runPipeline(frames, config, null);
+            require(new io.github.ppissias.jtransient.telemetry.FaintMoverSearchTelemetry().searchedFrameIndices.isEmpty(),
+                    "Faint-mover original frame identities missing from the API");
             require(result.tracks != null && result.telemetry != null && result.masterStackData != null,
                     "Result fields missing");
             require(result.telemetry.faintStreakSearchTelemetry != null, "Faint-streak search telemetry missing");

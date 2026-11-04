@@ -221,6 +221,8 @@ public class FaintMoverSearchTest {
         assertNull(result.telemetry.skippedReason);
         assertEquals(FRAMES - 2, result.telemetry.frames);
         assertEquals(2, result.telemetry.framesOutsideSession);
+        assertEquals(result.telemetry.frames, result.telemetry.searchedFrameIndices.size());
+        assertFalse(result.telemetry.searchedFrameIndices.contains(frames.getLast().sequenceIndex));
         assertEquals(1, result.candidates.size());
         assertEquals(mover[2], result.candidates.get(0).vx, 0.08);
     }
