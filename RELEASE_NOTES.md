@@ -12,6 +12,8 @@
 
 ## 1.0.8 (unreleased)
 
+- **Faint-search work previews and progress (F28, additive observer contract).** Optional requested snapshots carry copied active-tile/trial-path geometry on an example original frame, without borrowing pixels or treating trials as candidates. Joined workers emit throttled phase-local estimated work and completed-tile counts during long tiles. Existing skip/truncation, cancellation, scientific scoring and selection remain unchanged; `FaintMoverSearch.Input.observer` supports direct callers.
+
 - **Slow-mover temporal review and track correspondences (additive API).** `SlowMoverCandidateDiagnostics.motionEvidence` adds `SlowMoverMotionEvidence` with copied supported centroids, original identities/capture times, descriptive drift/RMS/correlation and explicit clock/support availability. `SlowMoverTrackMatcher.match` adds post-tracking spatial/common-frame distance measurements, excluding ambiguous IDs and conflicting known times. Neither confirms identity, rejects a candidate, changes defaults nor retains source pixel buffers. Broader straight/curved/shuffled controls are documented in the [algorithm reference](ALGORITHM.md#maximum-stack-investigation).
 
 - **Maximum-stack source-row caching (performance only).** The reducer borrows each input row once instead of resolving it for every pixel. Pixel arithmetic, reduction order, output ownership, cancellation and detection settings are unchanged. Full-size isolated benchmarks and the SM-F3 scientific experiments are described in the [algorithm reference](ALGORITHM.md#maximum-stack-investigation); the proposed temporal/shape/residual gates remain experimental.

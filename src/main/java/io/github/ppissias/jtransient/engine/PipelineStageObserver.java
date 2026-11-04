@@ -19,7 +19,7 @@ package io.github.ppissias.jtransient.engine;
  * order, after that stage's products are final: no later stage changes them. The products are the run's own objects
  * and arrays, not copies, so treat them as read-only and copy what you keep after the call returns. During a long
  * stage it may also call {@link #stageStarted} and, only when {@link #wantsUpdate()} returns true, {@link #liveUpdate}.
- * Source extraction and photometry call {@code wantsUpdate} from worker threads; the check must be safe for that and
+ * Source extraction, faint-mover search and photometry call {@code wantsUpdate} from worker threads; the check must be safe for that and
  * let only one caller through each time a picture is wanted. The run waits while the observer runs. An exception from
  * the observer is caught, reported through the run's diagnostics and ignored: it never fails or cancels the run.
  * Nothing is called after the run returns or throws. A run that keeps too few frames stops after quality control

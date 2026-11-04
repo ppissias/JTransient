@@ -44,6 +44,11 @@ public final class ApiConsumer {
         require(correspondence != null && !correspondence.frameComparisonAvailable(),
                 "Spatial overlap alone must not imply common-frame evidence");
         new com.google.gson.Gson().toJson(slowDiagnostics.motionEvidence);
+        var previewInput = new io.github.ppissias.jtransient.core.FaintMoverSearch.Input();
+        previewInput.observer = stage -> { };
+        var workPreview = new io.github.ppissias.jtransient.engine.LiveSnapshot("Faint-mover search", 0,
+                "Trial motion, not a retained candidate", new double[]{0, 64, 30, 34}, new double[]{0, 64, 30, 34});
+        require(workPreview.x().length == 4 && previewInput.observer != null, "Faint-search work preview API changed");
 
         List<ImageFrame> frames = frames();
         AutoTunerResult calibrated = CalibratedAutoTuner.tune(frames.subList(0, 4), config, AutoTuneProfile.MEDIUM, null);

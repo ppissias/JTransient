@@ -11,6 +11,8 @@ package io.github.ppissias.jtransient.core;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.engine.ImageFrame;
+import io.github.ppissias.jtransient.engine.LiveSnapshot;
+import io.github.ppissias.jtransient.engine.PipelineStageObserver;
 import io.github.ppissias.jtransient.engine.TransientEngineProgressListener;
 import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.execution.OperationContext;
@@ -30,6 +32,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The faint-mover search (experimental, off by default): digital tracking of point-like movers too faint for the single
@@ -153,8 +157,10 @@ public final class FaintMoverSearch {
         public List<List<DetectedObject>> streaks;
         /** The run's tracks; peaks following a point track, and their side lobes, are not reported. */
         public List<Track> tracks = List.of();
-        /** Progress of the search from 0 to 100, or null. */
+        /** Phase-local estimated work from 0 to 100, or null; notices may come from joined tile workers and must be thread-safe. */
         public TransientEngineProgressListener progress;
+        /** Optional requested scalar work previews; called synchronously on joined workers, with no borrowed pixels. */
+        public PipelineStageObserver observer;
     }
 
     /** The search domain of one run, worked out before any pixel is read. */
@@ -499,11 +505,14 @@ public final class FaintMoverSearch {
     public static Result search(Plan plan) throws ExecutionException {
         FaintMoverSearchTelemetry telemetry = plan.telemetry;
         if (plan.skippedReason != null) {
+            if (plan.input.progress != null) OperationContext.notify(plan.input.progress::onProgressUpdate, 0,
+                    "Faint-mover search skipped: " + plan.skippedReason);
             return new Result(List.of(), telemetry);
         }
         long deadline = plan.startedNanos + (long) (plan.config.faintMoverMaxSeconds * 1e9);
         List<Peak> peaks = new ArrayList<>();
         EvidencePool evidence = new EvidencePool();
+        SearchProgress progress = new SearchProgress(plan, deadline);
         int searched = 0;
         for (int from = 0; from < plan.tiles.size(); from += TILES_PER_BATCH) {
             CancellationScope.check();
@@ -513,7 +522,8 @@ public final class FaintMoverSearch {
             }
             List<Callable<TileResult>> tasks = new ArrayList<>();
             for (int[] tile : plan.tiles.subList(from, Math.min(plan.tiles.size(), from + TILES_PER_BATCH))) {
-                tasks.add(() -> searchTile(plan, tile[0], tile[1], tile[2], tile[3], deadline, evidence));
+                TileProgress tileProgress = new TileProgress(progress, from + tasks.size(), tile);
+                tasks.add(() -> searchTile(plan, tile[0], tile[1], tile[2], tile[3], deadline, evidence, tileProgress));
             }
             int finished = 0;
             for (TileResult tile : WorkerPool.invokeAll(tasks)) {
@@ -534,18 +544,83 @@ public final class FaintMoverSearch {
             if (telemetry.truncated) {
                 break;
             }
-            if (plan.input.progress != null) {
-                int done = searched;
-                OperationContext.notify(plan.input.progress::onProgressUpdate,
-                        (int) (100L * done / plan.tiles.size()),
-                        "Searching for faint movers: tile " + done + " of " + plan.tiles.size() + "...");
-            }
         }
         telemetry.tilesSearched = searched;
         List<FaintMoverCandidate> candidates = select(plan, peaks, evidence);
         telemetry.candidates = candidates.size();
+        if (plan.input.progress != null) OperationContext.notify(plan.input.progress::onProgressUpdate,
+                telemetry.truncated ? progress.percentage() : 100,
+                "Faint-mover search " + (telemetry.truncated ? "truncated at its time limit" : "completed")
+                        + ": " + searched + " of " + plan.tiles.size() + " tiles; " + candidates.size() + " candidates retained.");
         telemetry.elapsedMs = (System.nanoTime() - plan.startedNanos) / 1_000_000L;
         return new Result(candidates, telemetry);
+    }
+
+    /** Run-owned work accounting and a globally throttled notice; no observer means no preview construction. */
+    private static final class SearchProgress {
+        private final Plan plan;
+        private final long deadline;
+        private final AtomicLong units = new AtomicLong();
+        private final AtomicLong nextNotice = new AtomicLong();
+        private final AtomicInteger finishedTiles = new AtomicInteger();
+
+        /** Captures only this admitted search and its unchanged cooperative deadline. */
+        private SearchProgress(Plan plan, long deadline) { this.plan = plan; this.deadline = deadline; }
+
+        /** Returns monotonic phase-local estimated work, reserving 100 percent for completed selection. */
+        private int percentage() { return (int) Math.min(99, 100 * units.get() / (1_000_000L * plan.tiles.size())); }
+
+        /** Serializes at most four notices a second across tile workers and asks before allocating preview coordinates. */
+        private void notice(TileProgress tile, String phase, int motion) {
+            if (plan.input.progress == null && plan.input.observer == null) return;
+            long now = System.nanoTime(), next = nextNotice.get();
+            if (now < next || now >= deadline || !nextNotice.compareAndSet(next, now + 250_000_000L)) return;
+            synchronized (this) {
+                if (System.nanoTime() >= deadline) return;
+                String caption = "Faint-mover search estimated work " + percentage() + "%: " + finishedTiles.get() + " of "
+                        + plan.tiles.size() + " tiles completed; tile " + (tile.index + 1) + " — " + phase
+                        + (motion >= 0 ? " " + (motion + 1) + " of " + plan.motions.length : "");
+                if (plan.input.progress != null) OperationContext.notify(plan.input.progress::onProgressUpdate, percentage(), caption);
+                var observer = plan.input.observer;
+                if (observer == null) return;
+                try {
+                    if (!observer.wantsUpdate()) return;
+                    double vx = motion < 0 ? 0 : plan.motions[motion][0], vy = motion < 0 ? 0 : plan.motions[motion][1];
+                    double cx = tile.bounds[0] + tile.bounds[2] / 2.0, cy = tile.bounds[1] + tile.bounds[3] / 2.0;
+                    int frame = plan.frames.get(plan.frames.size() / 2).sequenceIndex;
+                    observer.liveUpdate(new LiveSnapshot("Faint-mover search", frame,
+                            caption + "\nExample source frame " + (frame + 1) + "; "
+                                    + (motion < 0 ? "search area" : "trial motion, not a retained candidate"),
+                            new double[]{tile.bounds[0], tile.bounds[0] + tile.bounds[2], cx + vx * plan.minutes[0], cx + vx * plan.minutes[plan.minutes.length - 1]},
+                            new double[]{tile.bounds[1], tile.bounds[1] + tile.bounds[3], cy + vy * plan.minutes[0], cy + vy * plan.minutes[plan.minutes.length - 1]}));
+                } catch (RuntimeException ignored) {
+                    // Observer failures cannot alter detection, cancellation or the scientific products.
+                    if (io.github.ppissias.jtransient.execution.DiagnosticContext.enabled())
+                        io.github.ppissias.jtransient.execution.DiagnosticContext.println("DEBUG: A faint-search work preview failed; the search continues: " + ignored);
+                }
+            }
+        }
+    }
+
+    /** One worker's monotonically accumulated tile work, with shared notices rather than a rendering or image queue. */
+    private static final class TileProgress {
+        private final SearchProgress owner;
+        private final int index;
+        private final int[] bounds;
+        private int previous;
+
+        /** Borrows fixed tile geometry for the joined worker lifetime. */
+        private TileProgress(SearchProgress owner, int index, int[] bounds) { this.owner = owner; this.index = index; this.bounds = bounds; }
+
+        /** Advances only this tile; percentages estimate preparation/coarse/refinement work, not retained-candidate confidence. */
+        private void update(int units, String phase, int motion) {
+            if (owner.plan.input.progress == null && owner.plan.input.observer == null) return;
+            owner.units.addAndGet(Math.max(0, units - previous)); previous = Math.max(previous, units);
+            owner.notice(this, phase, motion);
+        }
+
+        /** Counts a completed tile after its existing search checks, without changing scientific tile telemetry. */
+        private void finish() { owner.finishedTiles.incrementAndGet(); update(1_000_000, "tile finished", -1); }
     }
 
     private static Plan skipped(Input input, DetectionConfig config, FaintMoverSearchTelemetry telemetry,
@@ -590,7 +665,7 @@ public final class FaintMoverSearch {
     // ------------------------------------------------------------------------------------------------------------
 
     /** Prepares the original tile residuals; the caller releases these full-tile buffers after searching. */
-    private static PreparedTile prepareTile(Plan plan, int tx, int ty, int w, int h) {
+    private static PreparedTile prepareTile(Plan plan, int tx, int ty, int w, int h, TileProgress progress) {
         Input input = plan.input;
         int n = plan.frames.size();
         int m = plan.margin;
@@ -604,6 +679,7 @@ public final class FaintMoverSearch {
         BitSet[] streakMasks = new BitSet[n];
         for (int k = 0; k < n; k++) {
             CancellationScope.check();
+            progress.update(10_000 + 90_000 * k / n, "preparing residuals", -1);
             normalise(residuals[k], bad, width, height, scratch, weights);
             int index = plan.frameIndex[k];
             if (input.streaks != null && index < input.streaks.size() && input.streaks.get(index) != null
@@ -619,12 +695,14 @@ public final class FaintMoverSearch {
     }
 
     /** Searches a tile using temporary preprocessed residuals, without retaining those buffers in peaks. */
-    private static TileResult searchTile(Plan plan, int tx, int ty, int w, int h, long deadline, EvidencePool evidence) {
+    private static TileResult searchTile(Plan plan, int tx, int ty, int w, int h, long deadline, EvidencePool evidence, TileProgress progress) {
+        progress.update(0, "preparing residuals", -1);
         TileResult result = new TileResult();
         int n = plan.frames.size();
         int m = plan.margin;
         int width = w + 2 * m;
-        PreparedTile prepared = prepareTile(plan, tx, ty, w, h);
+        PreparedTile prepared = prepareTile(plan, tx, ty, w, h, progress);
+        progress.update(100_000, "coarse trial motions", 0);
         float[][] residuals = prepared.residuals;
         boolean[] bad = prepared.bad;
         BitSet[] streakMasks = prepared.streakMasks;
@@ -641,11 +719,13 @@ public final class FaintMoverSearch {
             }
         }
         if (good < MIN_GOOD_PIXELS) {
+            progress.finish();
             return result;
         }
         result.searchedPixels = good;
         double noise = stackNoise(plan, residuals, width, w, h, innerBad);
         if (!(noise > 0)) {
+            progress.finish();
             return result;
         }
         float scale = (float) (1.0 / (n * noise));
@@ -666,6 +746,8 @@ public final class FaintMoverSearch {
             }
             for (int mi = 0; mi < motions.length; mi++) {
                 CancellationScope.check();
+                if ((mi & 63) == 0) progress.update(100_000 + (int) (800_000L * ((long) (s0 / STRIP_ROWS) * motions.length + mi)
+                        / (((h + STRIP_ROWS - 1L) / STRIP_ROWS) * motions.length)), "coarse trial motions", mi);
                 Arrays.fill(acc, 0, rows * w, 0f);
                 for (int k = 0; k < n; k++) {
                     float[] r = residuals[k];
@@ -696,9 +778,11 @@ public final class FaintMoverSearch {
         }
 
         // Local maxima, refined and checked.
+        progress.update(900_000, "checking provisional peaks", -1);
         float[] localMax = maxFilter(best, w, h, PEAK_RADIUS);
         double keep = COARSE_KEEP_FRACTION * plan.config.faintMoverMinScore;
         for (int y = 0; y < h; y++) {
+            progress.update(900_000 + (int) (100_000L * y / h), "checking provisional peaks", -1);
             for (int x = 0; x < w; x++) {
                 int i = y * w + x;
                 if (best[i] < keep || best[i] != localMax[i]) {
@@ -714,6 +798,7 @@ public final class FaintMoverSearch {
                 }
             }
         }
+        progress.finish();
         return result;
     }
 

@@ -569,7 +569,7 @@ If timestamps are available, the tracker attempts time-aware linking before any 
 For each proposed baseline pair `p1 -> p2`:
 
 1. require forward time flow
-2. require jump distance `> maxStarJitter`
+2. require jump distance `>= maxStarJitter`
 3. require morphology consistency from `isProfileConsistent(...)`
 4. optionally require `strictExposureKinematics`
 5. compute velocity `distance / deltaTime`
@@ -603,6 +603,8 @@ Candidate time-based tracks are ranked by:
 - speed stability
 
 The tracker then accepts the highest-ranked non-conflicting candidates first.
+
+Growth proceeds only after the second seed point; it does not backfill the interval between the two seeds. The local direction test also remains active for subpixel steps. In the Lagoon review, the accepted track seeds are original frames 2 and 5, leaving frames 3 and 4 before its growth interval. Six further detections make 0.15–0.24 px steps whose directions differ by 94–130 degrees from the track direction, exceeding the dynamically relaxed 83–86 degree allowances despite passing velocity, line and profile checks. They remain available to residual rescue. SpacePixels can now show report-only possible-continuation links for these separate observations; it does not change this linking policy, assign identity or merge either finding.
 
 ## 11. Geometric Point Linking
 
@@ -1432,6 +1434,8 @@ When `enableFaintMoverSearch` is on (it is off by default), `FaintMoverSearch` l
 Each candidate carries its position at the session's mean mid-exposure time, its motion, its score, half scores (NaN when a half cannot be tested), stationary and camera-fixed scores and a 31 × 31 px cut-out of its filtered stack. `PipelineTelemetry.faintMoverSearchTelemetry` records the search domain and, in order, how many peaks each check removed; the text report shows them.
 
 **Bounded review evidence.** After a peak passes the tile's score and artifact checks, small residual rectangles are copied while that tile is resident. A run-owned, synchronized 32 MiB review pool prioritises stronger peaks using deterministic score/position/motion/tile ordering. Global candidate selection remains unchanged and transfers only selected candidates' evidence; no full tile or input image is retained. Reviews are limited to 128 frames and 256 pixels per side. Budget/geometry limits produce `diagnostics.unavailableReason` and never reject a candidate. `diagnosticsAvailable` and `diagnosticBytes` describe the selected evidence. Collection adds bounded work within the existing cooperative search budget; it does not repeat tile preprocessing after selection.
+
+**Live work and phase progress.** Joined tile workers account for estimated preparation, coarse-motion and peak-check work, with globally throttled notices and completed-tile counts during long tiles. Only a requested observer snapshot copies active-tile corners and trial-path endpoints on an example original frame; there are no copied residual pixels, score images or implied detections. The application keeps its shared three-second gate, coalesces pending work and renders a bounded source crop. No mask, arithmetic, ordering or selection rule uses progress or preview values. Notices respect the existing cooperative deadline; synchronous observer delays consume run time like other observer callbacks. Skipped, completed and truncated outcomes remain distinct.
 
 Each review frame preserves the original sequence index and midpoint, the actual whole-pixel scoring-path sample, its centre-mask test and locally normalised PSF-filtered residual signal. Masks are zeroed before filtering, so neighbouring signal can spread into a masked centre; the centre flag remains explicit. Samples are neither independent detections nor photometry, uncertainties or calibrated S/N. The first/second-half maps use the original tile noise, mask count, time order and full-stack normalisation. Their central refinement-area maxima reproduce the reported half scores; a half without sufficient support has no map. Candidate positions retain their original subpixel refinement. These additive diagnostics change no threshold, score or candidate-selection rule.
 

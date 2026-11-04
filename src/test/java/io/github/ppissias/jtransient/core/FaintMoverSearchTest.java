@@ -34,6 +34,53 @@ import static org.junit.Assert.assertTrue;
  * handled as documented.
  */
 public class FaintMoverSearchTest {
+    /** Requested work geometry and phase notices leave all deterministic candidate fields and review pixels unchanged. */
+    @Test public void workPreviewsPreserveScienceAndExposePhaseLocalProgress() throws Exception {
+        var input = input(frames(1, new double[]{100, 120, .4, -.25, 1.6 * NOISE}));
+        var baseline = run(input, new DetectionConfig());
+        var pictures = new java.util.concurrent.CopyOnWriteArrayList<io.github.ppissias.jtransient.engine.LiveSnapshot>();
+        var percentages = new java.util.concurrent.CopyOnWriteArrayList<Integer>();
+        var messages = new java.util.concurrent.CopyOnWriteArrayList<String>();
+        input.observer = new io.github.ppissias.jtransient.engine.PipelineStageObserver() {
+            @Override public void stageFinished(io.github.ppissias.jtransient.engine.PipelineStage ignored) { }
+            @Override public boolean wantsUpdate() { return true; }
+            @Override public void liveUpdate(io.github.ppissias.jtransient.engine.LiveSnapshot snapshot) { pictures.add(snapshot); }
+        };
+        input.progress = (percent, message) -> { percentages.add(percent); messages.add(message); };
+        var shown = run(input, new DetectionConfig());
+        var gson = new com.google.gson.GsonBuilder().serializeSpecialFloatingPointValues().create();
+        assertEquals(gson.toJson(baseline.candidates), gson.toJson(shown.candidates));
+        assertEquals(baseline.telemetry.searchedPixels, shown.telemetry.searchedPixels);
+        assertFalse(pictures.isEmpty());
+        for (var picture : pictures) {
+            assertEquals("Faint-mover search", picture.phase());
+            assertEquals(4, picture.x().length);
+            assertEquals(4, picture.y().length);
+            assertTrue(picture.caption().contains("Example source frame"));
+        }
+        for (int i = 1; i < percentages.size(); i++) assertTrue(percentages.get(i) >= percentages.get(i - 1));
+        assertEquals(Integer.valueOf(100), percentages.getLast());
+        assertTrue(messages.getLast().contains("completed"));
+    }
+
+    /** Declining or throwing from optional observers never constructs hidden snapshots or changes candidate selection. */
+    @Test public void declinedAndFailingWorkObserversPreserveResults() throws Exception {
+        var input = input(frames(1, new double[]{100, 120, .4, -.25, 1.6 * NOISE}));
+        input.observer = new io.github.ppissias.jtransient.engine.PipelineStageObserver() {
+            @Override public void stageFinished(io.github.ppissias.jtransient.engine.PipelineStage ignored) { }
+            @Override public void liveUpdate(io.github.ppissias.jtransient.engine.LiveSnapshot snapshot) { throw new AssertionError("Hidden view received a snapshot"); }
+        };
+        var hidden = run(input, new DetectionConfig());
+        input.observer = new io.github.ppissias.jtransient.engine.PipelineStageObserver() {
+            @Override public void stageFinished(io.github.ppissias.jtransient.engine.PipelineStage ignored) { }
+            @Override public boolean wantsUpdate() { return true; }
+            @Override public void liveUpdate(io.github.ppissias.jtransient.engine.LiveSnapshot snapshot) { throw new IllegalStateException("Failed preview"); }
+        };
+        var failedPreview = run(input, new DetectionConfig());
+        var gson = new com.google.gson.GsonBuilder().serializeSpecialFloatingPointValues().create();
+        assertEquals(gson.toJson(hidden.candidates), gson.toJson(failedPreview.candidates));
+    }
+
     private static final int SIZE = 260;
     private static final int FRAMES = 16;
     private static final double SKY = 1000;
@@ -239,16 +286,26 @@ public class FaintMoverSearchTest {
         assertEquals(1, result.telemetry.matchedTracks);
     }
 
+    /** A skipped search explains its reason through phase progress and never requests a picture. */
     @Test
     public void framesWithoutCaptureTimesAreNotSearched() throws Exception {
         List<ImageFrame> frames = new ArrayList<>(frames(5));
         ImageFrame first = frames.get(0);
         frames.set(0, new ImageFrame(first.sequenceIndex, first.filename, first.pixelData, -1L, 0L));
-        FaintMoverSearch.Plan plan = FaintMoverSearch.plan(input(frames), new DetectionConfig());
+        var input = input(frames);
+        var messages = new ArrayList<String>();
+        input.progress = (percentage, message) -> messages.add(message);
+        input.observer = new io.github.ppissias.jtransient.engine.PipelineStageObserver() {
+            @Override public void stageFinished(io.github.ppissias.jtransient.engine.PipelineStage ignored) { }
+            @Override public boolean wantsUpdate() { throw new AssertionError("Skipped work requested a picture"); }
+        };
+        FaintMoverSearch.Plan plan = FaintMoverSearch.plan(input, new DetectionConfig());
         assertNotNull(plan.skippedReason);
         FaintMoverSearch.Result result = FaintMoverSearch.search(plan);
         assertTrue(result.candidates.isEmpty());
         assertEquals(plan.skippedReason, result.telemetry.skippedReason);
+        assertTrue(messages.getLast().contains("skipped"));
+        assertTrue(messages.getLast().contains(plan.skippedReason));
     }
 
     @Test
@@ -288,14 +345,20 @@ public class FaintMoverSearchTest {
         assertEquals(List.of(3, 4, 5, 6), java.util.Arrays.stream(block).boxed().toList());
     }
 
+    /** The terminal progress distinguishes truncated coverage from successful full completion. */
     @Test
     public void theTimeLimitStopsTheSearchAndSaysSo() throws Exception {
         DetectionConfig config = new DetectionConfig();
         config.faintMoverMaxSeconds = 1e-9;
-        FaintMoverSearch.Result result = run(input(frames(6)), config);
+        var input = input(frames(6));
+        var messages = new ArrayList<String>();
+        input.progress = (percentage, message) -> messages.add(message);
+        FaintMoverSearch.Result result = run(input, config);
         assertTrue(result.telemetry.truncated);
         assertEquals(0, result.telemetry.tilesSearched);
         assertTrue(result.candidates.isEmpty());
+        assertTrue(messages.getLast().contains("truncated at its time limit"));
+        assertFalse(messages.getLast().contains("completed"));
     }
 
     @Test

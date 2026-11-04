@@ -868,7 +868,7 @@ public class JTransientEngine implements AutoCloseable {
     private FaintMoverSearch.Result searchFaintMovers(ExtractedFramesContext context, short[][] masterStackData,
                                                       TrackLinker.TrackingResult trackResult,
                                                       FaintStreakSearch.Result faintStreaks, DetectionConfig config,
-                                                      TransientEngineProgressListener listener) throws Exception {
+                                                      TransientEngineProgressListener listener, PipelineStageObserver observer) throws Exception {
         List<ImageFrame> keptFrames = context.cleanFrames;
         Map<Integer, Integer> keptIndex = new HashMap<>();
         List<List<DetectedObject>> streaks = new ArrayList<>();
@@ -903,8 +903,9 @@ public class JTransientEngine implements AutoCloseable {
         input.registrations = context.frameRegistrations;
         input.streaks = streaks;
         input.tracks = trackResult.tracks;
+        input.observer = observer;
         if (listener != null) {
-            input.progress = (percentage, message) -> OperationContext.notify(listener::onProgressUpdate, 92, message);
+            input.progress = (percentage, message) -> OperationContext.notify(listener::onProgressUpdate, 92 + percentage / 100, message);
         }
         FaintMoverSearch.Plan plan = FaintMoverSearch.plan(input, config);
         if (plan.skippedReason == null) {
@@ -1246,7 +1247,7 @@ public class JTransientEngine implements AutoCloseable {
                 OperationContext.notify(listener::onProgressUpdate, 92, "Searching for faint movers...");
             }
             FaintMoverSearch.Result faintMovers = searchFaintMovers(context, masterStackData, trackResult,
-                    faintStreakResult, config, listener);
+                    faintStreakResult, config, listener, observer);
             faintMoverCandidates = faintMovers.candidates;
             telemetry.faintMoverSearchTelemetry = faintMovers.telemetry;
             telemetry.recordStage(PipelineTelemetry.Stage.FAINT_MOVER_SEARCH, stageStartedNanos);
