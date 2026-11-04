@@ -357,6 +357,8 @@ This branch finds footprints that may belong to sources moving too slowly for no
 
 The stacks are not subtracted. Maximum-minus-median would change the footprint and introduce sensitivity to brightness/seeing differences. The slow-mover median mask is not the dilated stationary-star veto used by ordinary tracking, and does not use the two-pass `MasterReferenceAnalyzer` star list.
 
+`MasterMapGenerator` borrows each source row once while reducing that maximum-stack row. It retains the shifted-positive integer comparison, frame reduction order, row scheduler and cancellation checks, and allocates independent output rows. This source-row caching changes no detection threshold or pixel value.
+
 ### Extraction and data areas
 
 `SlowMoverAnalyzer` clones the supplied config and sets its grow threshold to `masterSlowMoverGrowSigmaMultiplier`. It extracts both stacks with `masterSlowMoverSigmaMultiplier` and `masterSlowMoverMinPixels`.

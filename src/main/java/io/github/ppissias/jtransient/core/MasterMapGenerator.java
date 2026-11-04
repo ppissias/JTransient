@@ -75,6 +75,7 @@ public class MasterMapGenerator {
     /**
      * Generates a Maximum Value Master Stack from the sequence.
      * This preserves swept source footprints for slow-mover morphology and is also exported for visualization.
+     * Borrows source pixels read-only, caching their row references during each row's reduction; output rows are new.
      */
     public static short[][] createMaximumMasterStack(List<ImageFrame> frames) {
         if (frames == null || frames.isEmpty()) return null;
@@ -90,15 +91,22 @@ public class MasterMapGenerator {
         }
 
         forEachRow(height, y -> {
+            // Borrow each source row once; keep the same shifted-pixel reduction and row cancellation checks.
+            if (width == 0) return;
+            short[][] sourceRows = new short[numFrames][];
+            for (int i = 0; i < numFrames; i++) {
+                sourceRows[i] = frames.get(i).pixelData[y];
+            }
+            short[] maximumRow = masterMap[y];
             for (int x = 0; x < width; x++) {
                 int maxPixelValue = 0;
                 for (int i = 0; i < numFrames; i++) {
-                    int shiftedPixelValue = PixelEncoding.toShiftedPositiveInt(frames.get(i).pixelData[y][x]);
+                    int shiftedPixelValue = PixelEncoding.toShiftedPositiveInt(sourceRows[i][x]);
                     if (shiftedPixelValue > maxPixelValue) {
                         maxPixelValue = shiftedPixelValue;
                     }
                 }
-                masterMap[y][x] = PixelEncoding.fromShiftedPositiveInt(maxPixelValue);
+                maximumRow[x] = PixelEncoding.fromShiftedPositiveInt(maxPixelValue);
             }
         });
 
