@@ -56,6 +56,7 @@ public final class ApiConsumer {
             PipelineResult result = engine.runPipeline(frames, config, null);
             require(new io.github.ppissias.jtransient.telemetry.FaintMoverSearchTelemetry().searchedFrameIndices.isEmpty(),
                     "Faint-mover original frame identities missing from the API");
+            for (var candidate : result.faintMoverCandidates) checkReviewEvidence(candidate);
             require(result.tracks != null && result.telemetry != null && result.masterStackData != null,
                     "Result fields missing");
             require(result.telemetry.faintStreakSearchTelemetry != null, "Faint-streak search telemetry missing");
@@ -64,6 +65,18 @@ public final class ApiConsumer {
             require(engine.generateMasterStack(new ArrayList<>(frames), config, null) != null, "Sequential reuse failed");
         }
         System.out.println("Current public API consumer passed on Java 21.");
+    }
+
+    /** Compiles the additive review contract and checks owned cutout geometry for enabled-search consumers. */
+    private static void checkReviewEvidence(io.github.ppissias.jtransient.core.FaintMoverCandidate candidate) {
+        var review = candidate.diagnostics;
+        require(review != null, "Review availability must be explicit");
+        if (review.unavailableReason == null) {
+            require(review.width <= 256 && review.height <= 256 && review.frames.size() <= 128, "Unbounded review pixels");
+            for (var frame : review.frames) {
+                require(frame.residual.length == review.width * review.height && Float.isFinite(frame.signal), "Incomplete review frame");
+            }
+        } else require(review.frames.isEmpty(), "Unavailable evidence retains frames");
     }
 
     /** Builds small valid mono16 descriptors in reverse order without sharing mutable frame containers. */

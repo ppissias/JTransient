@@ -28,8 +28,9 @@ public final class FaintMoverCandidate {
     /** Score of the stack along the motion. */
     public final double score;
     /**
-     * Scores of the first and the second half of the kept frames along the motion, on the same scale, from the frames
-     * whose path position lies outside the masks (star cores, fill, streaks); NaN when too few of the half's do.
+     * Scores of the first and second time-ordered halves along the motion, scaled by the number of unmasked path
+     * centres (star cores, fill, streaks); NaN when too few centres are unmasked. Mask zeros precede PSF filtering,
+     * which can spread neighbouring residual signal into a masked centre.
      */
     public final double firstHalfScore;
     public final double secondHalfScore;
@@ -42,13 +43,17 @@ public final class FaintMoverCandidate {
     public final double cameraScore;
     /**
      * The PSF-filtered stack along the motion around the position, in score units, {@code cutout[row][column]} with
-     * the position at the centre.
+     * the integer scoring position at the centre. The reported x/y additionally have a subpixel refinement of up to
+     * half a pixel per axis.
      */
     public final float[][] cutout;
+    /** Bounded review evidence; an explicit reason is supplied if resource limits prevent its collection. */
+    public final FaintMoverDiagnostics diagnostics;
 
+    /** Takes ownership of the selected peak's small score cutout and optional replay evidence. */
     FaintMoverCandidate(double x, double y, double vx, double vy, long referenceTimeMillis, double score,
                         double firstHalfScore, double secondHalfScore, double stationaryScore, double cameraScore,
-                        float[][] cutout) {
+                        float[][] cutout, FaintMoverDiagnostics diagnostics) {
         this.x = x;
         this.y = y;
         this.vx = vx;
@@ -60,6 +65,7 @@ public final class FaintMoverCandidate {
         this.stationaryScore = stationaryScore;
         this.cameraScore = cameraScore;
         this.cutout = cutout;
+        this.diagnostics = diagnostics;
     }
 
     /** Speed in pixels per minute. */

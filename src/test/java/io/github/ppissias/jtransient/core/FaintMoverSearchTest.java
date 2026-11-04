@@ -120,6 +120,22 @@ public class FaintMoverSearchTest {
         assertEquals(1, result.telemetry.tilesSearched);
         assertFalse(result.telemetry.truncated);
         assertEquals(FWHM, result.telemetry.fwhmPixels, 0.01);
+        assertNotNull(c.diagnostics);
+        var d = c.diagnostics;
+        assertNull(d.unavailableReason);
+        assertEquals(FRAMES, d.frames.size());
+        assertTrue(d.width <= 256 && d.height <= 256);
+        assertEquals(c.firstHalfScore, centralMaximum(d.firstHalf), 0.00001);
+        assertEquals(c.secondHalfScore, centralMaximum(d.secondHalf), 0.00001);
+        for (int k = 0; k < FRAMES; k++) {
+            var f = d.frames.get(k);
+            assertEquals(k, f.sequenceIndex);
+            assertEquals(START + k * CADENCE, f.midpointMillis);
+            assertEquals(d.width * d.height, f.residual.length);
+            int x = f.sampleX - d.x, y = f.sampleY - d.y;
+            assertEquals(f.signal, f.residual[y * d.width + x], 0);
+            assertEquals(d.scoreX + (int) Math.round(c.vx * (k * CADENCE / 60000.0 - midMinutes())), f.sampleX);
+        }
     }
 
     @Test
@@ -132,8 +148,36 @@ public class FaintMoverSearchTest {
         FaintMoverCandidate c = result.candidates.get(0);
         assertTrue(Double.isNaN(c.firstHalfScore));
         assertTrue(c.secondHalfScore >= FaintMoverSearch.MIN_HALF_SCORE);
+        assertNull(c.diagnostics.firstHalf);
+        assertNotNull(c.diagnostics.secondHalf);
+        assertTrue(c.diagnostics.frames.stream().anyMatch(f -> !f.unmasked));
+        assertTrue(c.diagnostics.frames.stream().anyMatch(f -> f.unmasked));
+        assertEquals(c.secondHalfScore, centralMaximum(c.diagnostics.secondHalf), 0.00001);
         // Only the unmasked half of the path constrains the motion.
         assertEquals(mover[2], c.vx, 0.1);
+    }
+
+    /** Review samples own their pixels and survive release or reuse of the borrowed source frames. */
+    @Test public void reviewPixelsDoNotBorrowInputFrames() throws Exception {
+        var original = frames(1, new double[]{100, 120, 0.4, -0.25, 1.6 * NOISE});
+        var result = run(input(original), new DetectionConfig());
+        assertFalse(result.candidates.isEmpty());
+        var d = result.candidates.getFirst().diagnostics;
+        assertNull(d.unavailableReason);
+        float[] saved = d.frames.getFirst().residual.clone();
+        for (var frame : original) for (var row : frame.pixelData) java.util.Arrays.fill(row, Short.MIN_VALUE);
+        org.junit.Assert.assertArrayEquals(saved, d.frames.getFirst().residual, 0);
+        assertEquals(result.candidates.size(), result.telemetry.diagnosticsAvailable);
+        assertTrue(result.telemetry.diagnosticBytes > 0 && result.telemetry.diagnosticBytes <= 32L * 1024 * 1024);
+    }
+
+    /** Returns the actual half-score peak in the engine's central refinement area. */
+    private static double centralMaximum(float[][] image) {
+        double value = Double.NEGATIVE_INFINITY;
+        int r = FaintMoverSearch.CUTOUT / 2;
+        int radius = FaintMoverSearch.REFINE_RADIUS;
+        for (int y = r - radius; y <= r + radius; y++) for (int x = r - radius; x <= r + radius; x++) value = Math.max(value, image[y][x]);
+        return value;
     }
 
     @Test

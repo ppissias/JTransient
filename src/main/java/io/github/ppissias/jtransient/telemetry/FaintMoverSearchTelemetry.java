@@ -65,6 +65,10 @@ public class FaintMoverSearchTelemetry {
     public int followingCamera;
     /** Candidates reported. */
     public int candidates;
+    /** Candidates with bounded replay evidence; the rest carry an explicit resource-limit reason. */
+    public int diagnosticsAvailable;
+    /** Estimated owned bytes of the selected candidates' review pixels and per-frame metadata. */
+    public long diagnosticBytes;
     /** Wall-clock time of the search, in milliseconds. */
     public long elapsedMs;
 }

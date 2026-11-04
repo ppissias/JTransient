@@ -27,6 +27,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 
@@ -252,9 +253,11 @@ public final class FaintMoverSearch {
         final double stationary;
         final double camera;
         final float[][] cutout;
+        final PeakLocation location;
 
+        /** Owns a refined score cutout and the coordinates used to copy bounded review evidence. */
         Peak(double x, double y, double vx, double vy, double score, double firstHalf, double secondHalf,
-             double stationary, double camera, float[][] cutout) {
+             double stationary, double camera, float[][] cutout, PeakLocation location) {
             this.x = x;
             this.y = y;
             this.vx = vx;
@@ -265,7 +268,55 @@ public final class FaintMoverSearch {
             this.stationary = stationary;
             this.camera = camera;
             this.cutout = cutout;
+            this.location = location;
         }
+    }
+
+    /** Original tile geometry, scoring-grid centre and stack noise; contains no borrowed image buffers. */
+    private record PeakLocation(int tx, int ty, int width, int height, int x, int y, double noise) { }
+
+    /** Temporary preprocessed search pixels; only small review rectangles may outlive this tile. */
+    private record PreparedTile(float[][] residuals, boolean[] bad, BitSet[] streakMasks) { }
+
+    /** Owns at most 32 MiB of copied review evidence, shared by this search's workers, strongest peaks first. */
+    private static final class EvidencePool {
+        private final TreeMap<Peak, FaintMoverDiagnostics> reviews = new TreeMap<>(peakOrder()
+                .thenComparingDouble(p -> p.vx).thenComparingDouble(p -> p.vy)
+                .thenComparingInt(p -> p.location.tx).thenComparingInt(p -> p.location.ty)
+                .thenComparingInt(p -> p.location.x).thenComparingInt(p -> p.location.y)
+                .thenComparingInt(p -> p.location.width).thenComparingInt(p -> p.location.height)
+                .thenComparingDouble(p -> p.location.noise));
+        private long bytes;
+
+        /** Creates one run-owned evidence budget; no full tile is retained. */
+        EvidencePool() { }
+
+        /** Copies a passing peak while its search tile is resident; eviction affects review evidence only. */
+        synchronized void capture(Plan plan, Peak peak, PreparedTile tile) {
+            var evidence = diagnostics(plan, peak, tile);
+            if (evidence.unavailableReason != null) return;
+            var previous = reviews.put(peak, evidence);
+            if (previous != null) bytes -= diagnosticBytes(previous);
+            bytes += diagnosticBytes(evidence);
+            while (bytes > 32L * 1024 * 1024) bytes -= diagnosticBytes(reviews.pollLastEntry().getValue());
+        }
+
+        /** Transfers only a selected candidate's small arrays; missing evidence has an explicit reason. */
+        synchronized FaintMoverDiagnostics take(Plan plan, Peak peak) {
+            var evidence = reviews.remove(peak);
+            if (evidence != null) bytes -= diagnosticBytes(evidence);
+            return evidence == null ? diagnostics(plan, peak, null) : evidence;
+        }
+    }
+
+    /** Matches the deterministic order used for candidate selection and the review-only memory budget. */
+    private static Comparator<Peak> peakOrder() {
+        return Comparator.comparingDouble((Peak p) -> p.score).reversed().thenComparingDouble(p -> p.y).thenComparingDouble(p -> p.x);
+    }
+
+    /** Accounts owned review pixels and per-frame metadata without counting any borrowed tile buffers. */
+    private static long diagnosticBytes(FaintMoverDiagnostics d) {
+        return 4L * d.frames.size() * d.width * d.height + 8L * CUTOUT * CUTOUT + 128L * d.frames.size();
     }
 
     /** The peaks of one tile and its counts. */
@@ -452,6 +503,7 @@ public final class FaintMoverSearch {
         }
         long deadline = plan.startedNanos + (long) (plan.config.faintMoverMaxSeconds * 1e9);
         List<Peak> peaks = new ArrayList<>();
+        EvidencePool evidence = new EvidencePool();
         int searched = 0;
         for (int from = 0; from < plan.tiles.size(); from += TILES_PER_BATCH) {
             CancellationScope.check();
@@ -461,7 +513,7 @@ public final class FaintMoverSearch {
             }
             List<Callable<TileResult>> tasks = new ArrayList<>();
             for (int[] tile : plan.tiles.subList(from, Math.min(plan.tiles.size(), from + TILES_PER_BATCH))) {
-                tasks.add(() -> searchTile(plan, tile[0], tile[1], tile[2], tile[3], deadline));
+                tasks.add(() -> searchTile(plan, tile[0], tile[1], tile[2], tile[3], deadline, evidence));
             }
             int finished = 0;
             for (TileResult tile : WorkerPool.invokeAll(tasks)) {
@@ -490,7 +542,7 @@ public final class FaintMoverSearch {
             }
         }
         telemetry.tilesSearched = searched;
-        List<FaintMoverCandidate> candidates = select(plan, peaks);
+        List<FaintMoverCandidate> candidates = select(plan, peaks, evidence);
         telemetry.candidates = candidates.size();
         telemetry.elapsedMs = (System.nanoTime() - plan.startedNanos) / 1_000_000L;
         return new Result(candidates, telemetry);
@@ -537,8 +589,8 @@ public final class FaintMoverSearch {
     // One tile
     // ------------------------------------------------------------------------------------------------------------
 
-    private static TileResult searchTile(Plan plan, int tx, int ty, int w, int h, long deadline) {
-        TileResult result = new TileResult();
+    /** Prepares the original tile residuals; the caller releases these full-tile buffers after searching. */
+    private static PreparedTile prepareTile(Plan plan, int tx, int ty, int w, int h) {
         Input input = plan.input;
         int n = plan.frames.size();
         int m = plan.margin;
@@ -563,9 +615,19 @@ public final class FaintMoverSearch {
             }
             filter(residuals[k], width, height, plan.kernel, scratch);
         }
-        // Released before the search's own maps are allocated.
-        scratch = null;
-        weights = null;
+        return new PreparedTile(residuals, bad, streakMasks);
+    }
+
+    /** Searches a tile using temporary preprocessed residuals, without retaining those buffers in peaks. */
+    private static TileResult searchTile(Plan plan, int tx, int ty, int w, int h, long deadline, EvidencePool evidence) {
+        TileResult result = new TileResult();
+        int n = plan.frames.size();
+        int m = plan.margin;
+        int width = w + 2 * m;
+        PreparedTile prepared = prepareTile(plan, tx, ty, w, h);
+        float[][] residuals = prepared.residuals;
+        boolean[] bad = prepared.bad;
+        BitSet[] streakMasks = prepared.streakMasks;
 
         boolean[] innerBad = new boolean[w * h];
         int good = 0;
@@ -648,6 +710,7 @@ public final class FaintMoverSearch {
                         tx, ty, result);
                 if (peak != null) {
                     result.peaks.add(peak);
+                    evidence.capture(plan, peak, prepared);
                 }
             }
         }
@@ -1012,7 +1075,7 @@ public final class FaintMoverSearch {
         double subX = vertex(cutout[r][r - 1], cutout[r][r], cutout[r][r + 1]);
         double subY = vertex(cutout[r - 1][r], cutout[r][r], cutout[r + 1][r]);
         return new Peak(tx + topX + subX, ty + topY + subY, topVx, topVy, top, firstHalf, secondHalf, stationary,
-                camera, cutout);
+                camera, cutout, new PeakLocation(tx, ty, w, h, topX, topY, noise));
     }
 
     /**
@@ -1145,10 +1208,9 @@ public final class FaintMoverSearch {
     // ------------------------------------------------------------------------------------------------------------
 
     /** The peaks that are not duplicates, tracked objects, side lobes or camera-fixed, strongest first. */
-    private static List<FaintMoverCandidate> select(Plan plan, List<Peak> peaks) {
+    private static List<FaintMoverCandidate> select(Plan plan, List<Peak> peaks, EvidencePool evidencePool) {
         FaintMoverSearchTelemetry telemetry = plan.telemetry;
-        peaks.sort(Comparator.comparingDouble((Peak p) -> p.score).reversed()
-                .thenComparingDouble(p -> p.y).thenComparingDouble(p -> p.x));
+        peaks.sort(peakOrder());
         double fwhm = plan.fwhm;
         List<Track> pointTracks = new ArrayList<>();
         for (Track track : plan.input.tracks) {
@@ -1206,10 +1268,77 @@ public final class FaintMoverSearch {
                 telemetry.belowScore++;
                 continue;
             }
+            var evidence = evidencePool.take(plan, peak);
+            if (evidence.unavailableReason == null) telemetry.diagnosticsAvailable++;
+            if (evidence.unavailableReason == null) telemetry.diagnosticBytes += diagnosticBytes(evidence);
             candidates.add(new FaintMoverCandidate(peak.x, peak.y, peak.vx, peak.vy, plan.referenceTimeMillis,
-                    peak.score, peak.firstHalf, peak.secondHalf, peak.stationary, peak.camera, peak.cutout));
+                    peak.score, peak.firstHalf, peak.secondHalf, peak.stationary, peak.camera, peak.cutout,
+                    evidence));
         }
         return candidates;
+    }
+
+    /** Copies bounded evidence from the resident tile; a null tile reports why no review pixels were retained. */
+    private static FaintMoverDiagnostics diagnostics(Plan plan, Peak peak, PreparedTile tile) {
+        int n = plan.frames.size();
+        if (n > 128) return FaintMoverDiagnostics.unavailable("more than 128 searched frames");
+        var p = peak.location;
+        int[] sx = new int[n], sy = new int[n];
+        shifts(plan, peak.vx, peak.vy, sx, sy);
+        int minX = Arrays.stream(sx).min().orElse(0), maxX = Arrays.stream(sx).max().orElse(0);
+        int minY = Arrays.stream(sy).min().orElse(0), maxY = Arrays.stream(sy).max().orElse(0);
+        int x = Math.max(Math.max(0, p.tx - plan.margin), p.tx + p.x + minX - 35);
+        int y = Math.max(Math.max(0, p.ty - plan.margin), p.ty + p.y + minY - 35);
+        int endX = Math.min(Math.min(plan.input.masterStack[0].length, p.tx + p.width + plan.margin), p.tx + p.x + maxX + 36);
+        int endY = Math.min(Math.min(plan.input.masterStack.length, p.ty + p.height + plan.margin), p.ty + p.y + maxY + 36);
+        int w = endX - x, h = endY - y;
+        if (w <= 0 || h <= 0 || w > 256 || h > 256)
+            return FaintMoverDiagnostics.unavailable("diagnostic rectangle exceeds 256 pixels per side");
+        if (tile == null) return FaintMoverDiagnostics.unavailable("32 MiB review-pixel budget exceeded");
+        int stride = p.width + 2 * plan.margin;
+        List<FaintMoverDiagnostics.Frame> frames = new ArrayList<>();
+        for (int k = 0; k < n; k++) {
+            CancellationScope.check();
+            float[] pixels = new float[w * h];
+            for (int row = 0; row < h; row++) {
+                int start = (y - p.ty + plan.margin + row) * stride + x - p.tx + plan.margin;
+                System.arraycopy(tile.residuals[k], start, pixels, row * w, w);
+            }
+            int sampleX = p.x + plan.margin + sx[k], sampleY = p.y + plan.margin + sy[k];
+            int sample = sampleY * stride + sampleX;
+            boolean unmasked = !tile.bad[sample] && (tile.streakMasks[k] == null || !tile.streakMasks[k].get(sample));
+            ImageFrame frame = plan.frames.get(k);
+            long mid = frame.timestamp + Math.max(0L, frame.exposureDuration) / 2;
+            frames.add(new FaintMoverDiagnostics.Frame(frame.sequenceIndex, mid, p.tx + p.x + sx[k],
+                    p.ty + p.y + sy[k], unmasked, tile.residuals[k][sample], pixels));
+        }
+        float[][] first = Double.isFinite(peak.firstHalf) ? diagnosticHalf(plan, tile, p, sx, sy, 0, n / 2) : null;
+        float[][] second = Double.isFinite(peak.secondHalf) ? diagnosticHalf(plan, tile, p, sx, sy, n / 2, n) : null;
+        return new FaintMoverDiagnostics(null, x, y, w, h, p.tx + p.x, p.ty + p.y, frames, first, second);
+    }
+
+    /** Copies the half-score map with its original mask count, time order and full-stack normalisation. */
+    private static float[][] diagnosticHalf(Plan plan, PreparedTile tile, PeakLocation p, int[] sx, int[] sy,
+                                           int from, int to) {
+        int width = p.width + 2 * plan.margin;
+        int valid = 0;
+        for (int o = from; o < to; o++) {
+            int k = plan.timeOrder[o];
+            int i = (p.y + plan.margin + sy[k]) * width + p.x + plan.margin + sx[k];
+            if (!tile.bad[i] && (tile.streakMasks[k] == null || !tile.streakMasks[k].get(i))) valid++;
+        }
+        double scale = 1.0 / (p.noise * Math.sqrt((double) plan.frames.size() * valid));
+        float[][] image = new float[CUTOUT][CUTOUT];
+        int r = CUTOUT / 2;
+        for (int dy = -r; dy <= r; dy++) for (int dx = -r; dx <= r; dx++) {
+            double sum = 0;
+            for (int o = from; o < to; o++) {
+                int k = plan.timeOrder[o];
+                sum += tile.residuals[k][(p.y + dy + plan.margin + sy[k]) * width + p.x + dx + plan.margin + sx[k]];
+            }
+            image[dy + r][dx + r] = (float) (sum * scale);
+        }
+        return image;
     }
 
     /** Whether the peak's path passes the track's timed detections within {@link #TRACK_MATCH_FWHM} (median). */
