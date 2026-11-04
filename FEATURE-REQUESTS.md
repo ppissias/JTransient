@@ -11,7 +11,8 @@ These are not authorisations. Keep the existing algorithms until the stated evid
 | [QC-1](#qc-1-star-count-rejection-envelope) | Deferred | Star-count rejection has no absolute or relative envelope floor. Counts now share a quality area, but small count changes can still matter. A new floor needs a recovery and false-retention study. |
 | [PT-5](#pt-5-registration-quality-and-shared-jitter-tolerances) | Proposed | `maxStarJitter` serves several tolerances. The maintainer preferred a future registration-quality assessment over splitting the tolerances now. The fill-edge registration used by camera-fixed rejection is not a general registration-quality measurement. |
 | [SM-F1](#sm-f1-temporal-confirmation-of-slow-mover-candidates) | Proposed | Three-bin temporal stacks, or a measured slow-mover path, are not implemented. Compare real-mover recovery, false positives and run time before introducing either; the current frame-support and stationarity screens do not establish motion. |
-| [SM-F2](#sm-f2-experimental-high-sensitivity-moving-object-detection) | Digital tracking implemented 2026-11-03 as an engine stage, off by default; SpacePixels F25 and open points pending | All three prototypes recover the three magnitude-18.5 Klangwolke-2 asteroids in blind full-field searches. Digital tracking has the best recovery in both injection experiments and finds all five faint known asteroids in the independent series. A first version, digital tracking only and off by default, is proposed; control artifacts remain open. |
+| [SM-F2](#sm-f2-experimental-high-sensitivity-moving-object-detection) | Digital tracking implemented 2026-11-03 as an engine stage, off by default; SpacePixels F25 integrated; engine follow-ups remain | All three prototypes recover the three magnitude-18.5 Klangwolke-2 asteroids in blind full-field searches. Digital tracking has the best recovery in both injection experiments and finds all five faint known asteroids in the independent series. The first version implements digital tracking only, off by default, with SpacePixels settings and presentation; control artifacts remain open. |
+| [SM-F3](#sm-f3-improvements-to-maximum-stack-slow-mover-detection) | Proposed | Review of the maximum-stack slow-mover branch: narrow motion corridor (5.0–6.3 px), lack of temporal progression check, and lock-on to stationary stars. Proposes temporal correlation, widened axis ratio, residual maximum stack, and row hoisting. |
 | [XC-3](#xc-3-local-background-and-noise-for-frame-extraction) | Partly implemented; frame work deferred | Master-star extraction adds a local-sky pass. Per-frame extraction still uses one sky level and noise estimate. Preserve extended emission and propagate local noise consistently before proposing a frame-sky redesign. |
 | [VS-9](#vs-9-selected-stars-and-the-linearity-check-minimum) | Deferred policy only; warning implemented | Check-B insufficient-count/range classification and separately validated retained-subset readiness; the completed star-cap warning is not pending. |
 | [VS-11](#vs-11-photometry-strictness-defaults-and-recovery-review) | Four deferred investigations and two follow-ups remain | Late-frame population lifecycle, reason-specific LIMITED handling, spatial correction of comparison cutouts and brief/fast variability; the peak-removal check's open questions and the blank-sky factor in star selection. The initial audit and adopted VS-12 work are complete. |
@@ -268,7 +269,7 @@ The session's JPL fetch stops at magnitude 19.0. Candidates scoring like Robinbo
 
 **Decisions (made, 2026-11-03).**
 - "I would not like to do a known object stack, I would like to independently discover these using the methods we are exploring." Fetched known objects stay a reference for checking results, never seeds and never a separate product.
-- "I think this feature should be disabled by default, I think we need another dedicated section for this and any settings it may need." The application side is [SpacePixels F25](../SpacePixels/FEATURE-REQUESTS.md#f25-experimental-faint-mover-search-settings-and-presentation).
+- "I think this feature should be disabled by default, I think we need another dedicated section for this and any settings it may need." The application side is [SpacePixels F25](../SpacePixels/MANUAL.md#faint-movers-experimental).
 
 **Scope of the first version.**
 - *Mechanism.* Digital tracking only (mechanism 1), as an optional JTransient stage after tracking, off by default. Temporal-bin and PSF-filtered-frame proposals stay experiments until they recover objects that the direct search misses.
@@ -315,7 +316,7 @@ The grid step, tile size, clipping, star-mask level, half-session and moving-ver
 
 ### Implementation (2026-11-03)
 
-**Implemented.** Digital tracking as the engine stage `FaintMoverSearch`, off by default, with the settings of the design above. The algorithm, its checks and its measurements are in [ALGORITHM.md](ALGORITHM.md#faint-mover-search). Before release, the application side ([SpacePixels F25](../SpacePixels/FEATURE-REQUESTS.md#f25-experimental-faint-mover-search-settings-and-presentation)) is needed: until then the stage can be switched on only through a saved profile, and its candidates appear only in the API result and the text telemetry.
+**Implemented.** Digital tracking as the engine stage `FaintMoverSearch`, off by default, with the settings of the design above. The algorithm, its checks and its measurements are in [ALGORITHM.md](ALGORITHM.md#faint-mover-search). The application integration ([SpacePixels F25](../SpacePixels/MANUAL.md#faint-movers-experimental)) provides dedicated settings, resource estimates, unverified FM report evidence and viewer overlays, with saved catalogue comparisons only after detection.
 
 **Changes from the design, from the measurements.**
 - *Camera check.* The design proposed the two-fit comparison of camera-fixed groups. A candidate has no per-frame positions to fit, and testing its path's camera spread failed both ways:
@@ -329,10 +330,55 @@ The grid step, tile size, clipping, star-mask level, half-session and moving-ver
 - *Not implemented:* down-weighting pixels by their temporal variance near bright stars. The bright-star residual candidate at (5273, 400) on Klangwolke-2 remains.
 
 **Open.**
-1. *SpacePixels F25*: settings section, report category, viewer layer, run-time estimate (`FaintMoverSearch.Plan.estimatedWork`).
-2. *Run time of long sessions.* The cost is trial motions × frames × pixels and grows with the cube of the session length: 313 s for m101-reg (106 frames over 233 minutes, 10,116 motions) against 70-90 s for Klangwolke-2. A hierarchical shift-and-add (half-session stacks combined on a coarser motion grid) would make it nearly independent of the frame count, at the cost of memory.
-3. *Ground truth for the unmatched candidates.* A catalogue fetch beyond magnitude 19.0 is needed before the five unmatched Klangwolke-2 candidates and those on Eagle-noisy, helix-reg and m101-reg can be called new or false.
-4. *Other mechanisms* (temporal bins, PSF-filtered frame points) only if they recover objects that digital tracking misses.
+1. *Run time of long sessions.* The cost is trial motions × frames × pixels and grows with the cube of the session length: 313 s for m101-reg (106 frames over 233 minutes, 10,116 motions) against 70-90 s for Klangwolke-2. A hierarchical shift-and-add (half-session stacks combined on a coarser motion grid) would make it nearly independent of the frame count, at the cost of memory.
+2. *Ground truth for the unmatched candidates.* A catalogue fetch beyond magnitude 19.0 is needed before the five unmatched Klangwolke-2 candidates and those on Eagle-noisy, helix-reg and m101-reg can be called new or false.
+3. *Other mechanisms* (temporal bins, PSF-filtered frame points) only if they recover objects that digital tracking misses.
+
+## SM-F3. Improvements to maximum-stack slow-mover detection
+
+**Status and decision.** Proposed (investigated 2026-11-03). The maintainer requested a thorough review of the maximum-stack slow-mover detection algorithm (`SlowMoverAnalyzer`, `SlowMoverFrameEvidence`, `MasterMapGenerator`) and proposals for improvements. This item records the investigation findings, edge-case limitations, and concrete improvement directions.
+
+**Problem analysis and investigation findings.**
+
+1. *Narrow motion corridor between axis ratio and stationary clustering.*
+   `slowMoverMinAxisRatio = 1.2` and `slowMoverMaxAxisRatio = 2.8` define the primary morphological window. For a typical seeing profile with minor extent ~3.5 px, `axisRatio <= 2.8` limits total displacement to at most (2.8 - 1) * 3.5 ≈ 6.3 px. Faster movers are rejected by `rejectedAboveMaxAxisRatio`. Meanwhile, `slowMoverMaxStationaryLikelihood = 60.0%` with clustering radius ≈ 1.5 px requires that no single location contains more than 60% of supported frame centroids. For uniform motion, spending <= 60% of N frames in a 3 px diameter requires total motion:
+   $$\Delta x = N \cdot v \ge \frac{3\text{ px}}{0.60} = 5.0\text{ px}$$
+   Consequently, the combination of default settings allows only objects with total displacement in a narrow corridor of roughly **5.0 to 6.3 px** to pass both gates. Slower objects fail stationary likelihood (> 60%), while slightly faster objects fail axis ratio (> 2.8).
+
+2. *Absence of chronological / temporal progression validation.*
+   `SlowMoverFrameEvidence` measures spatial clustering of frame centroids, but does not examine sequence order or capture timestamps (`DATE-OBS`). If seeing fluctuations or noise spikes cause the best-aperture position to jump back and forth randomly between frames, the spatial cluster size can remain below 60%, allowing an unmoving, noisy artifact to pass as a slow mover. The algorithm lacks a test for monotonic physical displacement over time.
+
+3. *Noise elevation in maximum stacks (Gumbel extreme-value effect).*
+   The per-pixel maximum across N Gaussian noise frames has an expected value $\mu_{\max} \approx \mu_{\text{sky}} + \sigma_{\text{sky}}\sqrt{2 \ln N}$ (elevated by ≈ 2.6 sigma for N = 30). Because a moving source only illuminates a given pixel in a small subset of frames, faint slow movers with single-frame SNR ~ 1-2 do not rise above the maximum-stack background median. The maximum stack is therefore suited for moderately bright slow movers (single-frame SNR >= 4-5), while faint targets require coherent integration (such as digital tracking in [SM-F2](#sm-f2-experimental-high-sensitivity-moving-object-detection)).
+
+4. *Lock-on by stationary background stars inside the candidate footprint.*
+   `SlowMoverFrameEvidence.findBestAperture` searches for the maximum SNR aperture within the candidate's footprint in each frame. If a moving object grazes a faint background star (or residual hot pixel), that star is present in all frames and yields the highest SNR in every frame. The search locks onto the stationary star, driving `stationaryLikelihood` to 100% and causing false rejection of genuine movers.
+
+5. *Redundant row indexing in stack generation.*
+   In `MasterMapGenerator.createMaximumMasterStack`, `frames.get(i).pixelData[y][x]` dereferences the 1D row array inside the innermost x loop, performing millions of redundant pointer lookups on large multi-megapixel sequences.
+
+**Proposed improvements.**
+
+1. **Temporal progression check in `SlowMoverFrameEvidence` (P1):**
+   Project supported centroids $(x_i, y_i)$ onto the candidate's principal moment axis $\theta$:
+   $$s_i = (x_i - x_0)\cos\theta + (y_i - y_0)\sin\theta$$
+   Compute the rank or linear correlation between projected coordinate $s_i$ and frame timestamp $t_i$: $|r(s_i, t_i)| \ge 0.70$. Real physical motion progresses monotonically over time ($|r| \approx 1.0$), whereas seeing jitter and noise scatter randomly around zero ($r \approx 0$). This provides a robust physical motion filter without restricting the allowable speed range.
+
+2. **Widen axis ratio corridor with TrackLinker hand-off (P2):**
+   Increase `slowMoverMaxAxisRatio` to 4.0–5.0. If a candidate has $axisRatio > 2.8$, verify whether `TrackLinker` already claimed it into a moving track. If `TrackLinker` missed it (e.g., due to dropped intermediate frames or sub-jitter steps), retain it in the slow-mover branch.
+
+3. **Residual maximum stack / median subtraction (P3):**
+   Form a median-subtracted maximum stack:
+   $$M_{\text{diff}}(x, y) = \max_t \left( I_t(x, y) - m(x, y) \right)$$
+   Subtracting the static median stack $m(x, y)$ removes stationary stars and background gradients before taking the maximum. This prevents faint stationary stars from distorting `findBestAperture`, removes star wing bleed, and simplifies stationary-mask overlap filtering.
+
+4. **Row buffer hoisting in `MasterMapGenerator` (P4):**
+   Cache `short[] rowI = frames.get(i).pixelData[y]` outside the column loop, eliminating $W \times N$ array indexing operations per row.
+
+**Evidence needed before implementation.**
+- Test candidate recovery and false-candidate rates across reference sessions (Klangwolke-2, Eagle-noisy, M81-Kumar, helix-reg, m101-reg).
+- Validate that the temporal monotonicity check rejects seeing/noise artifacts on real sessions without rejecting curved or slightly uneven asteroid paths.
+- Profile stack generation runtime before and after row buffer hoisting.
 
 ## XC-3. Local background and noise for frame extraction
 
