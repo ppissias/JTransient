@@ -22,6 +22,8 @@ SM-F7 preserves that faint-path criterion and separates 192 general from 48 purp
 
 An exact-velocity local oracle shifts the production fine-motion grid. The admitted-grid oracle instead starts at a real coarse node; reference masking remains explicit. A failed local refinement does not exhaust all other seeds, and a masked reference seed is not an admissible missed proposal. The old twelve-case side-lobe/proposal diagnosis remains reused evidence, not new validation.
 
+The subsequent native K2 application contains no artificial sources. D and T4 complete the full production domain; the union's full owned candidate JSON is byte-identical to the eleven-candidate D result. T4's seven candidates match existing FM1-FM7. No extra path means the preregistered conditional null-control trigger is not met; absence of those control runs is not a zero false-alarm result. Bounded original-input/coadd views reuse fitted paths and are descriptive. This reused observation does not independently validate a new threshold or demonstrate the injected close-pair benefit on an observed additional object.
+
 ## Unavailable and bounded evidence
 
 Keep timing, exposure, fill/crop, saturation, fit failure, missing bins and model eligibility explicit. An excluded source is not a detector rejection. Lack of a candidate does not establish that an unsearched or out-of-model source is false. Camera sources in the latest grid either depart from a constant-motion locus by too much or drift below the nominal coarse-speed range, so zero associations do not cleanly test camera rejection.

@@ -1,0 +1,184 @@
+[
+  {
+    "id": "FM1",
+    "score": 47.46032040922896,
+    "x": 2083.9053682855056,
+    "y": 3289.3450823366557,
+    "vx": -0.1315463607248273,
+    "vy": -0.14798965581543072,
+    "T4Recovered": true,
+    "T4Candidates": [
+      1
+    ],
+    "compatibleVerifiedT4Peaks": 2,
+    "compatiblePreRefinementSeeds": 2,
+    "nearbySeedOutcomes": {
+      "verified": 2
+    },
+    "stage": "selected"
+  },
+  {
+    "id": "FM2",
+    "score": 22.719218565996684,
+    "x": 5892.385889377491,
+    "y": 3630.651849031788,
+    "vx": -0.29597931163086144,
+    "vy": -0.16443295090603416,
+    "T4Recovered": true,
+    "T4Candidates": [
+      2
+    ],
+    "compatibleVerifiedT4Peaks": 4,
+    "compatiblePreRefinementSeeds": 3,
+    "nearbySeedOutcomes": {
+      "verified": 3
+    },
+    "stage": "selected"
+  },
+  {
+    "id": "FM3",
+    "score": 21.406472181899986,
+    "x": 5180.137290659129,
+    "y": 5829.194394508764,
+    "vx": -0.18087624599663757,
+    "vy": -0.18087624599663757,
+    "T4Recovered": true,
+    "T4Candidates": [
+      3
+    ],
+    "compatibleVerifiedT4Peaks": 2,
+    "compatiblePreRefinementSeeds": 2,
+    "nearbySeedOutcomes": {
+      "verified": 2
+    },
+    "stage": "selected"
+  },
+  {
+    "id": "FM4",
+    "score": 15.28424259667685,
+    "x": 2512.4109256892407,
+    "y": 3036.9852678484153,
+    "vx": -0.14798965581543072,
+    "vy": 0.0,
+    "T4Recovered": true,
+    "T4Candidates": [
+      4
+    ],
+    "compatibleVerifiedT4Peaks": 3,
+    "compatiblePreRefinementSeeds": 3,
+    "nearbySeedOutcomes": {
+      "verified": 3
+    },
+    "stage": "selected"
+  },
+  {
+    "id": "FM5",
+    "score": 14.501453856238188,
+    "x": 4768.264047111114,
+    "y": 6076.471798829795,
+    "vx": -0.2302061312684478,
+    "vy": -0.14798965581543072,
+    "T4Recovered": true,
+    "T4Candidates": [
+      5
+    ],
+    "compatibleVerifiedT4Peaks": 3,
+    "compatiblePreRefinementSeeds": 3,
+    "nearbySeedOutcomes": {
+      "verified": 3
+    },
+    "stage": "selected"
+  },
+  {
+    "id": "FM6",
+    "score": 13.873161678370149,
+    "x": 3064.3192244786765,
+    "y": 2122.2330641487592,
+    "vx": -0.19731954108724098,
+    "vy": -0.3124226067214648,
+    "T4Recovered": true,
+    "T4Candidates": [
+      6
+    ],
+    "compatibleVerifiedT4Peaks": 1,
+    "compatiblePreRefinementSeeds": 1,
+    "nearbySeedOutcomes": {
+      "verified": 1
+    },
+    "stage": "selected"
+  },
+  {
+    "id": "FM7",
+    "score": 13.459713972915345,
+    "x": 606.3852208355347,
+    "y": 2948.322711915798,
+    "vx": -0.2630927214496546,
+    "vy": -0.2302061312684478,
+    "T4Recovered": true,
+    "T4Candidates": [
+      7
+    ],
+    "compatibleVerifiedT4Peaks": 1,
+    "compatiblePreRefinementSeeds": 1,
+    "nearbySeedOutcomes": {
+      "verified": 1
+    },
+    "stage": "selected"
+  },
+  {
+    "id": "FM8",
+    "score": 9.890550787025617,
+    "x": 5962.061240504039,
+    "y": 1602.244684025195,
+    "vx": -0.32886590181206826,
+    "vy": -0.19731954108724098,
+    "T4Recovered": false,
+    "T4Candidates": [],
+    "compatibleVerifiedT4Peaks": 0,
+    "compatiblePreRefinementSeeds": 0,
+    "nearbySeedOutcomes": {},
+    "stage": "compatible verified peak absent"
+  },
+  {
+    "id": "FM9",
+    "score": 9.671491821145628,
+    "x": 5273.297844383058,
+    "y": 400.42785506037444,
+    "vx": -0.3617524919932751,
+    "vy": -0.03288659018120683,
+    "T4Recovered": false,
+    "T4Candidates": [],
+    "compatibleVerifiedT4Peaks": 0,
+    "compatiblePreRefinementSeeds": 0,
+    "nearbySeedOutcomes": {},
+    "stage": "compatible verified peak absent"
+  },
+  {
+    "id": "FM10",
+    "score": 8.485609618409905,
+    "x": 7146.1699485742,
+    "y": 5506.377475251713,
+    "vx": -0.3781957870838785,
+    "vy": 0.049329885271810245,
+    "T4Recovered": false,
+    "T4Candidates": [],
+    "compatibleVerifiedT4Peaks": 0,
+    "compatiblePreRefinementSeeds": 0,
+    "nearbySeedOutcomes": {},
+    "stage": "compatible verified peak absent"
+  },
+  {
+    "id": "FM11",
+    "score": 8.082217047413872,
+    "x": 5281.92991847465,
+    "y": 3404.856229099355,
+    "vx": -0.06577318036241366,
+    "vy": -0.1151030656342239,
+    "T4Recovered": false,
+    "T4Candidates": [],
+    "compatibleVerifiedT4Peaks": 0,
+    "compatiblePreRefinementSeeds": 0,
+    "nearbySeedOutcomes": {},
+    "stage": "compatible verified peak absent"
+  }
+]

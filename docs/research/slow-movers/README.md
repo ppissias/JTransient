@@ -1,6 +1,6 @@
 # Slow-mover investigation archive
 
-This collection preserves ten dated SM-F1/SM-F2/SM-F3/SM-F6/SM-F7 investigations conducted on 3-5 November 2026. It contains historical protocols, conclusions, numerical tables, validation records and selected scientific figures. Large case tables are losslessly compressed with gzip.
+This collection preserves eleven dated SM-F1/SM-F2/SM-F3/SM-F6/SM-F7 investigations conducted on 3-5 November 2026. It contains historical protocols, conclusions, numerical tables, validation records and selected scientific figures. Large case tables are losslessly compressed with gzip.
 
 [ALGORITHM.md](../../../ALGORITHM.md) remains the current algorithm reference. [FEATURE-REQUESTS.md](../../../FEATURE-REQUESTS.md) owns pending decisions and acceptance work. Historical reports describe their own experimental baseline and publication state; a statement such as “not implemented” in an early snapshot is not the current implementation status.
 
@@ -18,6 +18,7 @@ This collection preserves ten dated SM-F1/SM-F2/SM-F3/SM-F6/SM-F7 investigations
 | 2026-11-05 | [Joint SM-F1/SM-F3 gate comparison](08-joint-gates/README.md) | Nineteen policies on 1,910 evaluated cases expose support/morphology/median/stationarity interactions. A separate brighter-flash follow-up establishes a support-floor benefit. The tested temporal-bin veto is not adopted. |
 | 2026-11-05 | [SM-F6 matched-domain validation](09-digital-validation/README.md) | All 462 searches finish on six observations, including full-speed M81. Three disjoint image-third searches and 12 controlled encounters add conditional evidence. Deeper predictions give compatible known-object paths for all 11 original K2 candidates. No filter/default change earns adoption. |
 | 2026-11-05 | [SM-F7 complementary proposals](10-complementary-proposals/README.md) | Four fields, 644 result rows and 240 available moving histories compare the unchanged verifier. Temporal-bin proposals add six targeted close companions; five survive full upstream checks beyond ordinary tracks and digital tracking. Frame-point routes mostly reach resource boundaries. Gates/defaults and production integration remain unchanged. |
+| 2026-11-05 | [Native Klangwolke-2 full-field application](11-klangwolke-native/README.md) | No injections: all 247 tiles complete. D finds the existing 11 candidates, T4 seven of those, and their union the same 11 with byte-identical candidate/review data. No additional native detection; current gates/defaults and integration remain unchanged. |
 
 ## Conclusions to carry forward
 
@@ -36,7 +37,7 @@ The publication containing this archive changes documentation/evidence only. Ori
 
 Read [DATA-NOTES.md](DATA-NOTES.md) before joining tables or comparing scores. Case numbers are local to an investigation; repeated source histories and shared fields are correlated. Each study directory has an inventory and `provenance.json` with original/archived artifact SHA-256 values, portable-path transformations and available production-source snapshot hashes. [archive-manifest.json](archive-manifest.json) checks the committed archive bytes; line endings are fixed to LF for text files.
 
-[VALIDATION.json](VALIDATION.json) records the original nine-study publication checks. The SM-F7 extension has separate [scientific validation](10-complementary-proposals/validation.json) and [publication checks](10-complementary-proposals/publication-validation.json): numerical comparisons, source/result integrity, local links, code-history references, figure metadata and privacy.
+[VALIDATION.json](VALIDATION.json) records the original nine-study publication checks. The SM-F7 extensions have separate [matched-verifier scientific validation](10-complementary-proposals/validation.json), [publication checks](10-complementary-proposals/publication-validation.json) and [native K2 validation](11-klangwolke-native/validation.json): numerical comparisons, source/result integrity, local links, code-history references, figure metadata and privacy.
 
 The archive preserves decision evidence and protocols, rather than a self-contained bitwise rerun package. Original FITS/XISF data, full image/tile caches, executable diagnostics and machine-specific launchers remain external under the repository diagnostic-program policy. Historical references to those scratch artifacts identify their original roles; only the study inventories list files included here. Local private artifact locations are maintained in ignored environment notes.
 

@@ -1,0 +1,43 @@
+{
+  "dataset": "klangwolke-2",
+  "injections": 0,
+  "inputFrames": 33,
+  "searchedFrames": 28,
+  "completedTiles": {
+    "D": 247,
+    "T4": 247,
+    "D+T4": 247
+  },
+  "plannedTiles": 247,
+  "searchedReferencePixels": 49540332,
+  "coarseMotions": 720,
+  "D": 11,
+  "T4": 7,
+  "union": 11,
+  "T4DistinctBaselinePaths": 7,
+  "additionalUnionPaths": 0,
+  "baselineLosses": 0,
+  "unionCandidateValuesCutoutAndReviewHashesExact": true,
+  "actualLibraryParity": true,
+  "acceptedBaselineParity": true,
+  "allRoutesComplete": true,
+  "prototypeSeeds": 422,
+  "prototypeCandidateCeiling": false,
+  "sourceStages": {
+    "selected": 7,
+    "compatible verified peak absent": 4
+  },
+  "actualLibrarySeconds": 131.051,
+  "routeSeconds": {
+    "D": 159.028,
+    "T4": 40.703,
+    "D+T4": 10.504
+  },
+  "combinedSearchAndSelectionSeconds": 210.23499999999999,
+  "wholeDiagnosticSeconds": 518.280999999959,
+  "wholeProcessPeakGiB": 8.5714111328125,
+  "controlContextsExecuted": 0,
+  "conditionalControlsReason": "No additional union path; the preregistered trigger was not met. No false-alarm calibration claimed.",
+  "timingScope": "Research workload, fixed actual-D/D/T4/union order. Preparation counter sums worker durations and is not a wall-time component. Union route time is reselection only.",
+  "scientificScope": "Existing development observation, native full-field application; no magnitude completeness, identity probability or general proof of absence."
+}
