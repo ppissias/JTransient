@@ -1,0 +1,200 @@
+[
+  {
+    "source": "raw",
+    "axis": "current",
+    "positiveCases": 150,
+    "recovered": 38,
+    "recoveredWithCorrelation07": 38,
+    "stationaryCases": 30,
+    "stationaryPassing": 0,
+    "blankCases": 15,
+    "blankPassing": 0,
+    "byDisplacement": {
+      "2": {
+        "total": 30,
+        "recovered": 0
+      },
+      "4": {
+        "total": 30,
+        "recovered": 9
+      },
+      "6": {
+        "total": 30,
+        "recovered": 13
+      },
+      "10": {
+        "total": 30,
+        "recovered": 14
+      },
+      "16": {
+        "total": 30,
+        "recovered": 2
+      }
+    }
+  },
+  {
+    "source": "raw",
+    "axis": "widened",
+    "positiveCases": 150,
+    "recovered": 54,
+    "recoveredWithCorrelation07": 54,
+    "stationaryCases": 30,
+    "stationaryPassing": 0,
+    "blankCases": 15,
+    "blankPassing": 0,
+    "byDisplacement": {
+      "2": {
+        "total": 30,
+        "recovered": 0
+      },
+      "4": {
+        "total": 30,
+        "recovered": 9
+      },
+      "6": {
+        "total": 30,
+        "recovered": 13
+      },
+      "10": {
+        "total": 30,
+        "recovered": 17
+      },
+      "16": {
+        "total": 30,
+        "recovered": 15
+      }
+    }
+  },
+  {
+    "source": "residualExtractionRawEvidence",
+    "axis": "current",
+    "positiveCases": 150,
+    "recovered": 25,
+    "recoveredWithCorrelation07": 25,
+    "stationaryCases": 30,
+    "stationaryPassing": 0,
+    "blankCases": 15,
+    "blankPassing": 0,
+    "byDisplacement": {
+      "2": {
+        "total": 30,
+        "recovered": 0
+      },
+      "4": {
+        "total": 30,
+        "recovered": 4
+      },
+      "6": {
+        "total": 30,
+        "recovered": 9
+      },
+      "10": {
+        "total": 30,
+        "recovered": 9
+      },
+      "16": {
+        "total": 30,
+        "recovered": 3
+      }
+    }
+  },
+  {
+    "source": "residualExtractionRawEvidence",
+    "axis": "widened",
+    "positiveCases": 150,
+    "recovered": 45,
+    "recoveredWithCorrelation07": 45,
+    "stationaryCases": 30,
+    "stationaryPassing": 0,
+    "blankCases": 15,
+    "blankPassing": 0,
+    "byDisplacement": {
+      "2": {
+        "total": 30,
+        "recovered": 0
+      },
+      "4": {
+        "total": 30,
+        "recovered": 4
+      },
+      "6": {
+        "total": 30,
+        "recovered": 9
+      },
+      "10": {
+        "total": 30,
+        "recovered": 16
+      },
+      "16": {
+        "total": 30,
+        "recovered": 16
+      }
+    }
+  },
+  {
+    "source": "residualExtractionResidualEvidence",
+    "axis": "current",
+    "positiveCases": 150,
+    "recovered": 35,
+    "recoveredWithCorrelation07": 33,
+    "stationaryCases": 30,
+    "stationaryPassing": 0,
+    "blankCases": 15,
+    "blankPassing": 0,
+    "byDisplacement": {
+      "2": {
+        "total": 30,
+        "recovered": 0
+      },
+      "4": {
+        "total": 30,
+        "recovered": 6
+      },
+      "6": {
+        "total": 30,
+        "recovered": 14
+      },
+      "10": {
+        "total": 30,
+        "recovered": 12
+      },
+      "16": {
+        "total": 30,
+        "recovered": 3
+      }
+    }
+  },
+  {
+    "source": "residualExtractionResidualEvidence",
+    "axis": "widened",
+    "positiveCases": 150,
+    "recovered": 60,
+    "recoveredWithCorrelation07": 58,
+    "stationaryCases": 30,
+    "stationaryPassing": 0,
+    "blankCases": 15,
+    "blankPassing": 0,
+    "byDisplacement": {
+      "2": {
+        "total": 30,
+        "recovered": 0
+      },
+      "4": {
+        "total": 30,
+        "recovered": 6
+      },
+      "6": {
+        "total": 30,
+        "recovered": 14
+      },
+      "10": {
+        "total": 30,
+        "recovered": 20
+      },
+      "16": {
+        "total": 30,
+        "recovered": 20
+      }
+    }
+  }
+]

@@ -1,0 +1,19 @@
+# Joint SM-F1/SM-F3 current-filter review
+
+Historical investigation snapshot. Statements about implementation, pending work or publication describe the experiment at its date. Current behavior is documented in [ALGORITHM.md](../../../../ALGORITHM.md); current decisions remain in [FEATURE-REQUESTS.md](../../../../FEATURE-REQUESTS.md). Local artifact names in the snapshot are not promises that every external cache or harness is bundled. See this study's [inventory](README.md).
+
+The maintainer expanded the investigation on 2026-11-05 to include SM-F1 and a critical evidence-based review of all current slow-mover gates. Keeping a filter is a valid outcome; no scientific change is implied by the expanded scope.
+
+This turn completed a source audit and a retrospective inventory of the 1,910 evaluated candidate-local position cases. It did not generate fresh injections, rerun detection or introduce a filter. The paired counts describe the saved manual-axis-5 proposal pool on existing observations and are not independent validation, gate-removal outcomes, new detections or calibrated false-positive rates.
+
+Across the other 13 datasets, raw associated moving histories at successive size/shape/fill, median and final frame/stationarity stages number 236, 221 and 213. Corresponding shuffled-position histories number 115, 105 and 103. Median overlap and stationarity therefore have measurable conditional costs as well as control suppression. The association definition itself already requires 40% of retained frames, so this study cannot independently establish that the 40%-of-usable support threshold is necessary, redundant or optimal.
+
+There are 182 trail-crossing components covering at least 80% of the injected path; 114 first fail the manual upper axis bound of 5 and 68 first fail fill. All 33 other-cohort truth-covering curved components rejected before measurement fail fill. Contact with an injected path is not source-measurement recovery. These observations motivate a construction/gate-cost study without establishing that removing a gate will yield safe recoveries.
+
+The direct analyzer size recheck is structurally redundant on its private extraction path, which already guarantees the same minimum raw pixels. This does not make the extractor's scientific size criterion redundant, and no cleanup was made.
+
+The review inventories extraction/background coupling, both axis bounds, fill, both median bounds, aperture localization/SNR/noise, usable-frame and evidence-availability rules, support, stationary clustering and upstream/downstream effects. It also reviews the separate digital-tracking domain/mask/score/half/stationary/camera/duplicate/track/side-lobe gates qualitatively, retaining quantitative assessment under SM-F6. It distinguishes the earlier three-bin trajectory trial from unimplemented robust temporal-bin stacks in SM-F1.
+
+Only three tracked Markdown files changed: JTransient ALGORITHM.md/FEATURE-REQUESTS.md and SpacePixels FEATURE-REQUESTS.md. Full individual/selected-paired gate comparison requirements, fresh validation, independent association criteria and the legitimate retain/remove/retune/replace/insufficient-evidence outcomes are recorded in the backlogs. No scientific recommendation to remove or retune a filter is justified yet. All runtime code, settings and reports remain unchanged.
+
+Validation: audit_cached_gates.py reproduces the cached inventory, checks all 18 case-file hashes and 744 production/build/test source hashes, and saves review-manifest.json. verify_documentation.py checks the reported counts, ten added local links/anchors, whitespace/privacy and exact documentation-only diff scope. No unit or image-processing suites rerun for this documentation-only review. Work is unstaged/uncommitted; previous pushed commits remain intact. No branch/delegation/push/new settings or original-image changes.

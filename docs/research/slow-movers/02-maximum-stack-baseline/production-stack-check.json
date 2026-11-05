@@ -1,0 +1,312 @@
+[
+  {
+    "frames": 28,
+    "dataset": "klangwolke-2",
+    "timings": [
+      {
+        "round": -1,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.6989148,
+        "exactHash": "48c01f2460aede081a9795069c6dfe43e5bee65aa62c8d3546523b0ad28b85da"
+      },
+      {
+        "round": -1,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.4201436,
+        "exactHash": "48c01f2460aede081a9795069c6dfe43e5bee65aa62c8d3546523b0ad28b85da"
+      },
+      {
+        "round": 0,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.3183022,
+        "exactHash": "48c01f2460aede081a9795069c6dfe43e5bee65aa62c8d3546523b0ad28b85da"
+      },
+      {
+        "round": 0,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.6193516,
+        "exactHash": "48c01f2460aede081a9795069c6dfe43e5bee65aa62c8d3546523b0ad28b85da"
+      },
+      {
+        "round": 1,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.6199896,
+        "exactHash": "48c01f2460aede081a9795069c6dfe43e5bee65aa62c8d3546523b0ad28b85da"
+      },
+      {
+        "round": 1,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.3285066,
+        "exactHash": "48c01f2460aede081a9795069c6dfe43e5bee65aa62c8d3546523b0ad28b85da"
+      },
+      {
+        "round": 2,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.3161497,
+        "exactHash": "48c01f2460aede081a9795069c6dfe43e5bee65aa62c8d3546523b0ad28b85da"
+      },
+      {
+        "round": 2,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.5975855,
+        "exactHash": "48c01f2460aede081a9795069c6dfe43e5bee65aa62c8d3546523b0ad28b85da"
+      }
+    ]
+  },
+  {
+    "frames": 43,
+    "dataset": "Eagle-noisy",
+    "timings": [
+      {
+        "round": -1,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.0394788,
+        "exactHash": "86961dceee9b28e7c6cbd24817031b1cc7f574d5e1c277809d84e481a4570d70"
+      },
+      {
+        "round": -1,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.0218117,
+        "exactHash": "86961dceee9b28e7c6cbd24817031b1cc7f574d5e1c277809d84e481a4570d70"
+      },
+      {
+        "round": 0,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.0210139,
+        "exactHash": "86961dceee9b28e7c6cbd24817031b1cc7f574d5e1c277809d84e481a4570d70"
+      },
+      {
+        "round": 0,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.0368947,
+        "exactHash": "86961dceee9b28e7c6cbd24817031b1cc7f574d5e1c277809d84e481a4570d70"
+      },
+      {
+        "round": 1,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.0372538,
+        "exactHash": "86961dceee9b28e7c6cbd24817031b1cc7f574d5e1c277809d84e481a4570d70"
+      },
+      {
+        "round": 1,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.0206266,
+        "exactHash": "86961dceee9b28e7c6cbd24817031b1cc7f574d5e1c277809d84e481a4570d70"
+      },
+      {
+        "round": 2,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.0259443,
+        "exactHash": "86961dceee9b28e7c6cbd24817031b1cc7f574d5e1c277809d84e481a4570d70"
+      },
+      {
+        "round": 2,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.0370927,
+        "exactHash": "86961dceee9b28e7c6cbd24817031b1cc7f574d5e1c277809d84e481a4570d70"
+      }
+    ]
+  },
+  {
+    "frames": 39,
+    "dataset": "M81-kumar-L-dataset-registered",
+    "timings": [
+      {
+        "round": -1,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.3489158,
+        "exactHash": "735f9e46f061bd8c0ee563b5ac5bd08d505452000736d1f2cecbb2385cf761b6"
+      },
+      {
+        "round": -1,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.205147,
+        "exactHash": "735f9e46f061bd8c0ee563b5ac5bd08d505452000736d1f2cecbb2385cf761b6"
+      },
+      {
+        "round": 0,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.2064468,
+        "exactHash": "735f9e46f061bd8c0ee563b5ac5bd08d505452000736d1f2cecbb2385cf761b6"
+      },
+      {
+        "round": 0,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.3491199,
+        "exactHash": "735f9e46f061bd8c0ee563b5ac5bd08d505452000736d1f2cecbb2385cf761b6"
+      },
+      {
+        "round": 1,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.3506087,
+        "exactHash": "735f9e46f061bd8c0ee563b5ac5bd08d505452000736d1f2cecbb2385cf761b6"
+      },
+      {
+        "round": 1,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.200697,
+        "exactHash": "735f9e46f061bd8c0ee563b5ac5bd08d505452000736d1f2cecbb2385cf761b6"
+      },
+      {
+        "round": 2,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.2010453,
+        "exactHash": "735f9e46f061bd8c0ee563b5ac5bd08d505452000736d1f2cecbb2385cf761b6"
+      },
+      {
+        "round": 2,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.3475943,
+        "exactHash": "735f9e46f061bd8c0ee563b5ac5bd08d505452000736d1f2cecbb2385cf761b6"
+      }
+    ]
+  },
+  {
+    "frames": 39,
+    "dataset": "helix-reg",
+    "timings": [
+      {
+        "round": -1,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.0295772,
+        "exactHash": "e4c0788bf3d92ab1a671a44b499d1ed04617eef86d63e99c458a10976db5b182"
+      },
+      {
+        "round": -1,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.0157149,
+        "exactHash": "e4c0788bf3d92ab1a671a44b499d1ed04617eef86d63e99c458a10976db5b182"
+      },
+      {
+        "round": 0,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.0152846,
+        "exactHash": "e4c0788bf3d92ab1a671a44b499d1ed04617eef86d63e99c458a10976db5b182"
+      },
+      {
+        "round": 0,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.02585,
+        "exactHash": "e4c0788bf3d92ab1a671a44b499d1ed04617eef86d63e99c458a10976db5b182"
+      },
+      {
+        "round": 1,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.0242738,
+        "exactHash": "e4c0788bf3d92ab1a671a44b499d1ed04617eef86d63e99c458a10976db5b182"
+      },
+      {
+        "round": 1,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.0197644,
+        "exactHash": "e4c0788bf3d92ab1a671a44b499d1ed04617eef86d63e99c458a10976db5b182"
+      },
+      {
+        "round": 2,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.0142485,
+        "exactHash": "e4c0788bf3d92ab1a671a44b499d1ed04617eef86d63e99c458a10976db5b182"
+      },
+      {
+        "round": 2,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.0243864,
+        "exactHash": "e4c0788bf3d92ab1a671a44b499d1ed04617eef86d63e99c458a10976db5b182"
+      }
+    ]
+  },
+  {
+    "frames": 106,
+    "dataset": "m101-reg",
+    "timings": [
+      {
+        "round": -1,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.2260441,
+        "exactHash": "e1d05f21067e9c277a8b19ffc1baa0d0e1ae28b8105df267a2200ca07e64a469"
+      },
+      {
+        "round": -1,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.0980673,
+        "exactHash": "e1d05f21067e9c277a8b19ffc1baa0d0e1ae28b8105df267a2200ca07e64a469"
+      },
+      {
+        "round": 0,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.0991228,
+        "exactHash": "e1d05f21067e9c277a8b19ffc1baa0d0e1ae28b8105df267a2200ca07e64a469"
+      },
+      {
+        "round": 0,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.1885837,
+        "exactHash": "e1d05f21067e9c277a8b19ffc1baa0d0e1ae28b8105df267a2200ca07e64a469"
+      },
+      {
+        "round": 1,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.1883311,
+        "exactHash": "e1d05f21067e9c277a8b19ffc1baa0d0e1ae28b8105df267a2200ca07e64a469"
+      },
+      {
+        "round": 1,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.0881026,
+        "exactHash": "e1d05f21067e9c277a8b19ffc1baa0d0e1ae28b8105df267a2200ca07e64a469"
+      },
+      {
+        "round": 2,
+        "workers": 4,
+        "cachedRows": true,
+        "seconds": 0.0882032,
+        "exactHash": "e1d05f21067e9c277a8b19ffc1baa0d0e1ae28b8105df267a2200ca07e64a469"
+      },
+      {
+        "round": 2,
+        "workers": 4,
+        "cachedRows": false,
+        "seconds": 0.1899309,
+        "exactHash": "e1d05f21067e9c277a8b19ffc1baa0d0e1ae28b8105df267a2200ca07e64a469"
+      }
+    ]
+  }
+]

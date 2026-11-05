@@ -6,6 +6,7 @@ How JTransient is built, how its code is organised, the principles it follows, a
 |---|---|
 | [README.md](README.md) | What the library does, with usage examples |
 | [ALGORITHM.md](ALGORITHM.md) | The detection, slow-mover, photometry and Auto-Tune algorithms: the single algorithm reference |
+| [Investigation archive](docs/research/slow-movers/README.md) | Historical slow-mover protocols, numerical evidence, figures and code-delivery history |
 | [PIPELINE.md](PIPELINE.md) | Entry points, result contracts, progress and the stage observer |
 | [CONFIG.md](CONFIG.md) | `DetectionConfig` fields and defaults |
 | [DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md) | Pending design and refactoring work, and the latest code review |

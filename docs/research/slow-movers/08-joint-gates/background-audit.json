@@ -1,0 +1,362 @@
+{
+  "postHocDiagnostic": true,
+  "interpretation": "A background association flags source-attribution ambiguity, not proof that the same object caused the injected-case measurement. Failure to associate the blank does not prove source dominance or motion. The frozen primary study is unchanged; no threshold was selected with this check.",
+  "groups": [
+    {
+      "cohort": "development",
+      "policy": "baseline",
+      "movingCases": 360,
+      "primaryAssociatedCases": 29,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 29
+    },
+    {
+      "cohort": "development",
+      "policy": "no_min_axis",
+      "movingCases": 360,
+      "primaryAssociatedCases": 30,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 30
+    },
+    {
+      "cohort": "development",
+      "policy": "max_axis5",
+      "movingCases": 360,
+      "primaryAssociatedCases": 42,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 42
+    },
+    {
+      "cohort": "development",
+      "policy": "no_max_axis",
+      "movingCases": 360,
+      "primaryAssociatedCases": 51,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 51
+    },
+    {
+      "cohort": "development",
+      "policy": "no_fill",
+      "movingCases": 360,
+      "primaryAssociatedCases": 55,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 55
+    },
+    {
+      "cohort": "development",
+      "policy": "no_median_upper",
+      "movingCases": 360,
+      "primaryAssociatedCases": 36,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 36
+    },
+    {
+      "cohort": "development",
+      "policy": "no_frame_support",
+      "movingCases": 360,
+      "primaryAssociatedCases": 42,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 42
+    },
+    {
+      "cohort": "development",
+      "policy": "frame_support20",
+      "movingCases": 360,
+      "primaryAssociatedCases": 40,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 40
+    },
+    {
+      "cohort": "development",
+      "policy": "no_stationarity",
+      "movingCases": 360,
+      "primaryAssociatedCases": 31,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 31
+    },
+    {
+      "cohort": "development",
+      "policy": "no_median_upper_no_stationarity",
+      "movingCases": 360,
+      "primaryAssociatedCases": 40,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 40
+    },
+    {
+      "cohort": "development",
+      "policy": "no_max_axis_no_fill",
+      "movingCases": 360,
+      "primaryAssociatedCases": 89,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 89
+    },
+    {
+      "cohort": "development",
+      "policy": "median_lower_point1",
+      "movingCases": 360,
+      "primaryAssociatedCases": 17,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 17
+    },
+    {
+      "cohort": "development",
+      "policy": "aperture_snr3",
+      "movingCases": 360,
+      "primaryAssociatedCases": 28,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 28
+    },
+    {
+      "cohort": "development",
+      "policy": "seed3",
+      "movingCases": 360,
+      "primaryAssociatedCases": 29,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 29
+    },
+    {
+      "cohort": "development",
+      "policy": "grow2",
+      "movingCases": 360,
+      "primaryAssociatedCases": 26,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 26
+    },
+    {
+      "cohort": "development",
+      "policy": "min_pixels5",
+      "movingCases": 360,
+      "primaryAssociatedCases": 32,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 32
+    },
+    {
+      "cohort": "other13",
+      "policy": "baseline",
+      "movingCases": 864,
+      "primaryAssociatedCases": 91,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 91
+    },
+    {
+      "cohort": "other13",
+      "policy": "no_min_axis",
+      "movingCases": 864,
+      "primaryAssociatedCases": 95,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 95
+    },
+    {
+      "cohort": "other13",
+      "policy": "max_axis5",
+      "movingCases": 864,
+      "primaryAssociatedCases": 148,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 148
+    },
+    {
+      "cohort": "other13",
+      "policy": "no_max_axis",
+      "movingCases": 864,
+      "primaryAssociatedCases": 166,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 166
+    },
+    {
+      "cohort": "other13",
+      "policy": "no_fill",
+      "movingCases": 864,
+      "primaryAssociatedCases": 124,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 124
+    },
+    {
+      "cohort": "other13",
+      "policy": "no_median_upper",
+      "movingCases": 864,
+      "primaryAssociatedCases": 110,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 110
+    },
+    {
+      "cohort": "other13",
+      "policy": "no_frame_support",
+      "movingCases": 864,
+      "primaryAssociatedCases": 156,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 156
+    },
+    {
+      "cohort": "other13",
+      "policy": "frame_support20",
+      "movingCases": 864,
+      "primaryAssociatedCases": 144,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 144
+    },
+    {
+      "cohort": "other13",
+      "policy": "no_stationarity",
+      "movingCases": 864,
+      "primaryAssociatedCases": 104,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 104
+    },
+    {
+      "cohort": "other13",
+      "policy": "no_median_upper_no_stationarity",
+      "movingCases": 864,
+      "primaryAssociatedCases": 130,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 130
+    },
+    {
+      "cohort": "other13",
+      "policy": "no_max_axis_no_fill",
+      "movingCases": 864,
+      "primaryAssociatedCases": 234,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 234
+    },
+    {
+      "cohort": "other13",
+      "policy": "median_lower_point1",
+      "movingCases": 864,
+      "primaryAssociatedCases": 58,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 58
+    },
+    {
+      "cohort": "other13",
+      "policy": "aperture_snr3",
+      "movingCases": 864,
+      "primaryAssociatedCases": 79,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 79
+    },
+    {
+      "cohort": "other13",
+      "policy": "seed3",
+      "movingCases": 864,
+      "primaryAssociatedCases": 91,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 91
+    },
+    {
+      "cohort": "other13",
+      "policy": "grow2",
+      "movingCases": 864,
+      "primaryAssociatedCases": 99,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 99
+    },
+    {
+      "cohort": "other13",
+      "policy": "min_pixels5",
+      "movingCases": 864,
+      "primaryAssociatedCases": 97,
+      "blankCanAssociateCases": 0,
+      "associatedBothInjectedAndBlank": 0,
+      "associatedOnlyAfterInjection": 97
+    }
+  ],
+  "binAvailabilityOnBaselineAssociatedProposals": {
+    "development": {
+      "baselineAssociatedProposals": 29,
+      "binAvailableOnBaselineAssociatedProposals": 7
+    },
+    "other13": {
+      "baselineAssociatedProposals": 91,
+      "binAvailableOnBaselineAssociatedProposals": 23
+    }
+  },
+  "temporalVetoLossExamples": [
+    {
+      "dataset": "ic-5070-reg",
+      "case": 103,
+      "mode": "curved",
+      "profile": "moffat",
+      "snr": 14.0,
+      "displacement": 16.0,
+      "key": "4637934158016108493:4639126659201281706:87",
+      "rawScore": {
+        "associated": true,
+        "activePositions": 45,
+        "positions": 45,
+        "rmsPixels": 0.8021769432791171,
+        "supportFraction": 1.0,
+        "captureSpanFraction": 1.0,
+        "stationaryLocks": 0
+      },
+      "bins": {
+        "positions": [
+          {
+            "bin": 0,
+            "midpointMillis": 1563841332733.3333,
+            "x": 111.72326351823781,
+            "y": 134.34739819872146,
+            "snr": 16.593405432797788,
+            "residualNoiseRatio": 1.3404877560940744
+          },
+          {
+            "bin": 1,
+            "midpointMillis": 1563843753933.333,
+            "x": 115.69829703823393,
+            "y": 140.68248255694135,
+            "snr": 29.475022879555514,
+            "residualNoiseRatio": 1.8218695255519235
+          },
+          {
+            "bin": 2,
+            "midpointMillis": 1563846127933.3335,
+            "x": 120.30575414564842,
+            "y": 142.30807988755484,
+            "snr": 47.312412522617144,
+            "residualNoiseRatio": 2.3960066582166637
+          }
+        ],
+        "compatible": false,
+        "associated": true,
+        "referenceRms": 0.813814388710729,
+        "referenceErrors": [
+          1.2666954157772874,
+          0.5218442748752886,
+          0.33172707795195366
+        ]
+      }
+    }
+  ],
+  "ambiguousExamples": [],
+  "scriptSha256": "46dc460f50b15b283d1e247e2cdad88657995a6665e85378fd47c02ca9be9cec"
+}

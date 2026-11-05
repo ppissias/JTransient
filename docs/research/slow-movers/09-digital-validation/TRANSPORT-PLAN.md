@@ -1,0 +1,7 @@
+# Catalogue transport follow-up
+
+Historical investigation snapshot. Statements about implementation, pending work or publication describe the experiment at its date. Current behavior is documented in [ALGORITHM.md](../../../../ALGORITHM.md); current decisions remain in [FEATURE-REQUESTS.md](../../../../FEATURE-REQUESTS.md). Local artifact names in the snapshot are not promises that every external cache or harness is bundled. See this study's [inventory](README.md).
+
+The original Java-client FM4/FM8 field searches timed out at300s and are preserved as unavailable products; the owned worker was stopped before finishing all targets. A small public JPL metadata request succeeds using the system Python HTTPS stack. No empty catalogue inference follows from the timeouts.
+
+Repeat the same six fixed candidate-local magnitude23 queries through the existing SolarSystemClient parser and a recorded, certificate-validating system HTTPS transport. URI parameters and scientific query scope stay unchanged. Bound each transport request to90s, retain the response body or safe HTTP/error category, and store only a URI digest/endpoint in transport provenance so observer coordinates are not logged. Keep results in catalogue-transport/, separate from the original failed products. This is an I/O diagnostic, not a detector or catalogue-selection change, and makes no assumption about missing object identities.

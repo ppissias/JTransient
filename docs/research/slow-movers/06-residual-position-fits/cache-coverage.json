@@ -1,0 +1,128 @@
+[
+  {
+    "dataset": "Africano",
+    "frames": 12,
+    "wholeTileFillPixels": 0,
+    "centralStampDomainFillPixels": 0,
+    "centralStampDomainMinimumNativeValue": 241
+  },
+  {
+    "dataset": "Apophis",
+    "frames": 14,
+    "wholeTileFillPixels": 0,
+    "centralStampDomainFillPixels": 0,
+    "centralStampDomainMinimumNativeValue": 619
+  },
+  {
+    "dataset": "dc-reg",
+    "frames": 52,
+    "wholeTileFillPixels": 0,
+    "centralStampDomainFillPixels": 0,
+    "centralStampDomainMinimumNativeValue": 510
+  },
+  {
+    "dataset": "Eagle-noisy",
+    "frames": 43,
+    "wholeTileFillPixels": 0,
+    "centralStampDomainFillPixels": 0,
+    "centralStampDomainMinimumNativeValue": 946
+  },
+  {
+    "dataset": "helix-reg",
+    "frames": 39,
+    "wholeTileFillPixels": 0,
+    "centralStampDomainFillPixels": 0,
+    "centralStampDomainMinimumNativeValue": 1037
+  },
+  {
+    "dataset": "ic-5070-reg",
+    "frames": 45,
+    "wholeTileFillPixels": 0,
+    "centralStampDomainFillPixels": 0,
+    "centralStampDomainMinimumNativeValue": 1378
+  },
+  {
+    "dataset": "Iwamoto-huge",
+    "frames": 14,
+    "wholeTileFillPixels": 0,
+    "centralStampDomainFillPixels": 0,
+    "centralStampDomainMinimumNativeValue": 1269
+  },
+  {
+    "dataset": "klangwolke-1",
+    "frames": 9,
+    "wholeTileFillPixels": 0,
+    "centralStampDomainFillPixels": 0,
+    "centralStampDomainMinimumNativeValue": 1018
+  },
+  {
+    "dataset": "klangwolke-2",
+    "frames": 28,
+    "wholeTileFillPixels": 0,
+    "centralStampDomainFillPixels": 0,
+    "centralStampDomainMinimumNativeValue": 842
+  },
+  {
+    "dataset": "m101-reg",
+    "frames": 106,
+    "wholeTileFillPixels": 0,
+    "centralStampDomainFillPixels": 0,
+    "centralStampDomainMinimumNativeValue": 1242
+  },
+  {
+    "dataset": "m31-b-reg",
+    "frames": 32,
+    "wholeTileFillPixels": 0,
+    "centralStampDomainFillPixels": 0,
+    "centralStampDomainMinimumNativeValue": 193
+  },
+  {
+    "dataset": "m31-g-reg",
+    "frames": 33,
+    "wholeTileFillPixels": 0,
+    "centralStampDomainFillPixels": 0,
+    "centralStampDomainMinimumNativeValue": 450
+  },
+  {
+    "dataset": "m31-red-reg",
+    "frames": 43,
+    "wholeTileFillPixels": 0,
+    "centralStampDomainFillPixels": 0,
+    "centralStampDomainMinimumNativeValue": 753
+  },
+  {
+    "dataset": "m5-reg",
+    "frames": 32,
+    "wholeTileFillPixels": 0,
+    "centralStampDomainFillPixels": 0,
+    "centralStampDomainMinimumNativeValue": 2323
+  },
+  {
+    "dataset": "M81-kumar-L-dataset-registered",
+    "frames": 39,
+    "wholeTileFillPixels": 0,
+    "centralStampDomainFillPixels": 0,
+    "centralStampDomainMinimumNativeValue": 14073
+  },
+  {
+    "dataset": "m81-reg",
+    "frames": 97,
+    "wholeTileFillPixels": 0,
+    "centralStampDomainFillPixels": 0,
+    "centralStampDomainMinimumNativeValue": 2533
+  },
+  {
+    "dataset": "UG 6524-kumar-L-dataset-registeed",
+    "frames": 43,
+    "wholeTileFillPixels": 0,
+    "centralStampDomainFillPixels": 0,
+    "centralStampDomainMinimumNativeValue": 9221
+  },
+  {
+    "dataset": "whynot-nocalibration-wrongdrift",
+    "frames": 59,
+    "wholeTileFillPixels": 0,
+    "centralStampDomainFillPixels": 0,
+    "centralStampDomainMinimumNativeValue": 87
+  }
+]

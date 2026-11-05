@@ -1,0 +1,194 @@
+[
+  {
+    "id": "FM4",
+    "rawReview": [
+      {
+        "view": "early",
+        "meanApertureExcessNativeUnits": 50.44444444444434,
+        "outerPixelMADScale": 17.7912
+      },
+      {
+        "view": "middle",
+        "meanApertureExcessNativeUnits": 43.2275132275131,
+        "outerPixelMADScale": 16.802799999999888
+      },
+      {
+        "view": "late",
+        "meanApertureExcessNativeUnits": 46.51666666666665,
+        "outerPixelMADScale": 19.051409999999866
+      },
+      {
+        "view": "stationary",
+        "meanApertureExcessNativeUnits": 13.047619047619264,
+        "outerPixelMADScale": 11.304825
+      }
+    ],
+    "unmaskedCentres": 26,
+    "sampledFrames": 28,
+    "halfScores": [
+      10.629680321297354,
+      12.14864265270954
+    ],
+    "sharedFullFitPathAndReference": true
+  },
+  {
+    "id": "FM8",
+    "rawReview": [
+      {
+        "view": "early",
+        "meanApertureExcessNativeUnits": 27.037037037036953,
+        "outerPixelMADScale": 21.41533333333352
+      },
+      {
+        "view": "middle",
+        "meanApertureExcessNativeUnits": 27.206349206349387,
+        "outerPixelMADScale": 19.273799999999998
+      },
+      {
+        "view": "late",
+        "meanApertureExcessNativeUnits": 25.004761904761608,
+        "outerPixelMADScale": 18.458370000000066
+      },
+      {
+        "view": "stationary",
+        "meanApertureExcessNativeUnits": 2.6581632653060296,
+        "outerPixelMADScale": 10.74885
+      }
+    ],
+    "unmaskedCentres": 24,
+    "sampledFrames": 28,
+    "halfScores": [
+      9.657604635542528,
+      5.123025060318491
+    ],
+    "sharedFullFitPathAndReference": true
+  },
+  {
+    "id": "FM9",
+    "rawReview": [
+      {
+        "view": "early",
+        "meanApertureExcessNativeUnits": 20.63756613756641,
+        "outerPixelMADScale": 33.02903333333307
+      },
+      {
+        "view": "middle",
+        "meanApertureExcessNativeUnits": 14.291005291005149,
+        "outerPixelMADScale": 47.03136666666642
+      },
+      {
+        "view": "late",
+        "meanApertureExcessNativeUnits": 73.82857142857142,
+        "outerPixelMADScale": 41.661059999999864
+      },
+      {
+        "view": "stationary",
+        "meanApertureExcessNativeUnits": -1.6190476190477057,
+        "outerPixelMADScale": 25.574849999999998
+      }
+    ],
+    "unmaskedCentres": 23,
+    "sampledFrames": 28,
+    "halfScores": [
+      9.601468738534479,
+      5.57068967051141
+    ],
+    "sharedFullFitPathAndReference": true
+  },
+  {
+    "id": "FM10",
+    "rawReview": [
+      {
+        "view": "early",
+        "meanApertureExcessNativeUnits": 15.931216931216795,
+        "outerPixelMADScale": 22.238999999999997
+      },
+      {
+        "view": "middle",
+        "meanApertureExcessNativeUnits": 12.94179894179888,
+        "outerPixelMADScale": 19.273799999999998
+      },
+      {
+        "view": "late",
+        "meanApertureExcessNativeUnits": 20.3952380952378,
+        "outerPixelMADScale": 18.087720000000065
+      },
+      {
+        "view": "stationary",
+        "meanApertureExcessNativeUnits": -3.557823129251801,
+        "outerPixelMADScale": 11.278350000000048
+      }
+    ],
+    "unmaskedCentres": 28,
+    "sampledFrames": 28,
+    "halfScores": [
+      6.588205128238844,
+      6.206113185108693
+    ],
+    "sharedFullFitPathAndReference": true
+  },
+  {
+    "id": "FM11",
+    "rawReview": [
+      {
+        "view": "early",
+        "meanApertureExcessNativeUnits": 79.45767195767212,
+        "outerPixelMADScale": 16.885166666666365
+      },
+      {
+        "view": "middle",
+        "meanApertureExcessNativeUnits": 33.232804232804256,
+        "outerPixelMADScale": 15.979133333333408
+      },
+      {
+        "view": "late",
+        "meanApertureExcessNativeUnits": 24.364285714285415,
+        "outerPixelMADScale": 20.089229999999933
+      },
+      {
+        "view": "stationary",
+        "meanApertureExcessNativeUnits": 15.167517006802882,
+        "outerPixelMADScale": 11.093025000000047
+      }
+    ],
+    "unmaskedCentres": 22,
+    "sampledFrames": 28,
+    "halfScores": [
+      5.1419313463458085,
+      7.54304621935329
+    ],
+    "sharedFullFitPathAndReference": true
+  },
+  {
+    "id": "FM2",
+    "rawReview": [
+      {
+        "view": "early",
+        "meanApertureExcessNativeUnits": 51.962962962963275,
+        "outerPixelMADScale": 20.50929999999972
+      },
+      {
+        "view": "middle",
+        "meanApertureExcessNativeUnits": 55.55555555555543,
+        "outerPixelMADScale": 19.438533333333293
+      },
+      {
+        "view": "late",
+        "meanApertureExcessNativeUnits": 58.42619047619064,
+        "outerPixelMADScale": 23.054429999999932
+      },
+      {
+        "view": "stationary",
+        "meanApertureExcessNativeUnits": 8.363095238094957,
+        "outerPixelMADScale": 13.422825000000023
+      }
+    ],
+    "unmaskedCentres": 28,
+    "sampledFrames": 28,
+    "halfScores": [
+      16.376016619689384,
+      15.753810402861747
+    ],
+    "sharedFullFitPathAndReference": true
+  }
+]

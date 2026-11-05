@@ -1,0 +1,44 @@
+[
+  {
+    "frames": 1,
+    "expectedMaximumSigma": -5.1673408888739525e-17,
+    "medianMaximumSigma": 0.0,
+    "leadingAsymptotic": 0.0
+  },
+  {
+    "frames": 2,
+    "expectedMaximumSigma": 0.5641895835477555,
+    "medianMaximumSigma": 0.5449521356173603,
+    "leadingAsymptotic": 1.1774100225154747
+  },
+  {
+    "frames": 10,
+    "expectedMaximumSigma": 1.5387527308351634,
+    "medianMaximumSigma": 1.4987672753589754,
+    "leadingAsymptotic": 2.145966026289347
+  },
+  {
+    "frames": 28,
+    "expectedMaximumSigma": 2.01370692412325,
+    "medianMaximumSigma": 1.969438869741188,
+    "leadingAsymptotic": 2.5815516691227405
+  },
+  {
+    "frames": 30,
+    "expectedMaximumSigma": 2.0427608441714877,
+    "medianMaximumSigma": 1.9983376793275953,
+    "leadingAsymptotic": 2.608140096567727
+  },
+  {
+    "frames": 43,
+    "expectedMaximumSigma": 2.1896912604213257,
+    "medianMaximumSigma": 2.1446486482151617,
+    "leadingAsymptotic": 2.7426994424083593
+  },
+  {
+    "frames": 100,
+    "expectedMaximumSigma": 2.5075936364416767,
+    "medianMaximumSigma": 2.4620378381027024,
+    "leadingAsymptotic": 3.034854258770293
+  }
+]

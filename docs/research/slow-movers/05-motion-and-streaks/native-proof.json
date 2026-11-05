@@ -1,0 +1,122 @@
+[
+  {
+    "dataset": "klangwolke-1",
+    "brightRegionPixels": 147,
+    "sourceFrames": [
+      {
+        "frame": 2,
+        "pixels": 147
+      }
+    ],
+    "supportedPositions": [
+      {
+        "sourceFrame": 2,
+        "streakContacts": [
+          {
+            "trackIndex": 1,
+            "distancePixels": 0.3628497927809945
+          }
+        ],
+        "x": 7038.165156992567,
+        "y": 304.6769162029327
+      },
+      {
+        "sourceFrame": 5,
+        "streakContacts": [],
+        "x": 7034.843713278496,
+        "y": 307.10928319623974
+      },
+      {
+        "sourceFrame": 6,
+        "streakContacts": [],
+        "x": 7034.819749216301,
+        "y": 306.26959247648904
+      },
+      {
+        "sourceFrame": 7,
+        "streakContacts": [],
+        "x": 7035.795492957746,
+        "y": 308.0225352112676
+      },
+      {
+        "sourceFrame": 8,
+        "streakContacts": [],
+        "x": 7038.522997416021,
+        "y": 305.11317829457363
+      },
+      {
+        "sourceFrame": 9,
+        "streakContacts": [],
+        "x": 7035.199906367041,
+        "y": 307.43492509363296
+      },
+      {
+        "sourceFrame": 10,
+        "streakContacts": [],
+        "x": 7034.396400351186,
+        "y": 307.1321334503951
+      }
+    ],
+    "maximumAndMedianExact": true
+  },
+  {
+    "dataset": "Apophis",
+    "brightRegionPixels": 92,
+    "sourceFrames": [
+      {
+        "frame": 5,
+        "pixels": 92
+      }
+    ],
+    "supportedPositions": [
+      {
+        "sourceFrame": 5,
+        "streakContacts": [
+          {
+            "trackIndex": 6,
+            "distancePixels": 0.18489524168802615
+          }
+        ],
+        "x": 505.81597845601436,
+        "y": 261.0179533213645
+      },
+      {
+        "sourceFrame": 7,
+        "streakContacts": [],
+        "x": 506.0231884057971,
+        "y": 265.2231884057971
+      },
+      {
+        "sourceFrame": 9,
+        "streakContacts": [],
+        "x": 505.46946564885496,
+        "y": 266.8167938931298
+      },
+      {
+        "sourceFrame": 12,
+        "streakContacts": [],
+        "x": 502.6179775280899,
+        "y": 265.97752808988764
+      },
+      {
+        "sourceFrame": 13,
+        "streakContacts": [],
+        "x": 505.8374558303887,
+        "y": 265.52650176678446
+      },
+      {
+        "sourceFrame": 14,
+        "streakContacts": [],
+        "x": 508.25217391304346,
+        "y": 261.38260869565215
+      },
+      {
+        "sourceFrame": 15,
+        "streakContacts": [],
+        "x": 505.956678700361,
+        "y": 260.1624548736462
+      }
+    ],
+    "maximumAndMedianExact": true
+  }
+]

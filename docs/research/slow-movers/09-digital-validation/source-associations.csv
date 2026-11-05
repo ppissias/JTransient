@@ -1,0 +1,1441 @@
+dataset,batch,policy,source,mode,profile,nominalSnr,unavailable,associated,blankAssociated,newAssociation,activeFrames,activeSearchedFrames,expectedSpeed,belowNominalSpeedGrid,aboveNominalSpeedGrid
+klangwolke-2,flash-first,baseline,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,baseline,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,baseline,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,baseline,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,baseline,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,baseline,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,coarse35,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,coarse35,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,coarse35,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,coarse35,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,coarse35,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,coarse35,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_camera,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_camera,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_camera,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_camera,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_camera,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_camera,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_camera_margin,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_camera_margin,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_camera_margin,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_camera_margin,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_camera_margin,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_camera_margin,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_camera_share,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_camera_share,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_camera_share,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_camera_share,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_camera_share,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_camera_share,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_clip,S1,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+klangwolke-2,flash-first,no_clip,S2,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+klangwolke-2,flash-first,no_clip,S3,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+klangwolke-2,flash-first,no_clip,S4,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+klangwolke-2,flash-first,no_clip,S5,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+klangwolke-2,flash-first,no_clip,S6,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+klangwolke-2,flash-first,no_duplicate,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_duplicate,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_duplicate,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_duplicate,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_duplicate,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_duplicate,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_half,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_half,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_half,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_half,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_half,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_half,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_half_no_clip,S1,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+klangwolke-2,flash-first,no_half_no_clip,S2,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+klangwolke-2,flash-first,no_half_no_clip,S3,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+klangwolke-2,flash-first,no_half_no_clip,S4,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+klangwolke-2,flash-first,no_half_no_clip,S5,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+klangwolke-2,flash-first,no_half_no_clip,S6,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+klangwolke-2,flash-first,no_sidelobe,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_sidelobe,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_sidelobe,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_sidelobe,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_sidelobe,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_sidelobe,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_star_mask,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_star_mask,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_star_mask,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_star_mask,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_star_mask,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_star_mask,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_stationary,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_stationary,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_stationary,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_stationary,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_stationary,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_stationary,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_streak_mask,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_streak_mask,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_streak_mask,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_streak_mask,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_streak_mask,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_streak_mask,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_track,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_track,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_track,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_track,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_track,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_track,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_track_sidelobe,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_track_sidelobe,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_track_sidelobe,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_track_sidelobe,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_track_sidelobe,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,no_track_sidelobe,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,peak3,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,peak3,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,peak3,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,peak3,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,peak3,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,peak3,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,score6,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,score6,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,score6,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,score6,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-first,score6,S5,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+klangwolke-2,flash-first,score6,S6,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+klangwolke-2,flash-middle,baseline,S1,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-middle,baseline,S2,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-middle,baseline,S3,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-middle,baseline,S4,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-middle,baseline,S5,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,flash-middle,baseline,S6,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+klangwolke-2,gaussian-1.5,baseline,S1,slow,gaussian,1.5,,False,False,False,28,28,0.12,False,False
+klangwolke-2,gaussian-1.5,baseline,S2,fast,gaussian,1.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-1.5,baseline,S3,gapped,gaussian,1.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,gaussian-1.5,baseline,S4,curved,gaussian,1.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-1.5,baseline,S5,star-crossing,gaussian,1.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-1.5,baseline,S6,camera,gaussian,1.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,gaussian-2.5,baseline,S1,slow,gaussian,2.5,,True,False,True,28,28,0.12,False,False
+klangwolke-2,gaussian-2.5,baseline,S2,fast,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,baseline,S3,gapped,gaussian,2.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,gaussian-2.5,baseline,S4,curved,gaussian,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,baseline,S5,star-crossing,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,baseline,S6,camera,gaussian,2.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,gaussian-2.5,coarse35,S1,slow,gaussian,2.5,,True,False,True,28,28,0.12,False,False
+klangwolke-2,gaussian-2.5,coarse35,S2,fast,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,coarse35,S3,gapped,gaussian,2.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,gaussian-2.5,coarse35,S4,curved,gaussian,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,coarse35,S5,star-crossing,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,coarse35,S6,camera,gaussian,2.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,gaussian-2.5,no_camera,S1,slow,gaussian,2.5,,True,False,True,28,28,0.12,False,False
+klangwolke-2,gaussian-2.5,no_camera,S2,fast,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_camera,S3,gapped,gaussian,2.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,gaussian-2.5,no_camera,S4,curved,gaussian,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_camera,S5,star-crossing,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_camera,S6,camera,gaussian,2.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,gaussian-2.5,no_camera_margin,S1,slow,gaussian,2.5,,True,False,True,28,28,0.12,False,False
+klangwolke-2,gaussian-2.5,no_camera_margin,S2,fast,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_camera_margin,S3,gapped,gaussian,2.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,gaussian-2.5,no_camera_margin,S4,curved,gaussian,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_camera_margin,S5,star-crossing,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_camera_margin,S6,camera,gaussian,2.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,gaussian-2.5,no_camera_share,S1,slow,gaussian,2.5,,True,False,True,28,28,0.12,False,False
+klangwolke-2,gaussian-2.5,no_camera_share,S2,fast,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_camera_share,S3,gapped,gaussian,2.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,gaussian-2.5,no_camera_share,S4,curved,gaussian,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_camera_share,S5,star-crossing,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_camera_share,S6,camera,gaussian,2.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,gaussian-2.5,no_clip,S1,slow,gaussian,2.5,,True,False,True,28,28,0.12,False,False
+klangwolke-2,gaussian-2.5,no_clip,S2,fast,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_clip,S3,gapped,gaussian,2.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,gaussian-2.5,no_clip,S4,curved,gaussian,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_clip,S5,star-crossing,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_clip,S6,camera,gaussian,2.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,gaussian-2.5,no_duplicate,S1,slow,gaussian,2.5,,True,False,True,28,28,0.12,False,False
+klangwolke-2,gaussian-2.5,no_duplicate,S2,fast,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_duplicate,S3,gapped,gaussian,2.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,gaussian-2.5,no_duplicate,S4,curved,gaussian,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_duplicate,S5,star-crossing,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_duplicate,S6,camera,gaussian,2.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,gaussian-2.5,no_half,S1,slow,gaussian,2.5,,True,False,True,28,28,0.12,False,False
+klangwolke-2,gaussian-2.5,no_half,S2,fast,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_half,S3,gapped,gaussian,2.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,gaussian-2.5,no_half,S4,curved,gaussian,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_half,S5,star-crossing,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_half,S6,camera,gaussian,2.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,gaussian-2.5,no_half_no_clip,S1,slow,gaussian,2.5,,True,False,True,28,28,0.12,False,False
+klangwolke-2,gaussian-2.5,no_half_no_clip,S2,fast,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_half_no_clip,S3,gapped,gaussian,2.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,gaussian-2.5,no_half_no_clip,S4,curved,gaussian,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_half_no_clip,S5,star-crossing,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_half_no_clip,S6,camera,gaussian,2.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,gaussian-2.5,no_sidelobe,S1,slow,gaussian,2.5,,True,False,True,28,28,0.12,False,False
+klangwolke-2,gaussian-2.5,no_sidelobe,S2,fast,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_sidelobe,S3,gapped,gaussian,2.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,gaussian-2.5,no_sidelobe,S4,curved,gaussian,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_sidelobe,S5,star-crossing,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_sidelobe,S6,camera,gaussian,2.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,gaussian-2.5,no_star_mask,S1,slow,gaussian,2.5,,False,False,False,28,28,0.12,False,False
+klangwolke-2,gaussian-2.5,no_star_mask,S2,fast,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_star_mask,S3,gapped,gaussian,2.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,gaussian-2.5,no_star_mask,S4,curved,gaussian,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_star_mask,S5,star-crossing,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_star_mask,S6,camera,gaussian,2.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,gaussian-2.5,no_stationary,S1,slow,gaussian,2.5,,True,False,True,28,28,0.12,False,False
+klangwolke-2,gaussian-2.5,no_stationary,S2,fast,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_stationary,S3,gapped,gaussian,2.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,gaussian-2.5,no_stationary,S4,curved,gaussian,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_stationary,S5,star-crossing,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_stationary,S6,camera,gaussian,2.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,gaussian-2.5,no_streak_mask,S1,slow,gaussian,2.5,,True,False,True,28,28,0.12,False,False
+klangwolke-2,gaussian-2.5,no_streak_mask,S2,fast,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_streak_mask,S3,gapped,gaussian,2.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,gaussian-2.5,no_streak_mask,S4,curved,gaussian,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_streak_mask,S5,star-crossing,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_streak_mask,S6,camera,gaussian,2.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,gaussian-2.5,no_track,S1,slow,gaussian,2.5,,True,False,True,28,28,0.12,False,False
+klangwolke-2,gaussian-2.5,no_track,S2,fast,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_track,S3,gapped,gaussian,2.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,gaussian-2.5,no_track,S4,curved,gaussian,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_track,S5,star-crossing,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_track,S6,camera,gaussian,2.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,gaussian-2.5,no_track_sidelobe,S1,slow,gaussian,2.5,,True,False,True,28,28,0.12,False,False
+klangwolke-2,gaussian-2.5,no_track_sidelobe,S2,fast,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_track_sidelobe,S3,gapped,gaussian,2.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,gaussian-2.5,no_track_sidelobe,S4,curved,gaussian,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_track_sidelobe,S5,star-crossing,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,no_track_sidelobe,S6,camera,gaussian,2.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,gaussian-2.5,peak3,S1,slow,gaussian,2.5,,True,False,True,28,28,0.12,False,False
+klangwolke-2,gaussian-2.5,peak3,S2,fast,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,peak3,S3,gapped,gaussian,2.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,gaussian-2.5,peak3,S4,curved,gaussian,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,peak3,S5,star-crossing,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,peak3,S6,camera,gaussian,2.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,gaussian-2.5,score6,S1,slow,gaussian,2.5,,True,False,True,28,28,0.12,False,False
+klangwolke-2,gaussian-2.5,score6,S2,fast,gaussian,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,score6,S3,gapped,gaussian,2.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,gaussian-2.5,score6,S4,curved,gaussian,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,score6,S5,star-crossing,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-2.5,score6,S6,camera,gaussian,2.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,gaussian-4.0,baseline,S1,slow,gaussian,4.0,,True,False,True,28,28,0.12,False,False
+klangwolke-2,gaussian-4.0,baseline,S2,fast,gaussian,4.0,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-4.0,baseline,S3,gapped,gaussian,4.0,,True,False,True,18,18,0.32,False,False
+klangwolke-2,gaussian-4.0,baseline,S4,curved,gaussian,4.0,,True,False,True,28,28,0.32,False,False
+klangwolke-2,gaussian-4.0,baseline,S5,star-crossing,gaussian,4.0,,False,False,False,28,28,0.32,False,False
+klangwolke-2,gaussian-4.0,baseline,S6,camera,gaussian,4.0,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,moffat-1.5,baseline,S1,slow,moffat,1.5,,False,False,False,28,28,0.12,False,False
+klangwolke-2,moffat-1.5,baseline,S2,fast,moffat,1.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,moffat-1.5,baseline,S3,gapped,moffat,1.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,moffat-1.5,baseline,S4,curved,moffat,1.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,moffat-1.5,baseline,S5,star-crossing,moffat,1.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,moffat-1.5,baseline,S6,camera,moffat,1.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,moffat-2.5,baseline,S1,slow,moffat,2.5,,True,False,True,28,28,0.12,False,False
+klangwolke-2,moffat-2.5,baseline,S2,fast,moffat,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,moffat-2.5,baseline,S3,gapped,moffat,2.5,,False,False,False,18,18,0.32,False,False
+klangwolke-2,moffat-2.5,baseline,S4,curved,moffat,2.5,,True,False,True,28,28,0.32,False,False
+klangwolke-2,moffat-2.5,baseline,S5,star-crossing,moffat,2.5,,False,False,False,28,28,0.32,False,False
+klangwolke-2,moffat-2.5,baseline,S6,camera,moffat,2.5,,False,False,False,28,28,0.12781805829607523,False,False
+klangwolke-2,moffat-4.0,baseline,S1,slow,moffat,4.0,,True,False,True,28,28,0.12,False,False
+klangwolke-2,moffat-4.0,baseline,S2,fast,moffat,4.0,,True,False,True,28,28,0.32,False,False
+klangwolke-2,moffat-4.0,baseline,S3,gapped,moffat,4.0,,True,False,True,18,18,0.32,False,False
+klangwolke-2,moffat-4.0,baseline,S4,curved,moffat,4.0,,True,False,True,28,28,0.32,False,False
+klangwolke-2,moffat-4.0,baseline,S5,star-crossing,moffat,4.0,,False,False,False,28,28,0.32,False,False
+klangwolke-2,moffat-4.0,baseline,S6,camera,moffat,4.0,,False,False,False,28,28,0.12781805829607523,False,False
+M81-kumar-L-dataset-registered,flash-first,baseline,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,baseline,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,baseline,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,baseline,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,baseline,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,baseline,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,coarse35,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,coarse35,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,coarse35,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,coarse35,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,coarse35,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,coarse35,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_camera,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_camera,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_camera,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_camera,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_camera,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_camera,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_camera_margin,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_camera_margin,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_camera_margin,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_camera_margin,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_camera_margin,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_camera_margin,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_camera_share,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_camera_share,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_camera_share,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_camera_share,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_camera_share,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_camera_share,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_clip,S1,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_clip,S2,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_clip,S3,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_clip,S4,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_clip,S5,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_clip,S6,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_duplicate,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_duplicate,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_duplicate,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_duplicate,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_duplicate,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_duplicate,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_half,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_half,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_half,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_half,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_half,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_half,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_half_no_clip,S1,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_half_no_clip,S2,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_half_no_clip,S3,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_half_no_clip,S4,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_half_no_clip,S5,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_half_no_clip,S6,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_sidelobe,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_sidelobe,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_sidelobe,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_sidelobe,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_sidelobe,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_sidelobe,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_star_mask,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_star_mask,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_star_mask,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_star_mask,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_star_mask,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_star_mask,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_stationary,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_stationary,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_stationary,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_stationary,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_stationary,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_stationary,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_streak_mask,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_streak_mask,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_streak_mask,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_streak_mask,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_streak_mask,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_streak_mask,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_track,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_track,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_track,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_track,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_track,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_track,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_track_sidelobe,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_track_sidelobe,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_track_sidelobe,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_track_sidelobe,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_track_sidelobe,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,no_track_sidelobe,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,peak3,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,peak3,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,peak3,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,peak3,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,peak3,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,peak3,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,score6,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,score6,S2,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,score6,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,score6,S4,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,score6,S5,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-first,score6,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-middle,baseline,S1,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-middle,baseline,S2,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-middle,baseline,S3,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-middle,baseline,S4,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-middle,baseline,S5,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,flash-middle,baseline,S6,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+M81-kumar-L-dataset-registered,gaussian-1.5,baseline,S1,slow,gaussian,1.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-1.5,baseline,S2,fast,gaussian,1.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-1.5,baseline,S3,gapped,gaussian,1.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-1.5,baseline,S4,curved,gaussian,1.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-1.5,baseline,S5,star-crossing,gaussian,1.5,,False,False,False,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-1.5,baseline,S6,camera,gaussian,1.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,baseline,S1,slow,gaussian,2.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,baseline,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,baseline,S3,gapped,gaussian,2.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,baseline,S4,curved,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,baseline,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,baseline,S6,camera,gaussian,2.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,coarse35,S1,slow,gaussian,2.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,coarse35,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,coarse35,S3,gapped,gaussian,2.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,coarse35,S4,curved,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,coarse35,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,coarse35,S6,camera,gaussian,2.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_camera,S1,slow,gaussian,2.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_camera,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_camera,S3,gapped,gaussian,2.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_camera,S4,curved,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_camera,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_camera,S6,camera,gaussian,2.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_camera_margin,S1,slow,gaussian,2.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_camera_margin,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_camera_margin,S3,gapped,gaussian,2.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_camera_margin,S4,curved,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_camera_margin,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_camera_margin,S6,camera,gaussian,2.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_camera_share,S1,slow,gaussian,2.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_camera_share,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_camera_share,S3,gapped,gaussian,2.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_camera_share,S4,curved,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_camera_share,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_camera_share,S6,camera,gaussian,2.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_clip,S1,slow,gaussian,2.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_clip,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_clip,S3,gapped,gaussian,2.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_clip,S4,curved,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_clip,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_clip,S6,camera,gaussian,2.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_duplicate,S1,slow,gaussian,2.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_duplicate,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_duplicate,S3,gapped,gaussian,2.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_duplicate,S4,curved,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_duplicate,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_duplicate,S6,camera,gaussian,2.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_half,S1,slow,gaussian,2.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_half,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_half,S3,gapped,gaussian,2.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_half,S4,curved,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_half,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_half,S6,camera,gaussian,2.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_half_no_clip,S1,slow,gaussian,2.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_half_no_clip,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_half_no_clip,S3,gapped,gaussian,2.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_half_no_clip,S4,curved,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_half_no_clip,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_half_no_clip,S6,camera,gaussian,2.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_sidelobe,S1,slow,gaussian,2.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_sidelobe,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_sidelobe,S3,gapped,gaussian,2.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_sidelobe,S4,curved,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_sidelobe,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_sidelobe,S6,camera,gaussian,2.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_star_mask,S1,slow,gaussian,2.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_star_mask,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_star_mask,S3,gapped,gaussian,2.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_star_mask,S4,curved,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_star_mask,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_star_mask,S6,camera,gaussian,2.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_stationary,S1,slow,gaussian,2.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_stationary,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_stationary,S3,gapped,gaussian,2.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_stationary,S4,curved,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_stationary,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_stationary,S6,camera,gaussian,2.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_streak_mask,S1,slow,gaussian,2.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_streak_mask,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_streak_mask,S3,gapped,gaussian,2.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_streak_mask,S4,curved,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_streak_mask,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_streak_mask,S6,camera,gaussian,2.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_track,S1,slow,gaussian,2.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_track,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_track,S3,gapped,gaussian,2.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_track,S4,curved,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_track,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_track,S6,camera,gaussian,2.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_track_sidelobe,S1,slow,gaussian,2.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_track_sidelobe,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_track_sidelobe,S3,gapped,gaussian,2.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_track_sidelobe,S4,curved,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_track_sidelobe,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,no_track_sidelobe,S6,camera,gaussian,2.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,peak3,S1,slow,gaussian,2.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,peak3,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,peak3,S3,gapped,gaussian,2.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,peak3,S4,curved,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,peak3,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,peak3,S6,camera,gaussian,2.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,score6,S1,slow,gaussian,2.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,score6,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,score6,S3,gapped,gaussian,2.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,score6,S4,curved,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,score6,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-2.5,score6,S6,camera,gaussian,2.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,gaussian-4.0,baseline,S1,slow,gaussian,4.0,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,gaussian-4.0,baseline,S2,fast,gaussian,4.0,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-4.0,baseline,S3,gapped,gaussian,4.0,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-4.0,baseline,S4,curved,gaussian,4.0,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-4.0,baseline,S5,star-crossing,gaussian,4.0,source saturates native encoding,False,False,False,19,19,0.32,False,False
+M81-kumar-L-dataset-registered,gaussian-4.0,baseline,S6,camera,gaussian,4.0,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,moffat-1.5,baseline,S1,slow,moffat,1.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,moffat-1.5,baseline,S2,fast,moffat,1.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,moffat-1.5,baseline,S3,gapped,moffat,1.5,,False,False,False,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,moffat-1.5,baseline,S4,curved,moffat,1.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,moffat-1.5,baseline,S5,star-crossing,moffat,1.5,source saturates native encoding,False,False,False,18,18,0.32,False,False
+M81-kumar-L-dataset-registered,moffat-1.5,baseline,S6,camera,moffat,1.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,moffat-2.5,baseline,S1,slow,moffat,2.5,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,moffat-2.5,baseline,S2,fast,moffat,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,moffat-2.5,baseline,S3,gapped,moffat,2.5,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,moffat-2.5,baseline,S4,curved,moffat,2.5,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,moffat-2.5,baseline,S5,star-crossing,moffat,2.5,source saturates native encoding,False,False,False,18,18,0.32,False,False
+M81-kumar-L-dataset-registered,moffat-2.5,baseline,S6,camera,moffat,2.5,,False,False,False,39,39,0.5308790723295701,False,False
+M81-kumar-L-dataset-registered,moffat-4.0,baseline,S1,slow,moffat,4.0,,True,False,True,39,39,0.12,False,False
+M81-kumar-L-dataset-registered,moffat-4.0,baseline,S2,fast,moffat,4.0,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,moffat-4.0,baseline,S3,gapped,moffat,4.0,,True,False,True,25,25,0.32,False,False
+M81-kumar-L-dataset-registered,moffat-4.0,baseline,S4,curved,moffat,4.0,,True,False,True,39,39,0.32,False,False
+M81-kumar-L-dataset-registered,moffat-4.0,baseline,S5,star-crossing,moffat,4.0,source saturates native encoding,False,False,False,17,17,0.32,False,False
+M81-kumar-L-dataset-registered,moffat-4.0,baseline,S6,camera,moffat,4.0,,False,False,False,39,39,0.5308790723295701,False,False
+helix-reg,flash-first,baseline,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,baseline,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,baseline,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,baseline,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,baseline,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,baseline,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,coarse35,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,coarse35,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,coarse35,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,coarse35,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,coarse35,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,coarse35,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_camera,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_camera,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_camera,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_camera,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_camera,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_camera,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_camera_margin,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_camera_margin,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_camera_margin,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_camera_margin,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_camera_margin,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_camera_margin,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_camera_share,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_camera_share,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_camera_share,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_camera_share,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_camera_share,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_camera_share,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_clip,S1,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+helix-reg,flash-first,no_clip,S2,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+helix-reg,flash-first,no_clip,S3,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+helix-reg,flash-first,no_clip,S4,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+helix-reg,flash-first,no_clip,S5,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+helix-reg,flash-first,no_clip,S6,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+helix-reg,flash-first,no_duplicate,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_duplicate,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_duplicate,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_duplicate,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_duplicate,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_duplicate,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_half,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_half,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_half,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_half,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_half,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_half,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_half_no_clip,S1,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+helix-reg,flash-first,no_half_no_clip,S2,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+helix-reg,flash-first,no_half_no_clip,S3,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+helix-reg,flash-first,no_half_no_clip,S4,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+helix-reg,flash-first,no_half_no_clip,S5,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+helix-reg,flash-first,no_half_no_clip,S6,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+helix-reg,flash-first,no_sidelobe,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_sidelobe,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_sidelobe,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_sidelobe,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_sidelobe,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_sidelobe,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_star_mask,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_star_mask,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_star_mask,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_star_mask,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_star_mask,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_star_mask,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_stationary,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_stationary,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_stationary,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_stationary,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_stationary,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_stationary,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_streak_mask,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_streak_mask,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_streak_mask,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_streak_mask,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_streak_mask,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_streak_mask,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_track,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_track,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_track,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_track,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_track,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_track,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_track_sidelobe,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_track_sidelobe,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_track_sidelobe,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_track_sidelobe,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_track_sidelobe,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,no_track_sidelobe,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,peak3,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,peak3,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,peak3,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,peak3,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,peak3,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,peak3,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,score6,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,score6,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,score6,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,score6,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,score6,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-first,score6,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-middle,baseline,S1,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-middle,baseline,S2,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-middle,baseline,S3,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-middle,baseline,S4,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-middle,baseline,S5,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,flash-middle,baseline,S6,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+helix-reg,gaussian-1.5,baseline,S1,slow,gaussian,1.5,,False,False,False,39,39,0.12,False,False
+helix-reg,gaussian-1.5,baseline,S2,fast,gaussian,1.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-1.5,baseline,S3,gapped,gaussian,1.5,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-1.5,baseline,S4,curved,gaussian,1.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-1.5,baseline,S5,star-crossing,gaussian,1.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-1.5,baseline,S6,camera,gaussian,1.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,gaussian-2.5,baseline,S1,slow,gaussian,2.5,,False,False,False,39,39,0.12,False,False
+helix-reg,gaussian-2.5,baseline,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+helix-reg,gaussian-2.5,baseline,S3,gapped,gaussian,2.5,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-2.5,baseline,S4,curved,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,baseline,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,baseline,S6,camera,gaussian,2.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,gaussian-2.5,coarse35,S1,slow,gaussian,2.5,,False,False,False,39,39,0.12,False,False
+helix-reg,gaussian-2.5,coarse35,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+helix-reg,gaussian-2.5,coarse35,S3,gapped,gaussian,2.5,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-2.5,coarse35,S4,curved,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,coarse35,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,coarse35,S6,camera,gaussian,2.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,gaussian-2.5,no_camera,S1,slow,gaussian,2.5,,False,False,False,39,39,0.12,False,False
+helix-reg,gaussian-2.5,no_camera,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_camera,S3,gapped,gaussian,2.5,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-2.5,no_camera,S4,curved,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_camera,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_camera,S6,camera,gaussian,2.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,gaussian-2.5,no_camera_margin,S1,slow,gaussian,2.5,,False,False,False,39,39,0.12,False,False
+helix-reg,gaussian-2.5,no_camera_margin,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_camera_margin,S3,gapped,gaussian,2.5,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-2.5,no_camera_margin,S4,curved,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_camera_margin,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_camera_margin,S6,camera,gaussian,2.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,gaussian-2.5,no_camera_share,S1,slow,gaussian,2.5,,False,False,False,39,39,0.12,False,False
+helix-reg,gaussian-2.5,no_camera_share,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_camera_share,S3,gapped,gaussian,2.5,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-2.5,no_camera_share,S4,curved,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_camera_share,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_camera_share,S6,camera,gaussian,2.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,gaussian-2.5,no_clip,S1,slow,gaussian,2.5,,False,False,False,39,39,0.12,False,False
+helix-reg,gaussian-2.5,no_clip,S2,fast,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_clip,S3,gapped,gaussian,2.5,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-2.5,no_clip,S4,curved,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_clip,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_clip,S6,camera,gaussian,2.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,gaussian-2.5,no_duplicate,S1,slow,gaussian,2.5,,False,False,False,39,39,0.12,False,False
+helix-reg,gaussian-2.5,no_duplicate,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_duplicate,S3,gapped,gaussian,2.5,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-2.5,no_duplicate,S4,curved,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_duplicate,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_duplicate,S6,camera,gaussian,2.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,gaussian-2.5,no_half,S1,slow,gaussian,2.5,,False,False,False,39,39,0.12,False,False
+helix-reg,gaussian-2.5,no_half,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_half,S3,gapped,gaussian,2.5,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-2.5,no_half,S4,curved,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_half,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_half,S6,camera,gaussian,2.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,gaussian-2.5,no_half_no_clip,S1,slow,gaussian,2.5,,False,False,False,39,39,0.12,False,False
+helix-reg,gaussian-2.5,no_half_no_clip,S2,fast,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_half_no_clip,S3,gapped,gaussian,2.5,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-2.5,no_half_no_clip,S4,curved,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_half_no_clip,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_half_no_clip,S6,camera,gaussian,2.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,gaussian-2.5,no_sidelobe,S1,slow,gaussian,2.5,,False,False,False,39,39,0.12,False,False
+helix-reg,gaussian-2.5,no_sidelobe,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_sidelobe,S3,gapped,gaussian,2.5,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-2.5,no_sidelobe,S4,curved,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_sidelobe,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_sidelobe,S6,camera,gaussian,2.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,gaussian-2.5,no_star_mask,S1,slow,gaussian,2.5,,False,False,False,39,39,0.12,False,False
+helix-reg,gaussian-2.5,no_star_mask,S2,fast,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_star_mask,S3,gapped,gaussian,2.5,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-2.5,no_star_mask,S4,curved,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_star_mask,S5,star-crossing,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_star_mask,S6,camera,gaussian,2.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,gaussian-2.5,no_stationary,S1,slow,gaussian,2.5,,False,False,False,39,39,0.12,False,False
+helix-reg,gaussian-2.5,no_stationary,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_stationary,S3,gapped,gaussian,2.5,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-2.5,no_stationary,S4,curved,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_stationary,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_stationary,S6,camera,gaussian,2.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,gaussian-2.5,no_streak_mask,S1,slow,gaussian,2.5,,False,False,False,39,39,0.12,False,False
+helix-reg,gaussian-2.5,no_streak_mask,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_streak_mask,S3,gapped,gaussian,2.5,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-2.5,no_streak_mask,S4,curved,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_streak_mask,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_streak_mask,S6,camera,gaussian,2.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,gaussian-2.5,no_track,S1,slow,gaussian,2.5,,False,False,False,39,39,0.12,False,False
+helix-reg,gaussian-2.5,no_track,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_track,S3,gapped,gaussian,2.5,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-2.5,no_track,S4,curved,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_track,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_track,S6,camera,gaussian,2.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,gaussian-2.5,no_track_sidelobe,S1,slow,gaussian,2.5,,False,False,False,39,39,0.12,False,False
+helix-reg,gaussian-2.5,no_track_sidelobe,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_track_sidelobe,S3,gapped,gaussian,2.5,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-2.5,no_track_sidelobe,S4,curved,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_track_sidelobe,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,no_track_sidelobe,S6,camera,gaussian,2.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,gaussian-2.5,peak3,S1,slow,gaussian,2.5,,False,False,False,39,39,0.12,False,False
+helix-reg,gaussian-2.5,peak3,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+helix-reg,gaussian-2.5,peak3,S3,gapped,gaussian,2.5,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-2.5,peak3,S4,curved,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,peak3,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,peak3,S6,camera,gaussian,2.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,gaussian-2.5,score6,S1,slow,gaussian,2.5,,True,False,True,39,39,0.12,False,False
+helix-reg,gaussian-2.5,score6,S2,fast,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+helix-reg,gaussian-2.5,score6,S3,gapped,gaussian,2.5,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-2.5,score6,S4,curved,gaussian,2.5,,True,False,True,39,39,0.32,False,False
+helix-reg,gaussian-2.5,score6,S5,star-crossing,gaussian,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-2.5,score6,S6,camera,gaussian,2.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,gaussian-4.0,baseline,S1,slow,gaussian,4.0,,True,False,True,39,39,0.12,False,False
+helix-reg,gaussian-4.0,baseline,S2,fast,gaussian,4.0,,True,False,True,39,39,0.32,False,False
+helix-reg,gaussian-4.0,baseline,S3,gapped,gaussian,4.0,,False,False,False,24,24,0.32,False,False
+helix-reg,gaussian-4.0,baseline,S4,curved,gaussian,4.0,,True,False,True,39,39,0.32,False,False
+helix-reg,gaussian-4.0,baseline,S5,star-crossing,gaussian,4.0,,False,False,False,39,39,0.32,False,False
+helix-reg,gaussian-4.0,baseline,S6,camera,gaussian,4.0,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,moffat-1.5,baseline,S1,slow,moffat,1.5,,False,False,False,39,39,0.12,False,False
+helix-reg,moffat-1.5,baseline,S2,fast,moffat,1.5,,False,False,False,39,39,0.32,False,False
+helix-reg,moffat-1.5,baseline,S3,gapped,moffat,1.5,,False,False,False,24,24,0.32,False,False
+helix-reg,moffat-1.5,baseline,S4,curved,moffat,1.5,,False,False,False,39,39,0.32,False,False
+helix-reg,moffat-1.5,baseline,S5,star-crossing,moffat,1.5,,False,False,False,39,39,0.32,False,False
+helix-reg,moffat-1.5,baseline,S6,camera,moffat,1.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,moffat-2.5,baseline,S1,slow,moffat,2.5,,False,False,False,39,39,0.12,False,False
+helix-reg,moffat-2.5,baseline,S2,fast,moffat,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,moffat-2.5,baseline,S3,gapped,moffat,2.5,,False,False,False,24,24,0.32,False,False
+helix-reg,moffat-2.5,baseline,S4,curved,moffat,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,moffat-2.5,baseline,S5,star-crossing,moffat,2.5,,False,False,False,39,39,0.32,False,False
+helix-reg,moffat-2.5,baseline,S6,camera,moffat,2.5,,False,False,False,39,39,0.002085785635965628,True,False
+helix-reg,moffat-4.0,baseline,S1,slow,moffat,4.0,,True,False,True,39,39,0.12,False,False
+helix-reg,moffat-4.0,baseline,S2,fast,moffat,4.0,,True,False,True,39,39,0.32,False,False
+helix-reg,moffat-4.0,baseline,S3,gapped,moffat,4.0,,False,False,False,24,24,0.32,False,False
+helix-reg,moffat-4.0,baseline,S4,curved,moffat,4.0,,True,False,True,39,39,0.32,False,False
+helix-reg,moffat-4.0,baseline,S5,star-crossing,moffat,4.0,,False,False,False,39,39,0.32,False,False
+helix-reg,moffat-4.0,baseline,S6,camera,moffat,4.0,,False,False,False,39,39,0.002085785635965628,True,False
+ic-5070-reg,flash-first,baseline,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,baseline,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,baseline,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,baseline,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,baseline,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,baseline,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,coarse35,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,coarse35,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,coarse35,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,coarse35,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,coarse35,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,coarse35,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_camera,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_camera,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_camera,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_camera,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_camera,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_camera,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_camera_margin,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_camera_margin,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_camera_margin,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_camera_margin,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_camera_margin,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_camera_margin,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_camera_share,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_camera_share,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_camera_share,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_camera_share,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_camera_share,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_camera_share,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_clip,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_clip,S2,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_clip,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_clip,S4,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_clip,S5,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_clip,S6,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_duplicate,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_duplicate,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_duplicate,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_duplicate,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_duplicate,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_duplicate,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_half,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_half,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_half,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_half,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_half,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_half,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_half_no_clip,S1,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_half_no_clip,S2,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_half_no_clip,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_half_no_clip,S4,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_half_no_clip,S5,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_half_no_clip,S6,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_sidelobe,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_sidelobe,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_sidelobe,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_sidelobe,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_sidelobe,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_sidelobe,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_star_mask,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_star_mask,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_star_mask,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_star_mask,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_star_mask,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_star_mask,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_stationary,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_stationary,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_stationary,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_stationary,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_stationary,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_stationary,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_streak_mask,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_streak_mask,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_streak_mask,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_streak_mask,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_streak_mask,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_streak_mask,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_track,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_track,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_track,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_track,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_track,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_track,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_track_sidelobe,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_track_sidelobe,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_track_sidelobe,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_track_sidelobe,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_track_sidelobe,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,no_track_sidelobe,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,peak3,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,peak3,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,peak3,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,peak3,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,peak3,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,peak3,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,score6,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,score6,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,score6,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,score6,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,score6,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-first,score6,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-middle,baseline,S1,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-middle,baseline,S2,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-middle,baseline,S3,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-middle,baseline,S4,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-middle,baseline,S5,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,flash-middle,baseline,S6,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+ic-5070-reg,gaussian-1.5,baseline,S1,slow,gaussian,1.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,gaussian-1.5,baseline,S2,fast,gaussian,1.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-1.5,baseline,S3,gapped,gaussian,1.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-1.5,baseline,S4,curved,gaussian,1.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-1.5,baseline,S5,star-crossing,gaussian,1.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-1.5,baseline,S6,camera,gaussian,1.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,gaussian-2.5,baseline,S1,slow,gaussian,2.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,gaussian-2.5,baseline,S2,fast,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,baseline,S3,gapped,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-2.5,baseline,S4,curved,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,baseline,S5,star-crossing,gaussian,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,baseline,S6,camera,gaussian,2.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,gaussian-2.5,coarse35,S1,slow,gaussian,2.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,gaussian-2.5,coarse35,S2,fast,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,coarse35,S3,gapped,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-2.5,coarse35,S4,curved,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,coarse35,S5,star-crossing,gaussian,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,coarse35,S6,camera,gaussian,2.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,gaussian-2.5,no_camera,S1,slow,gaussian,2.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,gaussian-2.5,no_camera,S2,fast,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_camera,S3,gapped,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_camera,S4,curved,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_camera,S5,star-crossing,gaussian,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_camera,S6,camera,gaussian,2.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,gaussian-2.5,no_camera_margin,S1,slow,gaussian,2.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,gaussian-2.5,no_camera_margin,S2,fast,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_camera_margin,S3,gapped,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_camera_margin,S4,curved,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_camera_margin,S5,star-crossing,gaussian,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_camera_margin,S6,camera,gaussian,2.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,gaussian-2.5,no_camera_share,S1,slow,gaussian,2.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,gaussian-2.5,no_camera_share,S2,fast,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_camera_share,S3,gapped,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_camera_share,S4,curved,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_camera_share,S5,star-crossing,gaussian,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_camera_share,S6,camera,gaussian,2.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,gaussian-2.5,no_clip,S1,slow,gaussian,2.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,gaussian-2.5,no_clip,S2,fast,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_clip,S3,gapped,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_clip,S4,curved,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_clip,S5,star-crossing,gaussian,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_clip,S6,camera,gaussian,2.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,gaussian-2.5,no_duplicate,S1,slow,gaussian,2.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,gaussian-2.5,no_duplicate,S2,fast,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_duplicate,S3,gapped,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_duplicate,S4,curved,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_duplicate,S5,star-crossing,gaussian,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_duplicate,S6,camera,gaussian,2.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,gaussian-2.5,no_half,S1,slow,gaussian,2.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,gaussian-2.5,no_half,S2,fast,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_half,S3,gapped,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_half,S4,curved,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_half,S5,star-crossing,gaussian,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_half,S6,camera,gaussian,2.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,gaussian-2.5,no_half_no_clip,S1,slow,gaussian,2.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,gaussian-2.5,no_half_no_clip,S2,fast,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_half_no_clip,S3,gapped,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_half_no_clip,S4,curved,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_half_no_clip,S5,star-crossing,gaussian,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_half_no_clip,S6,camera,gaussian,2.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,gaussian-2.5,no_sidelobe,S1,slow,gaussian,2.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,gaussian-2.5,no_sidelobe,S2,fast,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_sidelobe,S3,gapped,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_sidelobe,S4,curved,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_sidelobe,S5,star-crossing,gaussian,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_sidelobe,S6,camera,gaussian,2.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,gaussian-2.5,no_star_mask,S1,slow,gaussian,2.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,gaussian-2.5,no_star_mask,S2,fast,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_star_mask,S3,gapped,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_star_mask,S4,curved,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_star_mask,S5,star-crossing,gaussian,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_star_mask,S6,camera,gaussian,2.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,gaussian-2.5,no_stationary,S1,slow,gaussian,2.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,gaussian-2.5,no_stationary,S2,fast,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_stationary,S3,gapped,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_stationary,S4,curved,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_stationary,S5,star-crossing,gaussian,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_stationary,S6,camera,gaussian,2.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,gaussian-2.5,no_streak_mask,S1,slow,gaussian,2.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,gaussian-2.5,no_streak_mask,S2,fast,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_streak_mask,S3,gapped,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_streak_mask,S4,curved,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_streak_mask,S5,star-crossing,gaussian,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_streak_mask,S6,camera,gaussian,2.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,gaussian-2.5,no_track,S1,slow,gaussian,2.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,gaussian-2.5,no_track,S2,fast,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_track,S3,gapped,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_track,S4,curved,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_track,S5,star-crossing,gaussian,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_track,S6,camera,gaussian,2.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,gaussian-2.5,no_track_sidelobe,S1,slow,gaussian,2.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,gaussian-2.5,no_track_sidelobe,S2,fast,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_track_sidelobe,S3,gapped,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_track_sidelobe,S4,curved,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_track_sidelobe,S5,star-crossing,gaussian,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,no_track_sidelobe,S6,camera,gaussian,2.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,gaussian-2.5,peak3,S1,slow,gaussian,2.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,gaussian-2.5,peak3,S2,fast,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,peak3,S3,gapped,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-2.5,peak3,S4,curved,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,peak3,S5,star-crossing,gaussian,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,peak3,S6,camera,gaussian,2.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,gaussian-2.5,score6,S1,slow,gaussian,2.5,,True,False,True,45,45,0.12,False,False
+ic-5070-reg,gaussian-2.5,score6,S2,fast,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,score6,S3,gapped,gaussian,2.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-2.5,score6,S4,curved,gaussian,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,score6,S5,star-crossing,gaussian,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-2.5,score6,S6,camera,gaussian,2.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,gaussian-4.0,baseline,S1,slow,gaussian,4.0,,True,False,True,45,45,0.12,False,False
+ic-5070-reg,gaussian-4.0,baseline,S2,fast,gaussian,4.0,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-4.0,baseline,S3,gapped,gaussian,4.0,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,gaussian-4.0,baseline,S4,curved,gaussian,4.0,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,gaussian-4.0,baseline,S5,star-crossing,gaussian,4.0,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,gaussian-4.0,baseline,S6,camera,gaussian,4.0,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,moffat-1.5,baseline,S1,slow,moffat,1.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,moffat-1.5,baseline,S2,fast,moffat,1.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,moffat-1.5,baseline,S3,gapped,moffat,1.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,moffat-1.5,baseline,S4,curved,moffat,1.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,moffat-1.5,baseline,S5,star-crossing,moffat,1.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,moffat-1.5,baseline,S6,camera,moffat,1.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,moffat-2.5,baseline,S1,slow,moffat,2.5,,False,False,False,45,45,0.12,False,False
+ic-5070-reg,moffat-2.5,baseline,S2,fast,moffat,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,moffat-2.5,baseline,S3,gapped,moffat,2.5,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,moffat-2.5,baseline,S4,curved,moffat,2.5,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,moffat-2.5,baseline,S5,star-crossing,moffat,2.5,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,moffat-2.5,baseline,S6,camera,moffat,2.5,,False,False,False,45,45,0.001016057960788759,True,False
+ic-5070-reg,moffat-4.0,baseline,S1,slow,moffat,4.0,,True,False,True,45,45,0.12,False,False
+ic-5070-reg,moffat-4.0,baseline,S2,fast,moffat,4.0,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,moffat-4.0,baseline,S3,gapped,moffat,4.0,,False,False,False,28,28,0.32,False,False
+ic-5070-reg,moffat-4.0,baseline,S4,curved,moffat,4.0,,True,False,True,45,45,0.32,False,False
+ic-5070-reg,moffat-4.0,baseline,S5,star-crossing,moffat,4.0,,False,False,False,45,45,0.32,False,False
+ic-5070-reg,moffat-4.0,baseline,S6,camera,moffat,4.0,,False,False,False,45,45,0.001016057960788759,True,False
+Africano,flash-first,baseline,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,baseline,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,baseline,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,baseline,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,baseline,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,baseline,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,coarse35,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,coarse35,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,coarse35,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,coarse35,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,coarse35,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,coarse35,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_camera,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_camera,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_camera,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_camera,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_camera,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_camera,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_camera_margin,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_camera_margin,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_camera_margin,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_camera_margin,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_camera_margin,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_camera_margin,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_camera_share,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_camera_share,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_camera_share,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_camera_share,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_camera_share,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_camera_share,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_clip,S1,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+Africano,flash-first,no_clip,S2,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+Africano,flash-first,no_clip,S3,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+Africano,flash-first,no_clip,S4,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+Africano,flash-first,no_clip,S5,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+Africano,flash-first,no_clip,S6,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+Africano,flash-first,no_duplicate,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_duplicate,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_duplicate,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_duplicate,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_duplicate,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_duplicate,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_half,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_half,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_half,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_half,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_half,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_half,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_half_no_clip,S1,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+Africano,flash-first,no_half_no_clip,S2,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+Africano,flash-first,no_half_no_clip,S3,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+Africano,flash-first,no_half_no_clip,S4,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+Africano,flash-first,no_half_no_clip,S5,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+Africano,flash-first,no_half_no_clip,S6,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+Africano,flash-first,no_sidelobe,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_sidelobe,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_sidelobe,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_sidelobe,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_sidelobe,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_sidelobe,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_star_mask,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_star_mask,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_star_mask,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_star_mask,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_star_mask,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_star_mask,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_stationary,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_stationary,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_stationary,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_stationary,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_stationary,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_stationary,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_streak_mask,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_streak_mask,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_streak_mask,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_streak_mask,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_streak_mask,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_streak_mask,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_track,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_track,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_track,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_track,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_track,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_track,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_track_sidelobe,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_track_sidelobe,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_track_sidelobe,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_track_sidelobe,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_track_sidelobe,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,no_track_sidelobe,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,peak3,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,peak3,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,peak3,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,peak3,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,peak3,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,peak3,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-first,score6,S1,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+Africano,flash-first,score6,S2,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+Africano,flash-first,score6,S3,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+Africano,flash-first,score6,S4,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+Africano,flash-first,score6,S5,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+Africano,flash-first,score6,S6,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+Africano,flash-middle,baseline,S1,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-middle,baseline,S2,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-middle,baseline,S3,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-middle,baseline,S4,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-middle,baseline,S5,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,flash-middle,baseline,S6,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+Africano,gaussian-1.5,baseline,S1,slow,gaussian,1.5,,False,False,False,12,12,0.12,False,False
+Africano,gaussian-1.5,baseline,S2,fast,gaussian,1.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-1.5,baseline,S3,gapped,gaussian,1.5,,False,False,False,10,10,0.32,False,False
+Africano,gaussian-1.5,baseline,S4,curved,gaussian,1.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-1.5,baseline,S5,star-crossing,gaussian,1.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-1.5,baseline,S6,camera,gaussian,1.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,gaussian-2.5,baseline,S1,slow,gaussian,2.5,,False,False,False,12,12,0.12,False,False
+Africano,gaussian-2.5,baseline,S2,fast,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,baseline,S3,gapped,gaussian,2.5,,True,False,True,10,10,0.32,False,False
+Africano,gaussian-2.5,baseline,S4,curved,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,baseline,S5,star-crossing,gaussian,2.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-2.5,baseline,S6,camera,gaussian,2.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,gaussian-2.5,coarse35,S1,slow,gaussian,2.5,,False,False,False,12,12,0.12,False,False
+Africano,gaussian-2.5,coarse35,S2,fast,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,coarse35,S3,gapped,gaussian,2.5,,True,False,True,10,10,0.32,False,False
+Africano,gaussian-2.5,coarse35,S4,curved,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,coarse35,S5,star-crossing,gaussian,2.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-2.5,coarse35,S6,camera,gaussian,2.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,gaussian-2.5,no_camera,S1,slow,gaussian,2.5,,False,False,False,12,12,0.12,False,False
+Africano,gaussian-2.5,no_camera,S2,fast,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_camera,S3,gapped,gaussian,2.5,,True,False,True,10,10,0.32,False,False
+Africano,gaussian-2.5,no_camera,S4,curved,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_camera,S5,star-crossing,gaussian,2.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-2.5,no_camera,S6,camera,gaussian,2.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,gaussian-2.5,no_camera_margin,S1,slow,gaussian,2.5,,False,False,False,12,12,0.12,False,False
+Africano,gaussian-2.5,no_camera_margin,S2,fast,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_camera_margin,S3,gapped,gaussian,2.5,,True,False,True,10,10,0.32,False,False
+Africano,gaussian-2.5,no_camera_margin,S4,curved,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_camera_margin,S5,star-crossing,gaussian,2.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-2.5,no_camera_margin,S6,camera,gaussian,2.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,gaussian-2.5,no_camera_share,S1,slow,gaussian,2.5,,False,False,False,12,12,0.12,False,False
+Africano,gaussian-2.5,no_camera_share,S2,fast,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_camera_share,S3,gapped,gaussian,2.5,,True,False,True,10,10,0.32,False,False
+Africano,gaussian-2.5,no_camera_share,S4,curved,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_camera_share,S5,star-crossing,gaussian,2.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-2.5,no_camera_share,S6,camera,gaussian,2.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,gaussian-2.5,no_clip,S1,slow,gaussian,2.5,,False,False,False,12,12,0.12,False,False
+Africano,gaussian-2.5,no_clip,S2,fast,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_clip,S3,gapped,gaussian,2.5,,True,False,True,10,10,0.32,False,False
+Africano,gaussian-2.5,no_clip,S4,curved,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_clip,S5,star-crossing,gaussian,2.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-2.5,no_clip,S6,camera,gaussian,2.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,gaussian-2.5,no_duplicate,S1,slow,gaussian,2.5,,False,False,False,12,12,0.12,False,False
+Africano,gaussian-2.5,no_duplicate,S2,fast,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_duplicate,S3,gapped,gaussian,2.5,,True,False,True,10,10,0.32,False,False
+Africano,gaussian-2.5,no_duplicate,S4,curved,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_duplicate,S5,star-crossing,gaussian,2.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-2.5,no_duplicate,S6,camera,gaussian,2.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,gaussian-2.5,no_half,S1,slow,gaussian,2.5,,False,False,False,12,12,0.12,False,False
+Africano,gaussian-2.5,no_half,S2,fast,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_half,S3,gapped,gaussian,2.5,,True,False,True,10,10,0.32,False,False
+Africano,gaussian-2.5,no_half,S4,curved,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_half,S5,star-crossing,gaussian,2.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-2.5,no_half,S6,camera,gaussian,2.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,gaussian-2.5,no_half_no_clip,S1,slow,gaussian,2.5,,False,False,False,12,12,0.12,False,False
+Africano,gaussian-2.5,no_half_no_clip,S2,fast,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_half_no_clip,S3,gapped,gaussian,2.5,,True,False,True,10,10,0.32,False,False
+Africano,gaussian-2.5,no_half_no_clip,S4,curved,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_half_no_clip,S5,star-crossing,gaussian,2.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-2.5,no_half_no_clip,S6,camera,gaussian,2.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,gaussian-2.5,no_sidelobe,S1,slow,gaussian,2.5,,False,False,False,12,12,0.12,False,False
+Africano,gaussian-2.5,no_sidelobe,S2,fast,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_sidelobe,S3,gapped,gaussian,2.5,,True,False,True,10,10,0.32,False,False
+Africano,gaussian-2.5,no_sidelobe,S4,curved,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_sidelobe,S5,star-crossing,gaussian,2.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-2.5,no_sidelobe,S6,camera,gaussian,2.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,gaussian-2.5,no_star_mask,S1,slow,gaussian,2.5,,False,False,False,12,12,0.12,False,False
+Africano,gaussian-2.5,no_star_mask,S2,fast,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_star_mask,S3,gapped,gaussian,2.5,,True,False,True,10,10,0.32,False,False
+Africano,gaussian-2.5,no_star_mask,S4,curved,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_star_mask,S5,star-crossing,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_star_mask,S6,camera,gaussian,2.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,gaussian-2.5,no_stationary,S1,slow,gaussian,2.5,,False,False,False,12,12,0.12,False,False
+Africano,gaussian-2.5,no_stationary,S2,fast,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_stationary,S3,gapped,gaussian,2.5,,True,False,True,10,10,0.32,False,False
+Africano,gaussian-2.5,no_stationary,S4,curved,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_stationary,S5,star-crossing,gaussian,2.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-2.5,no_stationary,S6,camera,gaussian,2.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,gaussian-2.5,no_streak_mask,S1,slow,gaussian,2.5,,False,False,False,12,12,0.12,False,False
+Africano,gaussian-2.5,no_streak_mask,S2,fast,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_streak_mask,S3,gapped,gaussian,2.5,,True,False,True,10,10,0.32,False,False
+Africano,gaussian-2.5,no_streak_mask,S4,curved,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_streak_mask,S5,star-crossing,gaussian,2.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-2.5,no_streak_mask,S6,camera,gaussian,2.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,gaussian-2.5,no_track,S1,slow,gaussian,2.5,,False,False,False,12,12,0.12,False,False
+Africano,gaussian-2.5,no_track,S2,fast,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_track,S3,gapped,gaussian,2.5,,True,False,True,10,10,0.32,False,False
+Africano,gaussian-2.5,no_track,S4,curved,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_track,S5,star-crossing,gaussian,2.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-2.5,no_track,S6,camera,gaussian,2.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,gaussian-2.5,no_track_sidelobe,S1,slow,gaussian,2.5,,False,False,False,12,12,0.12,False,False
+Africano,gaussian-2.5,no_track_sidelobe,S2,fast,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_track_sidelobe,S3,gapped,gaussian,2.5,,True,False,True,10,10,0.32,False,False
+Africano,gaussian-2.5,no_track_sidelobe,S4,curved,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,no_track_sidelobe,S5,star-crossing,gaussian,2.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-2.5,no_track_sidelobe,S6,camera,gaussian,2.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,gaussian-2.5,peak3,S1,slow,gaussian,2.5,,False,False,False,12,12,0.12,False,False
+Africano,gaussian-2.5,peak3,S2,fast,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,peak3,S3,gapped,gaussian,2.5,,True,False,True,10,10,0.32,False,False
+Africano,gaussian-2.5,peak3,S4,curved,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,peak3,S5,star-crossing,gaussian,2.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-2.5,peak3,S6,camera,gaussian,2.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,gaussian-2.5,score6,S1,slow,gaussian,2.5,,False,False,False,12,12,0.12,False,False
+Africano,gaussian-2.5,score6,S2,fast,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,score6,S3,gapped,gaussian,2.5,,True,False,True,10,10,0.32,False,False
+Africano,gaussian-2.5,score6,S4,curved,gaussian,2.5,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-2.5,score6,S5,star-crossing,gaussian,2.5,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-2.5,score6,S6,camera,gaussian,2.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,gaussian-4.0,baseline,S1,slow,gaussian,4.0,,True,False,True,12,12,0.12,False,False
+Africano,gaussian-4.0,baseline,S2,fast,gaussian,4.0,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-4.0,baseline,S3,gapped,gaussian,4.0,,True,False,True,10,10,0.32,False,False
+Africano,gaussian-4.0,baseline,S4,curved,gaussian,4.0,,True,False,True,12,12,0.32,False,False
+Africano,gaussian-4.0,baseline,S5,star-crossing,gaussian,4.0,,False,False,False,12,12,0.32,False,False
+Africano,gaussian-4.0,baseline,S6,camera,gaussian,4.0,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,moffat-1.5,baseline,S1,slow,moffat,1.5,,False,False,False,12,12,0.12,False,False
+Africano,moffat-1.5,baseline,S2,fast,moffat,1.5,,False,False,False,12,12,0.32,False,False
+Africano,moffat-1.5,baseline,S3,gapped,moffat,1.5,,False,False,False,10,10,0.32,False,False
+Africano,moffat-1.5,baseline,S4,curved,moffat,1.5,,False,False,False,12,12,0.32,False,False
+Africano,moffat-1.5,baseline,S5,star-crossing,moffat,1.5,,False,False,False,12,12,0.32,False,False
+Africano,moffat-1.5,baseline,S6,camera,moffat,1.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,moffat-2.5,baseline,S1,slow,moffat,2.5,,False,False,False,12,12,0.12,False,False
+Africano,moffat-2.5,baseline,S2,fast,moffat,2.5,,False,False,False,12,12,0.32,False,False
+Africano,moffat-2.5,baseline,S3,gapped,moffat,2.5,,True,False,True,10,10,0.32,False,False
+Africano,moffat-2.5,baseline,S4,curved,moffat,2.5,,True,False,True,12,12,0.32,False,False
+Africano,moffat-2.5,baseline,S5,star-crossing,moffat,2.5,,False,False,False,12,12,0.32,False,False
+Africano,moffat-2.5,baseline,S6,camera,moffat,2.5,,False,False,False,12,12,0.37005376199728734,False,False
+Africano,moffat-4.0,baseline,S1,slow,moffat,4.0,,True,False,True,12,12,0.12,False,False
+Africano,moffat-4.0,baseline,S2,fast,moffat,4.0,,True,False,True,12,12,0.32,False,False
+Africano,moffat-4.0,baseline,S3,gapped,moffat,4.0,,True,False,True,10,10,0.32,False,False
+Africano,moffat-4.0,baseline,S4,curved,moffat,4.0,,True,False,True,12,12,0.32,False,False
+Africano,moffat-4.0,baseline,S5,star-crossing,moffat,4.0,,False,False,False,12,12,0.32,False,False
+Africano,moffat-4.0,baseline,S6,camera,moffat,4.0,,False,False,False,12,12,0.37005376199728734,False,False
+UG 6524-kumar-L-dataset-registeed,flash-first,baseline,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,baseline,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,baseline,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,baseline,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,baseline,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,baseline,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,coarse35,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,coarse35,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,coarse35,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,coarse35,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,coarse35,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,coarse35,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_camera,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_camera,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_camera,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_camera,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_camera,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_camera,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_camera_margin,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_camera_margin,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_camera_margin,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_camera_margin,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_camera_margin,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_camera_margin,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_camera_share,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_camera_share,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_camera_share,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_camera_share,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_camera_share,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_camera_share,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_clip,S1,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_clip,S2,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_clip,S3,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_clip,S4,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_clip,S5,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_clip,S6,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_duplicate,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_duplicate,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_duplicate,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_duplicate,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_duplicate,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_duplicate,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_half,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_half,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_half,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_half,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_half,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_half,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_half_no_clip,S1,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_half_no_clip,S2,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_half_no_clip,S3,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_half_no_clip,S4,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_half_no_clip,S5,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_half_no_clip,S6,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_sidelobe,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_sidelobe,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_sidelobe,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_sidelobe,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_sidelobe,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_sidelobe,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_star_mask,S1,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_star_mask,S2,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_star_mask,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_star_mask,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_star_mask,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_star_mask,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_stationary,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_stationary,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_stationary,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_stationary,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_stationary,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_stationary,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_streak_mask,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_streak_mask,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_streak_mask,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_streak_mask,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_streak_mask,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_streak_mask,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_track,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_track,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_track,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_track,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_track,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_track,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_track_sidelobe,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_track_sidelobe,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_track_sidelobe,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_track_sidelobe,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_track_sidelobe,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,no_track_sidelobe,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,peak3,S1,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,peak3,S2,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,peak3,S3,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,peak3,S4,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,peak3,S5,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,peak3,S6,flash-first,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,score6,S1,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,score6,S2,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,score6,S3,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,score6,S4,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,score6,S5,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-first,score6,S6,flash-first,gaussian,60.0,,True,False,True,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-middle,baseline,S1,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-middle,baseline,S2,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-middle,baseline,S3,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-middle,baseline,S4,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-middle,baseline,S5,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,flash-middle,baseline,S6,flash-middle,gaussian,60.0,,False,False,False,1,1,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-1.5,baseline,S1,slow,gaussian,1.5,,False,False,False,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-1.5,baseline,S2,fast,gaussian,1.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-1.5,baseline,S3,gapped,gaussian,1.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-1.5,baseline,S4,curved,gaussian,1.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-1.5,baseline,S5,star-crossing,gaussian,1.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-1.5,baseline,S6,camera,gaussian,1.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,baseline,S1,slow,gaussian,2.5,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,baseline,S2,fast,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,baseline,S3,gapped,gaussian,2.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,baseline,S4,curved,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,baseline,S5,star-crossing,gaussian,2.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,baseline,S6,camera,gaussian,2.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,coarse35,S1,slow,gaussian,2.5,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,coarse35,S2,fast,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,coarse35,S3,gapped,gaussian,2.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,coarse35,S4,curved,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,coarse35,S5,star-crossing,gaussian,2.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,coarse35,S6,camera,gaussian,2.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_camera,S1,slow,gaussian,2.5,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_camera,S2,fast,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_camera,S3,gapped,gaussian,2.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_camera,S4,curved,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_camera,S5,star-crossing,gaussian,2.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_camera,S6,camera,gaussian,2.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_camera_margin,S1,slow,gaussian,2.5,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_camera_margin,S2,fast,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_camera_margin,S3,gapped,gaussian,2.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_camera_margin,S4,curved,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_camera_margin,S5,star-crossing,gaussian,2.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_camera_margin,S6,camera,gaussian,2.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_camera_share,S1,slow,gaussian,2.5,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_camera_share,S2,fast,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_camera_share,S3,gapped,gaussian,2.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_camera_share,S4,curved,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_camera_share,S5,star-crossing,gaussian,2.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_camera_share,S6,camera,gaussian,2.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_clip,S1,slow,gaussian,2.5,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_clip,S2,fast,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_clip,S3,gapped,gaussian,2.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_clip,S4,curved,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_clip,S5,star-crossing,gaussian,2.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_clip,S6,camera,gaussian,2.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_duplicate,S1,slow,gaussian,2.5,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_duplicate,S2,fast,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_duplicate,S3,gapped,gaussian,2.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_duplicate,S4,curved,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_duplicate,S5,star-crossing,gaussian,2.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_duplicate,S6,camera,gaussian,2.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_half,S1,slow,gaussian,2.5,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_half,S2,fast,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_half,S3,gapped,gaussian,2.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_half,S4,curved,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_half,S5,star-crossing,gaussian,2.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_half,S6,camera,gaussian,2.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_half_no_clip,S1,slow,gaussian,2.5,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_half_no_clip,S2,fast,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_half_no_clip,S3,gapped,gaussian,2.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_half_no_clip,S4,curved,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_half_no_clip,S5,star-crossing,gaussian,2.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_half_no_clip,S6,camera,gaussian,2.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_sidelobe,S1,slow,gaussian,2.5,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_sidelobe,S2,fast,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_sidelobe,S3,gapped,gaussian,2.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_sidelobe,S4,curved,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_sidelobe,S5,star-crossing,gaussian,2.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_sidelobe,S6,camera,gaussian,2.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_star_mask,S1,slow,gaussian,2.5,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_star_mask,S2,fast,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_star_mask,S3,gapped,gaussian,2.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_star_mask,S4,curved,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_star_mask,S5,star-crossing,gaussian,2.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_star_mask,S6,camera,gaussian,2.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_stationary,S1,slow,gaussian,2.5,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_stationary,S2,fast,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_stationary,S3,gapped,gaussian,2.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_stationary,S4,curved,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_stationary,S5,star-crossing,gaussian,2.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_stationary,S6,camera,gaussian,2.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_streak_mask,S1,slow,gaussian,2.5,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_streak_mask,S2,fast,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_streak_mask,S3,gapped,gaussian,2.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_streak_mask,S4,curved,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_streak_mask,S5,star-crossing,gaussian,2.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_streak_mask,S6,camera,gaussian,2.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_track,S1,slow,gaussian,2.5,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_track,S2,fast,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_track,S3,gapped,gaussian,2.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_track,S4,curved,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_track,S5,star-crossing,gaussian,2.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_track,S6,camera,gaussian,2.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_track_sidelobe,S1,slow,gaussian,2.5,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_track_sidelobe,S2,fast,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_track_sidelobe,S3,gapped,gaussian,2.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_track_sidelobe,S4,curved,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_track_sidelobe,S5,star-crossing,gaussian,2.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,no_track_sidelobe,S6,camera,gaussian,2.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,peak3,S1,slow,gaussian,2.5,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,peak3,S2,fast,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,peak3,S3,gapped,gaussian,2.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,peak3,S4,curved,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,peak3,S5,star-crossing,gaussian,2.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,peak3,S6,camera,gaussian,2.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,score6,S1,slow,gaussian,2.5,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,score6,S2,fast,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,score6,S3,gapped,gaussian,2.5,,True,False,True,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,score6,S4,curved,gaussian,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,score6,S5,star-crossing,gaussian,2.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-2.5,score6,S6,camera,gaussian,2.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-4.0,baseline,S1,slow,gaussian,4.0,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-4.0,baseline,S2,fast,gaussian,4.0,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-4.0,baseline,S3,gapped,gaussian,4.0,,True,False,True,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-4.0,baseline,S4,curved,gaussian,4.0,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,gaussian-4.0,baseline,S5,star-crossing,gaussian,4.0,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,gaussian-4.0,baseline,S6,camera,gaussian,4.0,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,moffat-1.5,baseline,S1,slow,moffat,1.5,,False,False,False,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,moffat-1.5,baseline,S2,fast,moffat,1.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,moffat-1.5,baseline,S3,gapped,moffat,1.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,moffat-1.5,baseline,S4,curved,moffat,1.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,moffat-1.5,baseline,S5,star-crossing,moffat,1.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,moffat-1.5,baseline,S6,camera,moffat,1.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,moffat-2.5,baseline,S1,slow,moffat,2.5,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,moffat-2.5,baseline,S2,fast,moffat,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,moffat-2.5,baseline,S3,gapped,moffat,2.5,,False,False,False,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,moffat-2.5,baseline,S4,curved,moffat,2.5,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,moffat-2.5,baseline,S5,star-crossing,moffat,2.5,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,moffat-2.5,baseline,S6,camera,moffat,2.5,,False,False,False,43,43,0.26605001602585937,False,False
+UG 6524-kumar-L-dataset-registeed,moffat-4.0,baseline,S1,slow,moffat,4.0,,True,False,True,43,43,0.12,False,False
+UG 6524-kumar-L-dataset-registeed,moffat-4.0,baseline,S2,fast,moffat,4.0,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,moffat-4.0,baseline,S3,gapped,moffat,4.0,,True,False,True,26,26,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,moffat-4.0,baseline,S4,curved,moffat,4.0,,True,False,True,43,43,0.32,False,False
+UG 6524-kumar-L-dataset-registeed,moffat-4.0,baseline,S5,star-crossing,moffat,4.0,no qualifying fixed-domain star crossing,False,False,False,0,0,0.0,True,False
+UG 6524-kumar-L-dataset-registeed,moffat-4.0,baseline,S6,camera,moffat,4.0,,False,False,False,43,43,0.26605001602585937,False,False

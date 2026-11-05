@@ -42,6 +42,7 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 | Document | Purpose |
 |---|---|
 | [ALGORITHM.md](ALGORITHM.md) | Detection, slow movers, variable-star photometry and both auto-tuners in one reference |
+| [Slow-mover investigation archive](docs/research/slow-movers/README.md) | Dated protocols, results, case tables, figures and delivered code history |
 | [PIPELINE.md](PIPELINE.md) | Public entry points, result contracts and progress |
 | [CONFIG.md](CONFIG.md) | `DetectionConfig` fields and engine defaults |
 | [DEVELOPER.md](DEVELOPER.md) | Principles, working rules, build and code organisation |

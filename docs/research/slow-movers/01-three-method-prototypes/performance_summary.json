@@ -1,0 +1,77 @@
+{
+  "preparation": {
+    "seconds": 843.2276361000258,
+    "peakRssMiB": 498.375,
+    "tiles": 247,
+    "fieldPixels": 60709384,
+    "pointCounts": [
+      25851,
+      25804,
+      27846,
+      27450,
+      28467,
+      31854,
+      27691,
+      26396,
+      26434,
+      27610,
+      26703,
+      27078,
+      34051,
+      26790,
+      28165,
+      36032,
+      29645,
+      27783,
+      37159,
+      28890,
+      27739,
+      34734,
+      56991,
+      39535,
+      25980,
+      26305,
+      25923,
+      26383
+    ],
+    "binCounts": [
+      3249,
+      4853,
+      12147
+    ],
+    "configuration": {
+      "core": 512,
+      "margin": 112,
+      "psfSigma": 1.2697361157116043,
+      "smoothSkySigma": 18,
+      "temporalNoiseFloor": 1,
+      "clipContribution": 5,
+      "strongReferenceThresholdADU": 4000,
+      "pointThreshold": 3,
+      "binThreshold": 4,
+      "velocityComponentLimit": 48,
+      "coarseVelocityStep": 4,
+      "minimumMotion": 8,
+      "minObservations": 14,
+      "searchThreshold": 7,
+      "workers": 8
+    }
+  },
+  "searchSeconds": 52.39113480004016,
+  "gridAccumulationAndTileIoSeconds": 44.48373509955127,
+  "pointProposalsAt35": 245259,
+  "binExtractionSeconds": 19.942027201177552,
+  "pointExtractionSeconds": 51.77975630038418,
+  "pointLinkSeconds": 19.763229400035925,
+  "verificationSecondsByMethod": {
+    "digital": 0.6319848998682573,
+    "bins": 0.34190899960231036,
+    "points": 0.0643849007319659
+  },
+  "sharedVerificationIoSeconds": 10.768731699907221,
+  "candidateCounts": {
+    "digital": 15,
+    "bins": 9,
+    "points": 10
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "study": "01-three-method-prototypes",
+  "date": "2026-11-03",
+  "title": "Three blind proposal methods",
+  "scope": "Historical protocol, curated numerical evidence and figures. Current algorithm remains ALGORITHM.md.",
+  "entries": [
+    {
+      "archivePath": "historical-report.md",
+      "originalArtifact": "README.md",
+      "sourceSha256": "b7d526eddb904b68842d1a13d39f302d1e4dbdca077c8f141370532b965657a5",
+      "archiveSha256": "e339d3dc07b39142518af0991ea75222cc2c8857ac34fd5801e41be9a3428297",
+      "gzip": false,
+      "transformations": {
+        "historicalContextAdded": true
+      }
+    },
+    {
+      "archivePath": "experiment_config.json",
+      "originalArtifact": "experiment_config.json",
+      "sourceSha256": "82631559ae3f4556ce39bcb16ab74b186d4b006bdb7950e7afaf9b072689a428",
+      "archiveSha256": "04dd6c4fdbfd648e45ab723c05c7e8a72dfff9e01ce040db2afaba43e2686015",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "evaluation.json",
+      "originalArtifact": "evaluation.json",
+      "sourceSha256": "9a2130e698c1744f7dd1dfb63b5b6ac1269530f1165f104b8cd31f2f0a0402c7",
+      "archiveSha256": "81eb34a5c99c3e0dfe2e81790708172103f8f158571ed9025ee77ed2e1fbcbf7",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "evaluation_static.json",
+      "originalArtifact": "evaluation_static.json",
+      "sourceSha256": "38e0a9821ff72b494b3109efa92a84ad1bb96772c91b47159cf81c0616b8b2e6",
+      "archiveSha256": "f0c0031b86ca2ef87b52c5f6f8bc25376aed9e853ef1c0cfe858520fb2000297",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "stationary_summary.json",
+      "originalArtifact": "stationary_summary.json",
+      "sourceSha256": "80d2f84b5ffb37003eed62fb5c70510861b8035a58ebb743d9b5f73e5954921d",
+      "archiveSha256": "f545086d66331b43493cbf52cf8b4a19be05e08f7e1584fd641dda71204ee553",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "performance_summary.json",
+      "originalArtifact": "performance_summary.json",
+      "sourceSha256": "270ded193b590a33378505205f83a6b0bbe0ab6b3a67ab590bbeb947e83cd9c2",
+      "archiveSha256": "c581312ae4c440440293a51df2fefb20ec1534cd21606acf888f91a35d3be4f7",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "extraction_profile.json",
+      "originalArtifact": "extraction_profile.json",
+      "sourceSha256": "c3cc535d40881cba97b950d3cb83a5992ec9c1cbafef66ed60e8ea12f37aa12c",
+      "archiveSha256": "2be56fb0f0d75755e044f80d4244bec75fbb754dc5c1d098f5740dec899a210e",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "final_checks.json",
+      "originalArtifact": "final_checks.json",
+      "sourceSha256": "17b383865826f1a630b74a17fc3335a2bbe85cd2e56c18b02c36ee95e158835b",
+      "archiveSha256": "a5c48bc3321fe394d1065e1a37edb7f831c2e1489aff0d09a437aeb93f55ffbc",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "injected/failure_audit.json",
+      "originalArtifact": "injected/failure_audit.json",
+      "sourceSha256": "b2776d6a99d09fee20a4d33b012429ccbea1220237975b5284aca7246c5b72da",
+      "archiveSha256": "eca2dd199afb6f1703f844adddb9be03223b5ce7e6c2f325738bcdda7366905e",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "full_field_results.png",
+      "originalArtifact": "full_field_results.png",
+      "sourceSha256": "06d8548d949f0b5aa27a4f694233f7997973e35a85293d34db9012b1b8cec401",
+      "archiveSha256": "06d8548d949f0b5aa27a4f694233f7997973e35a85293d34db9012b1b8cec401",
+      "gzip": false,
+      "transformations": {}
+    },
+    {
+      "archivePath": "full_field_results.svg",
+      "originalArtifact": "full_field_results.svg",
+      "sourceSha256": "52b7f5aaf2035fcc875e402d59d745cc37dfb392af14464e8c67cb9c02054bed",
+      "archiveSha256": "bd872b7b42d0c8668f1e0e92945b59debb8a17ceddd79a853f801437231cea7e",
+      "gzip": false,
+      "transformations": {
+        "svgTrailingWhitespaceTrimmed": 1671,
+        "lineEndingsNormalized": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,988 @@
+[
+  {
+    "candidateIndex": 1,
+    "usableRegistrations": 59,
+    "registeredSpread": {
+      "medianY": 746.4697829716193,
+      "medianX": 3064.2988313856426,
+      "maxRadius": 16.372308196626673,
+      "rmsRadius": 9.56267773800772,
+      "available": true
+    },
+    "cameraSpread": {
+      "medianY": 731.3922493028406,
+      "medianX": 3070.699863700359,
+      "maxRadius": 0.9129437798203907,
+      "rmsRadius": 0.2886718494769815,
+      "available": true
+    },
+    "maximumRegistrationFitRms": 0.3218947875549306,
+    "samples": [
+      {
+        "cameraV": 730.525008868393,
+        "cameraU": 3070.985101099681,
+        "sourceFrameIndex": 1,
+        "registrationFitRms": 0.0,
+        "registeredY": 731.525008868393,
+        "registeredX": 3070.985101099681
+      },
+      {
+        "cameraV": 731.5434242894651,
+        "cameraU": 3070.382953435838,
+        "sourceFrameIndex": 2,
+        "registrationFitRms": 0.2741126986626452,
+        "registeredY": 732.1036627505183,
+        "registeredX": 3070.7325501036626
+      },
+      {
+        "cameraV": 731.3676995351503,
+        "cameraU": 3071.222153625947,
+        "sourceFrameIndex": 3,
+        "registrationFitRms": 0.26582179605324896,
+        "registeredY": 732.069036226931,
+        "registeredX": 3070.7665755297335
+      },
+      {
+        "cameraV": 731.5340451036767,
+        "cameraU": 3070.634564307106,
+        "sourceFrameIndex": 4,
+        "registrationFitRms": 0.28731217608750076,
+        "registeredY": 732.6891988555079,
+        "registeredX": 3070.1745350500714
+      },
+      {
+        "cameraV": 731.6043189822295,
+        "cameraU": 3070.744837482187,
+        "sourceFrameIndex": 5,
+        "registrationFitRms": 0.290219337968123,
+        "registeredY": 733.500176366843,
+        "registeredX": 3070.155908289242
+      },
+      {
+        "cameraV": 731.5391729543502,
+        "cameraU": 3070.6834336708357,
+        "sourceFrameIndex": 6,
+        "registrationFitRms": 0.2969940911612149,
+        "registeredY": 733.4978224455612,
+        "registeredX": 3070.0536013400333
+      },
+      {
+        "cameraV": 731.6070002107695,
+        "cameraU": 3070.6314577143125,
+        "sourceFrameIndex": 7,
+        "registrationFitRms": 0.2846041387301366,
+        "registeredY": 734.525787965616,
+        "registeredX": 3069.3771489971346
+      },
+      {
+        "cameraV": 731.5278324055499,
+        "cameraU": 3071.18771696909,
+        "sourceFrameIndex": 8,
+        "registrationFitRms": 0.28874075007355204,
+        "registeredY": 735.0863209189001,
+        "registeredX": 3069.769230769231
+      },
+      {
+        "cameraV": 731.4011184230562,
+        "cameraU": 3070.634765235644,
+        "sourceFrameIndex": 9,
+        "registrationFitRms": 0.28653574914923324,
+        "registeredY": 735.4040874865543,
+        "registeredX": 3068.8992470419507
+      },
+      {
+        "cameraV": 731.2779679910535,
+        "cameraU": 3070.7137450576574,
+        "sourceFrameIndex": 10,
+        "registrationFitRms": 0.284050927987941,
+        "registeredY": 735.6942482341069,
+        "registeredX": 3068.9505549949545
+      },
+      {
+        "cameraV": 731.4885043793848,
+        "cameraU": 3070.8653075373204,
+        "sourceFrameIndex": 11,
+        "registrationFitRms": 0.2866461752836473,
+        "registeredY": 736.3828070175439,
+        "registeredX": 3068.6284210526314
+      },
+      {
+        "cameraV": 731.3252338919627,
+        "cameraU": 3070.9965973201033,
+        "sourceFrameIndex": 12,
+        "registrationFitRms": 0.289719088855082,
+        "registeredY": 736.7800212539851,
+        "registeredX": 3068.681190223167
+      },
+      {
+        "cameraV": 731.4697640356691,
+        "cameraU": 3070.6037103598583,
+        "sourceFrameIndex": 13,
+        "registrationFitRms": 0.2928589713311389,
+        "registeredY": 737.4211618257261,
+        "registeredX": 3067.915629322268
+      },
+      {
+        "cameraV": 731.4643253333583,
+        "cameraU": 3070.562609398003,
+        "sourceFrameIndex": 14,
+        "registrationFitRms": 0.28976612496003273,
+        "registeredY": 737.9944579147905,
+        "registeredX": 3067.703844821614
+      },
+      {
+        "cameraV": 731.3464330575974,
+        "cameraU": 3070.6116637040955,
+        "sourceFrameIndex": 15,
+        "registrationFitRms": 0.296545998430834,
+        "registeredY": 738.5499301675977,
+        "registeredX": 3067.407472067039
+      },
+      {
+        "cameraV": 731.5265719971701,
+        "cameraU": 3070.699863700359,
+        "sourceFrameIndex": 16,
+        "registrationFitRms": 0.30045555965783516,
+        "registeredY": 739.3426716774854,
+        "registeredX": 3067.3450632046465
+      },
+      {
+        "cameraV": 731.1529767094096,
+        "cameraU": 3070.923183113155,
+        "sourceFrameIndex": 17,
+        "registrationFitRms": 0.30314302686377426,
+        "registeredY": 739.4190375834212,
+        "registeredX": 3067.396206533193
+      },
+      {
+        "cameraV": 731.3233328086851,
+        "cameraU": 3070.6772275351314,
+        "sourceFrameIndex": 18,
+        "registrationFitRms": 0.30314894692935157,
+        "registeredY": 739.9331034482759,
+        "registeredX": 3066.7965517241378
+      },
+      {
+        "cameraV": 731.5016910687037,
+        "cameraU": 3070.800741723706,
+        "sourceFrameIndex": 19,
+        "registrationFitRms": 0.31079507591680017,
+        "registeredY": 740.7361747094047,
+        "registeredX": 3066.7890102148644
+      },
+      {
+        "cameraV": 731.2964665676429,
+        "cameraU": 3070.662845597638,
+        "sourceFrameIndex": 20,
+        "registrationFitRms": 0.31815268503188177,
+        "registeredY": 741.2716823406479,
+        "registeredX": 3066.412748171369
+      },
+      {
+        "cameraV": 731.6207307541063,
+        "cameraU": 3070.975852498836,
+        "sourceFrameIndex": 21,
+        "registrationFitRms": 0.32071774470044856,
+        "registeredY": 742.3130584192439,
+        "registeredX": 3066.509621993127
+      },
+      {
+        "cameraV": 731.256692804644,
+        "cameraU": 3070.6667178815665,
+        "sourceFrameIndex": 22,
+        "registrationFitRms": 0.31864794971572685,
+        "registeredY": 742.246546961326,
+        "registeredX": 3065.9989640883978
+      },
+      {
+        "cameraV": 731.455539216813,
+        "cameraU": 3070.7305889378204,
+        "sourceFrameIndex": 23,
+        "registrationFitRms": 0.31022403819779876,
+        "registeredY": 743.2651131374536,
+        "registeredX": 3065.7210401891252
+      },
+      {
+        "cameraV": 731.2425541321281,
+        "cameraU": 3070.851125695521,
+        "sourceFrameIndex": 24,
+        "registrationFitRms": 0.3128800749608892,
+        "registeredY": 743.5049504950495,
+        "registeredX": 3065.7337340876943
+      },
+      {
+        "cameraV": 731.4879573486455,
+        "cameraU": 3071.0117141626874,
+        "sourceFrameIndex": 25,
+        "registrationFitRms": 0.3091919115334137,
+        "registeredY": 744.0024246622792,
+        "registeredX": 3065.5812261863525
+      },
+      {
+        "cameraV": 730.9946606484533,
+        "cameraU": 3070.5969711575185,
+        "sourceFrameIndex": 26,
+        "registrationFitRms": 0.3201056866240423,
+        "registeredY": 744.2678450033991,
+        "registeredX": 3064.9626104690687
+      },
+      {
+        "cameraV": 731.2576639726572,
+        "cameraU": 3070.558514501608,
+        "sourceFrameIndex": 27,
+        "registrationFitRms": 0.31250584038774104,
+        "registeredY": 745.204258150366,
+        "registeredX": 3064.655355954757
+      },
+      {
+        "cameraV": 731.1943373353774,
+        "cameraU": 3070.680198735278,
+        "sourceFrameIndex": 28,
+        "registrationFitRms": 0.3218947875549306,
+        "registeredY": 745.516456582633,
+        "registeredX": 3064.8203781512607
+      },
+      {
+        "cameraV": 731.5630851927002,
+        "cameraU": 3070.8783832509125,
+        "sourceFrameIndex": 29,
+        "registrationFitRms": 0.30889927809634277,
+        "registeredY": 746.4453178400547,
+        "registeredX": 3064.530758714969
+      },
+      {
+        "cameraV": 730.9756889343871,
+        "cameraU": 3070.8296442941105,
+        "sourceFrameIndex": 30,
+        "registrationFitRms": 0.3207869882384445,
+        "registeredY": 746.4697829716193,
+        "registeredX": 3064.2988313856426
+      },
+      {
+        "cameraV": 731.7069230964223,
+        "cameraU": 3070.784271352531,
+        "sourceFrameIndex": 31,
+        "registrationFitRms": 0.31221175661713163,
+        "registeredY": 747.6630727762803,
+        "registeredX": 3063.9895552560647
+      },
+      {
+        "cameraV": 731.3091361942404,
+        "cameraU": 3070.877024960403,
+        "sourceFrameIndex": 32,
+        "registrationFitRms": 0.3107162165562997,
+        "registeredY": 747.7461157024793,
+        "registeredX": 3063.776859504132
+      },
+      {
+        "cameraV": 731.3922493028406,
+        "cameraU": 3070.826633346675,
+        "sourceFrameIndex": 33,
+        "registrationFitRms": 0.31897023900744925,
+        "registeredY": 748.2895451459606,
+        "registeredX": 3063.601154107264
+      },
+      {
+        "cameraV": 731.3993331227762,
+        "cameraU": 3070.9745937899947,
+        "sourceFrameIndex": 34,
+        "registrationFitRms": 0.3141216496155292,
+        "registeredY": 748.966493955095,
+        "registeredX": 3063.558894645941
+      },
+      {
+        "cameraV": 731.2017357924886,
+        "cameraU": 3070.8837916184116,
+        "sourceFrameIndex": 35,
+        "registrationFitRms": 0.3112205467167434,
+        "registeredY": 749.1874792977807,
+        "registeredX": 3063.3044054322622
+      },
+      {
+        "cameraV": 731.351183399806,
+        "cameraU": 3070.5888331061233,
+        "sourceFrameIndex": 36,
+        "registrationFitRms": 0.31082457012039627,
+        "registeredY": 749.8125207022193,
+        "registeredX": 3062.7671414375623
+      },
+      {
+        "cameraV": 731.6144861788047,
+        "cameraU": 3070.7467899069757,
+        "sourceFrameIndex": 37,
+        "registrationFitRms": 0.30979113604373837,
+        "registeredY": 750.5144131777625,
+        "registeredX": 3062.8709677419356
+      },
+      {
+        "cameraV": 731.0379976009438,
+        "cameraU": 3070.6617346782227,
+        "sourceFrameIndex": 38,
+        "registrationFitRms": 0.31396329908603393,
+        "registeredY": 750.6685791427607,
+        "registeredX": 3062.6250421869727
+      },
+      {
+        "cameraV": 731.6048585219787,
+        "cameraU": 3070.713249059209,
+        "sourceFrameIndex": 39,
+        "registrationFitRms": 0.31336423330621915,
+        "registeredY": 751.6093264248705,
+        "registeredX": 3062.459067357513
+      },
+      {
+        "cameraV": 731.5223714514095,
+        "cameraU": 3070.44005065481,
+        "sourceFrameIndex": 40,
+        "registrationFitRms": 0.30766669713069833,
+        "registeredY": 752.1760339342524,
+        "registeredX": 3061.8260869565215
+      },
+      {
+        "cameraV": 731.6440219679225,
+        "cameraU": 3070.664781469733,
+        "sourceFrameIndex": 41,
+        "registrationFitRms": 0.31194376139336416,
+        "registeredY": 752.8919540229886,
+        "registeredX": 3061.9747126436782
+      },
+      {
+        "cameraV": 731.2287457523927,
+        "cameraU": 3070.4470539597805,
+        "sourceFrameIndex": 42,
+        "registrationFitRms": 0.3167164802350674,
+        "registeredY": 752.7869863013699,
+        "registeredX": 3061.681506849315
+      },
+      {
+        "cameraV": 731.3381800159534,
+        "cameraU": 3070.8623652849847,
+        "sourceFrameIndex": 43,
+        "registrationFitRms": 0.31564274402585935,
+        "registeredY": 753.3299861495844,
+        "registeredX": 3061.757271468144
+      },
+      {
+        "cameraV": 731.1746848829496,
+        "cameraU": 3071.014748666263,
+        "sourceFrameIndex": 44,
+        "registrationFitRms": 0.3101805735898684,
+        "registeredY": 753.7904953145917,
+        "registeredX": 3061.7439759036147
+      },
+      {
+        "cameraV": 731.5676352807093,
+        "cameraU": 3070.612075778888,
+        "sourceFrameIndex": 45,
+        "registrationFitRms": 0.31062284109527677,
+        "registeredY": 754.7189207650273,
+        "registeredX": 3061.1178278688526
+      },
+      {
+        "cameraV": 730.9933497623257,
+        "cameraU": 3070.541223467808,
+        "sourceFrameIndex": 46,
+        "registrationFitRms": 0.31281301975650966,
+        "registeredY": 754.5531344284277,
+        "registeredX": 3060.7817633255113
+      },
+      {
+        "cameraV": 731.6628317657512,
+        "cameraU": 3070.7055507391483,
+        "sourceFrameIndex": 47,
+        "registrationFitRms": 0.3016161700632382,
+        "registeredY": 755.6303641092328,
+        "registeredX": 3060.7454486345905
+      },
+      {
+        "cameraV": 731.1411579991711,
+        "cameraU": 3070.562423604539,
+        "sourceFrameIndex": 48,
+        "registrationFitRms": 0.3194712457874753,
+        "registeredY": 755.5738255033557,
+        "registeredX": 3060.530201342282
+      },
+      {
+        "cameraV": 731.0134257456057,
+        "cameraU": 3070.608742947192,
+        "sourceFrameIndex": 49,
+        "registrationFitRms": 0.3146292257356874,
+        "registeredY": 755.972438983895,
+        "registeredX": 3060.4454590735513
+      },
+      {
+        "cameraV": 731.5544043481074,
+        "cameraU": 3070.920442264667,
+        "sourceFrameIndex": 50,
+        "registrationFitRms": 0.31463518395515694,
+        "registeredY": 757.0364398581103,
+        "registeredX": 3060.553692357304
+      },
+      {
+        "cameraV": 731.5293939323516,
+        "cameraU": 3070.620779562608,
+        "sourceFrameIndex": 51,
+        "registrationFitRms": 0.3113158195667374,
+        "registeredY": 757.5334242837654,
+        "registeredX": 3060.1152796725783
+      },
+      {
+        "cameraV": 730.9506705847923,
+        "cameraU": 3070.6470658313488,
+        "sourceFrameIndex": 52,
+        "registrationFitRms": 0.30538714448845317,
+        "registeredY": 757.5464236588721,
+        "registeredX": 3060.0371389270977
+      },
+      {
+        "cameraV": 731.4441298789111,
+        "cameraU": 3070.5381776794948,
+        "sourceFrameIndex": 53,
+        "registrationFitRms": 0.31726016832507026,
+        "registeredY": 758.4438257451687,
+        "registeredX": 3059.744513593187
+      },
+      {
+        "cameraV": 731.6357576775534,
+        "cameraU": 3070.673118856532,
+        "sourceFrameIndex": 54,
+        "registrationFitRms": 0.32063158855318225,
+        "registeredY": 758.869913275517,
+        "registeredX": 3059.6701134089394
+      },
+      {
+        "cameraV": 731.548425046296,
+        "cameraU": 3070.6078885335432,
+        "sourceFrameIndex": 55,
+        "registrationFitRms": 0.32126483710673287,
+        "registeredY": 759.4220713073005,
+        "registeredX": 3059.685229202037
+      },
+      {
+        "cameraV": 731.3789704625741,
+        "cameraU": 3071.0390443030706,
+        "sourceFrameIndex": 56,
+        "registrationFitRms": 0.32021346490302033,
+        "registeredY": 760.0094594594594,
+        "registeredX": 3059.8483108108107
+      },
+      {
+        "cameraV": 731.1706319772079,
+        "cameraU": 3070.746746940282,
+        "sourceFrameIndex": 57,
+        "registrationFitRms": 0.3172613128897789,
+        "registeredY": 759.9506214309707,
+        "registeredX": 3059.383271750084
+      },
+      {
+        "cameraV": 731.3682908465931,
+        "cameraU": 3070.621199931938,
+        "sourceFrameIndex": 58,
+        "registrationFitRms": 0.3179635385027838,
+        "registeredY": 760.2464957264957,
+        "registeredX": 3059.0177777777776
+      },
+      {
+        "cameraV": 731.1862446714975,
+        "cameraU": 3070.7124504760327,
+        "sourceFrameIndex": 59,
+        "registrationFitRms": 0.32146062285468224,
+        "registeredY": 760.3878688524591,
+        "registeredX": 3059.090163934426
+      }
+    ]
+  },
+  {
+    "candidateIndex": 2,
+    "usableRegistrations": 59,
+    "registeredSpread": {
+      "medianY": 1570.2514395393473,
+      "medianX": 3030.6139739592886,
+      "maxRadius": 15.691298575213104,
+      "rmsRadius": 8.914456740524084,
+      "available": true
+    },
+    "cameraSpread": {
+      "medianY": 1554.3219007122693,
+      "medianX": 3030.9874180473757,
+      "maxRadius": 1.1949956466176483,
+      "rmsRadius": 0.48771852681658506,
+      "available": true
+    },
+    "maximumRegistrationFitRms": 0.3218947875549306,
+    "samples": [
+      {
+        "cameraV": 1553.5601442741208,
+        "cameraU": 3030.624165915239,
+        "sourceFrameIndex": 1,
+        "registrationFitRms": 0.0,
+        "registeredY": 1554.5601442741208,
+        "registeredX": 3030.624165915239
+      },
+      {
+        "cameraV": 1553.9938755406474,
+        "cameraU": 3029.838325326044,
+        "sourceFrameIndex": 2,
+        "registrationFitRms": 0.2741126986626452,
+        "registeredY": 1554.5734152067907,
+        "registeredX": 3030.581361748239
+      },
+      {
+        "cameraV": 1554.797238055482,
+        "cameraU": 3031.303653970108,
+        "sourceFrameIndex": 3,
+        "registrationFitRms": 0.26582179605324896,
+        "registeredY": 1555.534159227546,
+        "registeredX": 3031.5889961741664
+      },
+      {
+        "cameraV": 1554.2438934524096,
+        "cameraU": 3031.0383828340723,
+        "sourceFrameIndex": 4,
+        "registrationFitRms": 0.28731217608750076,
+        "registeredY": 1555.4475448450805,
+        "registeredX": 3031.599202754122
+      },
+      {
+        "cameraV": 1554.587224757157,
+        "cameraU": 3030.084176818274,
+        "sourceFrameIndex": 5,
+        "registrationFitRms": 0.290219337968123,
+        "registeredY": 1556.5399670751783,
+        "registeredX": 3030.663435156393
+      },
+      {
+        "cameraV": 1554.515100374922,
+        "cameraU": 3030.780698468622,
+        "sourceFrameIndex": 6,
+        "registrationFitRms": 0.2969940911612149,
+        "registeredY": 1556.542939793889,
+        "registeredX": 3031.604411498825
+      },
+      {
+        "cameraV": 1554.4376360377555,
+        "cameraU": 3030.351754422182,
+        "sourceFrameIndex": 7,
+        "registrationFitRms": 0.2846041387301366,
+        "registeredY": 1557.4286483575659,
+        "registeredX": 3030.600969305331
+      },
+      {
+        "cameraV": 1554.9225144537727,
+        "cameraU": 3030.4188702147135,
+        "sourceFrameIndex": 8,
+        "registrationFitRms": 0.28874075007355204,
+        "registeredY": 1558.56583377636,
+        "registeredX": 3030.7513733829524
+      },
+      {
+        "cameraV": 1554.519401408895,
+        "cameraU": 3030.3946665619187,
+        "sourceFrameIndex": 9,
+        "registrationFitRms": 0.28653574914923324,
+        "registeredY": 1558.6157423971376,
+        "registeredX": 3030.616815742397
+      },
+      {
+        "cameraV": 1555.0050823058289,
+        "cameraU": 3030.2110803962414,
+        "sourceFrameIndex": 10,
+        "registrationFitRms": 0.284050927987941,
+        "registeredY": 1559.524244050814,
+        "registeredX": 3030.597423510467
+      },
+      {
+        "cameraV": 1554.6983632456413,
+        "cameraU": 3030.4715053241566,
+        "sourceFrameIndex": 11,
+        "registrationFitRms": 0.2866461752836473,
+        "registeredY": 1559.7054209517169,
+        "registeredX": 3030.6020568241242
+      },
+      {
+        "cameraV": 1555.1162318546083,
+        "cameraU": 3030.379522952,
+        "sourceFrameIndex": 12,
+        "registrationFitRms": 0.289719088855082,
+        "registeredY": 1560.692685493773,
+        "registeredX": 3030.611822487283
+      },
+      {
+        "cameraV": 1554.5257447248641,
+        "cameraU": 3030.4650637199506,
+        "sourceFrameIndex": 13,
+        "registrationFitRms": 0.2928589713311389,
+        "registeredY": 1560.6093284236367,
+        "registeredX": 3030.586007364545
+      },
+      {
+        "cameraV": 1554.9378408155037,
+        "cameraU": 3030.4490447211115,
+        "sourceFrameIndex": 14,
+        "registrationFitRms": 0.28976612496003273,
+        "registeredY": 1561.6080428028995,
+        "registeredX": 3030.577148774594
+      },
+      {
+        "cameraV": 1554.2347294302292,
+        "cameraU": 3030.587691310815,
+        "sourceFrameIndex": 15,
+        "registrationFitRms": 0.296545998430834,
+        "registeredY": 1561.5869430966034,
+        "registeredX": 3030.5680635200706
+      },
+      {
+        "cameraV": 1554.5791826101122,
+        "cameraU": 3030.558867819585,
+        "sourceFrameIndex": 16,
+        "registrationFitRms": 0.30045555965783516,
+        "registeredY": 1562.5544624033732,
+        "registeredX": 3030.6129655657064
+      },
+      {
+        "cameraV": 1554.1807164206443,
+        "cameraU": 3030.529301362022,
+        "sourceFrameIndex": 17,
+        "registrationFitRms": 0.30314302686377426,
+        "registeredY": 1562.6144734566833,
+        "registeredX": 3030.5777278229293
+      },
+      {
+        "cameraV": 1554.716698075963,
+        "cameraU": 3030.656853827245,
+        "sourceFrameIndex": 18,
+        "registrationFitRms": 0.30314894692935157,
+        "registeredY": 1563.5029982363317,
+        "registeredX": 3030.5902998236334
+      },
+      {
+        "cameraV": 1554.1610519876394,
+        "cameraU": 3030.634028258217,
+        "sourceFrameIndex": 19,
+        "registrationFitRms": 0.31079507591680017,
+        "registeredY": 1563.5797972856897,
+        "registeredX": 3030.5928534616046
+      },
+      {
+        "cameraV": 1554.3567775821302,
+        "cameraU": 3030.60064823621,
+        "sourceFrameIndex": 20,
+        "registrationFitRms": 0.31815268503188177,
+        "registeredY": 1564.525025363544,
+        "registeredX": 3030.5353398714915
+      },
+      {
+        "cameraV": 1554.558858554632,
+        "cameraU": 3030.683782091405,
+        "sourceFrameIndex": 21,
+        "registrationFitRms": 0.32071774470044856,
+        "registeredY": 1565.4536279798156,
+        "registeredX": 3030.5900469810335
+      },
+      {
+        "cameraV": 1554.197364994905,
+        "cameraU": 3030.688218572304,
+        "sourceFrameIndex": 22,
+        "registrationFitRms": 0.31864794971572685,
+        "registeredY": 1565.3961419221496,
+        "registeredX": 3030.5818119187047
+      },
+      {
+        "cameraV": 1554.3219007122693,
+        "cameraU": 3030.766070097454,
+        "sourceFrameIndex": 23,
+        "registrationFitRms": 0.31022403819779876,
+        "registeredY": 1566.3513701005897,
+        "registeredX": 3030.5752688172042
+      },
+      {
+        "cameraV": 1553.8917887540367,
+        "cameraU": 3030.733966041458,
+        "sourceFrameIndex": 24,
+        "registrationFitRms": 0.3128800749608892,
+        "registeredY": 1566.3815422191208,
+        "registeredX": 3030.5874040474528
+      },
+      {
+        "cameraV": 1554.6206673519582,
+        "cameraU": 3030.8011036431094,
+        "sourceFrameIndex": 25,
+        "registrationFitRms": 0.3091919115334137,
+        "registeredY": 1567.372515125324,
+        "registeredX": 3030.5662921348317
+      },
+      {
+        "cameraV": 1553.8141700729027,
+        "cameraU": 3030.867820017266,
+        "sourceFrameIndex": 26,
+        "registrationFitRms": 0.3201056866240423,
+        "registeredY": 1567.3302437349812,
+        "registeredX": 3030.631307929969
+      },
+      {
+        "cameraV": 1554.1341696703298,
+        "cameraU": 3030.9243095695915,
+        "sourceFrameIndex": 27,
+        "registrationFitRms": 0.31250584038774104,
+        "registeredY": 1568.3298683298683,
+        "registeredX": 3030.5841995841997
+      },
+      {
+        "cameraV": 1553.7486975889474,
+        "cameraU": 3030.68630861185,
+        "sourceFrameIndex": 28,
+        "registrationFitRms": 0.3218947875549306,
+        "registeredY": 1568.331462644686,
+        "registeredX": 3030.6055769905297
+      },
+      {
+        "cameraV": 1554.1256368417924,
+        "cameraU": 3030.9869781778516,
+        "sourceFrameIndex": 29,
+        "registrationFitRms": 0.30889927809634277,
+        "registeredY": 1569.276263240146,
+        "registeredX": 3030.623372113214
+      },
+      {
+        "cameraV": 1554.481704540831,
+        "cameraU": 3030.9590224008493,
+        "sourceFrameIndex": 30,
+        "registrationFitRms": 0.3207869882384445,
+        "registeredY": 1570.2514395393473,
+        "registeredX": 3030.600069795847
+      },
+      {
+        "cameraV": 1554.1620433851556,
+        "cameraU": 3031.078394479137,
+        "sourceFrameIndex": 31,
+        "registrationFitRms": 0.31221175661713163,
+        "registeredY": 1570.3998198198199,
+        "registeredX": 3030.6245045045043
+      },
+      {
+        "cameraV": 1554.6195924894903,
+        "cameraU": 3031.1716400003675,
+        "sourceFrameIndex": 32,
+        "registrationFitRms": 0.3107162165562997,
+        "registeredY": 1571.3463537000537,
+        "registeredX": 3030.621573194768
+      },
+      {
+        "cameraV": 1554.1721946777939,
+        "cameraU": 3031.107992938795,
+        "sourceFrameIndex": 33,
+        "registrationFitRms": 0.31897023900744925,
+        "registeredY": 1571.367047891351,
+        "registeredX": 3030.6188348820588
+      },
+      {
+        "cameraV": 1554.5158129659312,
+        "cameraU": 3031.0896675189942,
+        "sourceFrameIndex": 34,
+        "registrationFitRms": 0.3141216496155292,
+        "registeredY": 1572.3900772964228,
+        "registeredX": 3030.617292827611
+      },
+      {
+        "cameraV": 1554.085349708945,
+        "cameraU": 3031.1050475200977,
+        "sourceFrameIndex": 35,
+        "registrationFitRms": 0.3112205467167434,
+        "registeredY": 1572.3835003579097,
+        "registeredX": 3030.6225841088044
+      },
+      {
+        "cameraV": 1554.5859264638584,
+        "cameraU": 3031.0945197718866,
+        "sourceFrameIndex": 36,
+        "registrationFitRms": 0.31082457012039627,
+        "registeredY": 1573.3655134939322,
+        "registeredX": 3030.5846766890054
+      },
+      {
+        "cameraV": 1554.212325499477,
+        "cameraU": 3031.0274981745524,
+        "sourceFrameIndex": 37,
+        "registrationFitRms": 0.30979113604373837,
+        "registeredY": 1573.4395146685983,
+        "registeredX": 3030.635820354944
+      },
+      {
+        "cameraV": 1554.5067894287736,
+        "cameraU": 3030.9874180473757,
+        "sourceFrameIndex": 38,
+        "registrationFitRms": 0.31396329908603393,
+        "registeredY": 1574.4707162284678,
+        "registeredX": 3030.610335448776
+      },
+      {
+        "cameraV": 1554.0476976671248,
+        "cameraU": 3031.051535871491,
+        "sourceFrameIndex": 39,
+        "registrationFitRms": 0.31336423330621915,
+        "registeredY": 1574.3927873512168,
+        "registeredX": 3030.6368804405756
+      },
+      {
+        "cameraV": 1554.436687820252,
+        "cameraU": 3031.2335776365744,
+        "sourceFrameIndex": 40,
+        "registrationFitRms": 0.30766669713069833,
+        "registeredY": 1575.433908045977,
+        "registeredX": 3030.6557112068967
+      },
+      {
+        "cameraV": 1553.839807581852,
+        "cameraU": 3031.141189654984,
+        "sourceFrameIndex": 41,
+        "registrationFitRms": 0.31194376139336416,
+        "registeredY": 1575.4408911246855,
+        "registeredX": 3030.6494789795183
+      },
+      {
+        "cameraV": 1554.5182702920752,
+        "cameraU": 3031.062318775135,
+        "sourceFrameIndex": 42,
+        "registrationFitRms": 0.3167164802350674,
+        "registeredY": 1576.4348686577905,
+        "registeredX": 3030.6820798848507
+      },
+      {
+        "cameraV": 1554.0455535451702,
+        "cameraU": 3031.2231013831024,
+        "sourceFrameIndex": 43,
+        "registrationFitRms": 0.31564274402585935,
+        "registeredY": 1576.405309103866,
+        "registeredX": 3030.6814537680384
+      },
+      {
+        "cameraV": 1554.446474155495,
+        "cameraU": 3031.154012703363,
+        "sourceFrameIndex": 44,
+        "registrationFitRms": 0.3101805735898684,
+        "registeredY": 1577.4390596745027,
+        "registeredX": 3030.6254972875226
+      },
+      {
+        "cameraV": 1553.96473632823,
+        "cameraU": 3031.175168504915,
+        "sourceFrameIndex": 45,
+        "registrationFitRms": 0.31062284109527677,
+        "registeredY": 1577.4946392876614,
+        "registeredX": 3030.5829547519534
+      },
+      {
+        "cameraV": 1554.5135254730455,
+        "cameraU": 3031.257483402246,
+        "sourceFrameIndex": 46,
+        "registrationFitRms": 0.31281301975650966,
+        "registeredY": 1578.4564672160516,
+        "registeredX": 3030.582586886421
+      },
+      {
+        "cameraV": 1554.0632757849696,
+        "cameraU": 3031.348588521722,
+        "sourceFrameIndex": 47,
+        "registrationFitRms": 0.3016161700632382,
+        "registeredY": 1578.4213847818248,
+        "registeredX": 3030.639019112874
+      },
+      {
+        "cameraV": 1554.6271009790914,
+        "cameraU": 3031.2273754015346,
+        "sourceFrameIndex": 48,
+        "registrationFitRms": 0.3194712457874753,
+        "registeredY": 1579.4557124518615,
+        "registeredX": 3030.6139739592886
+      },
+      {
+        "cameraV": 1554.1609813364814,
+        "cameraU": 3031.1880623672814,
+        "sourceFrameIndex": 49,
+        "registrationFitRms": 0.3146292257356874,
+        "registeredY": 1579.5228529303354,
+        "registeredX": 3030.6024695908586
+      },
+      {
+        "cameraV": 1554.6320243376574,
+        "cameraU": 3031.22282601644,
+        "sourceFrameIndex": 50,
+        "registrationFitRms": 0.31463518395515694,
+        "registeredY": 1580.5262543757292,
+        "registeredX": 3030.6004846961673
+      },
+      {
+        "cameraV": 1554.141944794839,
+        "cameraU": 3031.2231097926724,
+        "sourceFrameIndex": 51,
+        "registrationFitRms": 0.3113158195667374,
+        "registeredY": 1580.5615412710008,
+        "registeredX": 3030.6482834185535
+      },
+      {
+        "cameraV": 1554.4761388778534,
+        "cameraU": 3031.186305142539,
+        "sourceFrameIndex": 52,
+        "registrationFitRms": 0.30538714448845317,
+        "registeredY": 1581.4937455325232,
+        "registeredX": 3030.674588992137
+      },
+      {
+        "cameraV": 1554.0627651098653,
+        "cameraU": 3031.153823009303,
+        "sourceFrameIndex": 53,
+        "registrationFitRms": 0.31726016832507026,
+        "registeredY": 1581.489148276491,
+        "registeredX": 3030.607878898413
+      },
+      {
+        "cameraV": 1553.747414860208,
+        "cameraU": 3031.2977144626448,
+        "sourceFrameIndex": 54,
+        "registrationFitRms": 0.32063158855318225,
+        "registeredY": 1581.4134770889489,
+        "registeredX": 3030.6858939802337
+      },
+      {
+        "cameraV": 1554.1809305557517,
+        "cameraU": 3030.9436467003084,
+        "sourceFrameIndex": 55,
+        "registrationFitRms": 0.32126483710673287,
+        "registeredY": 1582.4963490324935,
+        "registeredX": 3030.5952902519166
+      },
+      {
+        "cameraV": 1554.339240923876,
+        "cameraU": 3031.1071142467385,
+        "sourceFrameIndex": 56,
+        "registrationFitRms": 0.32021346490302033,
+        "registeredY": 1583.4203316510454,
+        "registeredX": 3030.6472602739727
+      },
+      {
+        "cameraV": 1554.256042547644,
+        "cameraU": 3031.0908960212214,
+        "sourceFrameIndex": 57,
+        "registrationFitRms": 0.3172613128897789,
+        "registeredY": 1583.4889732465654,
+        "registeredX": 3030.6297903109185
+      },
+      {
+        "cameraV": 1554.1012610283474,
+        "cameraU": 3031.199573601467,
+        "sourceFrameIndex": 58,
+        "registrationFitRms": 0.3179635385027838,
+        "registeredY": 1583.434189261986,
+        "registeredX": 3030.634225175076
+      },
+      {
+        "cameraV": 1553.8570673104086,
+        "cameraU": 3031.1079786879823,
+        "sourceFrameIndex": 59,
+        "registrationFitRms": 0.32146062285468224,
+        "registeredY": 1583.5218885672937,
+        "registeredX": 3030.6968162083936
+      }
+    ]
+  }
+]

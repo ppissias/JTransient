@@ -1,0 +1,12 @@
+{
+  "originalFramesChecked": 33,
+  "allSha256Unchanged": true,
+  "scratchBytesExcludingVenvAndDuplicateHardlinks": 20376647650,
+  "python": "3.12.10 (tags/v3.12.10:0cc8128, Apr  8 2025, 12:21:36) [MSC v.1943 64 bit (AMD64)]",
+  "numpy": "2.5.3",
+  "scipy": "1.18.1",
+  "numba": "0.68.1",
+  "psutil": "7.2.2",
+  "platform": "Windows",
+  "workers": 8
+}

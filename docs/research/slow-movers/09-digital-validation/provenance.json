@@ -1,0 +1,324 @@
+{
+  "study": "09-digital-validation",
+  "date": "2026-11-05",
+  "title": "SM-F6 matched-domain and candidate validation",
+  "scope": "Historical protocol, curated numerical evidence and figures. Current algorithm remains ALGORITHM.md.",
+  "entries": [
+    {
+      "archivePath": "PLAN.md",
+      "originalArtifact": "PLAN.md",
+      "sourceSha256": "d4112e71b6beef53630323f739db4d24e87def1e113dcd66ae6471c2d16c6497",
+      "archiveSha256": "781ac5c8916a4e36d2a0727b0a02f5d634b1aff37bcef24624680363ac080463",
+      "gzip": false,
+      "transformations": {
+        "historicalContextAdded": true
+      }
+    },
+    {
+      "archivePath": "CONCLUSION.md",
+      "originalArtifact": "CONCLUSION.md",
+      "sourceSha256": "70a8adc7522e4cd35d55663f25b85565f363bbf363c49a95c5d9baf62047035d",
+      "archiveSha256": "32c4c2a18461f534590bcd521d1a92f698286c1b51d4a99258d93f97d7df59fb",
+      "gzip": false,
+      "transformations": {
+        "historicalContextAdded": true
+      }
+    },
+    {
+      "archivePath": "CACHE-PLAN.md",
+      "originalArtifact": "CACHE-PLAN.md",
+      "sourceSha256": "e44b745d6c950c506fe6751884ac6861b596e0243985a75c9f0fd5b0152d52d6",
+      "archiveSha256": "a96fcd1ef79ecfcd5a90d184a397f96220caab0316c90383c7b55a7c126a2fc7",
+      "gzip": false,
+      "transformations": {
+        "historicalContextAdded": true
+      }
+    },
+    {
+      "archivePath": "SUBSET-PLAN.md",
+      "originalArtifact": "SUBSET-PLAN.md",
+      "sourceSha256": "2f694dc22b7159c003c59ff189cff1e1134314c7de48e639857d6aab6b31c37c",
+      "archiveSha256": "5e34137f34725a376590b9c202a21d223969a142ae1e8285f3ceeb8757488249",
+      "gzip": false,
+      "transformations": {
+        "historicalContextAdded": true
+      }
+    },
+    {
+      "archivePath": "ENCOUNTER-PLAN.md",
+      "originalArtifact": "ENCOUNTER-PLAN.md",
+      "sourceSha256": "4dfce7035d88691fa177b153f93bffc650bc2b394e3a42a6b24db9fdcb0324ef",
+      "archiveSha256": "7057e15108f80b982e2e580a57ec51c27ee0136e9ebeb35f74d5cca96c58eccf",
+      "gzip": false,
+      "transformations": {
+        "historicalContextAdded": true
+      }
+    },
+    {
+      "archivePath": "CATALOGUE-PLAN.md",
+      "originalArtifact": "CATALOGUE-PLAN.md",
+      "sourceSha256": "41135865195957fa84c2e6c1860ca3d5ebacb82e30dc0db8d8bb74d6a12f0888",
+      "archiveSha256": "0c3ff5c50aed2931e2a61e618c42a044b097ef819e9c67b707eb0245859413bc",
+      "gzip": false,
+      "transformations": {
+        "historicalContextAdded": true
+      }
+    },
+    {
+      "archivePath": "TRANSPORT-PLAN.md",
+      "originalArtifact": "TRANSPORT-PLAN.md",
+      "sourceSha256": "c86072ecb8120ff576e07bb3deed086e20b39102cb20581f065a01a10dea9874",
+      "archiveSha256": "88e9e5181d9dd2e41a3c5e2cbf61dd404133846511a11d7051cebc11af21fd02",
+      "gzip": false,
+      "transformations": {
+        "historicalContextAdded": true
+      }
+    },
+    {
+      "archivePath": "CATALOGUE-RETRY-PLAN.md",
+      "originalArtifact": "CATALOGUE-RETRY-PLAN.md",
+      "sourceSha256": "554c109712bf0d7156c6ab0395c4a9ea2fe7b1ecd8c8b39b26f2600e0ea80bdf",
+      "archiveSha256": "658df9259d6139a4da2a42c4799e49cf5d84bc7ab03d1041ea127cf79ffc049d",
+      "gzip": false,
+      "transformations": {
+        "historicalContextAdded": true
+      }
+    },
+    {
+      "archivePath": "profile.json",
+      "originalArtifact": "profile.json",
+      "sourceSha256": "2f6c15e13590c7836a31015dd1b9ad04ea2baeec6719ed96747efe46b4691a26",
+      "archiveSha256": "2f6c15e13590c7836a31015dd1b9ad04ea2baeec6719ed96747efe46b4691a26",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "summary.json",
+      "originalArtifact": "summary.json",
+      "sourceSha256": "374f8b3be9a3cf35d401e9e7bc8a9c007c2cad1c210f862431c69e2168e336f7",
+      "archiveSha256": "55492ec736defd9afba8cf72ab9e974d2f9f475b21f1d24cf828906d771748d5",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "source-associations.csv",
+      "originalArtifact": "source-associations.csv",
+      "sourceSha256": "31b6e92faffdf628f4e3ba65e3cf91a352145247b88431a72e19bae01dba328e",
+      "archiveSha256": "05dfe0b2e37b4c1ac7bd091a26cd7f99866100d0d1d943cebe78af77b07dda76",
+      "gzip": false,
+      "transformations": {
+        "lineEndingsNormalized": true
+      }
+    },
+    {
+      "archivePath": "source-associations.json.gz",
+      "originalArtifact": "source-associations.json",
+      "sourceSha256": "e5bb781576090925eae46f739321344dca9bcd90a097f20cd22238b151f3668c",
+      "archiveSha256": "6d4093e9177b5dcf7693028eb0b899cbf1d56121bccb462f77a2abd45db70a68",
+      "gzip": true,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "paired-policy-associations.json",
+      "originalArtifact": "paired-policy-associations.json",
+      "sourceSha256": "c6d3e43d2df24ba85ff5063f924721235a63fe18f631d188ff22ae1175b22e50",
+      "archiveSha256": "dd609f2ea5350d37a441d82d68a3726ddd36880446c00a365b914be064e2b466",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "supplement-summary.json",
+      "originalArtifact": "supplement-summary.json",
+      "sourceSha256": "3f469e4e938a196eef4c0cf1a5f73ab4a11b668e80415f6acd8e6d3e7dffea91",
+      "archiveSha256": "a845c2f08a83f1cfd5b7bd158a76e4aae068e2e29b718f13ab332ab9f103ff40",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "evidence-audit.json",
+      "originalArtifact": "evidence-audit.json",
+      "sourceSha256": "de379ab524ba00a7f85da272da4092b9a6cf53912a40326e237d54712d3942be",
+      "archiveSha256": "0f165a7d9e7f83cb340fc070ed945f2108478e86bf932f4c49bb92f1cb15ca04",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "catalogue-comparison-retry.json",
+      "originalArtifact": "catalogue-comparison-retry.json",
+      "sourceSha256": "0928487b1069f5ade61c057d62f483e492ec95365e4d211949e94776ca19b589",
+      "archiveSha256": "f8e703fc99d2cb946e6cb0d2bade58a67c2384e1e255a59b5550ece4bdf58006",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "candidate-review-statistics.json",
+      "originalArtifact": "candidate-review-statistics.json",
+      "sourceSha256": "4fe21e2f0f189214b7c2a16fc632b3f6921288e9035a6450372dcb6ead13403d",
+      "archiveSha256": "ca7c9b6e7a991b9fe586384053a73364a3eab1afd3647ff8ea7a21b44a0b1cfd",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "controls.json",
+      "originalArtifact": "controls.json",
+      "sourceSha256": "c1685a436d311b0c8ab54e0e78ea917555285576a695c37a6177907996e9b303",
+      "archiveSha256": "3c3c3bc84e42e273cf02a9211448fda386c7b189a79649baa82c6e1e7d85c808",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "cached-controls.json",
+      "originalArtifact": "cached-controls.json",
+      "sourceSha256": "a548c9c8c15efef83e0eb6689739bbf60b78924332285d0227d676bd3acbc56a",
+      "archiveSha256": "ad2e800a7d34d47a3901539673d27850adcc251c365eb3fcb7482113cdd6c064",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "cache-native-parity.json",
+      "originalArtifact": "cache-native-parity.json",
+      "sourceSha256": "cfb43534d6e8b027e4ebdc15565e02531521f01639f78312018f6d0950b5fe89",
+      "archiveSha256": "00318774c499c9b85a0a62d9db52cf086231990890790ba4ded8f0f982abb1bb",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "full-reference-cutout-parity.json",
+      "originalArtifact": "full-reference-cutout-parity.json",
+      "sourceSha256": "839e8756e1c230efa6214e6f78998bcd1d22aac1ef30342e7a6be09433a78be1",
+      "archiveSha256": "8bfaa811e043d78f2990866309f3516b47976de0b9653cb120bde834c8631d54",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "encounter-controls.json",
+      "originalArtifact": "encounter-controls.json",
+      "sourceSha256": "15dd51f2522f6b7ca5048b9b6b6a57e66bd29d10aa433438a78d9f3d950b4331",
+      "archiveSha256": "0aa2c8eab8c68e5348d97fbec706cdcfbbddf3e3784d2fcb5e32a377aa30bbfd",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "numeric-documentation-validation.json",
+      "originalArtifact": "numeric-documentation-validation.json",
+      "sourceSha256": "866cd31c964d84cfa55759b3bdf1fa9e18b5cdc37dbfddf79cabe833932f025d",
+      "archiveSha256": "30a7ae2307c0febddf49c632d5ab4430a6484a29799fb2f9caafcf853797524d",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "validation.json",
+      "originalArtifact": "validation.json",
+      "sourceSha256": "8489394ecf867218c4ffd70c803d086cee0a943c50e76122bbb8247ced381e60",
+      "archiveSha256": "db19933afa119bd649eef5b030e674657d814a493d705e86b24da08abc9d12ab",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON, two-space indent; finite values preserved"
+      }
+    },
+    {
+      "archivePath": "policy-review.png",
+      "originalArtifact": "policy-review.png",
+      "sourceSha256": "03bbab787ab3f57589e587a11aca535c5dc7b9c6ffa282a7cb53a178d7b08b04",
+      "archiveSha256": "03bbab787ab3f57589e587a11aca535c5dc7b9c6ffa282a7cb53a178d7b08b04",
+      "gzip": false,
+      "transformations": {}
+    },
+    {
+      "archivePath": "policy-review.svg",
+      "originalArtifact": "policy-review.svg",
+      "sourceSha256": "d1b378898f773b761d6e66c7a8d56b19991484ca9b6b1f14b4c31ef71f220ab4",
+      "archiveSha256": "6548739ca43ab381ca3f0d18365b2a323af3f50de82bc2f452a67b1252895a93",
+      "gzip": false,
+      "transformations": {
+        "svgTrailingWhitespaceTrimmed": 1248,
+        "lineEndingsNormalized": true
+      }
+    },
+    {
+      "archivePath": "injection-review.png",
+      "originalArtifact": "injection-review.png",
+      "sourceSha256": "cf6560f8405b05655ed8410dac0b4415c3c09b71502192ef3fd5d45ef1776ce0",
+      "archiveSha256": "cf6560f8405b05655ed8410dac0b4415c3c09b71502192ef3fd5d45ef1776ce0",
+      "gzip": false,
+      "transformations": {}
+    },
+    {
+      "archivePath": "injection-review.svg",
+      "originalArtifact": "injection-review.svg",
+      "sourceSha256": "1818febc06e883b36d0398178cc02c4af2de6bb57cea75c2d313cd353d35fd5a",
+      "archiveSha256": "2922dc370dc448767fcd42db60c984397567f673c0a2026577e4cffa8bfe1ad8",
+      "gzip": false,
+      "transformations": {
+        "svgTrailingWhitespaceTrimmed": 834,
+        "lineEndingsNormalized": true
+      }
+    },
+    {
+      "archivePath": "supplement-review.png",
+      "originalArtifact": "supplement-review.png",
+      "sourceSha256": "2fc4396780bf4c80c744f92d72e852692492951fde226ffb0090b00fefd88c04",
+      "archiveSha256": "2fc4396780bf4c80c744f92d72e852692492951fde226ffb0090b00fefd88c04",
+      "gzip": false,
+      "transformations": {}
+    },
+    {
+      "archivePath": "supplement-review.svg",
+      "originalArtifact": "supplement-review.svg",
+      "sourceSha256": "38a10dc2ab6113e1358f71683a244f54ac4572187a9b4f714ce0ff144524c871",
+      "archiveSha256": "c2c2e7565f1482d088a4e3b908c1be39bf4b34ba48123beed262861f2133056c",
+      "gzip": false,
+      "transformations": {
+        "svgTrailingWhitespaceTrimmed": 975,
+        "lineEndingsNormalized": true
+      }
+    },
+    {
+      "archivePath": "candidate-review.png",
+      "originalArtifact": "candidate-review.png",
+      "sourceSha256": "72da0f4bdf4db8d1812ad27960341c6e9b522334546d5300334b08205de49699",
+      "archiveSha256": "72da0f4bdf4db8d1812ad27960341c6e9b522334546d5300334b08205de49699",
+      "gzip": false,
+      "transformations": {}
+    },
+    {
+      "archivePath": "candidate-review.svg",
+      "originalArtifact": "candidate-review.svg",
+      "sourceSha256": "a2f6f4d21bdb8d9534154102c79051445cc766cd2e3389f254ea83863042b9f4",
+      "archiveSha256": "d4e0fca8d1dd0d4e2549b1e1571abf9b5fa02929fe7c7cae941784c2e80f42a8",
+      "gzip": false,
+      "transformations": {
+        "svgTrailingWhitespaceTrimmed": 1596,
+        "lineEndingsNormalized": true
+      }
+    }
+  ]
+}

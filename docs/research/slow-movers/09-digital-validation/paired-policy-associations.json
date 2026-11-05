@@ -1,0 +1,136 @@
+{
+  "baseline": {
+    "availableMovingPairs": 29,
+    "observedGains": [],
+    "observedLosses": []
+  },
+  "no_half": {
+    "availableMovingPairs": 29,
+    "observedGains": [],
+    "observedLosses": []
+  },
+  "no_stationary": {
+    "availableMovingPairs": 29,
+    "observedGains": [],
+    "observedLosses": []
+  },
+  "no_camera_margin": {
+    "availableMovingPairs": 29,
+    "observedGains": [],
+    "observedLosses": []
+  },
+  "no_camera_share": {
+    "availableMovingPairs": 29,
+    "observedGains": [],
+    "observedLosses": []
+  },
+  "no_camera": {
+    "availableMovingPairs": 29,
+    "observedGains": [],
+    "observedLosses": []
+  },
+  "no_duplicate": {
+    "availableMovingPairs": 29,
+    "observedGains": [],
+    "observedLosses": []
+  },
+  "no_track": {
+    "availableMovingPairs": 29,
+    "observedGains": [],
+    "observedLosses": []
+  },
+  "no_sidelobe": {
+    "availableMovingPairs": 29,
+    "observedGains": [],
+    "observedLosses": []
+  },
+  "no_track_sidelobe": {
+    "availableMovingPairs": 29,
+    "observedGains": [],
+    "observedLosses": []
+  },
+  "no_star_mask": {
+    "availableMovingPairs": 29,
+    "observedGains": [
+      [
+        "Africano",
+        "S5"
+      ],
+      [
+        "helix-reg",
+        "S5"
+      ]
+    ],
+    "observedLosses": [
+      [
+        "helix-reg",
+        "S2"
+      ],
+      [
+        "klangwolke-2",
+        "S1"
+      ]
+    ]
+  },
+  "no_streak_mask": {
+    "availableMovingPairs": 29,
+    "observedGains": [],
+    "observedLosses": []
+  },
+  "no_clip": {
+    "availableMovingPairs": 29,
+    "observedGains": [],
+    "observedLosses": [
+      [
+        "helix-reg",
+        "S2"
+      ]
+    ]
+  },
+  "coarse35": {
+    "availableMovingPairs": 29,
+    "observedGains": [],
+    "observedLosses": []
+  },
+  "score6": {
+    "availableMovingPairs": 29,
+    "observedGains": [
+      [
+        "UG 6524-kumar-L-dataset-registeed",
+        "S3"
+      ],
+      [
+        "helix-reg",
+        "S1"
+      ],
+      [
+        "helix-reg",
+        "S4"
+      ],
+      [
+        "ic-5070-reg",
+        "S1"
+      ],
+      [
+        "klangwolke-2",
+        "S2"
+      ]
+    ],
+    "observedLosses": []
+  },
+  "peak3": {
+    "availableMovingPairs": 29,
+    "observedGains": [],
+    "observedLosses": []
+  },
+  "no_half_no_clip": {
+    "availableMovingPairs": 29,
+    "observedGains": [],
+    "observedLosses": [
+      [
+        "helix-reg",
+        "S2"
+      ]
+    ]
+  }
+}

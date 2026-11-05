@@ -1,0 +1,156 @@
+{
+  "cameraControlRepresentability": [
+    {
+      "dataset": "klangwolke-2",
+      "unavailable": null,
+      "bestLineRmsPixels": 3.9781607213210592,
+      "searchFwhm": 2.6184566194998324,
+      "bestLineSpeed": 0.12781805829607526,
+      "representableWithinAssociationTolerance": false,
+      "nominalMinSpeed": 0.07008512071492823,
+      "nominalMaxSpeed": 1.0,
+      "withinNominalMotionGrid": true,
+      "eligibleFullPathCameraControl": false
+    },
+    {
+      "dataset": "M81-kumar-L-dataset-registered",
+      "unavailable": null,
+      "bestLineRmsPixels": 16.982610222560414,
+      "searchFwhm": 1.5825834980633298,
+      "bestLineSpeed": 0.5308790723295701,
+      "representableWithinAssociationTolerance": false,
+      "nominalMinSpeed": 0.008966103249953583,
+      "nominalMaxSpeed": 1.0,
+      "withinNominalMotionGrid": true,
+      "eligibleFullPathCameraControl": false
+    },
+    {
+      "dataset": "helix-reg",
+      "unavailable": null,
+      "bestLineRmsPixels": 0.278899613164302,
+      "searchFwhm": 2.4305617668011945,
+      "bestLineSpeed": 0.0020857856359656293,
+      "representableWithinAssociationTolerance": true,
+      "nominalMinSpeed": 0.04221557562833164,
+      "nominalMaxSpeed": 1.0,
+      "withinNominalMotionGrid": false,
+      "eligibleFullPathCameraControl": false
+    },
+    {
+      "dataset": "ic-5070-reg",
+      "unavailable": null,
+      "bestLineRmsPixels": 0.3700503917057103,
+      "searchFwhm": 2.9017775789928755,
+      "bestLineSpeed": 0.0010160579607887592,
+      "representableWithinAssociationTolerance": true,
+      "nominalMinSpeed": 0.04899582235530394,
+      "nominalMaxSpeed": 1.0,
+      "withinNominalMotionGrid": false,
+      "eligibleFullPathCameraControl": false
+    },
+    {
+      "dataset": "Africano",
+      "unavailable": null,
+      "bestLineRmsPixels": 27.441665792319572,
+      "searchFwhm": 1.8085645877730983,
+      "bestLineSpeed": 0.3700537619972873,
+      "representableWithinAssociationTolerance": false,
+      "nominalMinSpeed": 0.023288738119194314,
+      "nominalMaxSpeed": 1.0,
+      "withinNominalMotionGrid": true,
+      "eligibleFullPathCameraControl": false
+    },
+    {
+      "dataset": "UG 6524-kumar-L-dataset-registeed",
+      "unavailable": null,
+      "bestLineRmsPixels": 16.835990809771694,
+      "searchFwhm": 3.2556394226437133,
+      "bestLineSpeed": 0.26605001602585937,
+      "representableWithinAssociationTolerance": false,
+      "nominalMinSpeed": 0.01754841263951058,
+      "nominalMaxSpeed": 1.0,
+      "withinNominalMotionGrid": true,
+      "eligibleFullPathCameraControl": false
+    }
+  ],
+  "resourceObservations": [
+    {
+      "dataset": "klangwolke-2",
+      "elapsedSeconds": 609.375,
+      "preparationSeconds": 194.4430963,
+      "largestSampledWorkingSet": 8761360384,
+      "largestRecordedKernelPeakWorkingSet": 8944291840,
+      "samples": 203,
+      "productionTimingComparisonValid": false,
+      "scope": "Whole diagnostic JVM including preparation, parity checks, shared computations and serialization"
+    },
+    {
+      "dataset": "M81-kumar-L-dataset-registered",
+      "elapsedSeconds": 4326.704000000027,
+      "preparationSeconds": 28.4937524,
+      "largestSampledWorkingSet": 4914274304,
+      "largestRecordedKernelPeakWorkingSet": 4914274304,
+      "samples": 1442,
+      "productionTimingComparisonValid": false,
+      "scope": "Whole diagnostic JVM including preparation, parity checks, shared computations and serialization"
+    },
+    {
+      "dataset": "helix-reg",
+      "elapsedSeconds": 261.26599999994505,
+      "preparationSeconds": 4.1885744,
+      "largestSampledWorkingSet": 2482630656,
+      "largestRecordedKernelPeakWorkingSet": 2482630656,
+      "samples": 87,
+      "productionTimingComparisonValid": false,
+      "scope": "Whole diagnostic JVM including preparation, parity checks, shared computations and serialization"
+    },
+    {
+      "dataset": "ic-5070-reg",
+      "elapsedSeconds": 180.1720000000205,
+      "preparationSeconds": 2.9857647,
+      "largestSampledWorkingSet": 2281897984,
+      "largestRecordedKernelPeakWorkingSet": 2281897984,
+      "samples": 60,
+      "productionTimingComparisonValid": false,
+      "scope": "Whole diagnostic JVM including preparation, parity checks, shared computations and serialization"
+    },
+    {
+      "dataset": "Africano",
+      "elapsedSeconds": 297.2179999999935,
+      "preparationSeconds": 2.7265667,
+      "largestSampledWorkingSet": 1971163136,
+      "largestRecordedKernelPeakWorkingSet": 2020786176,
+      "samples": 99,
+      "productionTimingComparisonValid": false,
+      "scope": "Whole diagnostic JVM including preparation, parity checks, shared computations and serialization"
+    },
+    {
+      "dataset": "UG 6524-kumar-L-dataset-registeed",
+      "elapsedSeconds": 1434.313000000082,
+      "preparationSeconds": 16.8287844,
+      "largestSampledWorkingSet": 5495046144,
+      "largestRecordedKernelPeakWorkingSet": 5512839168,
+      "samples": 478,
+      "productionTimingComparisonValid": false,
+      "scope": "Whole diagnostic JVM including preparation, parity checks, shared computations and serialization"
+    }
+  ],
+  "cameraPredicateLogic": {
+    "cameraMarginImpliedByShareAtScoresAtLeast4": true,
+    "predicateChecks": 80,
+    "below4Counterexample": {
+      "score": 3,
+      "camera": 1.25,
+      "sharePass": true,
+      "marginPass": false
+    },
+    "configurationDomain": "faintMoverMinScore is POSITIVE, not constrained to >=4",
+    "productionChangeWarranted": false
+  },
+  "notes": [
+    "Camera-path association requires the full injected locus to lie within one FWHM of a constant-velocity candidate. Nonlinear native camera trajectories are not adequate standalone tests of the camera gates.",
+    "Zero observed camera associations does not establish redundancy.",
+    "At the studied score floors8/6, removing only the camera margin must have no effect if camera share is retained; this implication does not justify changing valid lower-score behavior.",
+    "Whole-process resource observations include the study harness and reuse; they are not per-policy production overhead or calibrated peaks between samples."
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "localLinksChecked": 11,
+  "brokenLinks": [],
+  "reportsCompared": 18,
+  "identicalNonHtmlAssets": 5310,
+  "tests": [
+    {
+      "repo": "JTransient",
+      "tests": 354,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "repo": "SpacePixels",
+      "tests": 762,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 7
+    }
+  ],
+  "inputIntegrity": {
+    "images": 818,
+    "unchanged": true,
+    "changed": [],
+    "seconds": 11.15700000000652
+  }
+}

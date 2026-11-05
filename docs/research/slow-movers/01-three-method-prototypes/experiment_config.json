@@ -1,0 +1,17 @@
+{
+  "core": 512,
+  "margin": 112,
+  "psfSigma": 1.2697361157116043,
+  "smoothSkySigma": 18,
+  "temporalNoiseFloor": 1,
+  "clipContribution": 5,
+  "strongReferenceThresholdADU": 4000,
+  "pointThreshold": 3,
+  "binThreshold": 4,
+  "velocityComponentLimit": 48,
+  "coarseVelocityStep": 4,
+  "minimumMotion": 8,
+  "minObservations": 14,
+  "searchThreshold": 7,
+  "workers": 8
+}

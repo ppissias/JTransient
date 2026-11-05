@@ -1,0 +1,124 @@
+{
+  "dataset": "Iwamoto-huge",
+  "case": 161,
+  "truthRmsVerified": 0.4064230041401778,
+  "frozenTemporalReview": [
+    {
+      "truthAssociated": true,
+      "truthRmsPixels": 0.40642300414017296,
+      "originalShape": true,
+      "positions": 14,
+      "streakContacts": 0,
+      "review": {
+        "positions": 14,
+        "camera": {
+          "available": true,
+          "frames": 14,
+          "rmsRadiusPixels": 4.597177898652885,
+          "maxRadiusPixels": 7.320861529683499,
+          "medianRegistrationFitRms": 1.0,
+          "empiricalTolerancePixels": 1.4142135623730951,
+          "compatible": false
+        },
+        "temporalAvailable": true,
+        "status": "temporal_mismatch",
+        "empiricalTemporalTolerancePixels": 2.0,
+        "timeBinCounts": [
+          6,
+          2,
+          6
+        ],
+        "models": [
+          {
+            "degree": 1,
+            "heldOutRmsPixels": 3.890120974569271,
+            "foldRmsPixels": [
+              3.048011130002951,
+              1.4867656594783065,
+              5.02824358682754
+            ],
+            "fittedSupportedSpanPixels": 12.51727842218005
+          },
+          {
+            "degree": 2,
+            "heldOutRmsPixels": 2.6459099236562644,
+            "foldRmsPixels": [
+              1.6336785559357005,
+              0.3337909707017376,
+              3.6917810509393436
+            ],
+            "fittedSupportedSpanPixels": 12.500999510329073
+          }
+        ],
+        "bestModel": {
+          "degree": 2,
+          "heldOutRmsPixels": 2.6459099236562644,
+          "foldRmsPixels": [
+            1.6336785559357005,
+            0.3337909707017376,
+            3.6917810509393436
+          ],
+          "fittedSupportedSpanPixels": 12.500999510329073
+        },
+        "supportedSpanMinutes": 19.683333333333334,
+        "temporalCompatible": false,
+        "motionResolved": true
+      },
+      "secondaryWithoutContact": {
+        "positions": 14,
+        "camera": {
+          "available": true,
+          "frames": 14,
+          "rmsRadiusPixels": 4.597177898652885,
+          "maxRadiusPixels": 7.320861529683499,
+          "medianRegistrationFitRms": 1.0,
+          "empiricalTolerancePixels": 1.4142135623730951,
+          "compatible": false
+        },
+        "temporalAvailable": true,
+        "status": "temporal_mismatch",
+        "empiricalTemporalTolerancePixels": 2.0,
+        "timeBinCounts": [
+          6,
+          2,
+          6
+        ],
+        "models": [
+          {
+            "degree": 1,
+            "heldOutRmsPixels": 3.890120974569271,
+            "foldRmsPixels": [
+              3.048011130002951,
+              1.4867656594783065,
+              5.02824358682754
+            ],
+            "fittedSupportedSpanPixels": 12.51727842218005
+          },
+          {
+            "degree": 2,
+            "heldOutRmsPixels": 2.6459099236562644,
+            "foldRmsPixels": [
+              1.6336785559357005,
+              0.3337909707017376,
+              3.6917810509393436
+            ],
+            "fittedSupportedSpanPixels": 12.500999510329073
+          }
+        ],
+        "bestModel": {
+          "degree": 2,
+          "heldOutRmsPixels": 2.6459099236562644,
+          "foldRmsPixels": [
+            1.6336785559357005,
+            0.3337909707017376,
+            3.6917810509393436
+          ],
+          "fittedSupportedSpanPixels": 12.500999510329073
+        },
+        "supportedSpanMinutes": 19.683333333333334,
+        "temporalCompatible": false,
+        "motionResolved": true
+      }
+    }
+  ]
+}
