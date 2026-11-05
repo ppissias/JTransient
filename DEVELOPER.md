@@ -64,7 +64,7 @@ Engine-specific additions:
 - **Engine fixes go one at a time.** Each is checked with this repository's tests, the SpacePixels tests and the real-data comparison.
 - **Evaluate issue reviews before implementation.** Consider each review comment, check its evidence against the current code, and record the decision and relevant verification with the change. Separate structural cleanup from changes to accepted configurations, diagnostic routing, tuning policy or exception behavior.
 - **Document every new Java type,** including nested types and tests, at type level. Give each new method and explicit constructor a concise Javadoc, private helpers included, covering ownership and mutation, units and contracts. Keep it current when behaviour changes.
-- **Algorithm descriptions live in ALGORITHM.md,** in the section of the relevant branch. Do not start a separate algorithm guide.
+- **Algorithm descriptions live in ALGORITHM.md,** in the section of the relevant branch. Describe current behavior, contracts and necessary limitations, without dataset-specific experiment histories. Use concise decision notes by default; detailed experimental publication requires an explicit maintainer request, as in the shared working rules. Do not start a separate algorithm guide.
 
 ## Build and test
 

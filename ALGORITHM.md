@@ -1,8 +1,8 @@
 # JTransient Algorithms
 
-This is the current algorithm reference for detection, slow movers, variable-star photometry and the auto-tuner. Reviewed against the implementation on 2026-10-19. [PIPELINE.md](PIPELINE.md) owns API signatures/result contracts, [CONFIG.md](CONFIG.md) owns `DetectionConfig` fields/defaults, and [DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md) owns proposed work and decisions.
+This is the current algorithm reference for detection, slow movers, variable-star photometry and the auto-tuner. [PIPELINE.md](PIPELINE.md) owns API signatures/result contracts, [CONFIG.md](CONFIG.md) owns `DetectionConfig` fields/defaults, and [FEATURE-REQUESTS.md](FEATURE-REQUESTS.md) owns algorithm proposals and decisions; [DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md) owns structural work.
 
-The [dated slow-mover investigation archive](docs/research/slow-movers/README.md) retains protocols, numerical evidence, figures and code-delivery history behind the research summaries below. Historical experiment reports are separate from this current algorithm reference.
+Historical evidence and delivery history are available separately in the [research archive](docs/research/slow-movers/README.md). This reference describes the implemented algorithms, their contracts and limitations.
 
 | Topic | Sections |
 |---|---|
@@ -40,7 +40,7 @@ The [dated slow-mover investigation archive](docs/research/slow-movers/README.md
   - [Frame evidence](#frame-evidence)
   - [Temporal review and track correspondence](#temporal-review-and-track-correspondence)
   - [Settings and interpretation](#settings-and-interpretation)
-  - [Maximum-stack investigation](#maximum-stack-investigation)
+  - [Limitations of maximum-stack candidates](#maximum-stack-limits)
   - [Outputs and ownership](#outputs-and-ownership)
 - [9. Stationary-Star Veto Filtering And Streak Linking](#9-stationary-star-veto-filtering-and-streak-linking)
   - [9.1 Streak separation](#91-streak-separation)
@@ -148,7 +148,7 @@ The analyzer also records each usable frame's coverage (`FrameCoverage`): the fi
 - the **quality area**, over every usable frame. A frame that alone shrinks it by 5 % of the frame or more is left out and rejected ("Shifted away from the other frames"), one at a time and at most a tenth of the frames. The sky and the quality metrics are measured here.
 - the **data area**, over the frames kept by quality control (section 5). Detection, slow movers and photometry keep to it, and it is exported as `PipelineResult.dataArea` with the frames that limit it most (`PipelineTelemetry.dataAreaLimitingFrames`).
 
-From the same coverage, `FrameRegistration.fit` measures how registration moved each usable frame: a shift and a rotation. Registration moves the camera's rectangle of pixels and the fill marks where it no longer reaches, so the first and last data pixel of each row and column (away from the corners) lie on the rectangle's sides. A least-squares fit of the turned rectangle to these points, with points more than 2 px off dropped, gives `tx`, `ty` and `theta` (DriftAnalysisResult.frameRegistrations). Sides without fill leave their shift at 0 (the frame moved less than a pixel that way); a frame without fill keeps the camera's position; a fit worse than 2 px rms marks the frame as not usable. On the reference datasets the fits are within 0.3-1.1 px. A frame turned by 180 degrees (a meridian flip) leaves the same fill as one that is not turned, so its camera positions come out mirrored and it only matches frames of its own pier side.
+From the same coverage, `FrameRegistration.fit` measures how registration moved each usable frame: a shift and a rotation. Registration moves the camera's rectangle of pixels and the fill marks where it no longer reaches, so the first and last data pixel of each row and column (away from the corners) lie on the rectangle's sides. A least-squares fit of the turned rectangle to these points, with points more than 2 px off dropped, gives `tx`, `ty` and `theta` (DriftAnalysisResult.frameRegistrations). Sides without fill leave their shift at 0 (the frame moved less than a pixel that way); a frame without fill keeps the camera's position; a fit worse than 2 px rms marks the frame as not usable. A frame turned by 180 degrees (a meridian flip) leaves the same fill as one that is not turned, so its camera positions come out mirrored and it only matches frames of its own pier side.
 
 The engine never changes the caller's configuration.
 
@@ -296,7 +296,7 @@ Four absolute floors keep the rejection envelopes from becoming too tight:
 
 The background envelope is also never smaller than the session's median per-frame sky noise.
 
-The star count has no absolute floor: its limit is the median minus a multiple of the MAD sigma. Since the counts are measured on the same sky in every frame (the quality area), they vary little between frames, so the limit can sit close to the median; on Africano a frame with 26 % fewer stars than the median is rejected. A relative floor was considered (code review QC-1) and left for later.
+The star-count envelope has no absolute or relative floor. With counts measured over the same quality area, a narrow spread can put the lower limit close to the median, so a small count loss can reject a frame. The current rule remains median minus the configured multiple of the MAD sigma; a possible floor is deferred under [QC-1](FEATURE-REQUESTS.md#qc-1-star-count-rejection-envelope).
 
 Rejected frames are recorded in `PipelineTelemetry.rejectedFrames`. Only the retained frames participate in stacking and tracking.
 
@@ -332,7 +332,7 @@ The engine next extracts stationary objects from the median master stack using a
 1. on the stack with one sky level for the whole stack, as the frames are searched;
 2. on a copy with the smooth sky subtracted (`SkyBackground.flatten`), seeded at 5 sigma (or the master sigma if higher) and grown as the first. An object of this pass is added when it shares no pixel with one of the first pass, so no object is listed twice and the mask covers at least what the first pass covers.
 
-The second pass is for sky gradients. With one sky level, the noise estimate includes the gradient (5 times the real noise on M81-kumar), so the threshold is far above the sky on the dark side, where faint stars were left out of the mask and came back as hundreds of stationary leftovers in the frames (local rescue candidates, common-motion groups). The first pass stays because the frames are still searched with one sky level each: they also detect bright emission larger than a sky box, such as the nebula of klangwolke-1, and only the first pass masks it (the second pass alone left 2,000 leftovers per frame there). The second pass seeds at 5 sigma because the master sigma was chosen against a noise estimate that the gradient inflated: on the real noise it adds noise peaks (565 on Apophis, one of them on the path of Apophis itself), while a stationary source that a frame can detect stands out of the median of ten or more frames by about 5 sigma or more.
+The local-sky pass finds stationary sources that a global noise estimate can miss in a gradient. The original global pass remains because frame extraction also uses one sky level and can detect emission larger than a local sky box; those persistent extended objects still need masking. Local seeds use at least 5 sigma so that a threshold selected against inflated global noise is not reused unchanged against the smaller local noise. Both passes contribute to the master reference.
 
 The sky map:
 
@@ -412,218 +412,22 @@ Callers must check availability flags. Unavailable scores do not veto a candidat
 
 The fit requires at least three ordered supported positions and valid, strictly increasing timestamps throughout the retained sequence. Timestamp zero is valid; missing, repeated or decreasing times have an explicit unavailable reason and never fall back to a per-frame rate disguised as px/min. Constant centroids can have a valid zero-drift fit with undefined correlation. Unavailable numeric fields are finite zeroes guarded by their availability flags. Supported/session spans and their ratio expose limited coverage; drift is not extrapolated over unsupported parts of the session. None of these values changes an acceptance gate, candidate order or configuration.
 
-After tracks exist, `SlowMoverTrackMatcher.match(candidate.object, candidate.diagnostics.motionEvidence, track)` measures a possible correspondence without modifying either finding. It preserves the report's former spatial screen: a track point lies within `clamp(0.55 * sqrt(footprintArea/pi) + 2, 3, 10)` pixels of the exact footprint (centroid fallback if absent). This is a display screen, not a duplicate threshold. Original sequence identities pair common supported frames; repeated IDs and conflicting known capture times are excluded and counted. The returned immutable `Match` gives spatial counts/distances, common-frame count and centroid RMS/maximum separation, with explicit availability. It does not match by nearest time or extrapolated position, and an overlap alone cannot establish identity. Crossings, reversed paths, parallel/partial tracks and ambiguous IDs are covered by controls.
+After tracks exist, `SlowMoverTrackMatcher.match(candidate.object, candidate.diagnostics.motionEvidence, track)` measures a possible correspondence without modifying either finding. Its spatial screen requires a track point within `clamp(0.55 * sqrt(footprintArea/pi) + 2, 3, 10)` pixels of the exact footprint (centroid fallback if absent). This is a display screen, not a duplicate threshold. Original sequence identities pair common supported frames; repeated IDs and conflicting known capture times are excluded and counted. The returned immutable `Match` gives spatial counts/distances, common-frame count and centroid RMS/maximum separation, with explicit availability. It does not match by nearest time or extrapolated position, and an overlap alone cannot establish identity, particularly for crossing, reversed or parallel paths.
 
 ### Settings and interpretation
 
-The extraction, morphology, overlap and frame-evidence controls and their engine defaults are listed once in [CONFIG.md](CONFIG.md#2-master-stack-and-slow-mover-extraction). `slowMoverMinFillFactor = 0` disables the fill veto; overlap bounds are fractions, while frame support/stationarity are percentages with availability flags. The maximum-stack sigma is not interchangeable with a per-frame sigma. Neither tuner currently tunes slow-mover extraction thresholds.
+The extraction, morphology, overlap and frame-evidence controls and their engine defaults are listed once in [CONFIG.md](CONFIG.md#2-master-stack-and-slow-mover-extraction). `slowMoverMinFillFactor = 0` disables the fill veto; overlap bounds are fractions, while frame support/stationarity are percentages with availability flags. The maximum-stack sigma is not interchangeable with a per-frame sigma. Auto-Tune does not tune slow-mover extraction thresholds.
 
-### Maximum-stack investigation
+<a id="maximum-stack-investigation"></a>
+<a id="maximum-stack-limits"></a>
 
-The SM-F3 review (2026-11-04) tested temporal evidence (P1), a maximum axis ratio of 5 (P2), median-subtracted extraction/evidence (P3), and row caching (P4). P4 and the non-gating temporal/correspondence review above are implemented. Temporal rejection, automatic duplicate suppression, wider default shapes and residual detection remain experiments; production gates and settings above remain unchanged.
+### Limitations of maximum-stack candidates
 
-The original proposal's 5–6 px motion window is not a general limit. Axis ratio describes a threshold-dependent footprint, not a timed displacement. In Klangwolke-2, Prokne moves about 16.1 px and passes the current gates with minor extent 11.2 px and axis ratio 2.25. A fixed 3.5 px width cannot be assumed for every source. Stationary clustering also depends on sampled centroids, their uncertainty and their distribution through time.
+A maximum stack records the brightest sample at each pixel and discards its time order. An elongated footprint can therefore come from a moving source, a blend, changing seeing, a trail crossing or an artifact. Its geometric displacement estimate is not a measured trajectory. Low signal or merged components can prevent a real source from becoming a candidate before the frame screens run.
 
-For independent, identically distributed Gaussian sky samples, the standardized maximum has exact CDF `P(max <= z) = Phi(z)^N`. Numerical integration gives an expectation of 2.043 sigma above sky and a median of 1.998 sigma for N = 30. The proposal's `sqrt(2 log N) = 2.608` is only a leading large-N term; normal order-statistic means require finite-sample treatment ([NIST](https://www.itl.nist.gov/div898/software/dataplot/refman2/auxillar/ordstmea.htm)). Maximum-stack extraction estimates that stack's own background/noise. These idealized values do not set a universal single-frame SNR cutoff: real backgrounds are correlated and source occupancy, seeing and footprint selection matter. Coherent integration remains the separate [faint-mover search](#faint-mover-search).
+The local aperture can follow a neighbouring star inside the footprint. Frame support and stationary clustering are heuristic screens. Copied centroids, correlation and fit RMS provide descriptive review evidence with explicit availability; they are not independent confirmation or calibrated positional uncertainty. Track overlap is a review measurement and never merges or suppresses either finding. Maximum-stack candidates do not receive a temporal-bin or camera-path veto.
 
-Subtracting the same static image commutes with the per-pixel maximum: `max_t(I_t - m) = max_t(I_t) - m`. It changes contrast and component geometry, but does not reduce the maximum's temporal noise selection or fix a search on original frames. The experiments therefore separate residual extraction from residual frame evidence. Residual apertures use signed, unclipped frame-minus-median values and a local ring; a scratch copy first reproduces production raw-frame support counts, usable counts, stationary scores and availability exactly for every evaluated candidate.
-
-**Full-field comparisons.** All retained frames at native dimensions are used with the shipped SpacePixels profile, no Auto-Tune and faint search off. Each variant retains the other extraction, fill, median-overlap and support/stationarity gates. The two residual columns keep the current axis limit of 2.8. Counts are survivors to investigate, not confirmed movers or measured false positives.
-
-| Session | Kept frames | Current | Axis limit 5 only | Residual extraction, raw evidence | Residual extraction and evidence |
-|---|---:|---:|---:|---:|---:|
-| Klangwolke-2 | 28 | 1 | 2 | 3 | 3 |
-| Eagle-noisy | 43 | 13 | 14 | 41 | 117 |
-| M81 Kumar | 39 | 0 | 0 | 0 | 108 |
-| helix-reg | 39 | 4 | 4 | 12 | 15 |
-| m101-reg | 106 | 0 | 0 | 0 | 0 |
-
-Prokne is the current Klangwolke-2 survivor; raising the axis limit adds Valeria (axis ratio 2.85). Both already have ordinary tracks, with 12 and 27 measured positions respectively matching the saved predicted paths within 0.22 px. The slow-mover stage precedes tracking, so duplicate ownership needs a later association step rather than consulting a track that does not yet exist. No frozen maximum-stack variant recovers the three approximately magnitude-18.5 targets. The residual extraction produces a footprint close to Sutoku, but its fill factor 0.366 fails the retained 0.5 gate; this is not a recovered candidate.
-
-Projecting supported centroids onto the moment axis and imposing the proposed `abs(Pearson(position, captureTime)) >= 0.70` preserves Prokne/Valeria and removes the 13 Eagle and four helix current survivors. Their removal does not establish that they are false positives. Six residual-evidence M81 candidates also have high correlation without confirmed moving identities. There are 199 deterministic time-label permutations per candidate; these diagnose temporal ordering, not a global false-alarm probability after searching many footprints. Seeing/registration trends can also correlate with time.
-
-**Injected controls.** Three fixed 192 px tiles per session, centred at quarter/half/three-quarter field coordinates, retain every kept frame. Independent pixel copies receive a Gaussian PSF with sigma 1.25 px moving along a straight 0.35-radian path at the actual capture-time spacing. Total displacements are 2, 4, 6, 10 and 16 px at nominal background-only aperture SNR 10 and 20, giving 150 moving cases. The amplitude uses the first tile frame's noise and a 2.5 px aperture; it is not a calibrated measured SNR. Thirty stationary injections and 15 uninjected tiles supply controls. Association requires supported centroids within 2 px RMS of the known path, with at least three and at least 40% of all frames. The same input pixels and association rule apply to each variant.
-
-| Extraction / frame evidence | Recovered, axis limit 2.8 | Recovered, axis limit 5 |
-|---|---:|---:|
-| Original / original | 38 / 150 | 54 / 150 |
-| Residual / original | 25 / 150 | 45 / 150 |
-| Residual / residual | 35 / 150 | 60 / 150 |
-
-No variant passes an injection-associated stationary or uninjected control. None recovers a 2 px moving injection. All 38/54 original-route recoveries survive the proposed correlation limit, but two residual-route recoveries fail it (35 becomes 33, 60 becomes 58). These few positions, one PSF/direction and straight trajectories do not establish completeness or false-positive rates. Residual subtraction loses some original-route recoveries and can suppress the source itself at low displacement. It is not justified as a replacement by these results.
-
-**Broader temporal controls.** A second frozen experiment uses the same five complete retained sequences and three fixed tiles per field, with PSF sigma 1.25/2.0 px and nominal aperture SNR 10/20. Straight motions span 4/10/16 px in three directions (-1.1, 0.35, 2.0 radians); curved motions span 10/16 px with a 3/6 px normal midpoint bow. Controls permute injected source positions among real frames/timestamps, vary stationary PSF width by 30% at approximately fixed flux, or leave the tile uninjected. Amplitude and association rules are as above; only the shape maximum is optionally widened to 5. This gives 975 cases: 780 moving and 195 controls, with no residual route in this experiment.
-
-| Cases | Count | Current shape: associated survivors | With `abs(r) >= 0.70` | Axis limit 5: associated survivors | With `abs(r) >= 0.70` |
-|---|---:|---:|---:|---:|---:|
-| Straight movers | 540 | 116 | 116 | 201 | 201 |
-| Curved movers | 240 | 48 | 47 | 51 | 50 |
-| Shuffled source positions | 120 | 21 | 0 | 48 | 0 |
-| Stationary, changing width | 60 | 0 | 0 | 0 | 0 |
-| Uninjected backgrounds | 15 | 0 | 0 | 0 | 0 |
-
-The lost curved case is in M81 Kumar: 31 supported positions cover 84% of the session, with coefficient 0.696, fit residual 1.44 px and injection-path RMS 1.67 px. Lowering a threshold just to keep this known case would tune on the validation example. High correlation remains useful inspection evidence, but these results do not justify a universal veto or calibrated confidence. The controls are a small prescribed grid rather than independent survey truth; full-field backgrounds still include unverified sources and instrumental trends. Shape relaxation remains available through the existing setting, without a new default or automatic duplicate policy.
-
-**Held-out broader-shape validation (2026-11-04).** A third, predeclared experiment fixes the maximum geometric axis ratio at either 2.8 or 5, leaving all other extraction, fill, overlap and frame-evidence gates unchanged. The 13 reference datasets outside the five development sessions supply new backgrounds and injections; all 18 complete native fields are also evaluated. These are held-out datasets for this SM-F3 comparison, not independent survey fields: the M31 bands share a target. Every original QC-retained frame and its capture cadence are preserved, including Klangwolke-1's recorded multi-session time gap. Both configurations run explicitly on the same pixels, with alternating order for injection cases. Every baseline candidate, geometry, median mask and diagnostic is preserved exactly; only the deliberately different upper-shape threshold in its diagnostics may differ.
-
-Two 256 px tiles per held-out dataset, at field fractions (0.29, 0.37) and (0.63, 0.71), receive copied-pixel injections at new subpixel locations. Profiles are Gaussian sigma 1.1 px and Moffat FWHM 4 px/beta 3.5, with 15% sinusoidal seeing variation at approximately fixed flux. Nominal amplitude SNR is 7.5/15, defined from the first tile frame's clipped noise and a 2.5 px aperture. Straight paths span 6/12/20/28 px in three directions; curved paths span 12/20 px with midpoint bows of 3/6 px. Gapped paths omit every fifth injection and the middle 16% of its time span without deleting native frames. Controls shuffle injected positions using three fixed new seeds in two directions, inject stationary sources with fixed/changing width, add one-frame flashes, or leave tiles unchanged. The 3,666 cases complete without saturation exclusions. Association requires active-frame centroid RMS at most 2 px, at least `max(3, ceil(0.4*N))` active positions for the full retained frame count N, and at least 80% of supported positions in active frames.
-
-| Cases | Count | Axis limit 2.8: associated survivors | Axis limit 5: associated survivors |
-|---|---:|---:|---:|
-| Straight movers | 1,248 | 257 | 467 |
-| Curved movers | 416 | 58 | 86 |
-| Gapped movers | 416 | 56 | 117 |
-| Shuffled source positions | 1,248 | 201 | 554 |
-| Stationary, fixed width | 104 | 0 | 0 |
-| Stationary, changing width | 104 | 0 | 0 |
-
-Moving recovery rises from 371/2,080 (17.8%) to 670/2,080 (32.2%), with no baseline loss. A descriptive 10,000-replicate target-cluster bootstrap groups the M31 bands together: its percentile interval for the paired increase is 8.6–19.0 percentage points, conditional on this selected grid. The 104 flash cases and 26 uninjected tiles have identical total candidate loads under both limits (12 and 3 respectively); these counts include pre-existing background findings. Requiring three active frames makes flash association impossible by construction, and uninjected tiles are not certified empty. Shuffled-position survivors expose a temporal failure mode; they are not a survey false-positive calibration. The injections add no source photon noise or exposure-integrated trail, so their nominal SNR and recovery are not physical completeness estimates.
-
-Full-field candidates rise from 36 to 42. Additions are one each in Klangwolke-1, Apophis, Eagle-noisy and Klangwolke-2, plus two in whynot; the other 13 datasets are unchanged. The added Klangwolke-2 footprint is compatible with Valeria's existing ordinary track: 27 common original frames out of 28 supported positions, RMS 0.146 px, maximum 0.302 px, no ambiguous frames or conflicting timestamps. It does not add a distinct object. Native maximum/median/source crops show trail contamination in the Klangwolke-1 and Apophis footprints, while Eagle's patchy footprint has no established moving identity. Klangwolke-1's nearby streak has ambiguous same-frame points and supplies spatial overlap only; it is not a duplicate association.
-
-The two added whynot candidates have absolute time correlations above 0.999 but are consistent with camera-fixed artifacts. Across 59 usable fill-derived registrations, their RMS radii about the median registered position are 9.56/8.91 px; mapping the same centroids into camera coordinates reduces those radii to 0.289/0.488 px (maximum 0.913/1.195 px). The maximum registration-fit RMS is 0.322 px. This comparison is diagnostic: steady drift can be degenerate with a real sky path, so no camera-coordinate veto or physical classification is adopted. It demonstrates why correlation alone is insufficient even when a fitted path looks smooth.
-
-**Outcome.** The wider limit offers additional injection recovery but also admits more nonchronological controls and native contamination; this review establishes no newly confirmed untracked mover. Keep the default at 2.8 and retain 5 as an existing manual setting. Before a broader default or automatic deduplication, validate candidate-local temporal/camera evidence, centroid uncertainty, coverage and competing-track ambiguity on fresh held-out cases, preserving curved/gapped movers and star crossings. All 18 accepted baseline science snapshots and maximum/median/veto-mask hashes reproduce exactly, and all 818 original image hashes remain unchanged. No production source, setting, finding or report was changed. The largest observed study process used 8.78 GiB working set; single paired stage timings are retained as resource observations, not a controlled performance comparison.
-
-**Streak provenance and motion-confirmation follow-up (2026-11-04).** The bright streaks in the wider-shape review are real streak detections, not simulated faint movers. A native-frame audit reproduces both saved maximum and median crops exactly. Inside the measured oriented candidate rectangle, selecting max-minus-median pixels above five times the median native-frame crop noise gives 147 bright review pixels in Klangwolke-1, all contributed by original frame 2, and 92 in Apophis, all contributed by frame 5. This review region is not the exact detector footprint. The saved production streak tracks already contain the intersecting frame-2 and frame-5 footprints. Other exposures can contain nearby trails; the attribution identifies which exposure formed the bright candidate region. At the other supported aperture positions, the tracked streak footprint does not establish a continuation of that bright region.
-
-These are spurious maximum-stack slow-mover interpretations of streak-contaminated footprints, not confirmed faint point-source paths. The slow-mover stage runs before final linking and does not apply a per-frame streak mask or record this causal association. The existing track comparison screens a track's point centroid against the candidate footprint; a long streak may overlap through its raw pixels while its centroid lies far away. Multiple streak pieces in one frame also make an ordinary one-point-per-frame comparison ambiguous. Explicit per-frame footprint contact is therefore useful provenance, but overlap is not a reason to reject an entire candidate: a real mover can cross a trail in one exposure. Nor does a streak-like maximum-stack shape by itself establish a per-frame streak identity.
-
-A frozen scratch review then fits straight/quadratic X/Y paths to the existing supported centroids at exposure midpoints. Each of three equal-time bins is held out in turn; at least six positions, two per bin and four training points per fold are required. The lower model prediction RMS is compared with the empirical `max(2px, 2*maxStarJitter)` tolerance, with at least 2 px fitted separation across the supported span. Full-frame fill registrations separately compare camera-coordinate radius with an empirical jitter/registration scale. Missing exposures, inadequate bins, rank problems and ambiguous camera/sky histories remain explicit. No ordinal-time fallback, significance estimate, rejection gate or physical classification is introduced.
-
-Fresh tiles/seeds on all 18 existing observations provide 4,356 predeclared cases, including exposure-integrated Gaussian/Moffat moving sources, curvature, gaps, blends, one/two-frame bright trails, shuffled positions and camera/drift ambiguity controls. Of these, 4,086 are evaluated. Whynot's missing exposure lengths exclude all 242 of its midpoint-based cases; another 28 camera-path cases leave their fixed crops and are excluded rather than repositioned. The five development sessions and other 13 datasets are reported separately. These are new cases on existing observations, not independent new observing nights.
-
-| Cohort and associated cases | Existing maximum-stack recoveries | After hypothetical temporal-mismatch veto | Strict motion-compatible review |
-|---|---:|---:|---:|
-| Development movers, 840 evaluated | 224 | 209 | 207 |
-| Held-out movers, 2,016 evaluated | 674 | 642 | 586 |
-| Held-out shuffled positions, 384 evaluated | 239 | 23 | 2 |
-
-The hypothetical veto preserves unavailable/ambiguous evidence, yet loses 32 held-out moving recoveries: six straight, eleven curved and fifteen gapped. Requiring a strict compatible review loses still more. The frozen rule is therefore not adopted. Its unavailable states matter on native findings too: Klangwolke-1 and Apophis lack enough positions in all three time bins, while whynot has camera-compatible positions but unavailable exposure-midpoint timing. Valeria remains compatible with timed motion; Eagle's extra candidate fails the tested trajectory models, without that failure proving a physical classification.
-
-Most difficult positives fail before this review: none of 192 evaluated held-out blends and only one of 384 moving-plus-streak cases has an injection-associated maximum-stack recovery. This test cannot establish safe confirmation through those overlaps. Centroid lock-on, candidate construction, calibrated position uncertainty and per-frame contamination handling need further work; neither a correlation cutoff nor a blanket streak-overlap veto is justified. Local streak re-extraction/contact and a secondary review omitting contact positions are diagnostic only and can differ from full-field extraction. All production gates, defaults and findings remain unchanged.
-
-**Candidate-local position measurements (2026-11-05).** The next frozen experiment keeps the maximum-stack proposals and the manual upper axis ratio of 5 unchanged. It compares the current strongest raw-frame aperture with a signed temporal-median residual: choose a fixed Gaussian matched peak inside the same raw-pixel footprint, then fit amplitude, X/Y and constant sky in a 9-by-9 window at fixed sigma 1.5 px. A fitted amplitude SNR of 5 supplies an alternative position; failed, displaced, low-SNR or void-contaminated fits stay unavailable. Neither the fit nor its formal covariance uses trajectory, catalogue or injection truth. Size/shape/fill/median gates are audited against production, and raw acceptance reproduces exactly for every reviewed proposal.
-
-New tile locations and source histories provide 2,052 declared cases on the same 18 observations: 1,910 evaluated, 114 excluded for unavailable exposure-midpoint timing in whynot and 28 for camera paths leaving their fixed crops. Gaussian/Moffat profiles, exposure integration, seeing changes, curved/gapped paths, blends, one/two-frame trails, shuffled positions and stationary/camera controls are preserved. The original five development datasets and the other 13 are reported separately; these are fresh copied-pixel cases on previously used observations, not new independent observing nights. All copied tiles have zero registration-fill pixels.
-
-The following counts require the existing history association rule on the same proposals that pass the unchanged size/shape/fill/median screens. They compare measurement histories before frame-support/stationarity rejection, **not production detection recovery**; for example, production accepts no injection-associated blend candidate in the 192 evaluated other-cohort blend cases.
-
-| Cohort and cases | Evaluated | Raw-aperture associated histories | Residual-fit associated histories |
-|---|---:|---:|---:|
-| Development moving cases, including overlaps | 360 | 63 | 72 |
-| Other-cohort straight movers | 288 | 159 | 157 |
-| Other-cohort curved movers | 96 | 30 | 28 |
-| Other-cohort gapped movers | 96 | 29 | 26 |
-| Other-cohort movers crossing a stationary source | 192 | 3 | 75 |
-| Other-cohort movers crossing bright trails | 192 | 0 | 0 |
-| Other-cohort shuffled-position controls | 192 | 105 | 110 |
-
-Across 864 evaluated other-cohort moving cases, associated histories rise from 221 to 286, with 91 gains and 26 losses. Eighteen of the 213 cases accepted with an associated source by the existing manual-5 configuration no longer yield an associated residual-fit history. Most gains are blends; ordinary straight, curved and gapped histories still suffer losses. On truth-covering geometry-qualified proposals, stationary-source lock positions in the blend controls fall from 3,412 to 444; total reported active positions across the moving cases also fall from 10,219 to 8,497. The methods therefore have different availability, and smaller lock counts alone do not establish uniformly better measurements. All reviewed trail-crossing components touching at least 40% of the injected path fail shape/fill qualification before measurement. Tile-local streak-pixel provenance remains diagnostic; this study provides no demonstrated safe recovery through those crossings.
-
-The conditional covariance assumes a fixed PSF and independent constant pixel noise. Its algebra passes an exact Gaussian/noise control (381/399 positions inside the nominal 95% ellipse), but only 2,880/8,497 active positions on other-cohort truth-covering geometry proposals lie inside it (33.9%; development 2,000/5,650, 35.4%). This coverage does not select positions by their measured error. Source confusion, PSF mismatch, shared-median/correlated noise and selection are not captured by that formal covariance; it is not calibrated astrometric uncertainty. The native Prokne replay reproduces all 28 original raw centroids within 1.6e-13 px. The alternative retains 28 positions, with 0.088 px RMS against 12 common ordinary-track positions versus about 0.077 px for the raw measurements. Its median formal X precision is about 0.0018 px while its fit residual/noise ratio is about 18; the comparison establishes no astrometric superiority or trustworthy error bar. Exact expanded-shape footprints for the other reviewed native examples were not cached, so no substitute footprint is claimed as an exact replay.
-
-**Decision.** Keep the production measurement and all gates/defaults unchanged. Residual-based source separation merits further work for blends, with the current raw evidence preserved; it is not a validated replacement or motion-confirmation rule. Candidate construction through trails, PSF/noise modelling, measurement availability and competing-source ambiguity remain prerequisites. The shuffled-control increase and the lost moving histories preclude choosing a new confidence/veto policy from this trial. All 18 application baselines and the full Klangwolke-2 faint-search run retain scientific results, stacks and existing assets; the separate known-object report presentation changes do not enter detection.
-
-**Current-filter evidence review (2026-11-05).** A code audit of [the analyzer](src/main/java/io/github/ppissias/jtransient/core/SlowMoverAnalyzer.java), [frame evidence](src/main/java/io/github/ppissias/jtransient/core/SlowMoverFrameEvidence.java) and [shared extraction](src/main/java/io/github/ppissias/jtransient/core/SourceExtractor.java), together with the completed experiments, supplies the following assessment. This is an assessment of current behavior, not a new filter or an adopted threshold change. Engine defaults are listed below; the shipped application profile and position study use seed/grow/minimum-size values 3.5/2.75/10 instead of the engine's 4/3.5/15, and the position study explicitly uses the manual upper axis ratio of 5.
-
-| Current selection or measurement | Evidence and present assessment |
-|---|---|
-| Retained frames and common data area | QC and coverage determine the input population before slow-mover extraction. They protect a valid comparison domain; the copied tiles have no registration fill and do not independently test these rules. The extractor's point/streak inclusion difference also affects edge selection. No relaxation is supported by these experiments. |
-| Clipped stack background, seed/grow thresholds and minimum pixels | Both stacks share these extraction settings but have different noise distributions. Changing a threshold also changes the stationary mask and component merging, not just faint-source sensitivity. Missing proposals cannot be recovered by later temporal confirmation. Neither the current values nor their removal have an independent paired validation here. |
-| Repeated analyzer size check | Its private caller receives objects whose non-null raw pixels already passed the identical extractor size threshold. This second check is redundant on that current path; removing it would be structural cleanup, with no demonstrated detection benefit. It is not evidence that the extractor's size gate is unnecessary. |
-| Minimum axis ratio, 1.2 | Excludes round footprints, including possible low-displacement movers. The wider-shape experiment changed the upper bound only; it does not validate removing or lowering this bound. |
-| Maximum axis ratio, 2.8 | The paired 2.8/5 comparison measures more moving recoveries and substantially more shuffled survivors/native contamination at 5. No distinct newly confirmed untracked mover establishes a default improvement. Retain the current default on this evidence. |
-| Minimum fill factor, 0.5 | Rejects sparse, bent and merged footprints as well as unwanted structure. On the later manual-5 pool, all 33 truth-covering curved components rejected before measurement in the other cohort fail fill. Trail-crossing losses also precede measurement. These are reasons to investigate construction and the gate's cost, not evidence that admitting all such components would recover them safely. |
-| Minimum median overlap, 0 | Inactive at the current default. A positive lower bound can reject sources absent from the median, including true movers. It is not mandatory temporal evidence; an inactive default is not a reason by itself to remove a supported profile control. |
-| Maximum median overlap, 0.8 | Rejects persistent elongated sources, but can also reject movers blended with them or substantially retained in the median. The retrospective inventory below measures losses as well as control suppression; it does not establish that the stationarity gate makes this one redundant. |
-| Best-aperture localization and integrated SNR at least 5 | The selected aperture may follow a stationary neighbor or noise anywhere in the footprint. Radius 1.5-4 px, local-ring sky/noise, the one-ADU noise floor, positive-flux centroid and maximization over positions all affect support. SNR here is not calibrated significance. Residual fitting improves blends but loses other histories and has overconfident formal errors; it does not justify replacing this measurement. |
-| Usable-frame and evidence-availability rules | A footprint must fit the frame, have at least 16 ring samples and have less than half its pixels at the absolute fill level. Support needs two usable frames; stationarity needs three supported frames spanning half the retained index range. Unavailable evidence does not veto. The ring and partially filled apertures are not independently fill-masked, and index span is not elapsed-time coverage. These assumptions remain explicit; fill-free tiles cannot validate their behavior near padding. |
-| Minimum frame support, 40% of usable frames | Rejects isolated artifacts but may lose faint/gapped signals or be dominated by a persistent star. The history association criterion already demands support on 40% of all retained frames; apparent absence of associated losses at this gate is therefore built into this particular measurement, not evidence of optimality or redundancy. |
-| Maximum stationary clustering, 60% | Rejects stable positions and extended stationary sources. It shares the aperture's source-confusion and jitter assumptions and can reject a genuinely moving source with limited displacement or a star crossing. Its marginal losses below merit comparison, but its distinct stationary-source rejection has not been replaced by validated temporal evidence. |
-| Temporal fit, camera-coordinate diagnostic and track correspondence | Descriptive fits/common-frame distances do not currently reject or merge these candidates. The known curved/gapped losses and camera/sky degeneracy argue against treating high correlation, straight-path prediction, camera compactness or one streak contact as a sufficient veto. |
-
-A retrospective re-inventory of the saved 1,910 evaluated position cases counts cases with an injection-associated **raw** measurement history at each existing ordered stage. It reruns no image processing and uses the same manual-5 proposals and association definition. For the other 13 datasets:
-
-| Source histories | Cases | After size/shape/fill | After median overlap | After existing frame/stationarity gates |
-|---|---:|---:|---:|---:|
-| Straight | 288 | 170 | 159 | 156 |
-| Curved | 96 | 31 | 30 | 29 |
-| Gapped | 96 | 30 | 29 | 28 |
-| Blended with a stationary source | 192 | 5 | 3 | 0 |
-| Crossing bright trails | 192 | 0 | 0 | 0 |
-| Shuffled-position controls | 192 | 115 | 105 | 103 |
-
-Among the moving cases, the median stage reduces associated histories from 236 to 221; stationarity then reduces them to 213. The analogous shuffled counts fall from 115 to 105 to 103. These are conditional counts, not independent gate-removal effects, calibrated false-positive rates or newly recovered detections. All 182 other-cohort trail components covering at least 80% of an injected path fail before measurement: 114 first fail the upper axis bound and 68 first fail fill. Footprint contact alone does not establish successful source measurement. The surviving-history association requires at least `ceil(0.4*N)` active positions among all N retained frames, which already implies the 40%-of-usable frame-support floor; this selection cannot assess that gate's missed-source cost independently. Ordered counters also hide downstream failures that might still reject a source if an earlier gate were removed.
-
-The [digital-tracking route](#faint-mover-search) has a separate set of filters. Its current evidence supports artifact suppression but not universal calibration of each cutoff. The initial critical assessment is:
-
-| Digital-tracking selection | Evidence and present assessment |
-|---|---|
-| Session/timing, motion domain, proposal grid and resource/candidate limits | Define which data and paths are searched; exclusions or truncation cannot count as clean negative results. Existing time/heap guards earn their resource role, while selection completeness remains conditional on the searched domain. |
-| Residual background/noise, clipping, PSF filtering and star/fill/streak masks | Real recovery is lost in masks; neighboring signal can spread into masked centers during filtering. Structured residuals still survive. Maximum-stack failures do not quantify the cost of these different masks or justify removing them. |
-| Coarse peak/refinement and final empirical score | Early proposal cuts can lose objects before later evidence is available. Existing selected-grid recovery does not calibrate score as significance or establish each proposal cut's marginal cost. |
-| Half-session support and its availability rules | Suppress isolated contributions, but both halves use the shared median/processed images; they are not fully independent evidence. An untestable half can be retained when the other passes. Masked halves, cadence and gaps limit what this demonstrates. |
-| Stationary and camera-fixed score comparisons | Protect against actual stationary/sensor artifacts, with real sky motion potentially degenerate with drift. The empirical camera fraction and score margins need their own recovery/control assessment; the maximum-stack camera diagnostics do not validate transferring a cutoff. |
-| Peak duplicate and ordinary-track removal | Avoid repeated findings, but nearby distinct/parallel paths and limited or ambiguous track coverage remain possible failure modes. Similar distance tests in the report-only maximum-stack review do not justify changing this route's acceptance. |
-| Single-frame side-lobe proximity | Rejects structured peaks from bright objects, but a real distinct mover can also cross a stronger path. That is a plausible loss mechanism requiring matched crossing controls and raw evidence, not a measured defect established by the maximum-stack trail experiment. |
-
-**Assessment outcome.** No scientific filter removal or retuning is justified from the combined evidence yet. Construction/measurement losses and the marginal costs of fill, median overlap and stationary clustering are now explicit priorities, rather than assumptions that all existing gates are necessary or that more temporal gates are automatically better. The joint SM-F1/SM-F3 investigation and SM-F6 acceptance criteria retain the option to keep every filter if controlled comparisons support that outcome.
-
-**Joint gate comparisons and temporal-bin trial (2026-11-05).** The next frozen mechanism study evaluates the unchanged shipped-profile baseline and 18 alternatives, including individual changes, two paired removals, and three temporal-bin policies. Two new fixed 256 px tiles per observation, centred at field fractions (0.18, 0.58) and (0.68, 0.21), preserve the original QC-retained identities, exposures and native pixels. The 2,052 declared cases yield 1,910 evaluations: 114 lack native exposure-midpoint timing and 28 camera paths leave the fixed crop. All evaluated tiles are free of fill-level pixels. The original five development observations remain separate; the other cohort has 12 evaluable observations out of its planned 13. These are new cases on existing observing sessions, not new independent nights or final validation of a selected policy.
-
-Each tile has a blank control and fourteen histories for each Gaussian/Moffat profile and nominal aperture-amplitude SNR 6/14. They cover 4/12/24 px straight paths, curved and gapped paths, sparse illumination, stationary-source blends, two bright-trail crossings, shuffled positions, stationary round/elongated sources, single-frame flashes, deliberately withheld clocks and native camera-fixed paths. Seeing varies by 20%; seven samples integrate the actual exposure. No source photon noise is added. The baseline uses the shipped 3.5/2.75/10 extraction and axis limit 2.8. Seed, grow and minimum-pixel variants rebuild both extraction and the median mask. Every measurable predicate is evaluated even after an earlier failure, with explicit research work bounds. All independently audited baseline acceptances agree with the actual analyzer; none of its ROI components is unassessed. The four extraction pools contain 71,583 reviewed ROI components in total.
-
-Raw-history association now requires at least three supported positions on illuminated original frames, at least 80% of all reported positions in those active frames and RMS at most 2 px, **without a fraction-of-retained-frame support requirement**. This allows the 40% support gate's cost to be measured rather than assuming it in success. It remains positional source association, not motion confirmation: a short or limited-span history can agree without resolving motion or establishing which source supplied all its flux. Continuous position/support/span evidence is retained. The following other-cohort counts compare identical cases; the first two numeric columns count cases with an associated accepted raw history, while the final two count all accepted ROI components in the named controls.
-
-| Frozen variant | Moving histories / 864 | Shuffled histories / 96 | Flash-control ROI load / 96 cases | Blank ROI load / 24 cases |
-|---|---:|---:|---:|---:|
-| Current baseline | 91 | 8 | 0 | 0 |
-| Remove minimum axis bound | 95 | 8 | 0 | 0 |
-| Upper axis bound 5 | 148 | 27 | 0 | 0 |
-| Remove upper axis bound | 166 | 27 | 0 | 0 |
-| Remove fill bound | 124 | 13 | 0 | 0 |
-| Remove median upper bound | 110 | 11 | 0 | 0 |
-| Remove frame-support floor | 156 | 10 | 44 | 11 |
-| Frame-support floor 20% | 144 | 10 | 8 | 2 |
-| Remove stationary ceiling | 104 | 9 | 12 | 3 |
-| Remove median upper and stationary ceiling | 130 | 13 | 143 | 36 |
-| Remove upper axis and fill bounds | 234 | 38 | 4 | 1 |
-| Require median lower overlap 0.1 | 58 | 1 | 0 | 0 |
-| Aperture SNR floor 3 | 79 | 3 | 16 | 4 |
-| Extraction seed 3 | 91 | 8 | 0 | 0 |
-| Extraction grow 2 | 99 | 13 | 0 | 0 |
-| Minimum pixels 5 | 97 | 8 | 0 | 0 |
-
-These are selected-grid source histories and unverified candidate loads, not completeness or false-positive rates. Blank fields can contain native sources, and their load is a different quantity from injected-source association. In particular, much of the primary flash-control ROI load matches repeated blank-background load; those columns alone do not attribute a candidate to the injected flash. A post-hoc interpretation check applies the same positional criterion to each corresponding blank field under the same non-temporal policy: none of the other-cohort associated moving cases is also associated on that blank. This does not prove unique source attribution or motion. The frozen primary counts are unchanged by the check. Conditional 10,000-replicate target-cluster intervals group the M31 bands; they describe dependence within this grid, not independent survey truth.
-
-The independent support comparison changes the earlier picture: gapped histories rise from 6/96 to 34/96 at 20% and 36/96 without the floor; sparse histories rise from 0/96 to 2/96 and 12/96. The accompanying flash/blank loads show support-sensitive candidate load, with attribution limits as above. This study does not cover the engine's 3-8-frame domain, so even the 20% alternative is not justified as a replacement default. Median overlap and stationary clustering are also not interchangeable: removing both raises stationary-round source associations from 1 to 19, elongated stationary associations from 0 to 16 and camera-fixed associations from 1 to 19. The current single gates hide some of each other's rejection. Conversely, removing upper-axis and fill together admits 40/96 associated trail-crossing histories, versus 14/96 when removing only upper-axis and zero when removing only fill. Construction gates can therefore obstruct a real signal before temporal review, but the additional shuffled/other load still matters.
-
-A separately declared negative-control follow-up addresses the primary flash-attribution limitation. It preserves every primary case/result and uses the same fixed cached fields and frozen code with brighter single-frame elongated flashes at nominal round-aperture SNR 24/60. Of 180 planned cases, 170 evaluate; ten lack native midpoint timing. Flash origin requires at least one measured position in the one illuminated frame, at least 80% of the candidate's reported positions in that frame and RMS within 2 px there. This deliberately differs from the three-position moving-history association. In the other cohort's 96 bright-flash cases, removing support admits 30 flash-attributed cases, versus zero for the current floor and the 20% alternative. This directly tests a failure mode the support gate prevents; it does not establish 40% as optimal or 20% as safe. The targeted follow-up uses reviewed observations and is not independent final validation.
-
-Lower thresholds are not uniformly better measurements. The SNR-3 aperture variant gains six moving histories and loses eighteen; lower grow gains 47 and loses 39 despite its net increase of eight. Reducing minimum pixels gains six but admits one elongated stationary control. The tested seed change gives no incremental associated moving recovery. The size check repeated inside the analyzer remains a structural duplicate of the extractor guarantee; none of these results makes the underlying extraction size criterion redundant.
-
-For SM-F1, three equal-elapsed-time groups each need at least two known-midpoint frames. Each lower-median bin stack is measured against the full-sequence median with the existing fixed-sigma 1.5 residual Gaussian fit inside the same component footprint. The empirical compatibility review requires endpoint displacement at least `max(2px, 2*maxStarJitter)`, a middle point within that tolerance of time-linear endpoint interpolation, no segment reversal and direction within 45 degrees of the footprint's moment axis. Missing groups/clocks/fits stay unavailable; shared reference noise and the conditional fit covariance are not calibrated confidence.
-
-Only 23 of the 91 baseline-associated other-cohort proposals have all three fitted bin positions available. An added veto that retains unavailable cases loses one moving history (91 to 90) and removes no associated shuffled history (8 to 8). The loss is an ic-5070 Moffat curved injection: raw RMS 0.802 px and bin-reference RMS 0.814 px both agree with its source history, but the straight-middle geometry veto fails. Applying that veto after removing median/stationarity still leaves 129 moving versus 13 shuffled histories, with the same stationary/camera and flash/blank contamination as the pair removal. Requiring strict available compatibility observes 28 associated moving cases but leaves 643 of 864 moving cases partly unassessed; its smaller count cannot be presented as a complete recovery or rejection measurement. Withholding capture clocks in 136 otherwise identical cases preserves every non-temporal selection while correctly disabling the bin measurement.
-
-**Combined decision.** Do not adopt this temporal-bin veto, remove a scientific gate, or retune defaults from this study. The support percentage has a measured sensitivity cost, while its artifact rejection, median/stationarity interactions and shape/fill trade-offs rule out a blanket simplification. Smaller changes with a few gains still lack the necessary independent source/uncertainty and control evidence. SM-F1's general temporal-confirmation question remains open; this one median-residual/straight-middle prototype is not evidence that every bin or trajectory method fails. The bounded gate-comparison milestone is complete, with remaining acceptance work in SM-F1/SM-F3 and the broader SM-F6 validation.
-
-All 818 original image hashes, 744 production/build/test source hashes, frozen artifacts and the 18 tile caches remain unchanged. Mathematical controls, baseline acceptance, selection monotonicity, aperture-SNR subset consistency and withheld-clock contrasts pass. The all-policy diagnostic workload used about 36.8 s for preparation and 282.8 s for evaluation with two JVM processors, 2 GiB preparation/1.5 GiB evaluation heap limits. A late-run sample observed at most about 579 MiB working set; it is not an all-run peak or per-policy memory comparison. These timings measure the diagnostic workload, not production overhead. Paired plots and three representative source-history/control cases were inspected without observing-site metadata.
-
-**Stack work.** Serial isolated full-size benchmarks use one warmup and the median of three rotating-order repetitions, comparing every output pixel after each timed interval. Outside an engine operation the row scheduler runs on the caller. These figures measure stack generation, not end-to-end application speed; pipeline worker limits, memory pressure and other stages differ.
-
-| Session | Dimensions | Frames | Original seconds | Cached-row seconds |
-|---|---:|---:|---:|---:|
-| Klangwolke-2 | 9544 x 6361 | 28 | 2.593 | 1.655 |
-| Eagle-noisy | 1600 x 1200 | 43 | 0.156 | 0.087 |
-| M81 Kumar | 6248 x 4176 | 39 | 1.360 | 0.616 |
-| helix-reg | 1542 x 1116 | 39 | 0.120 | 0.073 |
-| m101-reg | 2439 x 1569 | 106 | 0.866 | 0.336 |
-
-A separate four-worker benchmark of the built production reducer matches the frozen maximum-stack hashes on all five complete sessions; Klangwolke-2 takes 0.619 s with the former reduction and 0.318 s with cached rows. All 18 reference datasets retain identical scientific results, report data, 5,310 non-HTML assets and report HTML after normalizing generation timestamps and measured durations. These comparisons use faint search off and the usual photometry batch; the five investigation runs separately used photometry on.
-
-A loop-interchange prototype was inconsistent across dimensions (2.726 s on Klangwolke-2), so only source-row caching was adopted. Tests cover every 16-bit intensity value, rotating which frame holds each maximum, independent output ownership and unchanged empty-input results; existing worker/cancellation checks remain applicable. The subsequent temporal/correspondence delivery passes engine checks/API consumer and application checks/both API consumers (364 engine tests; 763 application tests, seven existing skips), plus 46 report JavaScript tests. Its 18 full-report comparisons preserve every old scientific field, report JSON, the same 5,310 assets and all unrelated HTML; the deliberate additions are 36 centroid CSVs/inspection panels and revised wording/common-frame metrics in four overlap notes. On Klangwolke-2, the 28 supported Prokne centroids give 0.203 px/min descriptive drift and 0.073 px fit RMS; the 12 common ordinary-track detections differ by 0.077 px RMS (0.116 px maximum). These are measured agreement/residual values, not calibrated astrometric uncertainties. Scientific follow-ups and their acceptance requirements stay in [SM-F3](FEATURE-REQUESTS.md#sm-f3-improvements-to-maximum-stack-slow-mover-detection).
+For point-like sources too faint in individual frames, the separate [digital-tracking stage](#faint-mover-search) integrates light along trial timed paths. Its search model, masks and score checks differ from this morphology route; neither route guarantees complete recovery.
 
 ### Outputs and ownership
 
@@ -634,8 +438,6 @@ Telemetry includes extraction counts, per-gate rejection counters, shape/overlap
 `PipelineResult.slowMoverAnalysis`, `slowMoverCandidates` and `telemetry.slowMoverTelemetry` expose these products. `slowMoverStackData` and `slowMoverMedianVetoMask` are compatibility aliases for the same maximum-stack/mask arrays. The candidate list is copied and unmodifiable; image/mask arrays are shared.
 
 Slow-mover candidates are separate from point/streak tracks and rescued anomalies. Their footprints can flag nearby variable-star measurements across frames. The camera-fixed point-detection filter does not run on these stack candidates.
-
-There are no three-bin temporal stacks or temporally confirmed slow-mover motion paths. Proposed, deferred and declined changes are tracked in [FEATURE-REQUESTS.md](FEATURE-REQUESTS.md). Geometry/branch coverage is in `SourceExtractorBlobGeometryTest` and `JTransientEngineSlowMoverTest`; descriptive fits and correspondences are covered by `SlowMoverMotionEvidenceTest` and `SlowMoverTrackMatcherTest`.
 
 ## 9. Stationary-Star Veto Filtering And Streak Linking
 
@@ -703,11 +505,9 @@ When `enableCameraFixedRejection` is on, `CameraFixedRejector` sets aside the su
 
 Each detection is mapped back to camera coordinates with its frame's registration (section 1). A group is the detections of at least 3 frames, one per frame, within 2 px of the group's median camera position, whose positions in the frames spread over at least 4 px; with less, the frames did not move enough to tell a camera position from a position on the sky. Frames whose registration is not usable are left out, and a dataset without registration fill is left as it is.
 
-A slow mover can also stay within 2 px on the camera when the frames move little between exposures. A group of at least 4 frames is therefore tested for motion on the sky. A straight line against time (capture times, or frame order when a member has none) is fitted to its positions twice: in camera coordinates and in the registered frames. A hot pixel fits tightly on the camera and jumps with the dither in the frames; a mover does the opposite. When the registered fit's rms per axis is below 1 px and below half the camera fit's, the group follows the sky: its detections stay for linking, and the telemetry counts it (`cameraFixedGroupsFollowingSky`, `cameraFixedDetectionsFollowingSky`). When both fit tightly, as on frames that drift steadily without dither, the geometry cannot tell a hot pixel from a mover moving with the drift, and the group stays camera-fixed. The camera positions come from the fill fit and drift by up to 3 px over a session on Eagle-noisy, so testing for motion on the camera alone would release hot pixels.
+A slow mover can also stay within 2 px on the camera when the frames move little between exposures. A group of at least 4 frames is therefore tested for motion on the sky. A straight line against time (capture times, or frame order when a member has none) is fitted to its positions twice: in camera coordinates and in the registered frames. A hot pixel fits tightly on the camera and jumps with the dither in the frames; a mover does the opposite. When the registered fit's rms per axis is below 1 px and below half the camera fit's, the group follows the sky: its detections stay for linking, and the telemetry counts it (`cameraFixedGroupsFollowingSky`, `cameraFixedDetectionsFollowingSky`). When both fit tightly, as on frames that drift steadily without dither, the geometry cannot tell a hot pixel from a mover moving with the drift, and the group stays camera-fixed. The camera positions come from an approximate fill-edge fit, so camera-coordinate motion alone is insufficient to release a group.
 
-The group's detections are removed from the point detections and from `allTransients`, so they become no tracks, anomalies, common-motion groups or residual candidates. The groups are exported as `PipelineResult.cameraFixedGroups` (tracker telemetry: `cameraFixedGroups`, `cameraFixedDetections`). On the reference data: both whynot tracks were hot pixels moving with the drift (0.7-1.8 px apart on the camera, while every real track spreads 21 px or more); Eagle-noisy keeps 7 of its 74 tracks (each of the 67 others contained camera-fixed detections, 55 nothing else); on M81-kumar the local rescue candidates fall from 84 to 10, the others being hot pixels that followed the dither between sets of frames. The recorded regression also added two camera-fixed groups on klangwolke-2 without changing its other findings; 16 of the 19 datasets were identical. These are historical measurements with the recorded profiles, not a new benchmark.
-
-Those two groups were detections of the asteroid 611 Valeria (0.27 px/min). With the sky-motion test (2026-11-03) they join its track, which grows from 16 to 27 frames; the other 17 reference datasets are unchanged with the shipped profile. With the Maximum Auto-Tune configuration on klangwolke-2, the test releases one of 76 groups: 9 detections of 4767 Sutoku (0.2 px/min). Six join Sutoku's track (14 to 20 frames) and three remain a local rescue candidate on its path. In the same measurement, Eagle-noisy's 90 groups had a median rms of 0.33 px on the camera and 10.5 px in the frames, and whynot's two drifting hot pixels 0.20–0.27 px and 0.28–0.54 px.
+Detections in groups that remain camera-fixed are removed from the point detections and from `allTransients`, so they become no tracks, anomalies, common-motion groups or residual candidates. The groups are exported as `PipelineResult.cameraFixedGroups` (tracker telemetry: `cameraFixedGroups`, `cameraFixedDetections`).
 
 ## 10. Time-Based Point Linking
 
@@ -753,7 +553,7 @@ Candidate time-based tracks are ranked by:
 
 The tracker then accepts the highest-ranked non-conflicting candidates first.
 
-Growth proceeds only after the second seed point; it does not backfill the interval between the two seeds. The local direction test also remains active for subpixel steps. In the Lagoon review, the accepted track seeds are original frames 2 and 5, leaving frames 3 and 4 before its growth interval. Six further detections make 0.15–0.24 px steps whose directions differ by 94–130 degrees from the track direction, exceeding the dynamically relaxed 83–86 degree allowances despite passing velocity, line and profile checks. They remain available to residual rescue. SpacePixels can now show report-only possible-continuation links for these separate observations; it does not change this linking policy, assign identity or merge either finding.
+Growth proceeds only after the second seed point; it does not backfill the interval between the seeds. The local direction test remains active for subpixel steps, so centroid jitter can fail that test even when the positions pass velocity, line and profile checks. Unlinked detections remain available to residual rescue. SpacePixels can display possible-continuation links without changing linking policy, assigning identity or merging findings.
 
 ## 11. Geometric Point Linking
 
@@ -881,9 +681,9 @@ A faint streak crossing a star changes the star's shape, and a tumbling satellit
 - **On a line** means the anomaly's centre is within 6 px of it, or one of its pixels within 2 px. A streak through a star pulls the centre off the line.
 - **Repeated joining.** Joining repeats until nothing more joins, so a filled frame can place the next one. Joined anomalies count where the streak was in their frame. They never draw a frame's line, because a round anomaly has no reliable direction.
 
-Time is the frames' timestamps when every frame has one, otherwise the frame index. Until October 2026 an anomaly on a same-frame streak stayed an anomaly, marked low confidence; anomalies in frames the streak skipped were not recognised.
+Time is the frames' timestamps when every frame has one, otherwise the frame index.
 
-On the reference data the joining took 17 of the 39 anomalies of klangwolke-2 (24 of 40 with a second profile) and one of the six of klangwolke-1; the other datasets were unchanged, and no track was added or lost. The joined pieces were mostly a satellite's flashes, in frames where its trail was otherwise missing, and a trail crossing stars. Photometry flags the stars a track crosses, so a few stars lose their measurement in those frames. These are measurements with the recorded profiles, not a benchmark.
+
 
 ### 13.5 Faint-streak search
 
@@ -891,9 +691,9 @@ A trail whose pixels are only 1–2 sigma above the sky never gives a seed in th
 
 **The search** runs after the master reference and the slow movers, before tracking, on the frames quality control kept. It does not run quality control again and changes nothing of the normal pass.
 
-- **Width.** Sigma is the median `medianFWHM` of the kept frames with a genuine measurement (finite, positive, below `errorFallbackValue`, from at least 5 stars), divided by √2 (the extraction FWHM convention of EX-3) and by 2.355; 1.0 px without any measurement; bounded to 0.5–3 px. The kernel reaches 3 sigma. The extraction FWHM is cut at the grow threshold, so on Integral-spacecraft-challenge the rule gave 1.01 px against 1.2 px from the stars' flux and peak. Synthetic trails injected into real frames were recovered about as well at the rule's width as at 1.25 or 1.5 times it (better on m81-reg, worse on Integral), so the rule stays.
+- **Width.** Sigma is the median `medianFWHM` of the kept frames with a genuine measurement (finite, positive, below `errorFallbackValue`, from at least 5 stars), divided by √2 (the extraction FWHM convention of EX-3) and by 2.355; 1.0 px without any measurement; bounded to 0.5–3 px. The kernel reaches 3 sigma. The extraction FWHM is cut at the grow threshold, so this is an approximate PSF width.
 - **Smoothing.** A normalised convolution over image pixels: registration fill neither enters the sky nor changes, and an image pixel never drops to the fill level. Where the smoothed noise would be below 4 ADU, the copy is stretched about the sky before rounding to 16 bits, and each candidate's flux and footprint values are scaled back, so the extraction's integer histogram keeps the noise. Rows are smoothed in bands of 256; each worker holds one frame's smoothed copy.
-- **Extraction.** The normal extraction with the run's thresholds, on the smoothed copy. The sky clipping runs 20 passes instead of `bgClippingIterations`: smoothing narrows the noise far more than the star halos, and on a synthetic field 3 passes gave twice the true noise of the smoothed frame (5 or more gave the true value). Blobs smaller than `streakMinPixels` are not analysed. Only streak-shaped objects (`streakMinElongation`, `streakMinPixels`) whose centroid lies inside the data area shrunk by the kernel radius are kept.
+- **Extraction.** The normal extraction with the run's thresholds, on the smoothed copy. The sky clipping runs 20 passes instead of `bgClippingIterations`: smoothing narrows the noise far more than the star halos. Blobs smaller than `streakMinPixels` are not analysed. Only streak-shaped objects (`streakMinElongation`, `streakMinPixels`) whose centroid lies inside the data area shrunk by the kernel radius are kept.
 - **Star mask.** The median stack is smoothed the same way and its stars extracted with the master settings; a candidate overlapping that mask more than `maxMaskOverlapFraction` is removed, because smoothing reveals fainter stars and joins close pairs.
 - Every candidate is marked `DetectedObject.fromFaintStreakSearch` and keeps its frame's sequence index, file name, timestamp and exposure. All its measurements are those of the smoothed frame; its `peakSigma` and `integratedSigma` are in the smoothed frame's noise units and are not comparable with normal detections (XC-1 unchanged).
 
@@ -906,14 +706,6 @@ A trail whose pixels are only 1–2 sigma above the sky never gives a seed in th
 5. A candidate in no final track is discarded. The search's objects never reach point linking, camera-fixed rejection, fragment assembly, anomaly rescue, `allTransients`, `unclassifiedTransients`, common motion or residual analysis. Photometry flags the stars that any final track crosses, faint pieces included: a trail across a star contaminates its measurement whichever pass found it.
 
 Faint pieces that are not streak-shaped (a faint trail broken into round pieces) are not used. `PipelineTelemetry.faintStreakSearchTelemetry` records the width, its source and the counts; `Stage.FAINT_STREAK_SEARCH` its time. `inspectTransients` and `redetectFrame` do not run the search.
-
-**Measurements (2026-11-01, default profile, the 18 reference datasets and Integral-spacecraft-challenge).**
-
-- With the switch off, every report matched the base apart from the new configuration line and timings.
-- With it on, no normal streak observation left its track on any dataset (checked per detection on the engine results); point detections and point tracks were unchanged and anomalies only joined streaks. The Integral trail (1.3–1.5 sigma per pixel) became a streak track over frames 4, 5, 7 and 10. On 7 other datasets 23 streak findings were new or extended; each was reviewed with its pictures and is a real trail, among them a faint satellite in klangwolke-2 frames 20, 23 and 24 that is absent at the same place in frame 22.
-- Photometry readiness, magnitudes and candidates were unchanged on dc-reg, m81-reg and M81-kumar; on m81-reg 44 light curves changed only which flags were set.
-- Single-frame gate: on the 775 kept frames and on their negated difference frames (`2 × median − frame`), the smoothed frames' noise formed no streak-shaped object; all 9 single and 14 multi-piece detections on the negated frames were real structures that are dark in one frame (dark lines, registration edges, a frame border). This is evidence, not a proof: for zero events in 775 frames a homogeneous Poisson bound is about 3/775 per frame.
-- Cost: 0.3–1.4 s on most datasets, 3.4 s on M81-kumar, 7.8 s on klangwolke-1 and about 33 s on klangwolke-2 (28 kept frames of 61 MP, two workers on a nearly full 10 GB heap), whose normal extraction takes 22 s.
 
 ## 14. Common-Motion Filtering
 
@@ -1127,14 +919,7 @@ For every aperture, `skyNoiseFactor` is the robust spread of the sky-subtracted 
 
 The factor scales only the errors reported with the light curves (`StarLightCurve.magError`): check B and the SNR cut keep the formula's error, so stars, verdicts and candidates do not depend on it. Telemetry records it: `PhotometryFrameStat.skyNoiseFactor` holds the main aperture's factor per frame, and `PhotometryTelemetry.skyNoiseFactorMedian`, `skyNoiseFactorMin`, `skyNoiseFactorMax` and `framesWithoutSkyNoiseFactor` summarise it.
 
-On the reference data, the session median for the main aperture ranges from 1.14 (M81 Kumar, UG 6524) and 1.82 (Klangwolke-2) to 2.71 (m5-reg) and 2.89 (Eagle-noisy). It is smaller for smaller apertures; on Klangwolke-2 it is 1.47 at 0.7 FWHM. For the faintest constant stars, where sky noise dominates, the scatter was 1.14–2.9 times the unscaled error. The factors at the apertures those stars use compare as follows ([release notes](RELEASE_NOTES.md#108-unreleased)):
-
-| Session | Factor | Faint-star scatter ÷ unscaled error |
-|---|---|---|
-| M81 Kumar, UG 6524 | 1.08 | 1.14–1.17 |
-| Klangwolke-2 | 1.47 | 1.46–1.52 |
-| m5-reg | 2.26 | 2.35–2.41 |
- Bright stars still scatter more than their error, because their own photon noise, scintillation and flat-field errors are not modelled.
+Bright-star scatter can still exceed the reported error because source photon noise, scintillation and flat-field errors are not modelled.
 
 Flags set here:
 
@@ -1325,17 +1110,7 @@ Light curves are built for every star whatever the verdict. `deltaMag` is the ma
   - *The one-pixel test.* Each fading or brightening is compared with the star's two nearest pointings that have neither. The change is the reference's mean sky-subtracted cutout minus the episode's, within max(3 px, 2 x FWHM). Its concentration is the largest single-pixel share of the change over the largest single-pixel share of the reference's light. A real change in brightness scales the whole profile and gives about 1; a removed peak gives about 2 to 4. A change counts as concentrated when its concentration is at least 1.8 against every reference.
   - *The session decision.* Noise, cosmic rays and hot pixels make concentrated changes in both directions. The session counts as having had its star peaks removed only when at least 20 fadings are concentrated, and at least 5 times as many as brightenings plus one. Only then are the concentrated fadings flagged `PEAK_REMOVED`: left out of scoring, kept for display, and explained in a readiness message.
   - *Telemetry:* `peakCheckFadings`, `peakCheckConcentratedFadings`, `peakCheckConcentratedBrightenings`, `peakRemovalFound`, `measurementsPeakRemoved`, and `PhotometryFrameStat.peakRemoved` per frame.
-  - *Limitation.* Pixel phase differs between pointings, so a real dimming within one pointing whose references caught the star on a sharper pixel position can look concentrated. This happened to 3 % of synthetic profile-shaped dimmings on M81 Kumar's real frames. The check therefore acts only in sessions with the one-sided signature.
-  - *Reference data.*
-
-    | Session | Concentrated fadings | Concentrated brightenings | Result |
-    |---|---|---|---|
-    | M81 Kumar (2.9"/px, FWHM 2 px) | 414 of 710 | 17 | found: 625 measurements flagged |
-    | Klangwolke-2 | 393 of 1360 | 180 | not found |
-    | Eagle-noisy | 8 of 47 | 40 | not found |
-    | m5-reg | 12 of 27 | 3 | not found |
-
-    On M81 Kumar, a high-confidence candidate without a catalogue match that was made entirely of such fadings becomes constant, and 13 of the 16 possible candidates of that kind become constant, as do 9 rejected ones. The other high-confidence candidates, all VSX-matched, are unchanged.
+  - *Limitation.* Pixel phase differs between pointings, so a real dimming within one pointing whose references caught the star on a sharper pixel position can look concentrated. The check therefore acts only in sessions with the one-sided signature.
 - **Isolated outliers.** A point more than 4 robust sigmas from the median is removed and flagged `OUTLIER`, unless a neighbouring usable point deviates by more than 2 sigmas on the same side. A neighbour counts only when the star has no missing measurement on a used frame between the two: deviations either side of a crossing-flagged or contaminated measurement do not keep each other, while a frame left out of the photometry does not separate them. Single-frame events (cosmic rays, hot pixels, satellite glints that were not detected) are dropped. Real dips or flares that span several frames are kept.
 - From the cleaned curve: `scatter` (sample standard deviation), `amplitude` (95th minus 5th percentile), and `timeSpanMinutes` (first to last usable mid-exposure Julian date; `NaN` if any usable frame has no timestamp).
 
@@ -1401,7 +1176,7 @@ Each candidate is tested against eight gates:
 
 `VariableStarAnalysis.candidates` holds the `HIGH_CONFIDENCE`, `POSSIBLE` and `REJECTED` stars, best tier first, then by descending `scatterZ`. `highConfidenceCandidates()` returns the first tier only. `failedGates` lists the gates each candidate failed, in the order of `VariableStarAnalysis.GATE_NAMES`.
 
-**Brief and fast variation.** A change must last about `variableMinPersistenceFrames` consecutive frames (5) to pass `PERSISTENCE`, so briefer dips and flares are at best `POSSIBLE`, and a change in one frame is removed as an outlier. Variation that alternates within three or four frames gives a negative Stetson J and does not become a candidate. In scorer-level injections with 28 and 40 frames and 9-18 mmag noise, dips lasting 6 frames or more and pulsations with a period of 12 frames were mostly `HIGH_CONFIDENCE` from 0.1 mag. A search for briefer events would first need checks of the brief excursions that constant stars show in real sessions; this is deferred under the [brief/fast variability investigation](FEATURE-REQUESTS.md#brief-and-fast-variability).
+**Brief and fast variation.** A change must last about `variableMinPersistenceFrames` consecutive frames (5) to pass `PERSISTENCE`, so briefer dips and flares are at best `POSSIBLE`, and a change in one frame is removed as an outlier. Variation that alternates within three or four frames gives a negative Stetson J and does not become a candidate. These statistics favour persistent, positively correlated variation; a separate brief-event or fast-variation search is not implemented.
 
 <a id="photometry-12"></a>
 ### 16.12 Outputs
@@ -1478,7 +1253,7 @@ The engine records non-overlapping elapsed wall time for major phases, plus trac
 <a id="auto-tuning"></a>
 ## 19. Auto-Tuning
 
-JTransient supplies a measured, calibrated tuner (`CalibratedAutoTuner`). It takes a base config and a profile, and returns an `AutoTunerResult`; signatures, reusable calibration and fallback contracts are in [PIPELINE.md](PIPELINE.md#calibratedautotunertune). The earlier score-based tuner was removed on 2026-10-23.
+JTransient supplies a measured, calibrated tuner (`CalibratedAutoTuner`). It takes a base config and a profile, and returns an `AutoTunerResult`; signatures, reusable calibration and fallback contracts are in [PIPELINE.md](PIPELINE.md#calibratedautotunertune).
 
 Profiles are `LOW`, `MEDIUM`, `HIGH` and `MAXIMUM`. `AutoTuneProfile.parse(...)` also accepts conservative, balanced and aggressive as aliases for the first three. The current methods are described here; the configurable detection fields/defaults are documented once in [CONFIG.md](CONFIG.md).
 
@@ -1544,17 +1319,17 @@ The telemetry report lists the measurement area, the star FWHM and jitter, skipp
 
 #### Known limitations
 
-- The injected stars are static point sources. A slow mover whose path crosses faint stars included only in a deep mask can be vetoed in many consecutive frames; the tuner cannot foresee that for a particular path. (Example: Apophis, which the deep 1.5-sigma mask removes while a 2.0-sigma mask keeps it; `MAXIMUM` finds it.)
+- The injected stars are static point sources. A slow mover whose path crosses faint stars included only in a deep mask can be vetoed in many consecutive frames; the tuner cannot foresee that for a particular path.
 - Diffuse objects such as comets are not represented by the injected stars, so the cost of a deep mask for them is underestimated.
 - Runtime depends on image dimensions, crop/frame counts, the search grid and hardware; old session timings are not a performance guarantee.
 
 ### 19.2 Limits and intended use
 
-The tuners provide a starting extraction configuration for a subsequent full pipeline run. They do not link tracks, run slow movers or photometry, export `PipelineResult`, or guarantee an optimum for every frame/downstream stage. False-positive budgets count surviving single-frame detections, not final false tracks or anomalies. Negative controls can retain structural residuals under changing seeing. Review telemetry and downstream results.
+The tuner provides a starting extraction configuration for a subsequent full pipeline run. It does not link tracks, run slow movers or photometry, export `PipelineResult`, or guarantee an optimum for every frame/downstream stage. False-positive budgets count surviving single-frame detections, not final false tracks or anomalies. Negative controls can retain structural residuals under changing seeing. Review telemetry and downstream results.
 
 ## 20. Design Decisions And Future Work
 
-[FEATURE-REQUESTS.md](FEATURE-REQUESTS.md) records algorithm proposals, deferred limitations and maintainer decisions, including the declined ones. This reference combines the former detection, slow-mover, variable-star and auto-tuner guides; public entry points remain in [PIPELINE.md](PIPELINE.md) and field defaults in [CONFIG.md](CONFIG.md).
+[FEATURE-REQUESTS.md](FEATURE-REQUESTS.md) records algorithm proposals, deferred limitations and maintainer decisions, including the declined ones. Public entry points are in [PIPELINE.md](PIPELINE.md) and field defaults in [CONFIG.md](CONFIG.md).
 
 <a id="faint-mover-search"></a>
 ## 21. Experimental Faint-Mover Search
@@ -1566,6 +1341,7 @@ When `enableFaintMoverSearch` is on (it is off by default), `FaintMoverSearch` l
 **Search domain.** The star size is the kept frames' median measured FWHM converted to a Gaussian FWHM, as for the [faint-streak search](#135-faint-streak-search). Motions range from `faintMoverMinDisplacementFwhm` FWHM over the session to `faintMoverMaxSpeedPixelsPerMinute`, on a square grid whose step is the FWHM divided by the largest time from the session's mean mid-exposure, so that half a step moves the end frames by at most half the FWHM. The data area is searched in tiles of 512 px, each read with a margin for the largest shift.
 
 **Residuals.** Per tile and frame:
+
 1. the frame minus the median stack (the static field);
 2. minus its local background: a 41 px running mean of the residual clipped to 3 robust sigmas about its centre, over unmasked pixels (the sky level changes during a session);
 3. divided by the residual's robust sigma and clipped to ±5, so that one exceptional pixel or frame cannot dominate;
@@ -1575,10 +1351,13 @@ When `enableFaintMoverSearch` is on (it is off by default), `FaintMoverSearch` l
 **Score and peaks.** A motion's score at a position is its stack over the robust spread of such stacks in the tile (taken at a motion halfway through the speed range). The coarse search keeps each position's best motion; local maxima within 6 px that reach 0.7 × `faintMoverMinScore` are refined on a grid four times finer, one coarse step to either side and within 2 px, and must then reach `faintMoverMinScore`.
 
 **Checks.** A refined peak is reported only when:
-1. *both halves of the session support it.* The first and second half of the frames (in time) are stacked along its motion and must each reach 3 on the full-stack scale, normalised by the count of unmasked path centres. Masks are zeroed before PSF filtering; that filtering can spread neighbouring residual signal into a masked centre, and the half stack sums those processed samples too. A half with fewer than a third of its frames (at least 3) unmasked cannot be tested, as when the path crosses a bright star; at least one half must be tested.
-2. *it moves on the sky.* Its score exceeds the best stationary stack within 4 px by at least 2.
-3. *it is not fixed on the camera.* Each frame is read where its [registration](#1-border-drift-diagnostics) puts one camera pixel, within 4 px of the median camera position of the peak's path. The score must exceed that camera-fixed stack by at least 2, and the camera-fixed stack must stay below half the score. A hot pixel or defect adds up best at one camera position; it can add up along a straight sky path only partly, when the frames moved steadily. Needs usable registrations for at least half of the frames.
-4. *it is not a duplicate, a tracked object or a side lobe.* A weaker peak within 2.5 FWHM and 1.5 coarse steps of another repeats it (neighbouring tiles). A peak whose path passes a point track's timed detections within 2 FWHM (median) is that track's object. A peak whose path comes within 2 FWHM of a point track's detection, or of a peak at least twice as strong, at the same time in any frame is a side lobe: that frame's light makes it.
+
+1. *each testable half of the session supports it.* The first and second half of the frames (in time) are stacked along its motion and must each reach 3 on the full-stack scale, normalised by the count of unmasked path centres. Masks are zeroed before PSF filtering; that filtering can spread neighbouring residual signal into a masked centre, and the half stack sums those processed samples too. A half with fewer than a third of its frames (at least 3) unmasked cannot be tested, as when the path crosses a bright star; at least one half must be tested.
+2. *the stationary comparison passes.* Its score exceeds the best stationary stack within 4 px by at least 2.
+3. *the camera comparison passes when available.* Each frame is read where its [registration](#1-border-drift-diagnostics) puts one camera pixel, within 4 px of the median camera position of the peak's path. The score must exceed that camera-fixed stack by at least 2, and the camera-fixed stack must stay below half the score. A hot pixel or defect adds up best at one camera position; it can add up along a straight sky path only partly, when the frames moved steadily. Needs usable registrations for at least `max(8, ceil(searchedFrames / 2))` frames; otherwise this comparison is unavailable and does not veto the peak.
+4. *it is not a duplicate, a tracked object or a side lobe.* A weaker peak within 2.5 FWHM and 1.5 coarse steps of another repeats it (neighbouring tiles). A peak whose path passes a point track's timed detections within 2 FWHM (median) is removed as a track match. A peak whose path comes within 2 FWHM of a point track's detection, or of a peak at least twice as strong, at the same time in any frame is removed as a possible single-frame side lobe. These proximity checks are selection heuristics, not proof of physical identity.
+
+<a id="faint-mover-validation"></a>
 
 Each candidate carries its position at the session's mean mid-exposure time, its motion, its score, half scores (NaN when a half cannot be tested), stationary and camera-fixed scores and a 31 × 31 px cut-out of its filtered stack. `PipelineTelemetry.faintMoverSearchTelemetry` records the search domain and, in order, how many peaks each check removed; the text report shows them.
 
@@ -1588,135 +1367,11 @@ Each candidate carries its position at the session's mean mid-exposure time, its
 
 Each review frame preserves the original sequence index and midpoint, the actual whole-pixel scoring-path sample, its centre-mask test and locally normalised PSF-filtered residual signal. Masks are zeroed before filtering, so neighbouring signal can spread into a masked centre; the centre flag remains explicit. Samples are neither independent detections nor photometry, uncertainties or calibrated S/N. The first/second-half maps use the original tile noise, mask count, time order and full-stack normalisation. Their central refinement-area maxima reproduce the reported half scores; a half without sufficient support has no map. Candidate positions retain their original subpixel refinement. These additive diagnostics change no threshold, score or candidate-selection rule.
 
-**Resources.** Tiles are searched in parallel in batches of 32. One tile's work holds every searched frame's residual of the tile with its margin, about (512 + 2 × margin)² × (4 × frames + 12) bytes, and the engine limits the workers to fit. The search is not run when it would need more than 100,000 coarse motions or a quarter of the heap for one tile, and it stops after `faintMoverMaxSeconds`, reporting `truncated` and the tiles searched. The run time grows with coarse motions × frames × pixels, about 7 × 10⁻¹¹ s per unit on a 16-core desktop: for a fixed cadence and speed range, with the cube of the session length.
+**Resources.** Tiles are searched in parallel in batches of 32. One tile holds each searched frame's residual with its margin, about `(512 + 2 * margin)^2 * (4 * frames + 12)` bytes, and the engine limits workers to fit. Planning skips a search needing more than 100,000 coarse motions or a quarter of the heap for one tile. The cooperative `faintMoverMaxSeconds` deadline is checked within tiles; workers join, incomplete tiles are discarded, and `tilesSearched` and `truncated` describe completed coverage. No conclusion about the unsearched field follows from an empty partial result.
 
-**Reference data (2026-11-03, shipped profile with the search on).**
-
-| Session | Frames, span | Motions | Search time | Candidates |
-|---|---|---|---|---|
-| Klangwolke-2 | 28, 75 min | 720 | 74 s | 11 |
-| Klangwolke-1 | 9 kept; 7 in the largest session | - | - | not searched: fewer than 8 frames |
-| Africano | 12, 155 min | 7,140 | 10 s | 0; shuffled times: 2 |
-| Apophis | 14, 17 min | 16 | 0 s | 0; shuffled times: 2 |
-| Eagle-noisy | 43, 117 min | 1,988 | 8 s | 1; shuffled times: 1 |
-| Iwamoto-huge | 14, 20 min | 64 | 1 s | 0; shuffled times: 0 |
-| dc-reg | 52, 87 min | 2,140 | 18 s | 0; shuffled times: 0 |
-| helix-reg | 39, 115 min | 2,072 | 11 s | 1; shuffled times: 0 |
-| ic-5070-reg | 45, 118 min | 1,308 | 8 s | 0; shuffled times: 0 |
-| m101-reg | 106, 233 min | 10,116 | 313 s | 1; shuffled times: 0 |
-| m31-b-reg | 32, 89 min | 1,824 | 7 s | 0; shuffled times: 0 |
-| m31-g-reg | 33, 96 min | 2,864 | 13 s | 0; shuffled times: 0 |
-| m31-red-reg | 43, 94 min | 1,612 | 14 s | 0; shuffled times: 0 |
-| m5-reg | 32, 94 min | 1,604 | 9 s | 0; shuffled times: 0 |
-| m81-reg | 97, 189 min | 5,700 | 201 s | 0; shuffled times: 0 |
-| M81 Kumar | 39, 353 min | 39,340 | 878 s, before within-tile time-limit checks | 6 in that earlier run |
-| whynot (uncalibrated) | 59, 87 min | 1,004 | 17 s | 2; shuffled times: 2 |
-
-On Klangwolke-2, the search finds all five known asteroids of predicted magnitude 18.5-19.0 that the profile misses, without using their predictions: 74326 (score 22.7), 25729 (21.4), 43283 Robinbock (14.5), 77716 (13.9) and 26239 (13.5). It also finds 4767 Sutoku (17.7 mag, 47.5), which this profile does not track; 611 Valeria matches its track. Five candidates match no known object above the 19.0 mag limit of the session's catalogue fetch; one of them (score 15.3) moves visibly in the early, middle and late frames.
-
-<a id="faint-mover-validation"></a>
-**Deeper candidate review (2026-11-05).** A new full-field production replay reproduces all 11 Klangwolke-2 candidates and their numeric decision fields. The five previously unmatched paths now have compatible known-object predictions in separately recorded, candidate-local 256 px field queries to predicted V magnitude 23. Detection remains blind; these predictions are compared only after the original candidates are fixed. The comparisons use all 28 searched mid-exposure positions and the admitted corrected WCS, with the existing 2 FWHM position and 0.1 px/min motion tolerances.
-
-| Original finding | Compatible predicted object | Predicted V | Path RMS (px) | Motion discrepancy (px/min) |
-|---|---|---:|---:|---:|
-| FM4 | 68067 (2000 YM72) | 19.13 | 0.589 | 0.0255 |
-| FM8 | 180044 (2003 AJ88) | 19.68 | 0.458 | 0.0161 |
-| FM9 | 98339 (2000 SG296) | 19.15 | 0.324 | 0.0073 |
-| FM10 | 222169 (2000 AR152) | 20.20 | 0.877 | 0.0370 |
-| FM11 | 11579 Tsujitsuka (1994 JN) | 19.40 | 0.630 | 0.0237 |
-
-Each path has one compatible returned identity; FM4's other returned object, 531365 (2012 RE42), is incompatible at about 169 px RMS. The known positive FM2/74326 comparison reproduces at 0.186 px RMS. Thus all 11 original paths have compatible predictions after the deeper review, rather than six under the earlier magnitude-19 inventory. Initial failed requests remain recorded as unavailable; only successful responses without reported fetch problems support these comparisons. The observer comes from the native headers, with no invented site fallback.
-
-This is catalogue compatibility, not a calibrated identity probability or new-object claim. The returned formal orbit uncertainties are 3-sigma predictions and do not include the detector's centroid or WCS error; no total astrometric confidence is inferred. Predicted V is not a calibration of the native image passband. The [JPL field-search API](https://ssd-api.jpl.nasa.gov/doc/sb_ident.html) can exclude objects with unknown magnitudes, and these small field queries do not establish full-field completeness to V=23. The [Horizons observer-ephemeris documentation](https://ssd.jpl.nasa.gov/horizons/manual.html#observer-table) describes the prediction quantities.
-
-Bounded original moving/stationary patches and blinks cover all 11 paths in all 28 retained frames. Disjoint early/middle/late raw coadds and the actual scoring-path samples show the star-wing/mask context, including changing availability on several faint paths. Their full-data fitted paths and scoring reference are shared: these views are descriptive, not independent detections or significance tests. A compatible asteroid can still have contaminated measurements. The previous unmatched list must not be treated as negative truth for tuning residual rejection.
-
-**Matched-domain validation milestone (2026-11-05).** A separately frozen study completes 462 searches: 77 per field on Klangwolke-2, M81 Kumar, helix, ic-5070, Africano and UG 6524. Each native/null/injection/policy comparison uses the same two fixed native 512 px grid tiles, with full-size native arrays and coordinates. All selected tiles finish, including M81 at the unchanged 1 px/min speed limit. Prepared retained identities, median/maximum/mask hashes and ordinary tracks agree with accepted production results. The study search reproduces production candidates, review pixels and scientific counters exactly; all 77 K2 cases also agree exactly between the original and computation-sharing research implementations. Only elapsed time differs. This reuse is confined to identical complete preprocessing/coarse arrays; every policy still performs its own refinement, checks and global selection.
-
-The baseline finds zero native candidates in these 12 selected tiles (2,930,220 searched pixels), zero across all 18 shuffled-time controls from three fixed seeds, and two across six sign-reversed-residual controls, one each in helix and ic-5070. These are restricted-domain, unverified control counts. They do not establish a survey false-positive rate or assess the unsearched field. In particular, M81's completed two-tile evaluation supplies matched controls and injections without revalidating the six candidates from its older run, whose original candidate evidence was not recovered.
-
-Faint-stage injections rebuild the exact changed-pixel median while preserving native encoding, registration fill and saturation. Six batches cross Gaussian/Moffat profiles with nominal per-frame aperture SNR 1.5/2.5/4, actual exposure integration and 20% seeing variation. The upstream QC, streaks and ordinary tracks remain fixed; this is not end-to-end injection recovery. Of 180 planned moving histories, 170 are available: six star crossings have no qualifying fixed-domain star and four touch saturation. Baseline associations are 82/170: 20 slow, 23 fast, 13 gapped, 26 mildly curved and zero of 26 available star crossings. These are source histories, not independent objects or trials. By profile/nominal SNR, the counts are:
-
-| Profile | 1.5 | 2.5 | 4 |
-|---|---:|---:|---:|
-| Gaussian | 6 / 29 | 15 / 29 | 22 / 28 |
-| Moffat | 5 / 28 | 12 / 28 | 22 / 28 |
-
-Source association uses path RMS within one search FWHM and motion discrepancy within 0.1 px/min, with the predefined mean motion for curves. A post-hoc same-policy native-blank check finds no matching source contacts; that supports attribution without proving injected light dominates every measurement. Nominal SNR is neither physical magnitude nor calibrated significance, and the omitted source-photon noise, quantization, mask/PSF mismatch and reused backgrounds limit generalisation. The strong field dependence and shared sources preclude treating these counts as independent binomial trials.
-
-**Individual and paired gates.** Every policy runs on native data, the first shuffled seed, Gaussian nominal SNR 2.5 and a bright first-exposure flash batch. The moving column below has 29 available paired histories; the flash column has 36 available source controls. Native/shuffled counts describe all reported candidates in the selected footprints, not classified false detections.
-
-| Policy | Moving associations | Native candidates | Shuffled candidates | Attributed flashes |
-|---|---:|---:|---:|---:|
-| Current baseline | 15 | 0 | 0 | 0 |
-| Remove half check | 15 | 0 | 0 | 0 |
-| Remove stationary margin | 15 | 1 | 0 | 0 |
-| Remove camera margin | 15 | 0 | 0 | 0 |
-| Remove camera share limit | 15 | 0 | 0 | 0 |
-| Remove both camera checks | 15 | 0 | 0 | 0 |
-| Remove duplicate suppression | 15 | 0 | 0 | 0 |
-| Remove ordinary-track matching | 15 | 0 | 0 | 0 |
-| Remove side-lobe rejection | 15 | 0 | 0 | 0 |
-| Remove track and side-lobe checks | 15 | 0 | 0 | 0 |
-| Remove star-core mask | 15 | 409 | 292 | 2 |
-| Remove streak mask | 15 | 0 | 0 | 0 |
-| Remove final clipping | 14 | 101 | 150 | 34 |
-| Coarse keep fraction 0.35 | 15 | 0 | 0 | 0 |
-| Final score 6 | 20 | 126 | 104 | 17 |
-| Peak radius 3 px | 15 | 0 | 0 | 0 |
-| Remove half check and final clipping | 14 | 336 | 509 | 35 |
-
-Removing the star mask gains two star-crossing histories (Africano/helix) but loses the helix fast and K2 slow histories, so the unchanged total is not an unchanged source set. It also widens native searched coverage to 3,084,851 pixels and increases candidate load substantially. Removing clipping loses the helix fast history without a moving-source gain. Lowering the score adds five moving associations but also more native/shuffled candidates and 17 attributed flashes. These comparisons do not justify either change. Preprocessing changes both the proposal pool and empirical noise scale; removing a mask or clip need not monotonically improve recovery.
-
-Half-check removal alone has no measured benefit here. With clipping removed, its removal raises flash-case candidate load from 1,022 to at least 2,913 across the six fields. The paired removal reaches the production 1,000-candidate ceiling in the M81 and UG first-flash cases, making candidate loads lower bounds. All six planned flash positions already have associations in each capped field; the one unassociated position is in uncapped ic-5070, so the observed source count is still 35/36 under the fixed criterion. Candidate ceilings are resource limits, not scientific rejections; production's `belowScore` counter can include ceiling drops. Separately, 54 case results lack some bounded review pixels. Missing diagnostics do not reject their candidates or establish that they are artifacts.
-
-**Availability and conditional redundancy.** All 36 camera-fixed injections have usable construction metadata, but none is an eligible full-path control for this association rule and motion domain: K2, M81, Africano and UG camera trajectories depart from their best straight paths by more than one FWHM, while helix and ic-5070 drift below the nominal speed floor. Their zero associations cannot validate or invalidate the camera gates. A separate code/predicate audit does establish that, for a finite score `S >= 4`, the retained share condition `camera < S/2` already implies the 2-point camera margin. That explains the margin-only ablation's inactivity at the studied floors 8 and 6. The configuration accepts positive score floors below 4, where this implication fails (for example, score 3 and camera 1.25 pass the share condition but fail the margin). There is no basis for deleting that lower-score behavior. Stationary, streak, duplicate and camera checks with little or no effect in these footprints remain insufficiently tested for removal; quiet controls or shared purposes are not proofs of global redundancy. The local background model/3-sigma background clip, upstream QC and input-validity rules were not individually ablated.
-
-**Separate subset and encounter checks.** Three blind full-field searches use disjoint 9/9/10-frame K2 thirds, each with its own rebuilt median, actual seeing measurements and corresponding streak/track points. All 247 tiles finish in each third. They return 2/2/3 candidates and 0/2/3 strict associations to the original full-session paths: FM2/FM6 in the middle and FM1/FM2/FM6 late. One early candidate lies only 0.31 px from FM2 at its reference epoch but misses the fixed motion tolerance (0.134 px/min discrepancy); that criterion is not loosened after seeing it. Several slow reference paths fall below the subsets' nominal coarse-motion floor. These are conditional image-subset checks with shared upstream QC/data area, not independent nights, calibrated confidence, or evidence that an unmatched/absent subset object is false.
-
-A separately frozen targeted follow-up injects 12 distinct perpendicular crossings/near passes of the native longest ordinary point track, at two encounter epochs, separations 0/3/8 FWHM and two flux levels. Baseline, no-track, no-side-lobe and paired removal all associate the same three injected histories, all at 8 FWHM separation; none has a matching native-blank contact. Across the repeated injected cases, candidate load is 3/3/28/40 respectively. On the single distinct native control tile it is 0/0/2/3. Thus the extra candidates do not demonstrate extra source recovery, and the unresolved closer-pass losses cannot be assigned to the removed gates alone. Proposal construction/refinement, masking and other selection mechanisms need diagnosis before changing a late veto; close/parallel/blended paths remain an acceptance priority.
-
-**Decision and scope.** Retain the current scientific gates/defaults. Star masking, clipping and the tested score relaxation show material sensitivity/control trade-offs; no blanket removal earns adoption. Investigate local treatment of star crossings and source/proposal separation, preserve explicit availability and test steady camera drift and boundary/short sequences before stronger conclusions. The joint SM-F1/SM-F3 support and centroid-uncertainty findings remain applicable as separate evidence: they do not calibrate digital-tracking thresholds. Planning checks on 3/5/8 frames confirm eligibility behavior only, with no claimed pixel sensitivity for the skipped short cases. SM-F1 temporal confirmation, broader SM-F6 validation and any scientific rule change remain open; this bounded milestone supplies the baseline for an independent SM-F7 proposal-method comparison.
-
-All frozen sources/classes/libraries/configurations, 744 production/build/test source files and 818 original image hashes remain unchanged; native array/median ownership and exact bounded-crop/coadd checks pass. These sequential diagnostic JVMs use four processors and an 11 GiB heap limit. Whole-job times include preparation, parity checks, reuse and serialization: about 72 minutes for M81 and 24 for UG, with recorded process working-set peaks across the six jobs about 1.88-8.33 GiB. They are research-workload observations, not production benchmarks or per-policy memory costs. Standalone candidate, gate, injection and supplementary figures were inspected without observing-site metadata. Production code, settings, reports and classification policies are unchanged.
+At most 1,000 candidates are returned. Ceiling drops also increment `belowScore`, so that counter is not always a pure score rejection count. Review-budget limits affect diagnostic availability separately. Cost grows with coarse motions × frames × pixels and with the shift margin; increasing a time limit does not improve the algorithm's scaling.
 
 <a id="faint-mover-complementary-proposals"></a>
+<a id="faint-mover-limits"></a>
 
-**SM-F7 matched-verifier comparison (2026-11-05).** A separately frozen [four-field study](docs/research/slow-movers/10-complementary-proposals/CONCLUSION.md) compares digital tracking D with temporal-bin proposals T4/T3 and PSF-filtered frame-point proposals P3/P2.5. All retain the current complete-sequence verifier and final selection. The four existing observations, Apophis, Africano, dc-reg and m5-reg, were outside the six-field SM-F6 grid; they are not new observing nights. Two fixed native cores per field, the full admitted motion range through 1 px/min, 48 general and 24 targeted pair batches supply 240 available moving histories, 96 stationary/flash controls and 20 native/shuffle/negative contexts. Seven result families produce 644 rows.
-
-| Route | Complete contexts / 92 | General associated / complete histories | Pair associated / complete histories |
-|---|---:|---:|---:|
-| D | 92 | 87 / 192 | 21 / 48 |
-| T4 | 92 | 13 / 192 | 25 / 48 |
-| T3 | 73 | 29 / 144 | 25 / 36 |
-| P3 | 24 | 1 / 48 | 3 / 12 |
-| P2.5 | 23 | 1 / 48 | 3 / 12 |
-| D+T4 | 92 | 87 / 192 | 27 / 48 |
-| D+P3 | 24 | 1 / 48 | 3 / 12 |
-
-T4 is a complement in these targeted pairs, not a replacement for D: the union adds six weak companions, five in dc-reg and one in m5-reg, with no general-grid increment or selection loss. Recomputing all upstream processing on the six full injected sequences retains five gains beyond ordinary tracks and D; one loses association after QC changes the kept-frame set. A separate exact upstream replay finds no compatible maximum-stack history for those target companions under the prior SM-F1/SM-F3 criterion. These are selected artificial histories on existing backgrounds, not five independent astronomical discoveries or full-pipeline completeness for the entire grid. Source photon noise is omitted and nominal aperture SNR is not calibrated magnitude.
-
-All 20 D/T4/union native/null contexts complete with zero candidates. Candidate load across repeated cases increases from 113 D paths to 136 union paths for six conditional source-history gains; repeated/ambiguous paths and unmatched findings remain explicit. T3 reaches the 50,000-seed prototype boundary in 19 cores, P3 in 136 and P2.5 in 138. Incomplete contexts are excluded from clean sensitivity comparisons; they do not establish a scientific miss. The lower-threshold T3 standalone gains are diagnostic: a D+T3 union was not tested. Warm route timings and shared preparation are separate, with fixed-order/JIT and whole-process-memory limits stated in the archive.
-
-All 72 accepted diagnostic batch replays match D candidates, review hashes and non-time counters. A corrected admitted-motion-grid oracle diagnoses the old twelve K2 encounters without treating them as new validation: three blind recoveries, three admissible local seeds surviving selection without blind recovery, three local camera cuts, one local score cut and two compatible local peaks removed as side lobes. Exact-velocity oracle grid phase and an unavailable-half-score comparator correction are preserved as explicit amendments. The [combined filter assessment](docs/research/slow-movers/10-complementary-proposals/CONCLUSION.md#what-this-changes-in-the-filter-review) retains current gates/defaults while preserving concrete masking and side-lobe counterexamples. Neither oracle failure nor an inactive late-cut ablation exhausts possible source-compatible paths.
-
-Production code, settings and reports remain unchanged; 757 production/build/test artifacts and 161 original images retain their frozen hashes. Temporal proposals merit independent close-pair/source-attribution examples before an integration contract is agreed. Frame-point proposal density/cost, short sequences, steady-camera controls and broader validation remain open. The archive contains protocols, all denominators, bounded input/score evidence, source/frame provenance and separate confirmation/validation records.
-
-**Native Klangwolke-2 follow-up (2026-11-05).** The requested [uninjected full-field application](docs/research/slow-movers/11-klangwolke-native/CONCLUSION.md) completes all 247 production tiles in D and T4 over the same 28 retained frames and 49,540,332 unmasked reference pixels, through maximum speed 1 px/min. D reproduces the existing eleven candidates exactly; T4 finds seven corresponding to FM1-FM7; the globally reselected union returns the same eleven. Its full owned candidate JSON, including every cutout/review array, is byte-identical to D. There is no additional path or baseline loss. FM8-FM11 have no compatible verified T4 peak reaching final selection; ordered proposal/cut counts do not establish filter redundancy. The four conditional null contexts are not triggered because the union adds no path, so this is not false-alarm calibration.
-
-Native stack/mask/track products, the actual-library baseline, recorded candidate/review hashes and non-time counters match. Forced-eviction/streaming controls preserve the frozen method; 757 production artifacts and all 33 input images retain their hashes. Both searches complete well within the original 600-second ceiling despite a separately recorded 3600-second research allowance; no seed/candidate limit is reached. The archive includes real-frame/coadd views, all streamed proposal/rejection ledgers and source correspondences without site metadata. This real-data result supplies no K2 sensitivity gain and does not convert the earlier selected close-pair injection gains into observed new objects. K2 is reused development data, not an independent validation night. Current scientific gates/defaults and production integration remain unchanged.
-
-**Earlier injection/control reference (2026-11-03).** Injected movers (352 on Klangwolke-2, Gaussian of the star size, flux scaled from Sutoku's, 0.15-0.5 px/min in any direction) were recovered at a score of 8 or more in 89-95 % at magnitude 18.0, 91-93 % at 18.5, 93 % at 19.0 and 80-82 % at 19.5. Most misses lie mainly in star masks. Null controls (shuffled frame times, and residuals mirrored about the median stack) left 0-2 candidates per session at 8 or more on the other sessions; on Klangwolke-2, 2-4 per control, all but one next to Sutoku, Valeria or 194 Prokne, whose light a shuffled or mirrored control turns into peaks that real frame times do not make.
-
-**Application acceptance (2026-11-04).** The agreed first delivery is integrated in [SpacePixels Faint Movers](../SpacePixels/MANUAL.md#faint-movers-experimental), off by default, with settings, resource guidance, unverified FM report evidence, maps/CSV/JSON, catalogue comparisons and searched-frame viewer overlays. The final full-size acceptance runs measured the following search-stage results; times depend on available workers and heap and exclude loading and report export.
-
-| Session | Frames in selected session | Completed tiles | Search time | Result |
-|---|---|---|---|---|
-| Klangwolke-2 | 28 | 247 / 247 | 90.1 s | 11 reference candidates reproduced; six paths compatible with saved predictions |
-| Klangwolke-1 | 7 of 9 kept | not searched | — | skipped: fewer than 8 frames in the largest kept session |
-| M81 Kumar | 39 | 18 / 110 | 604.8 s for a 600 s budget | truncated; 0 retained candidates in the completed coverage |
-| UG 6524 | 43 | 36 / 36 | 276.2 s | completed; 0 retained candidates |
-
-The M81 Kumar limit is cooperative and is now acceptance-tested within tiles. Its partial zero-candidate result does not assess the remaining tiles or revalidate the six candidates from the earlier, longer run above. The 18-dataset off-mode comparison preserved scientific results and exported data/images apart from generated timestamps and measured timings; ordinary detections and photometry were also unchanged in the enabled acceptance cases. These checks establish integration and coverage behavior, while broader sensitivity/control calibration remains open.
-
-**Limitations.** One constant motion, whole-pixel shifts and one star size per run. Paths mostly inside star masks are lost. On frames that drifted steadily without dither, a mover moving with the drift cannot be told from a hot pixel. Uncalibrated data still gives a few candidates from hot pixels lined up by chance. Temporal-variance weighting near bright stars is not implemented, and structured stellar residuals can survive the current checks. The cost grows quickly with long sessions and fast speed limits. Follow-up work is tracked as [residual suppression (SM-F4)](FEATURE-REQUESTS.md#sm-f4-bright-star-residuals-in-faint-mover-searches), [runtime/memory scaling (SM-F5)](FEATURE-REQUESTS.md#sm-f5-faint-mover-runtime-and-memory-scaling), [validation (SM-F6)](FEATURE-REQUESTS.md#sm-f6-faint-mover-validation-and-candidate-review), and [complementary mechanisms (SM-F7)](FEATURE-REQUESTS.md#sm-f7-complementary-high-sensitivity-moving-object-searches).
+**Limitations.** The model uses one constant motion, whole-pixel scoring shifts and one star size per run. Star masks can hide a path; median subtraction can attenuate low-displacement sources; nearby strong sources and track/side-lobe checks can exclude real companions. Structured bright-star residuals and chance alignments of sensor defects can survive. Steady undithered camera drift can be indistinguishable from a source moving with that drift. A good score, descriptive coadd or post-detection catalogue match is not calibrated discovery confidence. Temporal-bin and frame-point proposal methods and temporal-variance weighting are not production stages. Conditional extensions are collected in [SM-F7](FEATURE-REQUESTS.md#sm-f7-slow-and-faint-mover-extensions); current filters and defaults remain.

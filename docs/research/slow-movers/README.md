@@ -22,6 +22,8 @@ This collection preserves eleven dated SM-F1/SM-F2/SM-F3/SM-F6/SM-F7 investigati
 
 ## Conclusions to carry forward
 
+**Current status:** the investigation round is closed with present filters and defaults retained. Only the deferred [SM-F7 extension item](../../../FEATURE-REQUESTS.md#sm-f7-slow-and-faint-mover-extensions) remains for a concrete missed-source or resource need; no further campaign is scheduled. The dated study snapshots retain their historical proposals and publication state.
+
 - Keep the current scientific filters/defaults. Increased selected-history recovery can accompany substantial control load, and some relaxations also lose sources through changed preprocessing or noise normalization.
 - Treat missing evidence, input/model eligibility, candidate ceilings and scientific rejection separately. The camera controls in the latest grid do not cleanly test steady camera drift in the intended motion domain.
 - Use raw footprint/source provenance and credible centroid/PSF/noise uncertainty before adopting temporal confirmation or more aggressive overlap rules. A streak contact, strong time correlation or catalogue absence alone is not a physical classification.
