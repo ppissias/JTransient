@@ -1,0 +1,3302 @@
+[
+  {
+    "dataset": "dc-reg",
+    "context": "case-13",
+    "exactUpstreamReplay": true,
+    "sourceFrameTimes": [
+      {
+        "captureMillis": 1569117878000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 0
+      },
+      {
+        "captureMillis": 1569117968000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 1
+      },
+      {
+        "captureMillis": 1569118073000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 2
+      },
+      {
+        "captureMillis": 1569118169000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 3
+      },
+      {
+        "captureMillis": 1569118263000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 4
+      },
+      {
+        "captureMillis": 1569118360000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 5
+      },
+      {
+        "captureMillis": 1569118451000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 6
+      },
+      {
+        "captureMillis": 1569118541000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 7
+      },
+      {
+        "captureMillis": 1569118632000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 8
+      },
+      {
+        "captureMillis": 1569118723000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 9
+      },
+      {
+        "captureMillis": 1569118814000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 10
+      },
+      {
+        "captureMillis": 1569118900000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 11
+      },
+      {
+        "captureMillis": 1569118995000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 12
+      },
+      {
+        "captureMillis": 1569119090000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 13
+      },
+      {
+        "captureMillis": 1569119187000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 14
+      },
+      {
+        "captureMillis": 1569119278000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 15
+      },
+      {
+        "captureMillis": 1569119373000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 16
+      },
+      {
+        "captureMillis": 1569119463000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 17
+      },
+      {
+        "captureMillis": 1569119565000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 18
+      },
+      {
+        "captureMillis": 1569119657000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 19
+      },
+      {
+        "captureMillis": 1569119762000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 20
+      },
+      {
+        "captureMillis": 1569119850000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 21
+      },
+      {
+        "captureMillis": 1569119950000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 22
+      },
+      {
+        "captureMillis": 1569120040000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 23
+      },
+      {
+        "captureMillis": 1569120131000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 24
+      },
+      {
+        "captureMillis": 1569120218000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 25
+      },
+      {
+        "captureMillis": 1569120313000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 26
+      },
+      {
+        "captureMillis": 1569120405000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 27
+      },
+      {
+        "captureMillis": 1569120497000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 28
+      },
+      {
+        "captureMillis": 1569120588000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 29
+      },
+      {
+        "captureMillis": 1569120678000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 30
+      },
+      {
+        "captureMillis": 1569120774000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 31
+      },
+      {
+        "captureMillis": 1569120870000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 32
+      },
+      {
+        "captureMillis": 1569120964000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 33
+      },
+      {
+        "captureMillis": 1569121057000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 34
+      },
+      {
+        "captureMillis": 1569121152000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 35
+      },
+      {
+        "captureMillis": 1569121244000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 36
+      },
+      {
+        "captureMillis": 1569121334000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 37
+      },
+      {
+        "captureMillis": 1569121438000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 38
+      },
+      {
+        "captureMillis": 1569121528000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 39
+      },
+      {
+        "captureMillis": 1569121620000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 40
+      },
+      {
+        "captureMillis": 1569121715000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 41
+      },
+      {
+        "captureMillis": 1569121809000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 42
+      },
+      {
+        "captureMillis": 1569121900000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 43
+      },
+      {
+        "captureMillis": 1569121994000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 44
+      },
+      {
+        "captureMillis": 1569122084000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 45
+      },
+      {
+        "captureMillis": 1569122174000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 46
+      },
+      {
+        "captureMillis": 1569122265000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 47
+      },
+      {
+        "captureMillis": 1569122371000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 48
+      },
+      {
+        "captureMillis": 1569122461000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 49
+      },
+      {
+        "captureMillis": 1569122552000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 50
+      },
+      {
+        "captureMillis": 1569122647000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 51
+      },
+      {
+        "captureMillis": 1569122742000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 52
+      },
+      {
+        "captureMillis": 1569122833000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 53
+      },
+      {
+        "captureMillis": 1569122924000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 54
+      },
+      {
+        "captureMillis": 1569123014000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 55
+      },
+      {
+        "captureMillis": 1569123109000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 56
+      },
+      {
+        "captureMillis": 1569123199000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 57
+      },
+      {
+        "captureMillis": 1569123289000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 58
+      }
+    ],
+    "maximumStackCandidates": [],
+    "maximumStackAssociations": [
+      {
+        "matches": [],
+        "associated": false,
+        "source": "S7-1"
+      },
+      {
+        "matches": [],
+        "associated": false,
+        "source": "S7-2"
+      }
+    ],
+    "ordinaryTracks": 1,
+    "anomalies": 0,
+    "unclassifiedPoints": 5,
+    "targetSources": [
+      "S7-2"
+    ]
+  },
+  {
+    "dataset": "dc-reg",
+    "context": "case-14",
+    "exactUpstreamReplay": true,
+    "sourceFrameTimes": [
+      {
+        "captureMillis": 1569117878000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 0
+      },
+      {
+        "captureMillis": 1569117968000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 1
+      },
+      {
+        "captureMillis": 1569118073000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 2
+      },
+      {
+        "captureMillis": 1569118169000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 3
+      },
+      {
+        "captureMillis": 1569118263000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 4
+      },
+      {
+        "captureMillis": 1569118360000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 5
+      },
+      {
+        "captureMillis": 1569118451000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 6
+      },
+      {
+        "captureMillis": 1569118541000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 7
+      },
+      {
+        "captureMillis": 1569118632000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 8
+      },
+      {
+        "captureMillis": 1569118723000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 9
+      },
+      {
+        "captureMillis": 1569118814000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 10
+      },
+      {
+        "captureMillis": 1569118900000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 11
+      },
+      {
+        "captureMillis": 1569118995000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 12
+      },
+      {
+        "captureMillis": 1569119090000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 13
+      },
+      {
+        "captureMillis": 1569119187000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 14
+      },
+      {
+        "captureMillis": 1569119278000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 15
+      },
+      {
+        "captureMillis": 1569119373000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 16
+      },
+      {
+        "captureMillis": 1569119463000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 17
+      },
+      {
+        "captureMillis": 1569119565000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 18
+      },
+      {
+        "captureMillis": 1569119657000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 19
+      },
+      {
+        "captureMillis": 1569119762000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 20
+      },
+      {
+        "captureMillis": 1569119850000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 21
+      },
+      {
+        "captureMillis": 1569119950000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 22
+      },
+      {
+        "captureMillis": 1569120040000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 23
+      },
+      {
+        "captureMillis": 1569120131000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 24
+      },
+      {
+        "captureMillis": 1569120218000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 25
+      },
+      {
+        "captureMillis": 1569120313000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 26
+      },
+      {
+        "captureMillis": 1569120405000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 27
+      },
+      {
+        "captureMillis": 1569120497000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 28
+      },
+      {
+        "captureMillis": 1569120588000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 29
+      },
+      {
+        "captureMillis": 1569120678000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 30
+      },
+      {
+        "captureMillis": 1569120774000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 31
+      },
+      {
+        "captureMillis": 1569120870000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 32
+      },
+      {
+        "captureMillis": 1569120964000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 33
+      },
+      {
+        "captureMillis": 1569121057000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 34
+      },
+      {
+        "captureMillis": 1569121152000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 35
+      },
+      {
+        "captureMillis": 1569121244000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 36
+      },
+      {
+        "captureMillis": 1569121334000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 37
+      },
+      {
+        "captureMillis": 1569121438000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 38
+      },
+      {
+        "captureMillis": 1569121528000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 39
+      },
+      {
+        "captureMillis": 1569121620000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 40
+      },
+      {
+        "captureMillis": 1569121715000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 41
+      },
+      {
+        "captureMillis": 1569121809000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 42
+      },
+      {
+        "captureMillis": 1569121900000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 43
+      },
+      {
+        "captureMillis": 1569121994000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 44
+      },
+      {
+        "captureMillis": 1569122084000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 45
+      },
+      {
+        "captureMillis": 1569122174000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 46
+      },
+      {
+        "captureMillis": 1569122265000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 47
+      },
+      {
+        "captureMillis": 1569122371000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 48
+      },
+      {
+        "captureMillis": 1569122461000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 49
+      },
+      {
+        "captureMillis": 1569122552000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 50
+      },
+      {
+        "captureMillis": 1569122647000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 51
+      },
+      {
+        "captureMillis": 1569122742000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 52
+      },
+      {
+        "captureMillis": 1569122833000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 53
+      },
+      {
+        "captureMillis": 1569122924000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 54
+      },
+      {
+        "captureMillis": 1569123014000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 55
+      },
+      {
+        "captureMillis": 1569123109000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 56
+      },
+      {
+        "captureMillis": 1569123199000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 57
+      },
+      {
+        "captureMillis": 1569123289000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 58
+      }
+    ],
+    "maximumStackCandidates": [],
+    "maximumStackAssociations": [
+      {
+        "matches": [],
+        "associated": false,
+        "source": "S7-1"
+      },
+      {
+        "matches": [],
+        "associated": false,
+        "source": "S7-2"
+      }
+    ],
+    "ordinaryTracks": 1,
+    "anomalies": 0,
+    "unclassifiedPoints": 6,
+    "targetSources": [
+      "S7-2"
+    ]
+  },
+  {
+    "dataset": "dc-reg",
+    "context": "case-15",
+    "exactUpstreamReplay": true,
+    "sourceFrameTimes": [
+      {
+        "captureMillis": 1569117878000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 0
+      },
+      {
+        "captureMillis": 1569117968000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 1
+      },
+      {
+        "captureMillis": 1569118073000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 2
+      },
+      {
+        "captureMillis": 1569118169000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 3
+      },
+      {
+        "captureMillis": 1569118263000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 4
+      },
+      {
+        "captureMillis": 1569118360000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 5
+      },
+      {
+        "captureMillis": 1569118451000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 6
+      },
+      {
+        "captureMillis": 1569118541000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 7
+      },
+      {
+        "captureMillis": 1569118632000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 8
+      },
+      {
+        "captureMillis": 1569118723000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 9
+      },
+      {
+        "captureMillis": 1569118814000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 10
+      },
+      {
+        "captureMillis": 1569118900000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 11
+      },
+      {
+        "captureMillis": 1569118995000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 12
+      },
+      {
+        "captureMillis": 1569119090000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 13
+      },
+      {
+        "captureMillis": 1569119187000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 14
+      },
+      {
+        "captureMillis": 1569119278000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 15
+      },
+      {
+        "captureMillis": 1569119373000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 16
+      },
+      {
+        "captureMillis": 1569119463000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 17
+      },
+      {
+        "captureMillis": 1569119565000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 18
+      },
+      {
+        "captureMillis": 1569119657000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 19
+      },
+      {
+        "captureMillis": 1569119762000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 20
+      },
+      {
+        "captureMillis": 1569119850000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 21
+      },
+      {
+        "captureMillis": 1569119950000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 22
+      },
+      {
+        "captureMillis": 1569120040000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 23
+      },
+      {
+        "captureMillis": 1569120131000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 24
+      },
+      {
+        "captureMillis": 1569120218000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 25
+      },
+      {
+        "captureMillis": 1569120313000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 26
+      },
+      {
+        "captureMillis": 1569120405000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 27
+      },
+      {
+        "captureMillis": 1569120497000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 28
+      },
+      {
+        "captureMillis": 1569120588000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 29
+      },
+      {
+        "captureMillis": 1569120678000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 30
+      },
+      {
+        "captureMillis": 1569120774000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 31
+      },
+      {
+        "captureMillis": 1569120870000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 32
+      },
+      {
+        "captureMillis": 1569120964000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 33
+      },
+      {
+        "captureMillis": 1569121057000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 34
+      },
+      {
+        "captureMillis": 1569121152000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 35
+      },
+      {
+        "captureMillis": 1569121244000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 36
+      },
+      {
+        "captureMillis": 1569121334000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 37
+      },
+      {
+        "captureMillis": 1569121438000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 38
+      },
+      {
+        "captureMillis": 1569121528000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 39
+      },
+      {
+        "captureMillis": 1569121620000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 40
+      },
+      {
+        "captureMillis": 1569121715000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 41
+      },
+      {
+        "captureMillis": 1569121809000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 42
+      },
+      {
+        "captureMillis": 1569121900000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 43
+      },
+      {
+        "captureMillis": 1569121994000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 44
+      },
+      {
+        "captureMillis": 1569122084000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 45
+      },
+      {
+        "captureMillis": 1569122174000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 46
+      },
+      {
+        "captureMillis": 1569122265000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 47
+      },
+      {
+        "captureMillis": 1569122371000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 48
+      },
+      {
+        "captureMillis": 1569122461000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 49
+      },
+      {
+        "captureMillis": 1569122552000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 50
+      },
+      {
+        "captureMillis": 1569122647000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 51
+      },
+      {
+        "captureMillis": 1569122742000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 52
+      },
+      {
+        "captureMillis": 1569122833000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 53
+      },
+      {
+        "captureMillis": 1569122924000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 54
+      },
+      {
+        "captureMillis": 1569123014000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 55
+      },
+      {
+        "captureMillis": 1569123109000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 56
+      },
+      {
+        "captureMillis": 1569123199000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 57
+      },
+      {
+        "captureMillis": 1569123289000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 58
+      }
+    ],
+    "maximumStackCandidates": [],
+    "maximumStackAssociations": [
+      {
+        "matches": [],
+        "associated": false,
+        "source": "S7-1"
+      },
+      {
+        "matches": [],
+        "associated": false,
+        "source": "S7-2"
+      }
+    ],
+    "ordinaryTracks": 1,
+    "anomalies": 0,
+    "unclassifiedPoints": 6,
+    "targetSources": [
+      "S7-2"
+    ]
+  },
+  {
+    "dataset": "dc-reg",
+    "context": "case-17",
+    "exactUpstreamReplay": true,
+    "sourceFrameTimes": [
+      {
+        "captureMillis": 1569117878000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 0
+      },
+      {
+        "captureMillis": 1569117968000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 1
+      },
+      {
+        "captureMillis": 1569118073000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 2
+      },
+      {
+        "captureMillis": 1569118169000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 3
+      },
+      {
+        "captureMillis": 1569118263000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 4
+      },
+      {
+        "captureMillis": 1569118360000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 5
+      },
+      {
+        "captureMillis": 1569118451000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 6
+      },
+      {
+        "captureMillis": 1569118541000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 7
+      },
+      {
+        "captureMillis": 1569118632000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 8
+      },
+      {
+        "captureMillis": 1569118723000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 9
+      },
+      {
+        "captureMillis": 1569118814000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 10
+      },
+      {
+        "captureMillis": 1569118900000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 11
+      },
+      {
+        "captureMillis": 1569118995000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 12
+      },
+      {
+        "captureMillis": 1569119090000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 13
+      },
+      {
+        "captureMillis": 1569119187000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 14
+      },
+      {
+        "captureMillis": 1569119278000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 15
+      },
+      {
+        "captureMillis": 1569119373000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 16
+      },
+      {
+        "captureMillis": 1569119463000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 17
+      },
+      {
+        "captureMillis": 1569119565000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 18
+      },
+      {
+        "captureMillis": 1569119657000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 19
+      },
+      {
+        "captureMillis": 1569119762000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 20
+      },
+      {
+        "captureMillis": 1569119850000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 21
+      },
+      {
+        "captureMillis": 1569119950000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 22
+      },
+      {
+        "captureMillis": 1569120040000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 23
+      },
+      {
+        "captureMillis": 1569120131000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 24
+      },
+      {
+        "captureMillis": 1569120218000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 25
+      },
+      {
+        "captureMillis": 1569120313000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 26
+      },
+      {
+        "captureMillis": 1569120405000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 27
+      },
+      {
+        "captureMillis": 1569120497000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 28
+      },
+      {
+        "captureMillis": 1569120588000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 29
+      },
+      {
+        "captureMillis": 1569120678000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 30
+      },
+      {
+        "captureMillis": 1569120774000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 31
+      },
+      {
+        "captureMillis": 1569120870000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 32
+      },
+      {
+        "captureMillis": 1569120964000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 33
+      },
+      {
+        "captureMillis": 1569121057000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 34
+      },
+      {
+        "captureMillis": 1569121152000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 35
+      },
+      {
+        "captureMillis": 1569121244000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 36
+      },
+      {
+        "captureMillis": 1569121334000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 37
+      },
+      {
+        "captureMillis": 1569121438000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 38
+      },
+      {
+        "captureMillis": 1569121528000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 39
+      },
+      {
+        "captureMillis": 1569121620000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 40
+      },
+      {
+        "captureMillis": 1569121715000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 41
+      },
+      {
+        "captureMillis": 1569121809000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 42
+      },
+      {
+        "captureMillis": 1569121900000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 43
+      },
+      {
+        "captureMillis": 1569121994000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 44
+      },
+      {
+        "captureMillis": 1569122084000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 45
+      },
+      {
+        "captureMillis": 1569122174000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 46
+      },
+      {
+        "captureMillis": 1569122265000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 47
+      },
+      {
+        "captureMillis": 1569122371000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 48
+      },
+      {
+        "captureMillis": 1569122461000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 49
+      },
+      {
+        "captureMillis": 1569122552000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 50
+      },
+      {
+        "captureMillis": 1569122647000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 51
+      },
+      {
+        "captureMillis": 1569122742000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 52
+      },
+      {
+        "captureMillis": 1569122833000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 53
+      },
+      {
+        "captureMillis": 1569122924000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 54
+      },
+      {
+        "captureMillis": 1569123014000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 55
+      },
+      {
+        "captureMillis": 1569123109000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 56
+      },
+      {
+        "captureMillis": 1569123199000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 57
+      },
+      {
+        "captureMillis": 1569123289000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 58
+      }
+    ],
+    "maximumStackCandidates": [],
+    "maximumStackAssociations": [
+      {
+        "matches": [],
+        "associated": false,
+        "source": "S7-1"
+      },
+      {
+        "matches": [],
+        "associated": false,
+        "source": "S7-2"
+      }
+    ],
+    "ordinaryTracks": 1,
+    "anomalies": 0,
+    "unclassifiedPoints": 6,
+    "targetSources": [
+      "S7-2"
+    ]
+  },
+  {
+    "dataset": "dc-reg",
+    "context": "case-18",
+    "exactUpstreamReplay": true,
+    "sourceFrameTimes": [
+      {
+        "captureMillis": 1569117878000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 0
+      },
+      {
+        "captureMillis": 1569117968000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 1
+      },
+      {
+        "captureMillis": 1569118073000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 2
+      },
+      {
+        "captureMillis": 1569118169000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 3
+      },
+      {
+        "captureMillis": 1569118263000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 4
+      },
+      {
+        "captureMillis": 1569118360000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 5
+      },
+      {
+        "captureMillis": 1569118451000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 6
+      },
+      {
+        "captureMillis": 1569118541000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 7
+      },
+      {
+        "captureMillis": 1569118632000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 8
+      },
+      {
+        "captureMillis": 1569118723000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 9
+      },
+      {
+        "captureMillis": 1569118814000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 10
+      },
+      {
+        "captureMillis": 1569118900000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 11
+      },
+      {
+        "captureMillis": 1569118995000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 12
+      },
+      {
+        "captureMillis": 1569119090000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 13
+      },
+      {
+        "captureMillis": 1569119187000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 14
+      },
+      {
+        "captureMillis": 1569119278000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 15
+      },
+      {
+        "captureMillis": 1569119373000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 16
+      },
+      {
+        "captureMillis": 1569119463000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 17
+      },
+      {
+        "captureMillis": 1569119565000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 18
+      },
+      {
+        "captureMillis": 1569119657000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 19
+      },
+      {
+        "captureMillis": 1569119762000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 20
+      },
+      {
+        "captureMillis": 1569119850000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 21
+      },
+      {
+        "captureMillis": 1569119950000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 22
+      },
+      {
+        "captureMillis": 1569120040000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 23
+      },
+      {
+        "captureMillis": 1569120131000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 24
+      },
+      {
+        "captureMillis": 1569120218000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 25
+      },
+      {
+        "captureMillis": 1569120313000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 26
+      },
+      {
+        "captureMillis": 1569120405000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 27
+      },
+      {
+        "captureMillis": 1569120497000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 28
+      },
+      {
+        "captureMillis": 1569120588000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 29
+      },
+      {
+        "captureMillis": 1569120678000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 30
+      },
+      {
+        "captureMillis": 1569120774000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 31
+      },
+      {
+        "captureMillis": 1569120870000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 32
+      },
+      {
+        "captureMillis": 1569120964000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 33
+      },
+      {
+        "captureMillis": 1569121057000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 34
+      },
+      {
+        "captureMillis": 1569121152000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 35
+      },
+      {
+        "captureMillis": 1569121244000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 36
+      },
+      {
+        "captureMillis": 1569121334000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 37
+      },
+      {
+        "captureMillis": 1569121438000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 38
+      },
+      {
+        "captureMillis": 1569121528000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 39
+      },
+      {
+        "captureMillis": 1569121620000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 40
+      },
+      {
+        "captureMillis": 1569121715000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 41
+      },
+      {
+        "captureMillis": 1569121809000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 42
+      },
+      {
+        "captureMillis": 1569121900000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 43
+      },
+      {
+        "captureMillis": 1569121994000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 44
+      },
+      {
+        "captureMillis": 1569122084000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 45
+      },
+      {
+        "captureMillis": 1569122174000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 46
+      },
+      {
+        "captureMillis": 1569122265000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 47
+      },
+      {
+        "captureMillis": 1569122371000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 48
+      },
+      {
+        "captureMillis": 1569122461000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 49
+      },
+      {
+        "captureMillis": 1569122552000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 50
+      },
+      {
+        "captureMillis": 1569122647000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 51
+      },
+      {
+        "captureMillis": 1569122742000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 52
+      },
+      {
+        "captureMillis": 1569122833000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 53
+      },
+      {
+        "captureMillis": 1569122924000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 54
+      },
+      {
+        "captureMillis": 1569123014000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 55
+      },
+      {
+        "captureMillis": 1569123109000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 56
+      },
+      {
+        "captureMillis": 1569123199000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 57
+      },
+      {
+        "captureMillis": 1569123289000,
+        "exposureMillis": 60000,
+        "sequenceIndex": 58
+      }
+    ],
+    "maximumStackCandidates": [],
+    "maximumStackAssociations": [
+      {
+        "matches": [],
+        "associated": false,
+        "source": "S7-1"
+      },
+      {
+        "matches": [],
+        "associated": false,
+        "source": "S7-2"
+      }
+    ],
+    "ordinaryTracks": 1,
+    "anomalies": 0,
+    "unclassifiedPoints": 6,
+    "targetSources": [
+      "S7-2"
+    ]
+  },
+  {
+    "dataset": "m5-reg",
+    "context": "case-18",
+    "exactUpstreamReplay": true,
+    "sourceFrameTimes": [
+      {
+        "captureMillis": 1591469893000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 0
+      },
+      {
+        "captureMillis": 1591470061000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 1
+      },
+      {
+        "captureMillis": 1591470206000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 2
+      },
+      {
+        "captureMillis": 1591470351000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 3
+      },
+      {
+        "captureMillis": 1591470504000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 4
+      },
+      {
+        "captureMillis": 1591470652000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 5
+      },
+      {
+        "captureMillis": 1591470799000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 6
+      },
+      {
+        "captureMillis": 1591470984000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 7
+      },
+      {
+        "captureMillis": 1591471164000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 8
+      },
+      {
+        "captureMillis": 1591471326000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 9
+      },
+      {
+        "captureMillis": 1591471477000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 10
+      },
+      {
+        "captureMillis": 1591471647000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 11
+      },
+      {
+        "captureMillis": 1591471805000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 12
+      },
+      {
+        "captureMillis": 1591471949000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 13
+      },
+      {
+        "captureMillis": 1591472273000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 14
+      },
+      {
+        "captureMillis": 1591472439000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 15
+      },
+      {
+        "captureMillis": 1591472623000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 16
+      },
+      {
+        "captureMillis": 1591472780000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 17
+      },
+      {
+        "captureMillis": 1591472950000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 18
+      },
+      {
+        "captureMillis": 1591473128000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 19
+      },
+      {
+        "captureMillis": 1591473288000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 20
+      },
+      {
+        "captureMillis": 1591473466000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 21
+      },
+      {
+        "captureMillis": 1591473615000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 22
+      },
+      {
+        "captureMillis": 1591473762000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 23
+      },
+      {
+        "captureMillis": 1591473932000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 24
+      },
+      {
+        "captureMillis": 1591474112000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 25
+      },
+      {
+        "captureMillis": 1591474297000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 26
+      },
+      {
+        "captureMillis": 1591474451000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 27
+      },
+      {
+        "captureMillis": 1591474610000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 28
+      },
+      {
+        "captureMillis": 1591474754000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 29
+      },
+      {
+        "captureMillis": 1591474901000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 30
+      },
+      {
+        "captureMillis": 1591475065000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 31
+      },
+      {
+        "captureMillis": 1591475224000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 32
+      },
+      {
+        "captureMillis": 1591475383000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 33
+      },
+      {
+        "captureMillis": 1591475546000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 34
+      },
+      {
+        "captureMillis": 1591475702000,
+        "exposureMillis": 120000,
+        "sequenceIndex": 35
+      }
+    ],
+    "maximumStackCandidates": [
+      {
+        "diagnostics": {
+          "pixelCount": 42,
+          "momentElongation": 2.227683388233533,
+          "orientation": -0.7960003491932258,
+          "majorExtent": 11.628495809792252,
+          "minorExtent": 6.671529793365048,
+          "axisRatio": 1.7430029048745301,
+          "fillFactor": 0.5413776466181227,
+          "estimatedMotionPixels": 4.956966016427204,
+          "estimatedMotionDiameters": 0.7430029048745301,
+          "medianMaskOverlapFraction": 0.0,
+          "outsideMedianMaskFraction": 1.0,
+          "minAxisRatioThreshold": 1.2,
+          "maxAxisRatioThreshold": 2.8,
+          "minFillFactorThreshold": 0.5,
+          "medianSupportMinOverlapThreshold": 0.0,
+          "medianSupportMaxOverlapThreshold": 0.8,
+          "frameSupportPercentage": 40.625,
+          "stationaryLikelihoodPercentage": 7.6923076923076925,
+          "supportedFrameCount": 13,
+          "usableFrameCount": 32,
+          "frameSupportAvailable": true,
+          "stationaryLikelihoodAvailable": true,
+          "minFrameSupportThreshold": 40.0,
+          "maxStationaryLikelihoodThreshold": 60.0,
+          "motionEvidence": {
+            "positions": [
+              {
+                "retainedFrameIndex": 0,
+                "sourceFrameIndex": 0,
+                "timestamp": 1591469893000,
+                "x": 427.22444786851565,
+                "y": 17.9128145865434,
+                "signalToNoise": 20.468953328104988
+              },
+              {
+                "retainedFrameIndex": 1,
+                "sourceFrameIndex": 1,
+                "timestamp": 1591470061000,
+                "x": 431.92734611503533,
+                "y": 13.040699630003363,
+                "signalToNoise": 13.070639841237686
+              },
+              {
+                "retainedFrameIndex": 2,
+                "sourceFrameIndex": 2,
+                "timestamp": 1591470206000,
+                "x": 432.1431313737253,
+                "y": 15.293941211757648,
+                "signalToNoise": 17.654266619725394
+              },
+              {
+                "retainedFrameIndex": 4,
+                "sourceFrameIndex": 4,
+                "timestamp": 1591470504000,
+                "x": 425.74983004758667,
+                "y": 18.212780421481984,
+                "signalToNoise": 6.102972709947346
+              },
+              {
+                "retainedFrameIndex": 5,
+                "sourceFrameIndex": 5,
+                "timestamp": 1591470652000,
+                "x": 429.71789161098735,
+                "y": 14.959910913140313,
+                "signalToNoise": 5.677342607604407
+              },
+              {
+                "retainedFrameIndex": 8,
+                "sourceFrameIndex": 8,
+                "timestamp": 1591471164000,
+                "x": 435.0924112607099,
+                "y": 12.872093023255815,
+                "signalToNoise": 6.054353640140637
+              },
+              {
+                "retainedFrameIndex": 10,
+                "sourceFrameIndex": 10,
+                "timestamp": 1591471477000,
+                "x": 429.95366379310343,
+                "y": 16.285201149425287,
+                "signalToNoise": 12.342049146966104
+              },
+              {
+                "retainedFrameIndex": 13,
+                "sourceFrameIndex": 13,
+                "timestamp": 1591471949000,
+                "x": 430.91632818846466,
+                "y": 11.25101543460601,
+                "signalToNoise": 6.610013691362337
+              },
+              {
+                "retainedFrameIndex": 17,
+                "sourceFrameIndex": 19,
+                "timestamp": 1591473128000,
+                "x": 429.39934210526314,
+                "y": 11.142105263157895,
+                "signalToNoise": 7.270927056055867
+              },
+              {
+                "retainedFrameIndex": 19,
+                "sourceFrameIndex": 21,
+                "timestamp": 1591473466000,
+                "x": 430.56773602199814,
+                "y": 18.188450962419797,
+                "signalToNoise": 12.927814370152191
+              },
+              {
+                "retainedFrameIndex": 20,
+                "sourceFrameIndex": 22,
+                "timestamp": 1591473615000,
+                "x": 425.9081467056151,
+                "y": 19.662122687439144,
+                "signalToNoise": 14.47298106999697
+              },
+              {
+                "retainedFrameIndex": 22,
+                "sourceFrameIndex": 24,
+                "timestamp": 1591473932000,
+                "x": 425.0,
+                "y": 21.159838817998658,
+                "signalToNoise": 5.585348630166372
+              },
+              {
+                "retainedFrameIndex": 26,
+                "sourceFrameIndex": 29,
+                "timestamp": 1591474754000,
+                "x": 433.45148514851485,
+                "y": 12.8,
+                "signalToNoise": 5.090656990128242
+              }
+            ],
+            "fitAvailable": true,
+            "correlationAvailable": true,
+            "projectedCorrelation": -0.11933782312926078,
+            "velocityXPixelsPerMinute": -0.010963895787601518,
+            "velocityYPixelsPerMinute": 0.014413376939024005,
+            "speedPixelsPerMinute": 0.018109457353211202,
+            "displacementPixels": 1.4671678698993276,
+            "rmsPixels": 4.291410126558451,
+            "supportedSpanMinutes": 81.01666666666667,
+            "sessionSpanMinutes": 94.21666666666667,
+            "sessionSpanFraction": 0.8598973996108261
+          }
+        },
+        "footprintHash": "c6a05d1d7fe155bf703c334157c6f8d3e080909612337aba5f82f1aac2d6c722",
+        "y": 16.752752546105146,
+        "candidate": 1,
+        "x": 429.4629782548858
+      },
+      {
+        "diagnostics": {
+          "pixelCount": 10,
+          "momentElongation": 2.259627874069326,
+          "orientation": 0.16571514488172928,
+          "majorExtent": 5.110160276564438,
+          "minorExtent": 2.9726012777989905,
+          "axisRatio": 1.7190870214346958,
+          "fillFactor": 0.6583075230362794,
+          "estimatedMotionPixels": 2.137558998765447,
+          "estimatedMotionDiameters": 0.7190870214346959,
+          "medianMaskOverlapFraction": 0.0,
+          "outsideMedianMaskFraction": 1.0,
+          "minAxisRatioThreshold": 1.2,
+          "maxAxisRatioThreshold": 2.8,
+          "minFillFactorThreshold": 0.5,
+          "medianSupportMinOverlapThreshold": 0.0,
+          "medianSupportMaxOverlapThreshold": 0.8,
+          "frameSupportPercentage": 50.0,
+          "stationaryLikelihoodPercentage": 50.0,
+          "supportedFrameCount": 16,
+          "usableFrameCount": 32,
+          "frameSupportAvailable": true,
+          "stationaryLikelihoodAvailable": true,
+          "minFrameSupportThreshold": 40.0,
+          "maxStationaryLikelihoodThreshold": 60.0,
+          "motionEvidence": {
+            "positions": [
+              {
+                "retainedFrameIndex": 1,
+                "sourceFrameIndex": 1,
+                "timestamp": 1591470061000,
+                "x": 1379.1072164948453,
+                "y": 54.83367697594502,
+                "signalToNoise": 7.7887623415749685
+              },
+              {
+                "retainedFrameIndex": 3,
+                "sourceFrameIndex": 3,
+                "timestamp": 1591470351000,
+                "x": 1380.0161550888529,
+                "y": 55.919224555735056,
+                "signalToNoise": 6.050866378492934
+              },
+              {
+                "retainedFrameIndex": 4,
+                "sourceFrameIndex": 4,
+                "timestamp": 1591470504000,
+                "x": 1378.9924357034795,
+                "y": 55.949067070095815,
+                "signalToNoise": 20.265381455183157
+              },
+              {
+                "retainedFrameIndex": 5,
+                "sourceFrameIndex": 5,
+                "timestamp": 1591470652000,
+                "x": 1377.7418147801684,
+                "y": 54.69504209541628,
+                "signalToNoise": 5.589384665740157
+              },
+              {
+                "retainedFrameIndex": 7,
+                "sourceFrameIndex": 7,
+                "timestamp": 1591470984000,
+                "x": 1376.1246081504703,
+                "y": 55.76802507836991,
+                "signalToNoise": 12.473191436117906
+              },
+              {
+                "retainedFrameIndex": 9,
+                "sourceFrameIndex": 9,
+                "timestamp": 1591471326000,
+                "x": 1379.2301324503312,
+                "y": 54.86920529801324,
+                "signalToNoise": 6.963972969638692
+              },
+              {
+                "retainedFrameIndex": 13,
+                "sourceFrameIndex": 13,
+                "timestamp": 1591471949000,
+                "x": 1378.901484480432,
+                "y": 54.86504723346829,
+                "signalToNoise": 6.941634066279959
+              },
+              {
+                "retainedFrameIndex": 15,
+                "sourceFrameIndex": 17,
+                "timestamp": 1591472780000,
+                "x": 1377.131736526946,
+                "y": 55.003992015968066,
+                "signalToNoise": 6.625879813681847
+              },
+              {
+                "retainedFrameIndex": 16,
+                "sourceFrameIndex": 18,
+                "timestamp": 1591472950000,
+                "x": 1377.7733755942947,
+                "y": 54.91600633914422,
+                "signalToNoise": 6.305239544144171
+              },
+              {
+                "retainedFrameIndex": 18,
+                "sourceFrameIndex": 20,
+                "timestamp": 1591473288000,
+                "x": 1377.8583599574015,
+                "y": 54.88604898828541,
+                "signalToNoise": 8.796483654840596
+              },
+              {
+                "retainedFrameIndex": 19,
+                "sourceFrameIndex": 21,
+                "timestamp": 1591473466000,
+                "x": 1376.9910071942445,
+                "y": 54.82014388489208,
+                "signalToNoise": 7.576098227656301
+              },
+              {
+                "retainedFrameIndex": 24,
+                "sourceFrameIndex": 26,
+                "timestamp": 1591474297000,
+                "x": 1377.936823104693,
+                "y": 54.8971119133574,
+                "signalToNoise": 6.227798012500563
+              },
+              {
+                "retainedFrameIndex": 25,
+                "sourceFrameIndex": 27,
+                "timestamp": 1591474451000,
+                "x": 1378.0513231756215,
+                "y": 55.075380914194064,
+                "signalToNoise": 7.787870158030688
+              },
+              {
+                "retainedFrameIndex": 29,
+                "sourceFrameIndex": 32,
+                "timestamp": 1591475224000,
+                "x": 1377.9547900968785,
+                "y": 56.10979547900969,
+                "signalToNoise": 6.9622435061528565
+              },
+              {
+                "retainedFrameIndex": 30,
+                "sourceFrameIndex": 33,
+                "timestamp": 1591475383000,
+                "x": 1379.36889332004,
+                "y": 54.730807577268195,
+                "signalToNoise": 6.26402066439838
+              },
+              {
+                "retainedFrameIndex": 31,
+                "sourceFrameIndex": 34,
+                "timestamp": 1591475546000,
+                "x": 1380.0506566604129,
+                "y": 55.95684803001876,
+                "signalToNoise": 5.991726246683754
+              }
+            ],
+            "fitAvailable": true,
+            "correlationAvailable": true,
+            "projectedCorrelation": -0.00017390043104691387,
+            "velocityXPixelsPerMinute": -6.524136070551408e-05,
+            "velocityYPixelsPerMinute": 0.0003534057483622345,
+            "speedPixelsPerMinute": 0.00035937731998858524,
+            "displacementPixels": 0.0328530766689565,
+            "rmsPixels": 1.1860009999540433,
+            "supportedSpanMinutes": 91.41666666666667,
+            "sessionSpanMinutes": 94.21666666666667,
+            "sessionSpanFraction": 0.9702812665841146
+          }
+        },
+        "footprintHash": "8001ac4d6e1b286e0498d2306673bbc3cdd1b8f5409e376799202d39687954ac",
+        "y": 55.770947368421055,
+        "candidate": 2,
+        "x": 1377.9806315789474
+      },
+      {
+        "diagnostics": {
+          "pixelCount": 79,
+          "momentElongation": 2.656812819741082,
+          "orientation": -0.42615588351742567,
+          "majorExtent": 17.552037869947508,
+          "minorExtent": 8.530236981563196,
+          "axisRatio": 2.05762605515926,
+          "fillFactor": 0.5276408938783202,
+          "estimatedMotionPixels": 9.021800888384313,
+          "estimatedMotionDiameters": 1.0576260551592596,
+          "medianMaskOverlapFraction": 0.0,
+          "outsideMedianMaskFraction": 1.0,
+          "minAxisRatioThreshold": 1.2,
+          "maxAxisRatioThreshold": 2.8,
+          "minFillFactorThreshold": 0.5,
+          "medianSupportMinOverlapThreshold": 0.0,
+          "medianSupportMaxOverlapThreshold": 0.8,
+          "frameSupportPercentage": 53.125,
+          "stationaryLikelihoodPercentage": 5.882352941176471,
+          "supportedFrameCount": 17,
+          "usableFrameCount": 32,
+          "frameSupportAvailable": true,
+          "stationaryLikelihoodAvailable": true,
+          "minFrameSupportThreshold": 40.0,
+          "maxStationaryLikelihoodThreshold": 60.0,
+          "motionEvidence": {
+            "positions": [
+              {
+                "retainedFrameIndex": 0,
+                "sourceFrameIndex": 0,
+                "timestamp": 1591469893000,
+                "x": 162.01409580563833,
+                "y": 148.50412560165023,
+                "signalToNoise": 41.0379449230117
+              },
+              {
+                "retainedFrameIndex": 1,
+                "sourceFrameIndex": 1,
+                "timestamp": 1591470061000,
+                "x": 165.95051731893838,
+                "y": 144.704228520018,
+                "signalToNoise": 39.712364103877086
+              },
+              {
+                "retainedFrameIndex": 2,
+                "sourceFrameIndex": 2,
+                "timestamp": 1591470206000,
+                "x": 166.59331838035652,
+                "y": 146.29252744658245,
+                "signalToNoise": 38.99038368888632
+              },
+              {
+                "retainedFrameIndex": 3,
+                "sourceFrameIndex": 3,
+                "timestamp": 1591470351000,
+                "x": 172.483228897899,
+                "y": 144.29831674652905,
+                "signalToNoise": 33.29093677130909
+              },
+              {
+                "retainedFrameIndex": 5,
+                "sourceFrameIndex": 5,
+                "timestamp": 1591470652000,
+                "x": 168.87810559006212,
+                "y": 148.78804347826087,
+                "signalToNoise": 5.588637721377503
+              },
+              {
+                "retainedFrameIndex": 7,
+                "sourceFrameIndex": 7,
+                "timestamp": 1591470984000,
+                "x": 174.11782265144865,
+                "y": 148.459174714662,
+                "signalToNoise": 25.905262955040374
+              },
+              {
+                "retainedFrameIndex": 8,
+                "sourceFrameIndex": 8,
+                "timestamp": 1591471164000,
+                "x": 170.2571393998064,
+                "y": 143.25048402710553,
+                "signalToNoise": 38.45079108130504
+              },
+              {
+                "retainedFrameIndex": 9,
+                "sourceFrameIndex": 9,
+                "timestamp": 1591471326000,
+                "x": 165.7004132231405,
+                "y": 140.46763085399448,
+                "signalToNoise": 5.16948989227419
+              },
+              {
+                "retainedFrameIndex": 10,
+                "sourceFrameIndex": 10,
+                "timestamp": 1591471477000,
+                "x": 164.1942909235941,
+                "y": 147.08535126203634,
+                "signalToNoise": 40.026667621048155
+              },
+              {
+                "retainedFrameIndex": 11,
+                "sourceFrameIndex": 11,
+                "timestamp": 1591471647000,
+                "x": 167.50101694915253,
+                "y": 144.71864406779662,
+                "signalToNoise": 5.46819294289954
+              },
+              {
+                "retainedFrameIndex": 12,
+                "sourceFrameIndex": 12,
+                "timestamp": 1591471805000,
+                "x": 173.4884586746091,
+                "y": 144.44005956813106,
+                "signalToNoise": 5.137517278350949
+              },
+              {
+                "retainedFrameIndex": 14,
+                "sourceFrameIndex": 15,
+                "timestamp": 1591472439000,
+                "x": 162.73627940128296,
+                "y": 150.87883107626516,
+                "signalToNoise": 6.113776955541423
+              },
+              {
+                "retainedFrameIndex": 17,
+                "sourceFrameIndex": 19,
+                "timestamp": 1591473128000,
+                "x": 164.3050139275766,
+                "y": 141.74326833797585,
+                "signalToNoise": 6.339410173890141
+              },
+              {
+                "retainedFrameIndex": 18,
+                "sourceFrameIndex": 20,
+                "timestamp": 1591473288000,
+                "x": 169.84642233856894,
+                "y": 148.06271087841768,
+                "signalToNoise": 35.46770240416538
+              },
+              {
+                "retainedFrameIndex": 19,
+                "sourceFrameIndex": 21,
+                "timestamp": 1591473466000,
+                "x": 164.13928948294057,
+                "y": 149.33051940438503,
+                "signalToNoise": 38.07890348909023
+              },
+              {
+                "retainedFrameIndex": 20,
+                "sourceFrameIndex": 22,
+                "timestamp": 1591473615000,
+                "x": 159.82930062976467,
+                "y": 149.2275991603138,
+                "signalToNoise": 44.72431584830145
+              },
+              {
+                "retainedFrameIndex": 31,
+                "sourceFrameIndex": 34,
+                "timestamp": 1591475546000,
+                "x": 168.3722304283604,
+                "y": 147.0487444608567,
+                "signalToNoise": 5.717112151753997
+              }
+            ],
+            "fitAvailable": true,
+            "correlationAvailable": true,
+            "projectedCorrelation": -0.22479883768604528,
+            "velocityXPixelsPerMinute": -0.0300120244398866,
+            "velocityYPixelsPerMinute": 0.022132340165046557,
+            "speedPixelsPerMinute": 0.037290241245688985,
+            "displacementPixels": 3.513362229364664,
+            "rmsPixels": 4.778907199342489,
+            "supportedSpanMinutes": 94.21666666666667,
+            "sessionSpanMinutes": 94.21666666666667,
+            "sessionSpanFraction": 1.0
+          }
+        },
+        "footprintHash": "3076f6efcf6addc7996f86a4674e9959a9ef636fdf3ee14e813a5223515eb07c",
+        "y": 146.82681158223352,
+        "candidate": 3,
+        "x": 166.30884854891727
+      },
+      {
+        "diagnostics": {
+          "pixelCount": 43,
+          "momentElongation": 2.486175008693332,
+          "orientation": -0.8013851944952772,
+          "majorExtent": 12.334870834883368,
+          "minorExtent": 6.005635223576009,
+          "axisRatio": 2.0538827910261697,
+          "fillFactor": 0.580463477634336,
+          "estimatedMotionPixels": 6.329235611307359,
+          "estimatedMotionDiameters": 1.0538827910261697,
+          "medianMaskOverlapFraction": 0.0,
+          "outsideMedianMaskFraction": 1.0,
+          "minAxisRatioThreshold": 1.2,
+          "maxAxisRatioThreshold": 2.8,
+          "minFillFactorThreshold": 0.5,
+          "medianSupportMinOverlapThreshold": 0.0,
+          "medianSupportMaxOverlapThreshold": 0.8,
+          "frameSupportPercentage": 43.75,
+          "stationaryLikelihoodPercentage": 7.142857142857143,
+          "supportedFrameCount": 14,
+          "usableFrameCount": 32,
+          "frameSupportAvailable": true,
+          "stationaryLikelihoodAvailable": true,
+          "minFrameSupportThreshold": 40.0,
+          "maxStationaryLikelihoodThreshold": 60.0,
+          "motionEvidence": {
+            "positions": [
+              {
+                "retainedFrameIndex": 0,
+                "sourceFrameIndex": 0,
+                "timestamp": 1591469893000,
+                "x": 447.3274637886964,
+                "y": 147.48082930985515,
+                "signalToNoise": 20.863036394985883
+              },
+              {
+                "retainedFrameIndex": 1,
+                "sourceFrameIndex": 1,
+                "timestamp": 1591470061000,
+                "x": 451.4526195247638,
+                "y": 143.70226166618951,
+                "signalToNoise": 21.04196466595489
+              },
+              {
+                "retainedFrameIndex": 2,
+                "sourceFrameIndex": 2,
+                "timestamp": 1591470206000,
+                "x": 451.44940476190476,
+                "y": 145.6839826839827,
+                "signalToNoise": 23.096061216679054
+              },
+              {
+                "retainedFrameIndex": 5,
+                "sourceFrameIndex": 5,
+                "timestamp": 1591470652000,
+                "x": 449.51368613138686,
+                "y": 143.57846715328466,
+                "signalToNoise": 5.994910387784225
+              },
+              {
+                "retainedFrameIndex": 8,
+                "sourceFrameIndex": 8,
+                "timestamp": 1591471164000,
+                "x": 454.5015,
+                "y": 143.378,
+                "signalToNoise": 12.236904451570194
+              },
+              {
+                "retainedFrameIndex": 9,
+                "sourceFrameIndex": 9,
+                "timestamp": 1591471326000,
+                "x": 448.8414342629482,
+                "y": 146.30199203187252,
+                "signalToNoise": 8.064694790952949
+              },
+              {
+                "retainedFrameIndex": 10,
+                "sourceFrameIndex": 10,
+                "timestamp": 1591471477000,
+                "x": 449.4796052631579,
+                "y": 147.18848684210528,
+                "signalToNoise": 17.484870639091085
+              },
+              {
+                "retainedFrameIndex": 17,
+                "sourceFrameIndex": 19,
+                "timestamp": 1591473128000,
+                "x": 449.7972027972028,
+                "y": 142.59003496503496,
+                "signalToNoise": 6.059704110150273
+              },
+              {
+                "retainedFrameIndex": 18,
+                "sourceFrameIndex": 20,
+                "timestamp": 1591473288000,
+                "x": 452.97195598154065,
+                "y": 147.59105431309905,
+                "signalToNoise": 7.528601488271903
+              },
+              {
+                "retainedFrameIndex": 19,
+                "sourceFrameIndex": 21,
+                "timestamp": 1591473466000,
+                "x": 448.96916780354707,
+                "y": 150.4493860845839,
+                "signalToNoise": 22.544962142094523
+              },
+              {
+                "retainedFrameIndex": 20,
+                "sourceFrameIndex": 22,
+                "timestamp": 1591473615000,
+                "x": 445.10180572851806,
+                "y": 150.61799501867995,
+                "signalToNoise": 20.738728333049522
+              },
+              {
+                "retainedFrameIndex": 23,
+                "sourceFrameIndex": 25,
+                "timestamp": 1591474112000,
+                "x": 451.86772486772486,
+                "y": 147.12093726379442,
+                "signalToNoise": 7.182803155899197
+              },
+              {
+                "retainedFrameIndex": 25,
+                "sourceFrameIndex": 27,
+                "timestamp": 1591474451000,
+                "x": 445.33557369179067,
+                "y": 152.40566490638503,
+                "signalToNoise": 5.458107501314489
+              },
+              {
+                "retainedFrameIndex": 26,
+                "sourceFrameIndex": 29,
+                "timestamp": 1591474754000,
+                "x": 445.99465811965814,
+                "y": 148.15811965811966,
+                "signalToNoise": 5.570633502834995
+              }
+            ],
+            "fitAvailable": true,
+            "correlationAvailable": true,
+            "projectedCorrelation": -0.5373453242468783,
+            "velocityXPixelsPerMinute": -0.03690466539413575,
+            "velocityYPixelsPerMinute": 0.060158785031187656,
+            "speedPixelsPerMinute": 0.07057643901672687,
+            "displacementPixels": 5.717867834338489,
+            "rmsPixels": 3.417175569196327,
+            "supportedSpanMinutes": 81.01666666666667,
+            "sessionSpanMinutes": 94.21666666666667,
+            "sessionSpanFraction": 0.8598973996108261
+          }
+        },
+        "footprintHash": "0d2dc6b060a774687008731a2f337e43b2770693123f0d64289deefa92bbaaed",
+        "y": 147.72746502900034,
+        "candidate": 4,
+        "x": 448.9702490617537
+      },
+      {
+        "diagnostics": {
+          "pixelCount": 61,
+          "momentElongation": 2.569526304682911,
+          "orientation": -0.9161977872273109,
+          "majorExtent": 15.205783944685322,
+          "minorExtent": 7.826214571388981,
+          "axisRatio": 1.9429295997421945,
+          "fillFactor": 0.5125889842955202,
+          "estimatedMotionPixels": 7.379569373296341,
+          "estimatedMotionDiameters": 0.9429295997421945,
+          "medianMaskOverlapFraction": 0.0,
+          "outsideMedianMaskFraction": 1.0,
+          "minAxisRatioThreshold": 1.2,
+          "maxAxisRatioThreshold": 2.8,
+          "minFillFactorThreshold": 0.5,
+          "medianSupportMinOverlapThreshold": 0.0,
+          "medianSupportMaxOverlapThreshold": 0.8,
+          "frameSupportPercentage": 46.875,
+          "stationaryLikelihoodPercentage": 13.333333333333334,
+          "supportedFrameCount": 15,
+          "usableFrameCount": 32,
+          "frameSupportAvailable": true,
+          "stationaryLikelihoodAvailable": true,
+          "minFrameSupportThreshold": 40.0,
+          "maxStationaryLikelihoodThreshold": 60.0,
+          "motionEvidence": {
+            "positions": [
+              {
+                "retainedFrameIndex": 0,
+                "sourceFrameIndex": 0,
+                "timestamp": 1591469893000,
+                "x": 668.5965198477434,
+                "y": 157.8925502990756,
+                "signalToNoise": 46.95551713172363
+              },
+              {
+                "retainedFrameIndex": 1,
+                "sourceFrameIndex": 1,
+                "timestamp": 1591470061000,
+                "x": 672.89755684567,
+                "y": 153.25689404934687,
+                "signalToNoise": 39.183222754245605
+              },
+              {
+                "retainedFrameIndex": 2,
+                "sourceFrameIndex": 2,
+                "timestamp": 1591470206000,
+                "x": 673.0006254560617,
+                "y": 155.38674033149172,
+                "signalToNoise": 42.69140408092568
+              },
+              {
+                "retainedFrameIndex": 4,
+                "sourceFrameIndex": 4,
+                "timestamp": 1591470504000,
+                "x": 670.6365489130435,
+                "y": 157.77717391304347,
+                "signalToNoise": 6.839599900343346
+              },
+              {
+                "retainedFrameIndex": 6,
+                "sourceFrameIndex": 6,
+                "timestamp": 1591470799000,
+                "x": 666.6106927710844,
+                "y": 158.99397590361446,
+                "signalToNoise": 5.164467039015739
+              },
+              {
+                "retainedFrameIndex": 8,
+                "sourceFrameIndex": 8,
+                "timestamp": 1591471164000,
+                "x": 676.3157357444946,
+                "y": 152.67245150940644,
+                "signalToNoise": 24.788738660381195
+              },
+              {
+                "retainedFrameIndex": 9,
+                "sourceFrameIndex": 9,
+                "timestamp": 1591471326000,
+                "x": 671.9513742071881,
+                "y": 149.49713077620055,
+                "signalToNoise": 13.187672248743288
+              },
+              {
+                "retainedFrameIndex": 10,
+                "sourceFrameIndex": 10,
+                "timestamp": 1591471477000,
+                "x": 670.8687908892658,
+                "y": 157.63133026411438,
+                "signalToNoise": 40.55569129567608
+              },
+              {
+                "retainedFrameIndex": 11,
+                "sourceFrameIndex": 11,
+                "timestamp": 1591471647000,
+                "x": 673.751329001772,
+                "y": 157.36503248671,
+                "signalToNoise": 6.919471767318433
+              },
+              {
+                "retainedFrameIndex": 17,
+                "sourceFrameIndex": 19,
+                "timestamp": 1591473128000,
+                "x": 669.4905094905095,
+                "y": 151.583016983017,
+                "signalToNoise": 27.231518679175906
+              },
+              {
+                "retainedFrameIndex": 18,
+                "sourceFrameIndex": 20,
+                "timestamp": 1591473288000,
+                "x": 675.5249261768282,
+                "y": 159.2846968907417,
+                "signalToNoise": 23.410727135266917
+              },
+              {
+                "retainedFrameIndex": 19,
+                "sourceFrameIndex": 21,
+                "timestamp": 1591473466000,
+                "x": 670.1741913746631,
+                "y": 161.71125336927224,
+                "signalToNoise": 44.07484140190804
+              },
+              {
+                "retainedFrameIndex": 20,
+                "sourceFrameIndex": 22,
+                "timestamp": 1591473615000,
+                "x": 666.0935990338164,
+                "y": 161.5544685990338,
+                "signalToNoise": 38.89738158235166
+              },
+              {
+                "retainedFrameIndex": 26,
+                "sourceFrameIndex": 29,
+                "timestamp": 1591474754000,
+                "x": 668.3110616184113,
+                "y": 156.4550853749072,
+                "signalToNoise": 6.273160955917326
+              },
+              {
+                "retainedFrameIndex": 28,
+                "sourceFrameIndex": 31,
+                "timestamp": 1591475065000,
+                "x": 664.1750599520384,
+                "y": 159.0007993605116,
+                "signalToNoise": 5.464737379248778
+              }
+            ],
+            "fitAvailable": true,
+            "correlationAvailable": true,
+            "projectedCorrelation": -0.4425803550292113,
+            "velocityXPixelsPerMinute": -0.05161912038080375,
+            "velocityYPixelsPerMinute": 0.041812392622427745,
+            "speedPixelsPerMinute": 0.06642898287419399,
+            "displacementPixels": 5.726178323755522,
+            "rmsPixels": 4.434920946121645,
+            "supportedSpanMinutes": 86.2,
+            "sessionSpanMinutes": 94.21666666666667,
+            "sessionSpanFraction": 0.9149124358747568
+          }
+        },
+        "footprintHash": "76c08c2de762d44ce12809985cadd10d616bd19372042616a99978aa7d7f02d6",
+        "y": 158.01285839969322,
+        "candidate": 5,
+        "x": 670.0755036206547
+      },
+      {
+        "diagnostics": {
+          "pixelCount": 23,
+          "momentElongation": 2.3178932661130047,
+          "orientation": -0.2862642338585991,
+          "majorExtent": 7.997508522567246,
+          "minorExtent": 5.119592211341732,
+          "axisRatio": 1.56213780168856,
+          "fillFactor": 0.5617431105682323,
+          "estimatedMotionPixels": 2.8779163112255146,
+          "estimatedMotionDiameters": 0.56213780168856,
+          "medianMaskOverlapFraction": 0.0,
+          "outsideMedianMaskFraction": 1.0,
+          "minAxisRatioThreshold": 1.2,
+          "maxAxisRatioThreshold": 2.8,
+          "minFillFactorThreshold": 0.5,
+          "medianSupportMinOverlapThreshold": 0.0,
+          "medianSupportMaxOverlapThreshold": 0.8,
+          "frameSupportPercentage": 53.125,
+          "stationaryLikelihoodPercentage": 47.05882352941177,
+          "supportedFrameCount": 17,
+          "usableFrameCount": 32,
+          "frameSupportAvailable": true,
+          "stationaryLikelihoodAvailable": true,
+          "minFrameSupportThreshold": 40.0,
+          "maxStationaryLikelihoodThreshold": 60.0,
+          "motionEvidence": {
+            "positions": [
+              {
+                "retainedFrameIndex": 1,
+                "sourceFrameIndex": 1,
+                "timestamp": 1591470061000,
+                "x": 778.0620985010706,
+                "y": 218.3982869379015,
+                "signalToNoise": 6.705935501588077
+              },
+              {
+                "retainedFrameIndex": 4,
+                "sourceFrameIndex": 4,
+                "timestamp": 1591470504000,
+                "x": 780.8062622309197,
+                "y": 217.66634050880626,
+                "signalToNoise": 7.831841893280948
+              },
+              {
+                "retainedFrameIndex": 5,
+                "sourceFrameIndex": 5,
+                "timestamp": 1591470652000,
+                "x": 780.9631093544137,
+                "y": 217.72859025032938,
+                "signalToNoise": 5.3281314087029035
+              },
+              {
+                "retainedFrameIndex": 7,
+                "sourceFrameIndex": 7,
+                "timestamp": 1591470984000,
+                "x": 781.2487745098039,
+                "y": 217.76225490196077,
+                "signalToNoise": 5.61514401221038
+              },
+              {
+                "retainedFrameIndex": 8,
+                "sourceFrameIndex": 8,
+                "timestamp": 1591471164000,
+                "x": 781.184771573604,
+                "y": 217.853807106599,
+                "signalToNoise": 6.899790168122208
+              },
+              {
+                "retainedFrameIndex": 10,
+                "sourceFrameIndex": 10,
+                "timestamp": 1591471477000,
+                "x": 780.7269230769231,
+                "y": 217.3397435897436,
+                "signalToNoise": 5.347756202105124
+              },
+              {
+                "retainedFrameIndex": 11,
+                "sourceFrameIndex": 11,
+                "timestamp": 1591471647000,
+                "x": 780.7841163310962,
+                "y": 217.76510067114094,
+                "signalToNoise": 6.034623971182847
+              },
+              {
+                "retainedFrameIndex": 12,
+                "sourceFrameIndex": 12,
+                "timestamp": 1591471805000,
+                "x": 775.7720833333333,
+                "y": 215.91270833333334,
+                "signalToNoise": 31.92597072115803
+              },
+              {
+                "retainedFrameIndex": 13,
+                "sourceFrameIndex": 13,
+                "timestamp": 1591471949000,
+                "x": 777.0879639562326,
+                "y": 217.61038403776013,
+                "signalToNoise": 33.82333142872727
+              },
+              {
+                "retainedFrameIndex": 14,
+                "sourceFrameIndex": 15,
+                "timestamp": 1591472439000,
+                "x": 778.5537996746456,
+                "y": 215.5849407390193,
+                "signalToNoise": 32.38090911366405
+              },
+              {
+                "retainedFrameIndex": 16,
+                "sourceFrameIndex": 18,
+                "timestamp": 1591472950000,
+                "x": 781.0518234165067,
+                "y": 215.44875239923223,
+                "signalToNoise": 33.27682359506978
+              },
+              {
+                "retainedFrameIndex": 19,
+                "sourceFrameIndex": 21,
+                "timestamp": 1591473466000,
+                "x": 781.5813672111312,
+                "y": 218.1361161524501,
+                "signalToNoise": 5.604686063094723
+              },
+              {
+                "retainedFrameIndex": 23,
+                "sourceFrameIndex": 25,
+                "timestamp": 1591474112000,
+                "x": 781.2878228782288,
+                "y": 217.69741697416976,
+                "signalToNoise": 5.031083399478383
+              },
+              {
+                "retainedFrameIndex": 24,
+                "sourceFrameIndex": 26,
+                "timestamp": 1591474297000,
+                "x": 778.5216400911162,
+                "y": 217.9379271070615,
+                "signalToNoise": 6.080181527295145
+              },
+              {
+                "retainedFrameIndex": 28,
+                "sourceFrameIndex": 31,
+                "timestamp": 1591475065000,
+                "x": 778.2444011684518,
+                "y": 218.06913339824732,
+                "signalToNoise": 6.046398847224179
+              },
+              {
+                "retainedFrameIndex": 29,
+                "sourceFrameIndex": 32,
+                "timestamp": 1591475224000,
+                "x": 780.7975391498882,
+                "y": 213.8579418344519,
+                "signalToNoise": 5.721053902690843
+              },
+              {
+                "retainedFrameIndex": 31,
+                "sourceFrameIndex": 34,
+                "timestamp": 1591475546000,
+                "x": 780.5776081424937,
+                "y": 213.6793893129771,
+                "signalToNoise": 5.856451504767949
+              }
+            ],
+            "fitAvailable": true,
+            "correlationAvailable": true,
+            "projectedCorrelation": 0.16419702613680348,
+            "velocityXPixelsPerMinute": 0.0024686732646759008,
+            "velocityYPixelsPerMinute": -0.025786543170564356,
+            "speedPixelsPerMinute": 0.02590444279221433,
+            "displacementPixels": 2.368097811921593,
+            "rmsPixels": 2.1028565128860675,
+            "supportedSpanMinutes": 91.41666666666667,
+            "sessionSpanMinutes": 94.21666666666667,
+            "sessionSpanFraction": 0.9702812665841146
+          }
+        },
+        "footprintHash": "a84527536c95b18f4e0bf42e778f58344e209f5e6122befd29653c7f3e356845",
+        "y": 216.0799763422488,
+        "candidate": 6,
+        "x": 778.2616152986791
+      },
+      {
+        "diagnostics": {
+          "pixelCount": 69,
+          "momentElongation": 3.155155084747022,
+          "orientation": -0.3918960199519043,
+          "majorExtent": 18.078633108338117,
+          "minorExtent": 7.530639648654965,
+          "axisRatio": 2.4006769612946637,
+          "fillFactor": 0.5068175358554,
+          "estimatedMotionPixels": 10.547993459683152,
+          "estimatedMotionDiameters": 1.400676961294664,
+          "medianMaskOverlapFraction": 0.0,
+          "outsideMedianMaskFraction": 1.0,
+          "minAxisRatioThreshold": 1.2,
+          "maxAxisRatioThreshold": 2.8,
+          "minFillFactorThreshold": 0.5,
+          "medianSupportMinOverlapThreshold": 0.0,
+          "medianSupportMaxOverlapThreshold": 0.8,
+          "frameSupportPercentage": 46.875,
+          "stationaryLikelihoodPercentage": 13.333333333333334,
+          "supportedFrameCount": 15,
+          "usableFrameCount": 32,
+          "frameSupportAvailable": true,
+          "stationaryLikelihoodAvailable": true,
+          "minFrameSupportThreshold": 40.0,
+          "maxStationaryLikelihoodThreshold": 60.0,
+          "motionEvidence": {
+            "positions": [
+              {
+                "retainedFrameIndex": 0,
+                "sourceFrameIndex": 0,
+                "timestamp": 1591469893000,
+                "x": 90.4115760111576,
+                "y": 358.36624825662483,
+                "signalToNoise": 31.30076367778989
+              },
+              {
+                "retainedFrameIndex": 1,
+                "sourceFrameIndex": 1,
+                "timestamp": 1591470061000,
+                "x": 94.4492734302093,
+                "y": 353.72550326623116,
+                "signalToNoise": 33.7289971220674
+              },
+              {
+                "retainedFrameIndex": 2,
+                "sourceFrameIndex": 2,
+                "timestamp": 1591470206000,
+                "x": 94.9973301690893,
+                "y": 355.98205280332246,
+                "signalToNoise": 29.341485301310662
+              },
+              {
+                "retainedFrameIndex": 3,
+                "sourceFrameIndex": 3,
+                "timestamp": 1591470351000,
+                "x": 100.69761346392606,
+                "y": 353.4138501862326,
+                "signalToNoise": 35.588662288594385
+              },
+              {
+                "retainedFrameIndex": 4,
+                "sourceFrameIndex": 4,
+                "timestamp": 1591470504000,
+                "x": 95.26143790849673,
+                "y": 355.8178104575163,
+                "signalToNoise": 5.6518079901590035
+              },
+              {
+                "retainedFrameIndex": 7,
+                "sourceFrameIndex": 7,
+                "timestamp": 1591470984000,
+                "x": 101.5517578125,
+                "y": 357.0029296875,
+                "signalToNoise": 18.295010227592925
+              },
+              {
+                "retainedFrameIndex": 8,
+                "sourceFrameIndex": 8,
+                "timestamp": 1591471164000,
+                "x": 98.69284390063034,
+                "y": 352.3428253615128,
+                "signalToNoise": 37.06558814270189
+              },
+              {
+                "retainedFrameIndex": 10,
+                "sourceFrameIndex": 10,
+                "timestamp": 1591471477000,
+                "x": 91.97240070093459,
+                "y": 356.2796436915888,
+                "signalToNoise": 34.1810022461016
+              },
+              {
+                "retainedFrameIndex": 11,
+                "sourceFrameIndex": 11,
+                "timestamp": 1591471647000,
+                "x": 91.74207582349285,
+                "y": 354.8216283405842,
+                "signalToNoise": 6.77600331013608
+              },
+              {
+                "retainedFrameIndex": 13,
+                "sourceFrameIndex": 13,
+                "timestamp": 1591471949000,
+                "x": 92.73371335504886,
+                "y": 355.3697068403909,
+                "signalToNoise": 5.1566321964786725
+              },
+              {
+                "retainedFrameIndex": 18,
+                "sourceFrameIndex": 20,
+                "timestamp": 1591473288000,
+                "x": 96.9346460702767,
+                "y": 356.9018842301816,
+                "signalToNoise": 23.61109282454514
+              },
+              {
+                "retainedFrameIndex": 19,
+                "sourceFrameIndex": 21,
+                "timestamp": 1591473466000,
+                "x": 91.00655912072328,
+                "y": 358.1847190214501,
+                "signalToNoise": 26.971771885620694
+              },
+              {
+                "retainedFrameIndex": 20,
+                "sourceFrameIndex": 22,
+                "timestamp": 1591473615000,
+                "x": 86.59812631238896,
+                "y": 358.43805524147956,
+                "signalToNoise": 34.02962293200813
+              },
+              {
+                "retainedFrameIndex": 29,
+                "sourceFrameIndex": 32,
+                "timestamp": 1591475224000,
+                "x": 99.97353760445682,
+                "y": 353.0125348189415,
+                "signalToNoise": 6.789578325256556
+              },
+              {
+                "retainedFrameIndex": 31,
+                "sourceFrameIndex": 34,
+                "timestamp": 1591475546000,
+                "x": 92.25251742835012,
+                "y": 356.33539891556933,
+                "signalToNoise": 6.465181480877579
+              }
+            ],
+            "fitAvailable": true,
+            "correlationAvailable": true,
+            "projectedCorrelation": -0.1550361136462079,
+            "velocityXPixelsPerMinute": -0.0210826150279677,
+            "velocityYPixelsPerMinute": 0.0075548188734006795,
+            "speedPixelsPerMinute": 0.02239535542534167,
+            "displacementPixels": 2.110015736990941,
+            "rmsPixels": 4.48938005198753,
+            "supportedSpanMinutes": 94.21666666666667,
+            "sessionSpanMinutes": 94.21666666666667,
+            "sessionSpanFraction": 1.0
+          }
+        },
+        "footprintHash": "6ae317e3d5eee8d73a88da3d1f6ea8ee83504a091781f45c930b563d8c18647c",
+        "y": 355.7774918640733,
+        "candidate": 7,
+        "x": 94.3700396074573
+      },
+      {
+        "diagnostics": {
+          "pixelCount": 22,
+          "momentElongation": 1.5493548670765316,
+          "orientation": 0.7703435092150678,
+          "majorExtent": 8.091556216266664,
+          "minorExtent": 5.220870222706565,
+          "axisRatio": 1.5498481806873758,
+          "fillFactor": 0.520772121589988,
+          "estimatedMotionPixels": 2.870685993560099,
+          "estimatedMotionDiameters": 0.5498481806873757,
+          "medianMaskOverlapFraction": 0.0,
+          "outsideMedianMaskFraction": 1.0,
+          "minAxisRatioThreshold": 1.2,
+          "maxAxisRatioThreshold": 2.8,
+          "minFillFactorThreshold": 0.5,
+          "medianSupportMinOverlapThreshold": 0.0,
+          "medianSupportMaxOverlapThreshold": 0.8,
+          "frameSupportPercentage": 100.0,
+          "stationaryLikelihoodPercentage": 53.125,
+          "supportedFrameCount": 32,
+          "usableFrameCount": 32,
+          "frameSupportAvailable": true,
+          "stationaryLikelihoodAvailable": true,
+          "minFrameSupportThreshold": 40.0,
+          "maxStationaryLikelihoodThreshold": 60.0,
+          "motionEvidence": {
+            "positions": [
+              {
+                "retainedFrameIndex": 0,
+                "sourceFrameIndex": 0,
+                "timestamp": 1591469893000,
+                "x": 858.8168783285539,
+                "y": 649.4063908234331,
+                "signalToNoise": 15.608110143918307
+              },
+              {
+                "retainedFrameIndex": 1,
+                "sourceFrameIndex": 1,
+                "timestamp": 1591470061000,
+                "x": 858.9231776516805,
+                "y": 650.2405063291139,
+                "signalToNoise": 16.057286315888387
+              },
+              {
+                "retainedFrameIndex": 2,
+                "sourceFrameIndex": 2,
+                "timestamp": 1591470206000,
+                "x": 858.8045515394913,
+                "y": 650.5484158857653,
+                "signalToNoise": 16.49218575539117
+              },
+              {
+                "retainedFrameIndex": 3,
+                "sourceFrameIndex": 3,
+                "timestamp": 1591470351000,
+                "x": 863.0488812392426,
+                "y": 653.8299483648881,
+                "signalToNoise": 16.445199471187777
+              },
+              {
+                "retainedFrameIndex": 4,
+                "sourceFrameIndex": 4,
+                "timestamp": 1591470504000,
+                "x": 858.9352715304443,
+                "y": 650.0795392210641,
+                "signalToNoise": 13.415999389593084
+              },
+              {
+                "retainedFrameIndex": 5,
+                "sourceFrameIndex": 5,
+                "timestamp": 1591470652000,
+                "x": 858.9562624254473,
+                "y": 650.7470178926442,
+                "signalToNoise": 12.792378916643171
+              },
+              {
+                "retainedFrameIndex": 6,
+                "sourceFrameIndex": 6,
+                "timestamp": 1591470799000,
+                "x": 863.1015317286652,
+                "y": 654.0336980306346,
+                "signalToNoise": 17.70104720687138
+              },
+              {
+                "retainedFrameIndex": 7,
+                "sourceFrameIndex": 7,
+                "timestamp": 1591470984000,
+                "x": 862.5108853410741,
+                "y": 653.8007982583455,
+                "signalToNoise": 17.636716505386985
+              },
+              {
+                "retainedFrameIndex": 8,
+                "sourceFrameIndex": 8,
+                "timestamp": 1591471164000,
+                "x": 862.3626465661641,
+                "y": 653.858040201005,
+                "signalToNoise": 15.281741297120506
+              },
+              {
+                "retainedFrameIndex": 9,
+                "sourceFrameIndex": 9,
+                "timestamp": 1591471326000,
+                "x": 863.2596153846154,
+                "y": 653.7446153846154,
+                "signalToNoise": 22.510792431958965
+              },
+              {
+                "retainedFrameIndex": 10,
+                "sourceFrameIndex": 10,
+                "timestamp": 1591471477000,
+                "x": 863.1920604914934,
+                "y": 653.8124763705104,
+                "signalToNoise": 19.964453288028306
+              },
+              {
+                "retainedFrameIndex": 11,
+                "sourceFrameIndex": 11,
+                "timestamp": 1591471647000,
+                "x": 862.9826014913008,
+                "y": 653.907207953604,
+                "signalToNoise": 16.919375454628796
+              },
+              {
+                "retainedFrameIndex": 12,
+                "sourceFrameIndex": 12,
+                "timestamp": 1591471805000,
+                "x": 863.1233446840712,
+                "y": 653.2898221717745,
+                "signalToNoise": 16.913585531109504
+              },
+              {
+                "retainedFrameIndex": 13,
+                "sourceFrameIndex": 13,
+                "timestamp": 1591471949000,
+                "x": 858.4196392785572,
+                "y": 650.2440881763528,
+                "signalToNoise": 17.318880177459715
+              },
+              {
+                "retainedFrameIndex": 14,
+                "sourceFrameIndex": 15,
+                "timestamp": 1591472439000,
+                "x": 862.9611050527081,
+                "y": 653.787713558706,
+                "signalToNoise": 20.245427493565867
+              },
+              {
+                "retainedFrameIndex": 15,
+                "sourceFrameIndex": 17,
+                "timestamp": 1591472780000,
+                "x": 858.3150746944318,
+                "y": 650.0439112720688,
+                "signalToNoise": 15.482560223394783
+              },
+              {
+                "retainedFrameIndex": 16,
+                "sourceFrameIndex": 18,
+                "timestamp": 1591472950000,
+                "x": 863.0653950953679,
+                "y": 653.95810626703,
+                "signalToNoise": 18.78860655290863
+              },
+              {
+                "retainedFrameIndex": 17,
+                "sourceFrameIndex": 19,
+                "timestamp": 1591473128000,
+                "x": 863.7802101576182,
+                "y": 653.7683887915937,
+                "signalToNoise": 14.007196290834981
+              },
+              {
+                "retainedFrameIndex": 18,
+                "sourceFrameIndex": 20,
+                "timestamp": 1591473288000,
+                "x": 858.3847864768683,
+                "y": 650.1596975088968,
+                "signalToNoise": 15.755905560068571
+              },
+              {
+                "retainedFrameIndex": 19,
+                "sourceFrameIndex": 21,
+                "timestamp": 1591473466000,
+                "x": 859.0467811158799,
+                "y": 649.4609442060085,
+                "signalToNoise": 15.58833021380935
+              },
+              {
+                "retainedFrameIndex": 20,
+                "sourceFrameIndex": 22,
+                "timestamp": 1591473615000,
+                "x": 859.0442404006678,
+                "y": 650.6974123539233,
+                "signalToNoise": 15.673668330573552
+              },
+              {
+                "retainedFrameIndex": 21,
+                "sourceFrameIndex": 23,
+                "timestamp": 1591473762000,
+                "x": 863.7042985356637,
+                "y": 653.7061880018895,
+                "signalToNoise": 15.57963286218791
+              },
+              {
+                "retainedFrameIndex": 22,
+                "sourceFrameIndex": 24,
+                "timestamp": 1591473932000,
+                "x": 863.5853314527503,
+                "y": 653.8586036671368,
+                "signalToNoise": 21.96943977185437
+              },
+              {
+                "retainedFrameIndex": 23,
+                "sourceFrameIndex": 25,
+                "timestamp": 1591474112000,
+                "x": 860.8181992520855,
+                "y": 653.676670821747,
+                "signalToNoise": 90.2942516434231
+              },
+              {
+                "retainedFrameIndex": 24,
+                "sourceFrameIndex": 26,
+                "timestamp": 1591474297000,
+                "x": 858.804,
+                "y": 649.9105,
+                "signalToNoise": 14.017709573014743
+              },
+              {
+                "retainedFrameIndex": 25,
+                "sourceFrameIndex": 27,
+                "timestamp": 1591474451000,
+                "x": 858.4146576663452,
+                "y": 649.9098360655738,
+                "signalToNoise": 13.272333103110524
+              },
+              {
+                "retainedFrameIndex": 26,
+                "sourceFrameIndex": 29,
+                "timestamp": 1591474754000,
+                "x": 863.8673318551367,
+                "y": 654.0107169253511,
+                "signalToNoise": 19.914259104903394
+              },
+              {
+                "retainedFrameIndex": 27,
+                "sourceFrameIndex": 30,
+                "timestamp": 1591474901000,
+                "x": 863.692236598891,
+                "y": 653.4029574861368,
+                "signalToNoise": 15.881364060747053
+              },
+              {
+                "retainedFrameIndex": 28,
+                "sourceFrameIndex": 31,
+                "timestamp": 1591475065000,
+                "x": 862.9657924743443,
+                "y": 653.8814139110605,
+                "signalToNoise": 16.13525982538828
+              },
+              {
+                "retainedFrameIndex": 29,
+                "sourceFrameIndex": 32,
+                "timestamp": 1591475224000,
+                "x": 858.9077549174768,
+                "y": 650.2916572462129,
+                "signalToNoise": 14.152249111634005
+              },
+              {
+                "retainedFrameIndex": 30,
+                "sourceFrameIndex": 33,
+                "timestamp": 1591475383000,
+                "x": 859.125,
+                "y": 650.1452067669173,
+                "signalToNoise": 13.617900117367018
+              },
+              {
+                "retainedFrameIndex": 31,
+                "sourceFrameIndex": 34,
+                "timestamp": 1591475546000,
+                "x": 863.7289740698985,
+                "y": 653.3720405862458,
+                "signalToNoise": 15.542135489080096
+              }
+            ],
+            "fitAvailable": true,
+            "correlationAvailable": true,
+            "projectedCorrelation": 0.07358463029799608,
+            "velocityXPixelsPerMinute": 0.007523393477494042,
+            "velocityYPixelsPerMinute": 0.0024275772739024187,
+            "speedPixelsPerMinute": 0.007905351405090567,
+            "displacementPixels": 0.7448158582162829,
+            "rmsPixels": 2.8562729660810766,
+            "supportedSpanMinutes": 94.21666666666667,
+            "sessionSpanMinutes": 94.21666666666667,
+            "sessionSpanFraction": 1.0
+          }
+        },
+        "footprintHash": "857699060c905f41ba1a0c6b1d26f6523839f2c488d58d9a5a14aa60d75feac8",
+        "y": 653.3581991763384,
+        "candidate": 8,
+        "x": 860.83901160614
+      }
+    ],
+    "maximumStackAssociations": [
+      {
+        "matches": [],
+        "associated": false,
+        "source": "S7-1"
+      },
+      {
+        "matches": [],
+        "associated": false,
+        "source": "S7-2"
+      }
+    ],
+    "ordinaryTracks": 5,
+    "anomalies": 25,
+    "unclassifiedPoints": 78,
+    "targetSources": [
+      "S7-2"
+    ]
+  }
+]

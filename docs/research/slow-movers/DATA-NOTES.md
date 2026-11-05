@@ -18,6 +18,10 @@ The residual-position study's association definition embeds 40% support. The lat
 
 SM-F6 uses path RMS within one search FWHM and motion discrepancy within 0.1 px/min, with predefined mean motion for curves. Each source counts once, irrespective of repeated candidates. Its same-policy native-blank contact audit is an additional post-hoc attribution check. Source-photon noise is omitted, and upstream QC/streak/ordinary-track context is frozen: these are faint-stage sensitivity tests, not full-pipeline injection recovery.
 
+SM-F7 preserves that faint-path criterion and separates 192 general from 48 purpose-built close-pair histories. D+T4/D+P3 are selected from combined verified proposals, so both gains and competition losses are measured. Incomplete prototype routes retain raw paths but are excluded from clean comparisons. The six primary union-gain batches receive a separate full-upstream confirmation; five remain additional beyond ordinary tracks and D. A maximum-stack context audit uses the earlier SM-F1/SM-F3 supported-position criterion rather than equating a morphology footprint with a trajectory. These selected reruns are not full-pipeline completeness for the whole conditional grid.
+
+An exact-velocity local oracle shifts the production fine-motion grid. The admitted-grid oracle instead starts at a real coarse node; reference masking remains explicit. A failed local refinement does not exhaust all other seeds, and a masked reference seed is not an admissible missed proposal. The old twelve-case side-lobe/proposal diagnosis remains reused evidence, not new validation.
+
 ## Unavailable and bounded evidence
 
 Keep timing, exposure, fill/crop, saturation, fit failure, missing bins and model eligibility explicit. An excluded source is not a detector rejection. Lack of a candidate does not establish that an unsearched or out-of-model source is false. Camera sources in the latest grid either depart from a constant-motion locus by too much or drift below the nominal coarse-speed range, so zero associations do not cleanly test camera rejection.
@@ -30,7 +34,7 @@ Blind image-third searches rebuild median references, conditional on full-sessio
 
 The final candidate-local V=23 comparisons are post-detection compatibility checks with the admitted corrected WCS. Initial request failures remain unavailable. Formal orbit 3-sigma values omit centroid/WCS uncertainty, native passband is not calibrated to predicted V, and unknown-magnitude omissions limit completeness. The earlier five unmatched K2 labels are not negative truth; all eleven original paths have compatible predictions after deeper review.
 
-Absolute machine paths become portable artifact identifiers in selected numerical evidence. No observing-site headers, saved application settings or observer-containing request URLs are bundled. Finite scientific values are preserved; non-finite JSON values would be explicitly encoded as `NaN`, `Infinity` or `-Infinity` strings and counted in provenance, rather than replaced by zero. Current selected evidence contains no such conversion. CSV boolean/unavailable fields retain their textual representations.
+Absolute machine paths become portable artifact identifiers in selected numerical evidence. No observing-site headers, saved application settings or observer-containing request URLs are bundled. Finite scientific values are preserved; non-finite JSON values are explicitly encoded as `NaN`, `Infinity` or `-Infinity` strings rather than replaced by zero. Earlier study provenance records no such conversion; SM-F7's `special-value-encoding.json` records unavailable-score conversions in its derived ledgers. Its parity amendment fixes inconsistent parsed/numeric `NaN` comparison while preserving all scientific values and hashes. CSV boolean/unavailable fields retain their textual representations.
 
 ## Compression and integrity
 

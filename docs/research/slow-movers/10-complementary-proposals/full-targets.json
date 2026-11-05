@@ -1,0 +1,62 @@
+[
+  {
+    "dataset": "dc-reg",
+    "context": "case-13",
+    "sources": [
+      "S7-2"
+    ],
+    "methods": [
+      "T4"
+    ]
+  },
+  {
+    "dataset": "dc-reg",
+    "context": "case-14",
+    "sources": [
+      "S7-2"
+    ],
+    "methods": [
+      "T4"
+    ]
+  },
+  {
+    "dataset": "dc-reg",
+    "context": "case-15",
+    "sources": [
+      "S7-2"
+    ],
+    "methods": [
+      "T4"
+    ]
+  },
+  {
+    "dataset": "dc-reg",
+    "context": "case-17",
+    "sources": [
+      "S7-2"
+    ],
+    "methods": [
+      "T4"
+    ]
+  },
+  {
+    "dataset": "dc-reg",
+    "context": "case-18",
+    "sources": [
+      "S7-2"
+    ],
+    "methods": [
+      "T4"
+    ]
+  },
+  {
+    "dataset": "m5-reg",
+    "context": "case-18",
+    "sources": [
+      "S7-2"
+    ],
+    "methods": [
+      "T4"
+    ]
+  }
+]

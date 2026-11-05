@@ -1,6 +1,6 @@
 # Slow-mover investigation archive
 
-This collection preserves the dated SM-F1/SM-F2/SM-F3/SM-F6 investigations conducted on 3-5 November 2026 and the evidence informing future SM-F7 comparisons. It contains historical protocols, conclusions, numerical tables, validation records and selected scientific figures. Large case tables are losslessly compressed with gzip.
+This collection preserves ten dated SM-F1/SM-F2/SM-F3/SM-F6/SM-F7 investigations conducted on 3-5 November 2026. It contains historical protocols, conclusions, numerical tables, validation records and selected scientific figures. Large case tables are losslessly compressed with gzip.
 
 [ALGORITHM.md](../../../ALGORITHM.md) remains the current algorithm reference. [FEATURE-REQUESTS.md](../../../FEATURE-REQUESTS.md) owns pending decisions and acceptance work. Historical reports describe their own experimental baseline and publication state; a statement such as “not implemented” in an early snapshot is not the current implementation status.
 
@@ -17,13 +17,14 @@ This collection preserves the dated SM-F1/SM-F2/SM-F3/SM-F6 investigations condu
 | 2026-11-05 | [Retrospective gate inventory](07-filter-inventory/README.md) | Ordered conditional counts are not independent ablations. The old association definition already required 40% support and could not validate that threshold independently. |
 | 2026-11-05 | [Joint SM-F1/SM-F3 gate comparison](08-joint-gates/README.md) | Nineteen policies on 1,910 evaluated cases expose support/morphology/median/stationarity interactions. A separate brighter-flash follow-up establishes a support-floor benefit. The tested temporal-bin veto is not adopted. |
 | 2026-11-05 | [SM-F6 matched-domain validation](09-digital-validation/README.md) | All 462 searches finish on six observations, including full-speed M81. Three disjoint image-third searches and 12 controlled encounters add conditional evidence. Deeper predictions give compatible known-object paths for all 11 original K2 candidates. No filter/default change earns adoption. |
+| 2026-11-05 | [SM-F7 complementary proposals](10-complementary-proposals/README.md) | Four fields, 644 result rows and 240 available moving histories compare the unchanged verifier. Temporal-bin proposals add six targeted close companions; five survive full upstream checks beyond ordinary tracks and digital tracking. Frame-point routes mostly reach resource boundaries. Gates/defaults and production integration remain unchanged. |
 
 ## Conclusions to carry forward
 
 - Keep the current scientific filters/defaults. Increased selected-history recovery can accompany substantial control load, and some relaxations also lose sources through changed preprocessing or noise normalization.
 - Treat missing evidence, input/model eligibility, candidate ceilings and scientific rejection separately. The camera controls in the latest grid do not cleanly test steady camera drift in the intended motion domain.
 - Use raw footprint/source provenance and credible centroid/PSF/noise uncertainty before adopting temporal confirmation or more aggressive overlap rules. A streak contact, strong time correlation or catalogue absence alone is not a physical classification.
-- Compare the two SM-F7 proposal methods separately against the unchanged digital-tracking verifier on fresh frozen examples, with matched motion/footprint/resource coverage and incremental source recovery. Reviewed grids are diagnostic data, not new independent threshold-validation sets.
+- Carry forward the first SM-F7 comparison's targeted temporal-bin benefit, source/review costs and incomplete frame-point coverage. Independent observing examples, source attribution and an agreed engine/application contract remain necessary before integration. Reviewed grids are diagnostic data, not new independent threshold-validation sets.
 
 ## Code changes and current scope
 
@@ -35,7 +36,7 @@ The publication containing this archive changes documentation/evidence only. Ori
 
 Read [DATA-NOTES.md](DATA-NOTES.md) before joining tables or comparing scores. Case numbers are local to an investigation; repeated source histories and shared fields are correlated. Each study directory has an inventory and `provenance.json` with original/archived artifact SHA-256 values, portable-path transformations and available production-source snapshot hashes. [archive-manifest.json](archive-manifest.json) checks the committed archive bytes; line endings are fixed to LF for text files.
 
-[VALIDATION.json](VALIDATION.json) records the publication checks: numerical comparisons with source artifacts, local links, code-history references, figure metadata, privacy and unchanged production-source hashes.
+[VALIDATION.json](VALIDATION.json) records the original nine-study publication checks. The SM-F7 extension has separate [scientific validation](10-complementary-proposals/validation.json) and [publication checks](10-complementary-proposals/publication-validation.json): numerical comparisons, source/result integrity, local links, code-history references, figure metadata and privacy.
 
 The archive preserves decision evidence and protocols, rather than a self-contained bitwise rerun package. Original FITS/XISF data, full image/tile caches, executable diagnostics and machine-specific launchers remain external under the repository diagnostic-program policy. Historical references to those scratch artifacts identify their original roles; only the study inventories list files included here. Local private artifact locations are maintained in ignored environment notes.
 

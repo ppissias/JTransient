@@ -1,0 +1,22 @@
+{
+  "complete": true,
+  "exactUpstreamReplays": 6,
+  "targetSources": 6,
+  "associatedTargetSources": 0,
+  "criterion": "At least three supported positions, 80% active-source support and <=2 px direct RMS, from prior SM-F1/SM-F3 comparison; not a production gate or motion confidence",
+  "resources": [
+    {
+      "dataset": "dc-reg",
+      "elapsedSeconds": 54.125,
+      "exitCode": 0,
+      "peakWorkingSetGiB": 4.380176544189453
+    },
+    {
+      "dataset": "m5-reg",
+      "elapsedSeconds": 8.094000000040978,
+      "exitCode": 0,
+      "peakWorkingSetGiB": 0.8915824890136719
+    }
+  ],
+  "scope": "Selected same six full-upstream cases only; single-frame anomalies are not counted as moving-history recovery."
+}

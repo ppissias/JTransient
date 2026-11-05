@@ -1,0 +1,580 @@
+{
+  "study": "10-complementary-proposals",
+  "date": "2026-11-05",
+  "title": "SM-F7 complementary proposals with the unchanged verifier",
+  "scope": "Frozen four-field conditional comparison and separately sealed diagnostic reuse; no production integration.",
+  "originalExecutionManifestSha256": "a0373887e6a034b587b217279647102328f28ca7f7f8e84af0e3bf2d14c3e4d8",
+  "originalGridDiagnosticManifestSha256": "cd82e77dbf6a678d69891cf398c054980f60f75a689cd84a055dd98b215a16a0",
+  "entries": [
+    {
+      "archivePath": "PLAN.md",
+      "originalArtifact": "PLAN.md",
+      "sourceSha256": "6fdcb02c60c0689e027a25b576c5d5917b3582c3d286781adc231b4157cc95c2",
+      "archiveSha256": "26aef9d5492ba0106eb410258498624476e5e1a2742b1a411edebd2c41b35f69",
+      "gzip": false,
+      "transformations": {
+        "historicalContextAdded": true
+      }
+    },
+    {
+      "archivePath": "PLAN-initial.md",
+      "originalArtifact": "PLAN-initial.md",
+      "sourceSha256": "483776995e4d665cc70af9d6a3f8448268b6d50bdc128ee28fa72187d3971110",
+      "archiveSha256": "ba3030e00685c00349e1ec1a1e27d2bd9409055325982d9e0bcf34ac69e0da6c",
+      "gzip": false,
+      "transformations": {
+        "historicalContextAdded": true
+      }
+    },
+    {
+      "archivePath": "DIAGNOSTIC-AMENDMENT.md",
+      "originalArtifact": "DIAGNOSTIC-AMENDMENT.md",
+      "sourceSha256": "dc594a4f35ee69aed0ca9daa685c10cce1134a574b65130ae8a9815b1ceea29c",
+      "archiveSha256": "3b5ac3a8a7149f34188c9691e0f8edcde8a16f638fa29cf66861b71cd38cf933",
+      "gzip": false,
+      "transformations": {
+        "historicalContextAdded": true
+      }
+    },
+    {
+      "archivePath": "FRESH-DIAGNOSTIC-PLAN.md",
+      "originalArtifact": "FRESH-DIAGNOSTIC-PLAN.md",
+      "sourceSha256": "af4806c354d30f9329236a0a794a199c8f8e93116b2d2ec7297d308508401118",
+      "archiveSha256": "4e8e99c65b52bd3637e6f4568bd93cb3f9c684b66165c46bb1baa7ebff172961",
+      "gzip": false,
+      "transformations": {
+        "historicalContextAdded": true
+      }
+    },
+    {
+      "archivePath": "GRID-DIAGNOSTIC-AMENDMENT.md",
+      "originalArtifact": "GRID-DIAGNOSTIC-AMENDMENT.md",
+      "sourceSha256": "0829168333beb45e38e1d8febcd318da8d1d995e0b5b8f412720205c31cec98b",
+      "archiveSha256": "2f476bc38595abfe39f52bb295d9ca0afe2289bbda71c2b282d3a4009a463e29",
+      "gzip": false,
+      "transformations": {
+        "historicalContextAdded": true
+      }
+    },
+    {
+      "archivePath": "NONFINITE-PARITY-AMENDMENT.md",
+      "originalArtifact": "NONFINITE-PARITY-AMENDMENT.md",
+      "sourceSha256": "df7a97bc4b6dab9363fffee876a61f10192f8204694b5b1f4b03a56fabc8d5f4",
+      "archiveSha256": "023e767aa85659176c5b3bccd315b327af1ae8c3c35591a7f7d3763b19059d7d",
+      "gzip": false,
+      "transformations": {
+        "historicalContextAdded": true
+      }
+    },
+    {
+      "archivePath": "FULL-PIPELINE-PLAN.md",
+      "originalArtifact": "FULL-PIPELINE-PLAN.md",
+      "sourceSha256": "326562f7f7f258777b3bbdc86e059b24aa939bccb3c2d117a5b69eae2b8c55b2",
+      "archiveSha256": "645ad6bd1accd51e512afce5afd2bad113dd110da375f913b6186186912e1ea8",
+      "gzip": false,
+      "transformations": {
+        "historicalContextAdded": true
+      }
+    },
+    {
+      "archivePath": "BASELINE-AUDIT-PLAN.md",
+      "originalArtifact": "BASELINE-AUDIT-PLAN.md",
+      "sourceSha256": "cc41b199f72d75e94161e53bae67b979062cc83fb7be5a2affede9714eaa98bc",
+      "archiveSha256": "08f99f5f0e62f708b72b78d1f07b2a0a07daa1813699612e705b5e46b6b4d364",
+      "gzip": false,
+      "transformations": {
+        "historicalContextAdded": true
+      }
+    },
+    {
+      "archivePath": "CONCLUSION.md",
+      "originalArtifact": "CONCLUSION.md",
+      "sourceSha256": "522135e314631af03843d5136f48621521f85031fc009a326611579b7699b25b",
+      "archiveSha256": "9140bf94a7b11891b1b47a261dd8afbf7aae717252b34487ff04a75e806d6867",
+      "gzip": false,
+      "transformations": {
+        "historicalContextAdded": true
+      }
+    },
+    {
+      "archivePath": "profile.json",
+      "originalArtifact": "profile.json",
+      "sourceSha256": "12da9a534da83244af477611de483266541487b4c0dc1d281e24fc699101610d",
+      "archiveSha256": "0a4e57b8dc57c469e399ad19d9285814b70b941fc7c495fb732d4fa0ea82a54e",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "controls.json",
+      "originalArtifact": "controls.json",
+      "sourceSha256": "d5da4ebed4e1f18b9e6be3934a5fe8793d1caed9dae634c81e46110318d66ebb",
+      "archiveSha256": "c83622dc23a0d98947c93c7222a0bda4b2b3f14dc074e528d49c5a51c120c619",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "source-copy-check.json",
+      "originalArtifact": "source-copy-check.json",
+      "sourceSha256": "03098f1330545d24f6bcddbdaf8fc9e1564029ca88df41b8d5ca4a25671cbd28",
+      "archiveSha256": "a5362b1676fd950282ede73707c11137ff83eebb35604f254d8d3e7e2c3a6ce3",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "prior-diagnostic-post-summary.json",
+      "originalArtifact": "prior-diagnostic-post-summary.json",
+      "sourceSha256": "47c52ac1124809ed0100d2a00dd82db71fd82aa96c508c91c59bdf108d6ff4d8",
+      "archiveSha256": "ec7718f7f0b55f43c1d6b3cc99c113df52268dc53f32029d57ee0c8ee5684c55",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "full-capture-source-check.json",
+      "originalArtifact": "full-capture-source-check.json",
+      "sourceSha256": "8fff1a317d0ad376e002f2793e76ebf6260686e20d06448c4cf45b831ce1638f",
+      "archiveSha256": "8fff1a317d0ad376e002f2793e76ebf6260686e20d06448c4cf45b831ce1638f",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "full-controls.json",
+      "originalArtifact": "full-controls.json",
+      "sourceSha256": "aef39796a1029b506509083b40a0d612aee55091b335b9a5a727cdfd76fc4f13",
+      "archiveSha256": "745730dda31e9c823de030ca44941417ff6c84c2ecdf7f75dc6c948776c49583",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "full-targets.json",
+      "originalArtifact": "full-targets.json",
+      "sourceSha256": "5bc3075cc0fce5babb17073b9cc450d285184fbdacce24d96d56107c5c00be38",
+      "archiveSha256": "5bc3075cc0fce5babb17073b9cc450d285184fbdacce24d96d56107c5c00be38",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "full-target-manifest.json",
+      "originalArtifact": "full-target-manifest.json",
+      "sourceSha256": "b38647d312e5ad75297b487b335acd3a9f02f00bcfee8bb4650cae6e1b8bc3ea",
+      "archiveSha256": "dd5653b939525bd19cad444cf9f9e330282ff747bbf035e2290b940ea30f72c6",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "nonfinite-parity-proof.json",
+      "originalArtifact": "nonfinite-parity-proof.json",
+      "sourceSha256": "6fcf9b8db5efc89a669c73b2418efb6abe838fc59e00e1ed3dc2569feafde724",
+      "archiveSha256": "6fcf9b8db5efc89a669c73b2418efb6abe838fc59e00e1ed3dc2569feafde724",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "accepted-diagnostic-runs.json",
+      "originalArtifact": "accepted-diagnostic-runs.json",
+      "sourceSha256": "206c07b1f68f31d1f87cd64c0134430d9536decf69e4b2bb71d8acea5a6e7e79",
+      "archiveSha256": "206c07b1f68f31d1f87cd64c0134430d9536decf69e4b2bb71d8acea5a6e7e79",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "summary.json",
+      "originalArtifact": "analysis/summary.json",
+      "sourceSha256": "6207b8540af7f19f048a67feba892ba9368bf5ee18bfaf87be1a9da87b3de00b",
+      "archiveSha256": "313cf7fb204a77f3e4ddf3910ccac62221c3d0a7f7d6eef083990748f1ea553e",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "audit-summary.json",
+      "originalArtifact": "analysis/audit-summary.json",
+      "sourceSha256": "5ef0e39a88485e9f0788a9dabb23a50d95bf2d840cf1d6f2c7ac92ea9eee638e",
+      "archiveSha256": "5ef0e39a88485e9f0788a9dabb23a50d95bf2d840cf1d6f2c7ac92ea9eee638e",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "preparation-domain.json",
+      "originalArtifact": "analysis/preparation-domain.json",
+      "sourceSha256": "80667f3c3dc7ec49731a2c5a405e9ea7d1e6119735b6429f83b4fe3e52e35680",
+      "archiveSha256": "80667f3c3dc7ec49731a2c5a405e9ea7d1e6119735b6429f83b4fe3e52e35680",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "contexts.csv",
+      "originalArtifact": "analysis/contexts.csv",
+      "sourceSha256": "b0e9d80ec16c4040bc89b3e9eea97bd7579bc256ab6b590cf102fda020e92076",
+      "archiveSha256": "69c9994b38757575dbe6343f00cd133c6ab3510e06f86fe1104d60ef3cf44793",
+      "gzip": false,
+      "transformations": {}
+    },
+    {
+      "archivePath": "sources.csv.gz",
+      "originalArtifact": "analysis/sources.csv",
+      "sourceSha256": "0aeb110e56e9b26de130478156ee626a3697fe12d6211604fa7d5c971ffc3678",
+      "archiveSha256": "b88acaaf9b892f6680b3ae988acb3500fa3bd920dec3469c99ab7379b129d1ac",
+      "gzip": true,
+      "transformations": {}
+    },
+    {
+      "archivePath": "paired-comparisons.csv",
+      "originalArtifact": "analysis/paired-comparisons.csv",
+      "sourceSha256": "b82719e3ef45f68fd5680036c465663c7170957d80b55ab0748eb3732510f2cc",
+      "archiveSha256": "0c88850e3836bbe4715efea1a1202aa34455af95731b42539db9644d798626ae",
+      "gzip": false,
+      "transformations": {}
+    },
+    {
+      "archivePath": "field-summary.csv",
+      "originalArtifact": "analysis/field-summary.csv",
+      "sourceSha256": "f55ea8d48169c83f3c32455db958e9efbda85b1ed139a3d5e67209054d13868d",
+      "archiveSha256": "bedc09f51bc0c36fca3a64c38ac9ee7f287b87f74cf68aafae1a87c70c15701e",
+      "gzip": false,
+      "transformations": {}
+    },
+    {
+      "archivePath": "trace-summary.json.gz",
+      "originalArtifact": "analysis/trace-summary.json",
+      "sourceSha256": "4a92df93b43674a063ec71841f7acec687ad13b61788a78be68d17cd4d984813",
+      "archiveSha256": "8cf970fc2cf5b7fd69c1ce0bbf6626d9d25372c73df03535738d3082dd09291c",
+      "gzip": true,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "source-stages.json",
+      "originalArtifact": "analysis/source-stages.json",
+      "sourceSha256": "185b78a5a6eba5a1190d7e8fd53b19be0e239403b972723c088f7fffed5ca27f",
+      "archiveSha256": "185b78a5a6eba5a1190d7e8fd53b19be0e239403b972723c088f7fffed5ca27f",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "source-verified-peaks.json.gz",
+      "originalArtifact": "analysis/source-verified-peaks.json",
+      "sourceSha256": "a3b5179998fbd560a88ad9a804a882e2092f9c4c70113b58eb584d4ff355c704",
+      "archiveSha256": "f609c226caf1ed851ce4600f322caa60903ed132a1aabcc15d4af756c01095a0",
+      "gzip": true,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "resource-summary.json",
+      "originalArtifact": "analysis/resource-summary.json",
+      "sourceSha256": "390c34192a6c2df8fe4a3440029962a3c90de58e7b07de95a6b046d577e3b6de",
+      "archiveSha256": "390c34192a6c2df8fe4a3440029962a3c90de58e7b07de95a6b046d577e3b6de",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "additional-candidate-paths.json",
+      "originalArtifact": "analysis/additional-candidate-paths.json",
+      "sourceSha256": "51e77980d6ac2c8256e95f748e6ccdd057df05002366b0256682b61333c6e090",
+      "archiveSha256": "51e77980d6ac2c8256e95f748e6ccdd057df05002366b0256682b61333c6e090",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "prior-grid-summary.json",
+      "originalArtifact": "analysis/prior-grid-summary.json",
+      "sourceSha256": "ea08888b908d0ed1a7d319fef26cc6c7000e75f1d67c2460d96f8f0809ef2d43",
+      "archiveSha256": "ea08888b908d0ed1a7d319fef26cc6c7000e75f1d67c2460d96f8f0809ef2d43",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "execution-snapshot.json",
+      "originalArtifact": "analysis/execution-snapshot.json",
+      "sourceSha256": "8117e1073da4a6850d446486377a042e7dfffe800bf6c30b0d155ca7ede13514",
+      "archiveSha256": "8117e1073da4a6850d446486377a042e7dfffe800bf6c30b0d155ca7ede13514",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "input-sequence-hashes.json",
+      "originalArtifact": "analysis/input-sequence-hashes.json",
+      "sourceSha256": "6b006cd840bab7c13652eaf5742ea4906063362af2c2b37afd96abe23c0286e2",
+      "archiveSha256": "45e03f1feb3207f8a164a6b844c292f72b52e0a4023d837f0a875ccdeb3d556f",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "blind-results.json.gz",
+      "originalArtifact": "analysis/blind-results.json",
+      "sourceSha256": "52f25e9db3bcbfae75b7bd0c36cc60772f0ef38c0fbbaa694eedc725cbb98cc4",
+      "archiveSha256": "392cd19bf7ed4743789a5fe83b794827573ebf3e6ffbd9422838ad28013f91a0",
+      "gzip": true,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "truth-ledger.json.gz",
+      "originalArtifact": "analysis/truth-ledger.json",
+      "sourceSha256": "ba0b980971d223a29dedc6435ad736ae7577a443e163b68c9642bf35bc6f6752",
+      "archiveSha256": "0c2f85b643700b7e6e0d541252ffb7bd6e17901dd1f12c8cd8eaa1429baeed04",
+      "gzip": true,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "oracle-ledger.json.gz",
+      "originalArtifact": "analysis/oracle-ledger.json",
+      "sourceSha256": "de865c282b7f3d0c9aa0510145450a116ac7f47a990da7b6b359628d897adb69",
+      "archiveSha256": "165c34f5e9afbbb7da34430122c2229e0becca0ca609a83ccd89c5c9469fa44a",
+      "gzip": true,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "prior-diagnostics.json",
+      "originalArtifact": "analysis/prior-diagnostics.json",
+      "sourceSha256": "8c4bb6766b8174ca7595ab04495f6b6519348f15fd09cf936fa063c2df015e91",
+      "archiveSha256": "8c4bb6766b8174ca7595ab04495f6b6519348f15fd09cf936fa063c2df015e91",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "external-result-manifest.json.gz",
+      "originalArtifact": "analysis/external-result-manifest.json",
+      "sourceSha256": "1c273513408d585ada49a7f246c1397ff8491467cac301668cad3e7a1c70beb8",
+      "archiveSha256": "b81821e7eba72bcbd90f27b44ae210a18288d8c2044c7b4ca201439db2a459df",
+      "gzip": true,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "special-value-encoding.json",
+      "originalArtifact": "analysis/special-value-encoding.json",
+      "sourceSha256": "b8460c65f41711c1f1ade08a695cf3d3cf5595688c91758539df4c8ac7fc1978",
+      "archiveSha256": "b8460c65f41711c1f1ade08a695cf3d3cf5595688c91758539df4c8ac7fc1978",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "fixed-raw-review.json.gz",
+      "originalArtifact": "analysis/fixed-raw-review.json",
+      "sourceSha256": "3e922fc82d71ce4ceb47ad2ed0a211175ab72bc80050fd5b97343c8177227be4",
+      "archiveSha256": "ee09a3911375c39dcf947354a122c34f5d36b4036114a867b9e5627de4c30eb5",
+      "gzip": true,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "validation.json",
+      "originalArtifact": "analysis/validation.json",
+      "sourceSha256": "2def52751597d9a15ea6ca4c5c6d227749fdf29cb4ba5af43c2d8e3145b91249",
+      "archiveSha256": "2def52751597d9a15ea6ca4c5c6d227749fdf29cb4ba5af43c2d8e3145b91249",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "full-pipeline-summary.json",
+      "originalArtifact": "analysis/full-pipeline-summary.json",
+      "sourceSha256": "571b415597126c50741bd60a1e27c6a30817bfc76063460ba6f2d183f0f13073",
+      "archiveSha256": "571b415597126c50741bd60a1e27c6a30817bfc76063460ba6f2d183f0f13073",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "full-pipeline-sources.csv",
+      "originalArtifact": "analysis/full-pipeline-sources.csv",
+      "sourceSha256": "02b9a5969df9166f0346142980f6a05f317d6a5ec4609d5a7c9d2789dace2c2e",
+      "archiveSha256": "2def610bee1a334524b45ed5311a8eefd41055bdb899882552c4bb0d00991926",
+      "gzip": false,
+      "transformations": {}
+    },
+    {
+      "archivePath": "full-pipeline-results.json",
+      "originalArtifact": "analysis/full-pipeline-results.json",
+      "sourceSha256": "fe6e4a14e689e3cc136c76a32ce0f0f175efdcfdca8c1992b2d49b957c7f1182",
+      "archiveSha256": "fe6e4a14e689e3cc136c76a32ce0f0f175efdcfdca8c1992b2d49b957c7f1182",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "baseline-summary.json",
+      "originalArtifact": "analysis/baseline-summary.json",
+      "sourceSha256": "c6f324c95edc628b40f4e56a0f19c6e044954a3defef841ca5b0ddc2d6ceb899",
+      "archiveSha256": "c6f324c95edc628b40f4e56a0f19c6e044954a3defef841ca5b0ddc2d6ceb899",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "baseline-ledger.json",
+      "originalArtifact": "analysis/baseline-ledger.json",
+      "sourceSha256": "ce4f497f8ae729c426f3d69cccd27e03a90301c1ae97081329b8c75b8b36c976",
+      "archiveSha256": "ce4f497f8ae729c426f3d69cccd27e03a90301c1ae97081329b8c75b8b36c976",
+      "gzip": false,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "proposal-comparison.png",
+      "originalArtifact": "analysis/proposal-comparison.png",
+      "sourceSha256": "61a8f15e937f8344ffff90af6e18a4fa708cd498638719d16a76eec3ebea1b30",
+      "archiveSha256": "61a8f15e937f8344ffff90af6e18a4fa708cd498638719d16a76eec3ebea1b30",
+      "gzip": false,
+      "transformations": {}
+    },
+    {
+      "archivePath": "proposal-comparison.svg",
+      "originalArtifact": "analysis/proposal-comparison.svg",
+      "sourceSha256": "b662bdeb64e348134b6e17fece05b301f920f4b0d090389157fe43571250296f",
+      "archiveSha256": "474a1156c5538daec12d2e5eb7ef69cdbdbe83b12056ed824840f896f4d9b66e",
+      "gzip": false,
+      "transformations": {
+        "svgTrailingWhitespaceTrimmed": 1053
+      }
+    },
+    {
+      "archivePath": "source-diagnostics.png",
+      "originalArtifact": "analysis/source-diagnostics.png",
+      "sourceSha256": "881e5ad29e6b8596929c4651913ffcbe4a38bfeab65573ce43baaa938de668c3",
+      "archiveSha256": "881e5ad29e6b8596929c4651913ffcbe4a38bfeab65573ce43baaa938de668c3",
+      "gzip": false,
+      "transformations": {}
+    },
+    {
+      "archivePath": "source-diagnostics.svg",
+      "originalArtifact": "analysis/source-diagnostics.svg",
+      "sourceSha256": "f56a28e2506e527ffbc79c9142c63d225c94c4a06d17b6be4c909ab1bad4782e",
+      "archiveSha256": "d22c7d4114b3001c5ca8346bc6c603b20149b50100ee08f31bbecd026282dbec",
+      "gzip": false,
+      "transformations": {
+        "svgTrailingWhitespaceTrimmed": 889
+      }
+    },
+    {
+      "archivePath": "fixed-raw-review.png",
+      "originalArtifact": "analysis/fixed-raw-review.png",
+      "sourceSha256": "b7f5a723dd948ed68b26a389a77a0f7a7e6a1a6b11a13e5a70f93b16b33b1147",
+      "archiveSha256": "b7f5a723dd948ed68b26a389a77a0f7a7e6a1a6b11a13e5a70f93b16b33b1147",
+      "gzip": false,
+      "transformations": {}
+    },
+    {
+      "archivePath": "fixed-raw-review.svg",
+      "originalArtifact": "analysis/fixed-raw-review.svg",
+      "sourceSha256": "8f216dabb88e12d5dc0d9b697dd48a46b59d0194c7b269fa14581e9297540571",
+      "archiveSha256": "53a26c2173cfc2a64e8e71fab3bedd809ef54215b6312962d9fcb1b8f4add763",
+      "gzip": false,
+      "transformations": {
+        "svgTrailingWhitespaceTrimmed": 1130
+      }
+    },
+    {
+      "archivePath": "gain-input-review.json.gz",
+      "originalArtifact": "analysis/gain-input-review.json",
+      "sourceSha256": "4ed1e4f876cce2ac86e953ff91525e5c79e78933cb13f1c969b74c37a63ccd81",
+      "archiveSha256": "121bba96ea733c7ac86b957e1e4d88014482d5581fcf2d584f8c3698840750bf",
+      "gzip": true,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "gain-score-review.json.gz",
+      "originalArtifact": "analysis/gain-score-review.json",
+      "sourceSha256": "a42f8b881148fabbdd65bfab33d671222f89b56e4c007ed2dc08ed17653e10ba",
+      "archiveSha256": "0d501dbde5076c6bea703d18f8e52f047731d2198aadff708c0aa969965dd606",
+      "gzip": true,
+      "transformations": {
+        "serialization": "UTF-8 JSON; finite numerical values unchanged"
+      }
+    },
+    {
+      "archivePath": "gain-input-review.png",
+      "originalArtifact": "analysis/gain-input-review.png",
+      "sourceSha256": "fb54a3d7b05e1a3cb21a2f1b576fececa65e4a6708b00f899b68a249d0c616bc",
+      "archiveSha256": "fb54a3d7b05e1a3cb21a2f1b576fececa65e4a6708b00f899b68a249d0c616bc",
+      "gzip": false,
+      "transformations": {}
+    },
+    {
+      "archivePath": "gain-input-review.svg",
+      "originalArtifact": "analysis/gain-input-review.svg",
+      "sourceSha256": "dbb0b81ffb48c3e7900e46f1e932624ae93830b75fa6c5b0dd1ce3e0c91e4779",
+      "archiveSha256": "25359dcbbccd273f9ac9f31b09d65511973ed9d61ad1051fbaa60b3d936a98db",
+      "gzip": false,
+      "transformations": {
+        "svgTrailingWhitespaceTrimmed": 1611
+      }
+    },
+    {
+      "archivePath": "gain-score-review.png",
+      "originalArtifact": "analysis/gain-score-review.png",
+      "sourceSha256": "22214cf930c242f0beef07199c708e771c68c1a43e3086302dca5da8f0663c53",
+      "archiveSha256": "22214cf930c242f0beef07199c708e771c68c1a43e3086302dca5da8f0663c53",
+      "gzip": false,
+      "transformations": {}
+    },
+    {
+      "archivePath": "gain-score-review.svg",
+      "originalArtifact": "analysis/gain-score-review.svg",
+      "sourceSha256": "dc94b09766e9cabafe2fc617e59fe0a21cf4f8aa65adc7bd0232010be2a11d42",
+      "archiveSha256": "ed69c54dffc07d5bccbf49b834a4e457d4e222473cebe674be88a4443bdff3f3",
+      "gzip": false,
+      "transformations": {
+        "svgTrailingWhitespaceTrimmed": 1056
+      }
+    }
+  ]
+}

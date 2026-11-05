@@ -1,0 +1,1129 @@
+[
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 0,
+    "captureMillis": 1773110239409,
+    "exposureMillis": 120000,
+    "sha256": "d93ba6d3ee605d69beded11b8642e2120abbdd78681d3513f1756ec9bf491184"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 1,
+    "captureMillis": 1773110373410,
+    "exposureMillis": 120000,
+    "sha256": "8ceba937cb38e8790a954b69df5d1b2aef88e024c0da0ecc8aca45948ec227c0"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 2,
+    "captureMillis": 1773110511565,
+    "exposureMillis": 120000,
+    "sha256": "201add13f3a3185b2a428f6535939951e62bf39d034848899eaff9b33139484c"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 3,
+    "captureMillis": 1773110645360,
+    "exposureMillis": 120000,
+    "sha256": "1a0fb646fd4dcbb5db7cc90eb5a9d67ce803255540f0660f575705b3d96557be"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 4,
+    "captureMillis": 1773110789561,
+    "exposureMillis": 120000,
+    "sha256": "8defbe5a0ab55013f722cdfa88e54349432bc2d73d28a629fb951aaa96137ad9"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 5,
+    "captureMillis": 1773110923762,
+    "exposureMillis": 120000,
+    "sha256": "95e2d0865fc31f8cd2dc0189a88d976f6c7628eeb6cb5031e27154fe14b10f5e"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 6,
+    "captureMillis": 1773111067674,
+    "exposureMillis": 120000,
+    "sha256": "ea950cb19a2b9e1180806b1155abea741dbf45bc36e47811b24b3df369fafb27"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 7,
+    "captureMillis": 1773111201833,
+    "exposureMillis": 120000,
+    "sha256": "f1201337fbd197d8eb18c63142fadc5ffb59f6144110b6986268934d68376530"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 8,
+    "captureMillis": 1773111342031,
+    "exposureMillis": 120000,
+    "sha256": "4c192aefc891748022d4f85edb565e5a3674d2f5091d9456aa4928577b9048f9"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 9,
+    "captureMillis": 1773111490068,
+    "exposureMillis": 120000,
+    "sha256": "6aa533d4bd120f4618f18c4371b45c70ee9679fd3ca744558843fe7c031aa9cb"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 10,
+    "captureMillis": 1773111633955,
+    "exposureMillis": 120000,
+    "sha256": "11f32673a170440e771df6861c83b959faebd1e0e750fb9dc194e6edd9c2097d"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 11,
+    "captureMillis": 1773111768282,
+    "exposureMillis": 120000,
+    "sha256": "33b4ea3d334c959f9bee9a161e5c8008ce77ba90ce4ff3f4cd984017b38ee82a"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 12,
+    "captureMillis": 1773111914108,
+    "exposureMillis": 120000,
+    "sha256": "045efc17654662e84a4ab22e0e6d5e51ef0d5eb1a722f93dcf2ab2b3256df46d"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 13,
+    "captureMillis": 1773112048341,
+    "exposureMillis": 120000,
+    "sha256": "5c49c3023e655183b624167f923071cd3abb87b446e22487c4850eab419e660b"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 14,
+    "captureMillis": 1773112184219,
+    "exposureMillis": 120000,
+    "sha256": "876d2574d460b8174fa4d2f663ff30db197764aed1886fb0add23b178fbcb1ce"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 15,
+    "captureMillis": 1773112330301,
+    "exposureMillis": 120000,
+    "sha256": "91beaccfb702cc76c58c87dd6c9ff32400449b304ac2910fda02c2858d62e5e6"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 16,
+    "captureMillis": 1773112476541,
+    "exposureMillis": 120000,
+    "sha256": "8add17d7b5ab33251447c8b7fc5be846398a012bb13c62bde81966cfe0fc7902"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 17,
+    "captureMillis": 1773112610436,
+    "exposureMillis": 120000,
+    "sha256": "d4858c792292ac44ef17cdeb61bc5d48bfdca182681c9c273f0a160b9be3371b"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 18,
+    "captureMillis": 1773112927887,
+    "exposureMillis": 120000,
+    "sha256": "e4de51ff43b0bef33573d05e516c5f473455130d19adf62eb2446e1ed9f26613"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 19,
+    "captureMillis": 1773113064849,
+    "exposureMillis": 120000,
+    "sha256": "f32bf70cdcbb5b8b177a7bcccfd76dbad8091c2cd49a3b988c48e1204f86c3ba"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 20,
+    "captureMillis": 1773113200729,
+    "exposureMillis": 120000,
+    "sha256": "f70017b3cbb3ec653ec6143829dbb804b93b8c888c3a736478fb0791b0f3f5cc"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 21,
+    "captureMillis": 1773113334962,
+    "exposureMillis": 120000,
+    "sha256": "003bc39f37425620be532a30c09445fa2bb93fdec844d77e5301371487089082"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 22,
+    "captureMillis": 1773113480882,
+    "exposureMillis": 120000,
+    "sha256": "16b0a1acc104f00aff0671c33b5398c121e46ed73f93f2af0216a02504043e3d"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 23,
+    "captureMillis": 1773113629118,
+    "exposureMillis": 120000,
+    "sha256": "60ebcf49b773c363f4a93e1c857c7422395c94f9c0081c851fdd0e23b3db3c25"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 24,
+    "captureMillis": 1773113894853,
+    "exposureMillis": 120000,
+    "sha256": "a846ec2cc40de7d414bcb85988dd2db27464d81d8e224546aca643c14b116278"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 25,
+    "captureMillis": 1773114027289,
+    "exposureMillis": 120000,
+    "sha256": "1bccb23d2dfec96098d8794f43c50474b3d9a61302085ada6c9eecd16263a476"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 26,
+    "captureMillis": 1773114171392,
+    "exposureMillis": 120000,
+    "sha256": "5af8e8a8c9fc6c7205d4bbb90a71974c81cb6828b470fa48b978ac37d4f7af8f"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 27,
+    "captureMillis": 1773114305306,
+    "exposureMillis": 120000,
+    "sha256": "97f351ad7a00ef341316e5797e8250f189a3b4dbdceb9c564868d51652a27b77"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 28,
+    "captureMillis": 1773114446550,
+    "exposureMillis": 120000,
+    "sha256": "2aa703c2e55ca027cf054ed607a5899d2eb4829d5eabf4d5e6138321f85c9d89"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 29,
+    "captureMillis": 1773114580382,
+    "exposureMillis": 120000,
+    "sha256": "81e78e6b276cd397e95308d5ee14c3426b1219248ad35a42107541fd848dbbc3"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 30,
+    "captureMillis": 1773114722740,
+    "exposureMillis": 120000,
+    "sha256": "8eb06041f3d7c9261af9b46e6b75ccc519ba768abe03213aa72b8cf56b7c0adf"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 31,
+    "captureMillis": 1773114866822,
+    "exposureMillis": 120000,
+    "sha256": "83ee6c19f823e2aeae70baa38b2fb7cf7ac532bdc6cb72034c040dfd57ee4881"
+  },
+  {
+    "dataset": "klangwolke-2",
+    "sequenceIndex": 32,
+    "captureMillis": 1773115001736,
+    "exposureMillis": 120000,
+    "sha256": "b06244e1e9b383cad98438c5886249e3d8cc21c0d0f2a9ede1744e28451a9353"
+  },
+  {
+    "dataset": "Apophis",
+    "sequenceIndex": 0,
+    "captureMillis": 1615056848162,
+    "exposureMillis": 60000,
+    "sha256": "ef2838d76fa7660abb44d0b7a18db9b2ec676636b9f1f17d33fc698996a64687"
+  },
+  {
+    "dataset": "Apophis",
+    "sequenceIndex": 1,
+    "captureMillis": 1615056924628,
+    "exposureMillis": 60000,
+    "sha256": "52448ce2393c46deafba44bf63a8c5194014687625def1507e9acc1d8f7757d2"
+  },
+  {
+    "dataset": "Apophis",
+    "sequenceIndex": 2,
+    "captureMillis": 1615057002419,
+    "exposureMillis": 60000,
+    "sha256": "29976290034c0aa4dcf2c3469f79f7b169719a48c6f17a04ce4c08ae9a1ac7f6"
+  },
+  {
+    "dataset": "Apophis",
+    "sequenceIndex": 3,
+    "captureMillis": 1615057081118,
+    "exposureMillis": 60000,
+    "sha256": "81cce879803541b6cdc61325a29e8de36bccf62afed60d7044f56d2048ee6f6f"
+  },
+  {
+    "dataset": "Apophis",
+    "sequenceIndex": 4,
+    "captureMillis": 1615057158229,
+    "exposureMillis": 60000,
+    "sha256": "d0687fe5986cb9bffe84fb51dd3f9f10420bb878cfa6f80a24039ad54d8aade8"
+  },
+  {
+    "dataset": "Apophis",
+    "sequenceIndex": 5,
+    "captureMillis": 1615057234837,
+    "exposureMillis": 60000,
+    "sha256": "23867d17e86eb3f02894142a57b78b250740b7dae1a8726fe879736d3df4a3da"
+  },
+  {
+    "dataset": "Apophis",
+    "sequenceIndex": 6,
+    "captureMillis": 1615057312386,
+    "exposureMillis": 60000,
+    "sha256": "833d49e24ea658ee660c0a0208c6a5351f53536261fe1d36d85f557b029fba7a"
+  },
+  {
+    "dataset": "Apophis",
+    "sequenceIndex": 7,
+    "captureMillis": 1615057389407,
+    "exposureMillis": 60000,
+    "sha256": "a58c527e609db81b0b833a92c4e6d1bcf5b7c087ab804eda35d4cf821d7837b2"
+  },
+  {
+    "dataset": "Apophis",
+    "sequenceIndex": 8,
+    "captureMillis": 1615057466004,
+    "exposureMillis": 60000,
+    "sha256": "8df7d6243f1ad49d7a0349e1c5f7e09c795cd3626f911cee2d5a2e7e92ae22fd"
+  },
+  {
+    "dataset": "Apophis",
+    "sequenceIndex": 9,
+    "captureMillis": 1615057542803,
+    "exposureMillis": 60000,
+    "sha256": "7ce67d9a3e864c509fd263a7fb752164855956a4cb42cc841d91b2c66e5d4adb"
+  },
+  {
+    "dataset": "Apophis",
+    "sequenceIndex": 10,
+    "captureMillis": 1615057620158,
+    "exposureMillis": 60000,
+    "sha256": "2a6877dad57a7bf222407348c2f2e9e043eace025233cacf63c303eabbe1237d"
+  },
+  {
+    "dataset": "Apophis",
+    "sequenceIndex": 11,
+    "captureMillis": 1615057697920,
+    "exposureMillis": 60000,
+    "sha256": "3ddf07cfad44d69962c819ef4bca0311568168b3ce2a7f58c3cb246e0e015097"
+  },
+  {
+    "dataset": "Apophis",
+    "sequenceIndex": 12,
+    "captureMillis": 1615057775713,
+    "exposureMillis": 60000,
+    "sha256": "304c52e48e5225f255cd21d87c855a722f2461dda0b82484a75224c40b1f3725"
+  },
+  {
+    "dataset": "Apophis",
+    "sequenceIndex": 13,
+    "captureMillis": 1615057853494,
+    "exposureMillis": 60000,
+    "sha256": "c9e248f2a0a03d25b82a0938d490b1898736667a61620b60efa41e9716910735"
+  },
+  {
+    "dataset": "Apophis",
+    "sequenceIndex": 14,
+    "captureMillis": 1615057930305,
+    "exposureMillis": 60000,
+    "sha256": "1df65f1201bef4a7b110e6459f6084e47669c7c3ff73f7c23d1ba9a699002c77"
+  },
+  {
+    "dataset": "Africano",
+    "sequenceIndex": 0,
+    "captureMillis": 1569106590000,
+    "exposureMillis": 30000,
+    "sha256": "57f3ef08a01cd5ace650ad536f30166c4948ae8309b7de889f451d984c3b661e"
+  },
+  {
+    "dataset": "Africano",
+    "sequenceIndex": 1,
+    "captureMillis": 1569106980000,
+    "exposureMillis": 30000,
+    "sha256": "98bf7adaef5b544dfd1d6c9011dbd1f1b4d745f02fc23b88a3979822cc1f82de"
+  },
+  {
+    "dataset": "Africano",
+    "sequenceIndex": 2,
+    "captureMillis": 1569107438000,
+    "exposureMillis": 30000,
+    "sha256": "7987afbda2066579b08a2bd85dc47c6ac75773f12a1c8a958988bd6672e61616"
+  },
+  {
+    "dataset": "Africano",
+    "sequenceIndex": 3,
+    "captureMillis": 1569107881000,
+    "exposureMillis": 30000,
+    "sha256": "5e5b20485ff6a3acebd0f9f800b24c00d23fb6e85ad5e182a3df15ee90314df6"
+  },
+  {
+    "dataset": "Africano",
+    "sequenceIndex": 4,
+    "captureMillis": 1569108464000,
+    "exposureMillis": 30000,
+    "sha256": "4cb71d6c9307478f35facadf0731c998592e457b4bc7f530d098dd0b29d73ecd"
+  },
+  {
+    "dataset": "Africano",
+    "sequenceIndex": 5,
+    "captureMillis": 1569109052000,
+    "exposureMillis": 30000,
+    "sha256": "1d494f116c4372fcc837c06d1cc78b8f4fee443b6a8cf0a37968e61ec13c90a0"
+  },
+  {
+    "dataset": "Africano",
+    "sequenceIndex": 6,
+    "captureMillis": 1569109551000,
+    "exposureMillis": 30000,
+    "sha256": "e35df0c10f9e477eeef44d4ee1c73aee0377ece6b05ed4c40ee83fb24ae19d23"
+  },
+  {
+    "dataset": "Africano",
+    "sequenceIndex": 7,
+    "captureMillis": 1569110104000,
+    "exposureMillis": 30000,
+    "sha256": "b33137e208372080d5893ae806bf8bb52fd8df1a9525f8e6e1245545d27c1437"
+  },
+  {
+    "dataset": "Africano",
+    "sequenceIndex": 8,
+    "captureMillis": 1569110683000,
+    "exposureMillis": 30000,
+    "sha256": "e309f21807428fe3d2af6aeb14616c816c450e523ba4618d6f060490f4f8b48b"
+  },
+  {
+    "dataset": "Africano",
+    "sequenceIndex": 9,
+    "captureMillis": 1569111066000,
+    "exposureMillis": 30000,
+    "sha256": "68f61dd2297a27ba7c777ffc1c01ea113755a10b69b635ad6ee92395ba73a6f4"
+  },
+  {
+    "dataset": "Africano",
+    "sequenceIndex": 10,
+    "captureMillis": 1569111644000,
+    "exposureMillis": 30000,
+    "sha256": "910cf13efc25ae11051b274e33e9cc5ae57993b28f1880f50be70da98fdd9683"
+  },
+  {
+    "dataset": "Africano",
+    "sequenceIndex": 11,
+    "captureMillis": 1569112212000,
+    "exposureMillis": 30000,
+    "sha256": "441419d152794e0e133560c0ff0f15c5a37a3841deda8975a5b0cd1d3ead46d8"
+  },
+  {
+    "dataset": "Africano",
+    "sequenceIndex": 12,
+    "captureMillis": 1569113003000,
+    "exposureMillis": 30000,
+    "sha256": "3d09998b5c427a4eb6411da5c35c7da4e220d8030eafc23064858d528804d829"
+  },
+  {
+    "dataset": "Africano",
+    "sequenceIndex": 13,
+    "captureMillis": 1569113600000,
+    "exposureMillis": 30000,
+    "sha256": "7259f3d79856b327964ec8c28f8b3beb6119a32d009462b82706860dc15c50dd"
+  },
+  {
+    "dataset": "Africano",
+    "sequenceIndex": 14,
+    "captureMillis": 1569114603000,
+    "exposureMillis": 30000,
+    "sha256": "437bba85ed4e043f1b35b414bd357cc0bb50f71991a2106c061f512417b71e5d"
+  },
+  {
+    "dataset": "Africano",
+    "sequenceIndex": 15,
+    "captureMillis": 1569115343000,
+    "exposureMillis": 30000,
+    "sha256": "609557274c57ac8f92a80e396e017e2385940bfa4917f288888ea45b1c9a7eee"
+  },
+  {
+    "dataset": "Africano",
+    "sequenceIndex": 16,
+    "captureMillis": 1569115909000,
+    "exposureMillis": 30000,
+    "sha256": "d57b27d56d64ac9e0dcbb346f1d31fade19880d8c15c4a34916210d1410f5b9f"
+  },
+  {
+    "dataset": "Africano",
+    "sequenceIndex": 17,
+    "captureMillis": 1569116665000,
+    "exposureMillis": 30000,
+    "sha256": "e38eeb34d6889b1dd7aecff8483611ed74dba8fb43d8e8e4d56d0fd5cd82deb1"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 0,
+    "captureMillis": 1569117878000,
+    "exposureMillis": 60000,
+    "sha256": "ff7e51f4cdee5ae7281878a89b02833c4e081bbfec7e1e7ebb96d6474cf4590e"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 1,
+    "captureMillis": 1569117968000,
+    "exposureMillis": 60000,
+    "sha256": "d3f6de8796bd092d79322e6af2f66c0493c0e42150799a04cd5ea32e27edf9e7"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 2,
+    "captureMillis": 1569118073000,
+    "exposureMillis": 60000,
+    "sha256": "012068303944f53b532130393c4044818c87fe4541bceff9976af9b2ad585e9d"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 3,
+    "captureMillis": 1569118169000,
+    "exposureMillis": 60000,
+    "sha256": "b126efa83d1eb212a48a198f678ff1ed258576af394793740742e0a071faab99"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 4,
+    "captureMillis": 1569118263000,
+    "exposureMillis": 60000,
+    "sha256": "29262ff480f261c069fcab896de85ae8b5872f94d730eb408622e77ad6697ad6"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 5,
+    "captureMillis": 1569118360000,
+    "exposureMillis": 60000,
+    "sha256": "d3207bfd84f1fadd4c1244addab0d57f73a6062f5ed97a39a9fb06dc882c6ef9"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 6,
+    "captureMillis": 1569118451000,
+    "exposureMillis": 60000,
+    "sha256": "6892472eb88389059a785f3d4c38b0c31328a2677a5a348a27046c7f33cb9626"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 7,
+    "captureMillis": 1569118541000,
+    "exposureMillis": 60000,
+    "sha256": "885f93845c8d96993fb5849ffae3a02946f7777678ebc14ebe4e4969eda26302"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 8,
+    "captureMillis": 1569118632000,
+    "exposureMillis": 60000,
+    "sha256": "61f1e9d1fd2ff3cbf6594c21afdaf5218107a08d5fc2bf47de19c96920bcaf44"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 9,
+    "captureMillis": 1569118723000,
+    "exposureMillis": 60000,
+    "sha256": "e4034f866d3064f9c4a3f4c5462070ab1dec4fca199c84e623f020d889097443"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 10,
+    "captureMillis": 1569118814000,
+    "exposureMillis": 60000,
+    "sha256": "ede5215c93c1761ea563c957443cc6986241a24c1e81b9dfaa59238c64c55229"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 11,
+    "captureMillis": 1569118900000,
+    "exposureMillis": 60000,
+    "sha256": "138ed93a434cafff5585b43c21ae5e616faaed302ed536b4cff8c210775f9066"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 12,
+    "captureMillis": 1569118995000,
+    "exposureMillis": 60000,
+    "sha256": "fb488e0ce2bdce8ecd3cbd99f2d8f326c3f193414a173537bbba5b9e0d012fe9"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 13,
+    "captureMillis": 1569119090000,
+    "exposureMillis": 60000,
+    "sha256": "4f22bdafef895d515ede58ecebff82922bda198e89d4d839d4a60f352464972b"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 14,
+    "captureMillis": 1569119187000,
+    "exposureMillis": 60000,
+    "sha256": "d95810f77aab9ec7a4c3adc2076f68d7e5f79afe3a370b791372e15f5e3ca4b3"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 15,
+    "captureMillis": 1569119278000,
+    "exposureMillis": 60000,
+    "sha256": "0a7c03624dba56e452b4a6ca8c49a971ca942c90dee8ae059f781586744e2f47"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 16,
+    "captureMillis": 1569119373000,
+    "exposureMillis": 60000,
+    "sha256": "a64a7b4b4cdabb4e1cd121fbf42985afc2df23c19ffc767acc92185f263eaa71"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 17,
+    "captureMillis": 1569119463000,
+    "exposureMillis": 60000,
+    "sha256": "4077746e34deb0a9c423f2bf7c8b717a00dd1470558005ae7af2c6d3679cb2db"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 18,
+    "captureMillis": 1569119565000,
+    "exposureMillis": 60000,
+    "sha256": "ea9cdc53925b2263af25130141e78fc80e49987e1ae30b10bd4b7ad65afb4e50"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 19,
+    "captureMillis": 1569119657000,
+    "exposureMillis": 60000,
+    "sha256": "d7ec9fdb7b0955b84509a801ede4aed2d18da670082f1f4494eae1df38d59db9"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 20,
+    "captureMillis": 1569119762000,
+    "exposureMillis": 60000,
+    "sha256": "62a51b5482e6b5575b7b0b71d0f69dabbd2f85e0b07b770398007ef0b0e1061c"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 21,
+    "captureMillis": 1569119850000,
+    "exposureMillis": 60000,
+    "sha256": "67aa598011d227f35c4aead899122cc0f5ae561b3d4f288942dbe9c15f802be5"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 22,
+    "captureMillis": 1569119950000,
+    "exposureMillis": 60000,
+    "sha256": "fefd1f4f8eccc84868517e74cba72910419666db957d855b7a3fecaa8749bc8d"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 23,
+    "captureMillis": 1569120040000,
+    "exposureMillis": 60000,
+    "sha256": "b22771e4b9eb7b4f5592474aa2abbfa6fca428ab578d6b161a5ad8a6cd7ec951"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 24,
+    "captureMillis": 1569120131000,
+    "exposureMillis": 60000,
+    "sha256": "e16deaf8cd7693148f804d5dfa69029f02cdd2cadef963072041050edf1613a1"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 25,
+    "captureMillis": 1569120218000,
+    "exposureMillis": 60000,
+    "sha256": "61da2f4246fd5370b257fa29f7933b35a847ed177b36f406ebb39dff412dc525"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 26,
+    "captureMillis": 1569120313000,
+    "exposureMillis": 60000,
+    "sha256": "10bd2aaaff3dfd06412c451c815a19cc628955b43f25d8308d8b1a41b14dd988"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 27,
+    "captureMillis": 1569120405000,
+    "exposureMillis": 60000,
+    "sha256": "4ed1d2deae9e43319fc880d9d1a6dc792929fec17c876da28aeb7603ae8e6f95"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 28,
+    "captureMillis": 1569120497000,
+    "exposureMillis": 60000,
+    "sha256": "d1c961be61ddd8b2f63ababf6fbf096474fccfb89d6b45719b01626c16b526f7"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 29,
+    "captureMillis": 1569120588000,
+    "exposureMillis": 60000,
+    "sha256": "9a7f9e076f51bf569f1615d553f8cdc0be5b089f17fbce60cce12264635ca326"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 30,
+    "captureMillis": 1569120678000,
+    "exposureMillis": 60000,
+    "sha256": "c979408238584857a5c36a887e4a6c1a81cbb6dd969e3f9cda63a1a64a9a6a21"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 31,
+    "captureMillis": 1569120774000,
+    "exposureMillis": 60000,
+    "sha256": "43e6ef60bc31019b01db97991d94a0f19a00d28b4e78402f79d68600af1c50e7"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 32,
+    "captureMillis": 1569120870000,
+    "exposureMillis": 60000,
+    "sha256": "256a78fb05ba22d391275fb9bff0f026c188224ca7ea2b575f838427c5f7609b"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 33,
+    "captureMillis": 1569120964000,
+    "exposureMillis": 60000,
+    "sha256": "263d21bd0261895e4e074e3aca735fdc839260c69d8bacf60f6ae44b43e43e81"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 34,
+    "captureMillis": 1569121057000,
+    "exposureMillis": 60000,
+    "sha256": "5a9df4c95821974877f5fda210478bbf1722fd0b20fdee7115aa23a87af493cd"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 35,
+    "captureMillis": 1569121152000,
+    "exposureMillis": 60000,
+    "sha256": "35c2c175cfb84176d0e6e88ecd012192648a827995427cd385480ab4ebaa5d04"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 36,
+    "captureMillis": 1569121244000,
+    "exposureMillis": 60000,
+    "sha256": "a7bc02802c43513ffb8766956b53dc338227c9ccce24ed31b4dfc5bcc5bedadb"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 37,
+    "captureMillis": 1569121334000,
+    "exposureMillis": 60000,
+    "sha256": "253c054db05f9d9755dffb125152d54f9312ddc835e6a45f6360cff0e40a85fa"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 38,
+    "captureMillis": 1569121438000,
+    "exposureMillis": 60000,
+    "sha256": "872c2a8862ba913b6fec83b33fea6b03ff85f3a920328a0f6d8f08cbf89ba479"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 39,
+    "captureMillis": 1569121528000,
+    "exposureMillis": 60000,
+    "sha256": "fbd23ae69a91c1ddad31e2eb7a4b54650ca12e60a97ae56299f107f0b9af1124"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 40,
+    "captureMillis": 1569121620000,
+    "exposureMillis": 60000,
+    "sha256": "a46248d46f8b43c39cf0ff2af308f67ac4f56bf80375685fe49383d531d3aa17"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 41,
+    "captureMillis": 1569121715000,
+    "exposureMillis": 60000,
+    "sha256": "defc7b1d5ab2470aa446b2e0b8b67ad209570bec878582fb8de64359e09c906f"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 42,
+    "captureMillis": 1569121809000,
+    "exposureMillis": 60000,
+    "sha256": "c33238515935f7ff99389c3abdb25e5dd874dc7ed7a6600c49e6bce16e26df6e"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 43,
+    "captureMillis": 1569121900000,
+    "exposureMillis": 60000,
+    "sha256": "631ebfe8d3656cc3fa9ac26baf64ef60b3440f94a4c973229f96cfe9898d9977"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 44,
+    "captureMillis": 1569121994000,
+    "exposureMillis": 60000,
+    "sha256": "7d283f7a906d647405f1726cb3f8789142f400ffea027d78ecf0682cca4d05cd"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 45,
+    "captureMillis": 1569122084000,
+    "exposureMillis": 60000,
+    "sha256": "6d8f01c899576b7b3eebc0605edec8c3c9d4d533c354f2122debac3398e21b94"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 46,
+    "captureMillis": 1569122174000,
+    "exposureMillis": 60000,
+    "sha256": "86ec5f2da3f2718b86c9143ea365b42468c7449398e6251ce73bd2e942b5e890"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 47,
+    "captureMillis": 1569122265000,
+    "exposureMillis": 60000,
+    "sha256": "7ca5ce846b5ad4cf6b61d180f6610828c94603ca06ba92b6107fab3edd9feb2d"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 48,
+    "captureMillis": 1569122371000,
+    "exposureMillis": 60000,
+    "sha256": "9658a8670c0d2904bdb57cac5ec212f5099e156fa96aa8c5eec46a42f0eb1e4e"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 49,
+    "captureMillis": 1569122461000,
+    "exposureMillis": 60000,
+    "sha256": "f657357cf1201ed03f69d83caa560d1f3a7966daa0ec982dede8133d1ff10929"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 50,
+    "captureMillis": 1569122552000,
+    "exposureMillis": 60000,
+    "sha256": "e50f52b4f26a1f12dd8b2587535bf1e1b8130bb5c804dc879175f77311a99be6"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 51,
+    "captureMillis": 1569122647000,
+    "exposureMillis": 60000,
+    "sha256": "60fa891f4b3fb41487ca25a7149a131e4ccc9abb1de6018c49e7b9d7ccde151f"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 52,
+    "captureMillis": 1569122742000,
+    "exposureMillis": 60000,
+    "sha256": "81ab3436ba2a9d508825a1b3c06e7300d30f67a651bceaca5f691609c3663029"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 53,
+    "captureMillis": 1569122833000,
+    "exposureMillis": 60000,
+    "sha256": "7ed5af5fc854b4553e503014a43805a81cac57c4c821b78a7c4f423f79200b0a"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 54,
+    "captureMillis": 1569122924000,
+    "exposureMillis": 60000,
+    "sha256": "10a7311020f071dc313935354531e69ef117b8827322dcb182e91efc7795611b"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 55,
+    "captureMillis": 1569123014000,
+    "exposureMillis": 60000,
+    "sha256": "0a69b7f5f9092713b43f1b3c1040db7733e953ca1992e3a088ae2adfc228606f"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 56,
+    "captureMillis": 1569123109000,
+    "exposureMillis": 60000,
+    "sha256": "c6365b7bf1c652e7842c1a455f21a419b181e68a47949f872846e517d794b067"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 57,
+    "captureMillis": 1569123199000,
+    "exposureMillis": 60000,
+    "sha256": "9a5248b0a4a7e6e8481222ec825bdc2cd87ce4710ad82063c86f626687a60cdb"
+  },
+  {
+    "dataset": "dc-reg",
+    "sequenceIndex": 58,
+    "captureMillis": 1569123289000,
+    "exposureMillis": 60000,
+    "sha256": "d0493e11adb5583d49dd156709ed632b03add2957d3b3710be19ebe1cabb7c0f"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 0,
+    "captureMillis": 1591469893000,
+    "exposureMillis": 120000,
+    "sha256": "10e3f4da2e8016e624a3f0127a2ec764d7cb63d69146a7cd3fc3be61e9b82034"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 1,
+    "captureMillis": 1591470061000,
+    "exposureMillis": 120000,
+    "sha256": "08b610bf7fd58f8a19e237076806700ca0ef77909aa8a4b4aab7bdf2b9dba0dd"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 2,
+    "captureMillis": 1591470206000,
+    "exposureMillis": 120000,
+    "sha256": "8380d7446e678096dec52bb5af39711faae3d9ba7a5c40f424ecdea1c80a8964"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 3,
+    "captureMillis": 1591470351000,
+    "exposureMillis": 120000,
+    "sha256": "aa056c1424d87f5786258160ef314fed96011afe22ee6f71a8acb4d67e4a4d44"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 4,
+    "captureMillis": 1591470504000,
+    "exposureMillis": 120000,
+    "sha256": "fa39586ca62598d5cc07b7b81963d4229bdc7c33409b4b17dd08f889e098c1ef"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 5,
+    "captureMillis": 1591470652000,
+    "exposureMillis": 120000,
+    "sha256": "8fdf356413015cc327a921fb7c1cadffb70bf9e8350a9501b26d1c35acacc71c"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 6,
+    "captureMillis": 1591470799000,
+    "exposureMillis": 120000,
+    "sha256": "9fd7970dea400ff1fe252a3d9ae645857035a30bc873d330b77e316d4c5b9650"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 7,
+    "captureMillis": 1591470984000,
+    "exposureMillis": 120000,
+    "sha256": "0e0c6c0a3e191c79322557c32493e4f1f0e7d1cac46980de982e1291f8b16910"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 8,
+    "captureMillis": 1591471164000,
+    "exposureMillis": 120000,
+    "sha256": "2d71185843aeb8aabe04d82b6d2a6ae8addc78c14ea8ff4ce3712068b58ab3d0"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 9,
+    "captureMillis": 1591471326000,
+    "exposureMillis": 120000,
+    "sha256": "f5321ecbbb6304cad263e6c859a4494d317e3b417f04d5e59d33394c6c238c94"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 10,
+    "captureMillis": 1591471477000,
+    "exposureMillis": 120000,
+    "sha256": "0b29bd4c8824b10bac6d9c085541286b984e43f4204fc7e75388ec5756b3fd9d"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 11,
+    "captureMillis": 1591471647000,
+    "exposureMillis": 120000,
+    "sha256": "fc4e2dbbb3fbe89a43198310ed8de6f904221f9d49cc843bc3fa550b443da75a"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 12,
+    "captureMillis": 1591471805000,
+    "exposureMillis": 120000,
+    "sha256": "41560e6e5f6754e9cb141db561c0cc0b966a43ec43fbdf91efab76e607726c84"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 13,
+    "captureMillis": 1591471949000,
+    "exposureMillis": 120000,
+    "sha256": "a3ac923adc27ec63ec73643dc0198a417aa0e8ed9e9e464e5dbe0c4bf1bcc924"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 14,
+    "captureMillis": 1591472273000,
+    "exposureMillis": 120000,
+    "sha256": "e0b842fb854d1b65119040c59a0fd3dca22571b9189c06c1e5978ff43fc301b1"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 15,
+    "captureMillis": 1591472439000,
+    "exposureMillis": 120000,
+    "sha256": "fef076841aac511b8a1e28bdb1f8b7465902e84293e08c9aeb7f70c3f11dfa87"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 16,
+    "captureMillis": 1591472623000,
+    "exposureMillis": 120000,
+    "sha256": "743df298626630240ad4d601ddd02ab60751250936eaf55c22541539875d3955"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 17,
+    "captureMillis": 1591472780000,
+    "exposureMillis": 120000,
+    "sha256": "74f3ca3f2a1e1a4cb5436223e30d1127e3cf04d6f1b52763d36dd085c70f7265"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 18,
+    "captureMillis": 1591472950000,
+    "exposureMillis": 120000,
+    "sha256": "4e555653330be5496996a6246327a17ffdb7177dffaf42ce32db32c35039433a"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 19,
+    "captureMillis": 1591473128000,
+    "exposureMillis": 120000,
+    "sha256": "f7e8d557a32aab65ca7f9634d772590fc35a6d2bc2a897f9352ec67c3470ae8c"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 20,
+    "captureMillis": 1591473288000,
+    "exposureMillis": 120000,
+    "sha256": "a21f7323a29492c03a37fa15af17161ad272f8702a781930daccec5c87743400"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 21,
+    "captureMillis": 1591473466000,
+    "exposureMillis": 120000,
+    "sha256": "4f162e7241e1f0c632931ddaabedef764663680d278e2f90271799fc191a0f86"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 22,
+    "captureMillis": 1591473615000,
+    "exposureMillis": 120000,
+    "sha256": "2d8e74ed32152a4786d8171fc6dca8181b1f34f82b377c3155261295556365eb"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 23,
+    "captureMillis": 1591473762000,
+    "exposureMillis": 120000,
+    "sha256": "639baafaf00dcfa52a4bf6ae15435915be5c1b95e42b96336f0f009f2bb4f540"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 24,
+    "captureMillis": 1591473932000,
+    "exposureMillis": 120000,
+    "sha256": "eae58311979b037bf2f3867f614cff68450bd3da38c7832673e04b6863c9de1c"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 25,
+    "captureMillis": 1591474112000,
+    "exposureMillis": 120000,
+    "sha256": "81a20c4d954517d26bc3eb59c52ab4e5da9e0159801a4b0f1739f36bfe10919b"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 26,
+    "captureMillis": 1591474297000,
+    "exposureMillis": 120000,
+    "sha256": "32361bcdbf2e99af0b76faf8633eb300b165d6c11d78a95144157bcc2aed2019"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 27,
+    "captureMillis": 1591474451000,
+    "exposureMillis": 120000,
+    "sha256": "1a4690a1ee6ce9d175035c7d016369d1b5ec4f66b264ea80190b8d3173a30e1b"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 28,
+    "captureMillis": 1591474610000,
+    "exposureMillis": 120000,
+    "sha256": "7cc51732851b14e857ca8a3258d4e3afd28378be4398de3542f0d1700d53e522"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 29,
+    "captureMillis": 1591474754000,
+    "exposureMillis": 120000,
+    "sha256": "cade3f017e3ad1edd7637b5bb93f7a9b6bb90105d9278059f6488c84d1fad852"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 30,
+    "captureMillis": 1591474901000,
+    "exposureMillis": 120000,
+    "sha256": "93d7671d9a04e330106f62a447901bff348d77b5c89aa8f961e746acabad2f60"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 31,
+    "captureMillis": 1591475065000,
+    "exposureMillis": 120000,
+    "sha256": "2fff0aa209fb623bff6d92e39d3b7c75563d841f571e1b83028353b3346274a2"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 32,
+    "captureMillis": 1591475224000,
+    "exposureMillis": 120000,
+    "sha256": "3c9439c71891e49098b7db4dc4e3d2f786f30cdbca1e50588fb2d1a3a8f0d79d"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 33,
+    "captureMillis": 1591475383000,
+    "exposureMillis": 120000,
+    "sha256": "4678216cf8337b8ac1442511b76998e032cefe2e35f08b7ec9d4a657c59ceaf0"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 34,
+    "captureMillis": 1591475546000,
+    "exposureMillis": 120000,
+    "sha256": "66baab3c1a128a35fee526233daaddd267af08bfaa8db031c7bad320bab86cd9"
+  },
+  {
+    "dataset": "m5-reg",
+    "sequenceIndex": 35,
+    "captureMillis": 1591475702000,
+    "exposureMillis": 120000,
+    "sha256": "92b64ebc3e1cf1eef9fa83b0bae183f843c5d13631ce7142839a126cd09d1605"
+  }
+]

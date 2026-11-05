@@ -1,0 +1,30 @@
+{
+  "complete": true,
+  "selectedBatches": 6,
+  "selectedSources": 6,
+  "completedBatches": 6,
+  "availableBatches": 6,
+  "targetRows": 6,
+  "fullPipelineIncrements": 5,
+  "classificationCounts": {
+    "conditional gain not retained": 1,
+    "retained full-pipeline increment": 5
+  },
+  "resources": [
+    {
+      "dataset": "dc-reg",
+      "phase": "targeted-full-upstream",
+      "exitCode": 0,
+      "elapsedSeconds": 196.06200000003446,
+      "peakWorkingSetGiB": 4.1383056640625
+    },
+    {
+      "dataset": "m5-reg",
+      "phase": "targeted-full-upstream",
+      "exitCode": 0,
+      "elapsedSeconds": 24.015999999945052,
+      "peakWorkingSetGiB": 0.9623603820800781
+    }
+  ],
+  "scope": "Selected same histories/observations only, not independent validation. No source photon noise or calibrated magnitude."
+}

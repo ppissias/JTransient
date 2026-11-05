@@ -1,0 +1,210 @@
+{
+  "cases": [
+    {
+      "case": 1,
+      "replayExact": true,
+      "selected": false,
+      "sourceCompatibleVerifiedProposals": 0,
+      "localOracleCompatible": false,
+      "stage": "local-verifier: camera",
+      "exactPathScore": 6.379825865396265,
+      "unmaskedFrames": 11,
+      "referenceBad": false,
+      "firstHalf": null,
+      "secondHalf": 6.854822112217384,
+      "oraclePassedFinalSelection": null,
+      "oracleFinalReasons": []
+    },
+    {
+      "case": 2,
+      "replayExact": true,
+      "selected": false,
+      "sourceCompatibleVerifiedProposals": 0,
+      "localOracleCompatible": false,
+      "stage": "local-verifier: camera",
+      "exactPathScore": 10.701327004062843,
+      "unmaskedFrames": 11,
+      "referenceBad": false,
+      "firstHalf": null,
+      "secondHalf": 12.998526115441638,
+      "oraclePassedFinalSelection": null,
+      "oracleFinalReasons": []
+    },
+    {
+      "case": 3,
+      "replayExact": true,
+      "selected": false,
+      "sourceCompatibleVerifiedProposals": 0,
+      "localOracleCompatible": false,
+      "stage": "local-verifier: camera",
+      "exactPathScore": 8.343335106872393,
+      "unmaskedFrames": 28,
+      "referenceBad": false,
+      "firstHalf": 6.716293618391747,
+      "secondHalf": 6.108164168840095,
+      "oraclePassedFinalSelection": null,
+      "oracleFinalReasons": []
+    },
+    {
+      "case": 4,
+      "replayExact": true,
+      "selected": false,
+      "sourceCompatibleVerifiedProposals": 0,
+      "localOracleCompatible": true,
+      "stage": "proposal",
+      "exactPathScore": 16.136405460451424,
+      "unmaskedFrames": 28,
+      "referenceBad": false,
+      "firstHalf": 11.233563488362137,
+      "secondHalf": 12.210560743866564,
+      "oraclePassedFinalSelection": true,
+      "oracleFinalReasons": [
+        "selected"
+      ]
+    },
+    {
+      "case": 5,
+      "replayExact": true,
+      "selected": true,
+      "sourceCompatibleVerifiedProposals": 1,
+      "localOracleCompatible": true,
+      "stage": "selected",
+      "exactPathScore": 16.929798880846263,
+      "unmaskedFrames": 28,
+      "referenceBad": false,
+      "firstHalf": 7.700879390041859,
+      "secondHalf": 16.241471795499766,
+      "oraclePassedFinalSelection": true,
+      "oracleFinalReasons": [
+        "selected"
+      ]
+    },
+    {
+      "case": 6,
+      "replayExact": true,
+      "selected": true,
+      "sourceCompatibleVerifiedProposals": 1,
+      "localOracleCompatible": true,
+      "stage": "selected",
+      "exactPathScore": 26.17452130134152,
+      "unmaskedFrames": 28,
+      "referenceBad": false,
+      "firstHalf": 13.524166693617108,
+      "secondHalf": 23.492196319363543,
+      "oraclePassedFinalSelection": true,
+      "oracleFinalReasons": [
+        "selected"
+      ]
+    },
+    {
+      "case": 7,
+      "replayExact": true,
+      "selected": false,
+      "sourceCompatibleVerifiedProposals": 0,
+      "localOracleCompatible": false,
+      "stage": "local-refinement/source-confusion",
+      "exactPathScore": 21.754574076214308,
+      "unmaskedFrames": 24,
+      "referenceBad": false,
+      "firstHalf": 9.58692319339681,
+      "secondHalf": 27.474949984955792,
+      "oraclePassedFinalSelection": false,
+      "oracleFinalReasons": [
+        "sidelobe"
+      ]
+    },
+    {
+      "case": 8,
+      "replayExact": true,
+      "selected": false,
+      "sourceCompatibleVerifiedProposals": 0,
+      "localOracleCompatible": false,
+      "stage": "local-refinement/source-confusion",
+      "exactPathScore": 27.079531568996266,
+      "unmaskedFrames": 24,
+      "referenceBad": false,
+      "firstHalf": 14.19946443933815,
+      "secondHalf": 28.686604473182783,
+      "oraclePassedFinalSelection": false,
+      "oracleFinalReasons": [
+        "sidelobe"
+      ]
+    },
+    {
+      "case": 9,
+      "replayExact": true,
+      "selected": false,
+      "sourceCompatibleVerifiedProposals": 0,
+      "localOracleCompatible": false,
+      "stage": "local-verifier: score",
+      "exactPathScore": 6.593735827653552,
+      "unmaskedFrames": 17,
+      "referenceBad": false,
+      "firstHalf": 5.78344267710386,
+      "secondHalf": 6.201482879612221,
+      "oraclePassedFinalSelection": null,
+      "oracleFinalReasons": []
+    },
+    {
+      "case": 10,
+      "replayExact": true,
+      "selected": false,
+      "sourceCompatibleVerifiedProposals": 0,
+      "localOracleCompatible": true,
+      "stage": "proposal",
+      "exactPathScore": 11.456051641352806,
+      "unmaskedFrames": 16,
+      "referenceBad": false,
+      "firstHalf": 9.915616683140566,
+      "secondHalf": 11.668850780091434,
+      "oraclePassedFinalSelection": true,
+      "oracleFinalReasons": [
+        "selected"
+      ]
+    },
+    {
+      "case": 11,
+      "replayExact": true,
+      "selected": false,
+      "sourceCompatibleVerifiedProposals": 0,
+      "localOracleCompatible": true,
+      "stage": "proposal",
+      "exactPathScore": 11.222530345789753,
+      "unmaskedFrames": 25,
+      "referenceBad": false,
+      "firstHalf": 6.415483126227836,
+      "secondHalf": 11.174805799848066,
+      "oraclePassedFinalSelection": true,
+      "oracleFinalReasons": [
+        "selected"
+      ]
+    },
+    {
+      "case": 12,
+      "replayExact": true,
+      "selected": true,
+      "sourceCompatibleVerifiedProposals": 1,
+      "localOracleCompatible": true,
+      "stage": "selected",
+      "exactPathScore": 18.525371177813483,
+      "unmaskedFrames": 25,
+      "referenceBad": false,
+      "firstHalf": 10.488027599803443,
+      "secondHalf": 17.675640295560676,
+      "oraclePassedFinalSelection": false,
+      "oracleFinalReasons": [
+        "duplicate"
+      ]
+    }
+  ],
+  "exactPriorReplays": 12,
+  "selected": 3,
+  "stageCounts": {
+    "local-refinement/source-confusion": 2,
+    "local-verifier: camera": 3,
+    "local-verifier: score": 1,
+    "proposal": 3,
+    "selected": 3
+  },
+  "scope": "Prior diagnostic examples only; truth-centered local oracle failure does not exhaust all possible source-compatible paths."
+}

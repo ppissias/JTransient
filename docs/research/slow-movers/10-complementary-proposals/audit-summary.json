@@ -1,0 +1,43 @@
+{
+  "completeOriginal": true,
+  "completeDiagnostics": true,
+  "fieldsComplete": 4,
+  "contextRows": 644,
+  "plannedMovingHistories": 240,
+  "plannedInjectedControls": 96,
+  "observedMovingHistories": 240,
+  "availableMovingHistories": 240,
+  "unavailableReasons": {},
+  "ambiguousSourceMethodRows": 24,
+  "ambiguousDistinctHistories": 10,
+  "sourceStages": {
+    "grid-local-verifier: score": 104,
+    "grid-local-refinement/source-confusion": 4,
+    "selected": 108,
+    "admitted-seed/proposal-or-local-search": 18,
+    "grid-reference-mask": 6
+  },
+  "partialCoreCountsByMethod": {
+    "D": {
+      "atSeedLimit": 0,
+      "beforeSeedLimit": 0
+    },
+    "T4": {
+      "atSeedLimit": 0,
+      "beforeSeedLimit": 0
+    },
+    "T3": {
+      "atSeedLimit": 19,
+      "beforeSeedLimit": 0
+    },
+    "P3": {
+      "atSeedLimit": 136,
+      "beforeSeedLimit": 0
+    },
+    "P2.5": {
+      "atSeedLimit": 138,
+      "beforeSeedLimit": 0
+    }
+  },
+  "exactSupplementBatchReplays": 72
+}
