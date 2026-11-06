@@ -777,7 +777,7 @@ Check A. When the median share of sky-annulus pixels at zero exceeds this, negat
 
 ### `linearityMaxConcentrationDrift` (default `0.03`)
 
-Check B. The concentration index is the flux within 0.7 x FWHM divided by the flux within 2.5 x FWHM, using stars with SNR of about 50 or more. The faint half of those stars sets the reference; walking towards brighter stars, the first magnitude bin that departs by more than this value (plus two standard errors of the bin median) marks the frame's linear limit. Brighter stars are flagged non-linear in that frame.
+Check B. The concentration index is the flux within 0.7 x FWHM divided by the flux within 2.5 x FWHM, using stars with SNR of about 20 or more. The faint half of those stars sets the reference; walking towards brighter stars, the first magnitude bin that departs by more than this value (plus two standard errors of the bin median) marks the frame's linear limit. Brighter stars are flagged non-linear in that frame.
 
 ### `linearityMinRangeMag` (default `2.0`)
 
@@ -868,7 +868,7 @@ Runs the search after residual analysis. It needs capture times on the kept fram
 
 ### `faintMoverMinDisplacementFwhm` (default `2.0`)
 
-Slowest motion searched, as the distance moved over the session in star widths (FWHM). A slower object stays inside its own median-stack footprint and is subtracted with the static field.
+Slowest motion searched, as the distance moved over the session in star widths (FWHM). A slower object stays inside its own median-stack footprint and is subtracted with the static field. SpacePixels displays the corresponding arcsec/min rate when WCS/timing are available, labels pre-run seeing estimates, and requires at least 2 FWHM/session in its controls. The engine field retains its relative-displacement meaning.
 
 ### `faintMoverMaxSpeedPixelsPerMinute` (default `1.0`)
 
@@ -901,3 +901,5 @@ If you do not have strong prior knowledge of the dataset:
 2. run `CalibratedAutoTuner.tune(...)`
 3. use the returned `optimizedConfig` with `runPipeline(...)`
 4. only hand-tune fields like `enableSlowMoverDetection`, `strictExposureKinematics`, `maxJumpPixels`, or anomaly thresholds after reviewing telemetry
+
+For variable stars, retain the general defaults: 50 magnitude neighbours for the empirical noise model, a separate 100-pixel local-comparison radius, score 5, persistence 5 frames, and amplitude floors of 0.05 mag (`READY`) / 0.10 mag (`LIMITED`). Auto-Tune does not estimate these settings. Increasing the comparison pool changes the brightness range represented, especially in sparse fields. Lowering the absolute amplitude floor does not bypass empirical-noise or consistency checks; catalogue membership alone does not demonstrate detectable variation during the session.

@@ -71,6 +71,8 @@ Revisit with known-linear sparse/range-limited inputs and genuine response fault
 
 **The audit and adopted VS-12 changes are complete.** Only the following six questions remain. Investigation is authorised; a scientific-policy or default change still needs evidence and agreement. Low-count readiness belongs solely to VS-9. Current behavior is in [photometry](ALGORITHM.md#16-variable-star-photometry) and the [release notes](RELEASE_NOTES.md#108-unreleased).
 
+**Initial-settings decision (2026-11-06).** Retain the current general defaults, including 50 magnitude neighbours, the 100-pixel local radius and the 0.05/0.10-mag amplitude floors. Larger comparison pools and a lower Ready amplitude floor give field-dependent additions or tier promotions, without a consistent recovery benefit in the bounded image controls. Broader spatial radii do not justify a change. This closes the general starting-settings sweep; the specific questions below remain deferred or open as stated. Catalogue associations are review evidence, not session-variable truth or a false-positive calibration.
+
 ### Late-frame population lifecycle
 
 **Deferred.** Check D and spatial rejection occur after population/contamination statistics. Revisit with a READY/LIMITED session that actually has late frame exclusions; the previous review showed no recovered valid variable. Compare one bounded recomputation on final active frames, preserving reasons, identities and the reference convention, without a rejection/refitting loop. See [contaminated shape](ALGORITHM.md#photometry-7-1) and [spatial exclusion](ALGORITHM.md#photometry-9-4).

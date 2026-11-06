@@ -133,6 +133,8 @@ public final class FaintMoverSearch {
     static final int CUTOUT = 31;
     /** Most candidates reported; further ones are counted as below the score. */
     static final int MAX_CANDIDATES = 1000;
+    /** Copied review pixels retained per run; selection and the small candidate cutouts use separate storage. */
+    static final long REVIEW_BUDGET_BYTES = 64L * 1024 * 1024;
     /** Fewest unmasked pixels of a tile for its noise; a tile with fewer is not searched. */
     static final int MIN_GOOD_PIXELS = 1000;
     /** Values sampled for a robust centre and spread. */
@@ -284,7 +286,7 @@ public final class FaintMoverSearch {
     /** Temporary preprocessed search pixels; only small review rectangles may outlive this tile. */
     private record PreparedTile(float[][] residuals, boolean[] bad, BitSet[] streakMasks) { }
 
-    /** Owns at most 32 MiB of copied review evidence, shared by this search's workers, strongest peaks first. */
+    /** Owns at most 64 MiB of copied review evidence, shared by this search's workers, strongest peaks first. */
     private static final class EvidencePool {
         private final TreeMap<Peak, FaintMoverDiagnostics> reviews = new TreeMap<>(peakOrder()
                 .thenComparingDouble(p -> p.vx).thenComparingDouble(p -> p.vy)
@@ -304,7 +306,7 @@ public final class FaintMoverSearch {
             var previous = reviews.put(peak, evidence);
             if (previous != null) bytes -= diagnosticBytes(previous);
             bytes += diagnosticBytes(evidence);
-            while (bytes > 32L * 1024 * 1024) bytes -= diagnosticBytes(reviews.pollLastEntry().getValue());
+            while (bytes > REVIEW_BUDGET_BYTES) bytes -= diagnosticBytes(reviews.pollLastEntry().getValue());
         }
 
         /** Transfers only a selected candidate's small arrays; missing evidence has an explicit reason. */
@@ -1379,7 +1381,7 @@ public final class FaintMoverSearch {
         int w = endX - x, h = endY - y;
         if (w <= 0 || h <= 0 || w > 256 || h > 256)
             return FaintMoverDiagnostics.unavailable("diagnostic rectangle exceeds 256 pixels per side");
-        if (tile == null) return FaintMoverDiagnostics.unavailable("32 MiB review-pixel budget exceeded");
+        if (tile == null) return FaintMoverDiagnostics.unavailable("64 MiB review-pixel budget exceeded");
         int stride = p.width + 2 * plan.margin;
         List<FaintMoverDiagnostics.Frame> frames = new ArrayList<>();
         for (int k = 0; k < n; k++) {

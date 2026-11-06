@@ -215,7 +215,7 @@ public class FaintMoverSearchTest {
         for (var frame : original) for (var row : frame.pixelData) java.util.Arrays.fill(row, Short.MIN_VALUE);
         org.junit.Assert.assertArrayEquals(saved, d.frames.getFirst().residual, 0);
         assertEquals(result.candidates.size(), result.telemetry.diagnosticsAvailable);
-        assertTrue(result.telemetry.diagnosticBytes > 0 && result.telemetry.diagnosticBytes <= 32L * 1024 * 1024);
+        assertTrue(result.telemetry.diagnosticBytes > 0 && result.telemetry.diagnosticBytes <= 64L * 1024 * 1024);
     }
 
     /** Returns the actual half-score peak in the engine's central refinement area. */
