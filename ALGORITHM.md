@@ -1340,6 +1340,8 @@ When `enableFaintMoverSearch` is on (it is off by default), `FaintMoverSearch` l
 
 **Search domain.** The star size is the kept frames' median measured FWHM converted to a Gaussian FWHM, as for the [faint-streak search](#135-faint-streak-search). Motions range from `faintMoverMinDisplacementFwhm` FWHM over the session to `faintMoverMaxSpeedPixelsPerMinute`, on a square grid whose step is the FWHM divided by the largest time from the session's mean mid-exposure, so that half a step moves the end frames by at most half the FWHM. The data area is searched in tiles of 512 px, each read with a margin for the largest shift.
 
+Each trial path samples the tile's surrounding halo across all searched exposures. The margin covers the allowed motion, coarse-grid refinement and PSF/review support, so samples remain available when the path crosses into a neighbouring tile within the usable image. This geometric coverage does not make scores spatially uniform: background/noise normalisation and stack-noise calibration are tile-specific, so nearby reference positions in different tiles can receive different empirical scores.
+
 **Residuals.** Per tile and frame:
 
 1. the frame minus the median stack (the static field);
