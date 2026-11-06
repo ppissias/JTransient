@@ -14,6 +14,7 @@ The public surface is split into three layers:
 ## Contents
 
 - [Pipeline Scope](#pipeline-scope)
+  - [Standalone frame quality control](#standalone-frame-quality-control)
   - [Prepared-frame associations (1.0.6)](#prepared-frame-associations-106)
 - [Per-operation tuner options (1.0.6)](#per-operation-tuner-options-106)
 - [Per-operation diagnostics (1.0.6)](#per-operation-diagnostics-106)
@@ -41,6 +42,21 @@ The public surface is split into three layers:
 ## Pipeline Scope
 
 `runPipeline(...)` executes the complete analysis. `generateMasterStack(...)` shares registration/quality selection but returns only a median stack. `detectTransients(...)` adds extraction and stationary-star/streak filtering, then stops before point linking. Tuners search configurations on sampled crops; `SourceExtractor` works on one image. The [algorithm flow](ALGORITHM.md#high-level-flow) defines stage ordering.
+
+### Standalone frame quality control
+
+`evaluateFrameQuality(frames, config, listener)` runs the pipeline's quality/registration/common-area checks without ordinary transient extraction or downstream stages. Its immutable `FrameQualityResult` contains every original frame's scalar metrics, reference-star counts, keep/reject reason, session limits and area fractions. `thresholds().available()` distinguishes unavailable statistical limits; `tooFewFrames()` indicates that detection would stop with fewer than three retained frames. Padding-fit shifts/rotation/edge RMS describe registration geometry, not residual stellar alignment; an unavailable or zero fit is not proof of alignment. No image buffers, coverage arrays or mutable telemetry escape in this result.
+
+For file-backed inputs, `evaluateFrameQuality(frameCount, FrameLoader, config, listener)` uses two passes: one for validated metadata and registration coverage, then bounded parallel quality measurement on the same common area. The loader receives the original zero-based input position and must return stable metadata/pixels across repeated calls, supporting concurrent independent reads in the second pass. The engine checks metadata stability; the caller must prevent or detect pixel-file changes. Both overloads capture settings, preserve original sequence identities, borrow pixels read-only until joined completion, and share normal engine cancellation, operation ownership and failure diagnostics. Statistical baselines and forced-exclusion priority are identical to a full pipeline run; no new rejection rule is added.
+
+```java
+try (JTransientEngine engine = new JTransientEngine()) {
+    FrameQualityResult quality = engine.evaluateFrameQuality(frames, config, listener);
+    for (FrameQualityResult.Frame frame : quality.frames()) {
+        System.out.println(frame.filename() + ": " + frame.reason());
+    }
+}
+```
 
 ### Prepared-frame associations (1.0.6)
 
@@ -155,6 +171,7 @@ Non-finite consumed values are errors; finite out-of-domain or cross-field findi
 | Entry point | Scope | Generates or uses a master stack | Returns tracks | Primary use |
 | --- | --- | --- | --- | --- |
 | `SourceExtractor.extractSources(...)` | One frame | No | No | Standalone object detection |
+| `JTransientEngine.evaluateFrameQuality(...)` | Every input frame | No | No | Exact pipeline quality measurements, limits and rejection decisions before a full run |
 | `CalibratedAutoTuner.tune(...)` | Crops of a sample of frames | Internal cropped master stacks | No | Measure false positives and sensitivity, pick the most sensitive settings within a profile budget |
 | `JTransientEngine.generateMasterStack(...)` | Full frame sequence | Generates a median master stack | No | Reuse the stack across repeated runs |
 | `JTransientEngine.detectTransients(...)` | Full frame sequence | Generates a median master stack | No | Export per-frame transients after stationary-star filtering |

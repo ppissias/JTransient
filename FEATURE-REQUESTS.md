@@ -11,7 +11,7 @@ These are proposals, not implementation authorisations. Retain current algorithm
 | [QC-1](#qc-1-star-count-rejection-envelope) | Deferred | Consider a count-envelope floor only if corrected common-area counts reject useful frames too readily. |
 | [PT-5](#pt-5-registration-quality-and-shared-jitter-tolerances) | Proposed assessment | Measure residual stellar registration quality before deciding whether shared jitter tolerances need to change. |
 | [SM-F7](#sm-f7-slow-and-faint-mover-extensions) | Deferred; no further campaign scheduled | Revisit specific mover losses or a demonstrated resource bottleneck; retain digital tracking and current maximum-stack gates. |
-| [XC-3](#xc-3-local-background-and-noise-for-frame-extraction) | Pilot reviewed; adoption deferred | Improve spatial sensitivity while preserving source associations, photometry and score calibration near tile boundaries. |
+| [XC-3](#xc-3-local-background-and-noise-for-frame-extraction) | Open; parked at maintainer request | Resume with local sky correction alone, keeping baseline noise and thresholds fixed; preserve associations, photometry and boundary calibration. |
 | [VS-9](#vs-9-selected-stars-and-the-linearity-check-minimum) | Deferred policy | Distinguish insufficient Check-B evidence from measured nonlinearity; retained-subset scoring is not implemented. |
 | [VS-11](#vs-11-photometry-strictness-defaults-and-recovery-review) | Deferred follow-ups | Six bounded photometry questions below; the initial audit and adopted VS-12 work are complete. |
 
@@ -53,11 +53,13 @@ Before adopting a lead, demonstrate incremental recovery or useful complete-cove
 
 ## XC-3. Local background and noise for frame extraction
 
-**Gradient confirmed; retain the current per-frame model.** A continuous local sky/noise prototype improved fixed-flux recovery, but also lost some controlled recoveries, changed source associations and photometry classifications/readiness, and added many unverified findings. No production algorithm, gate or default change is selected. The master reference's existing local-sky pass remains unchanged.
+**Open, parked at the maintainer's request; retain the current per-frame model.** A continuous local sky/noise prototype improved fixed-flux recovery, but also lost some controlled recoveries, changed source associations and photometry classifications/readiness, and added many unverified findings. No production algorithm, gate or default change is selected. The master reference's existing local-sky pass remains unchanged.
 
-The next bounded question is whether correcting the local sky level separately from noise calibration can retain the sensitivity benefit with fewer downstream changes. Define the conservative or residual-noise policy before testing; preserve physical pixel values and consistent centroid, flux and significance calculations. Photometry's local sky does not solve frame extraction.
+The next proposed experiment changes only the continuous local sky level, retaining the baseline's exact per-frame global noise estimates and configured seed/grow multipliers. Use consistent local background subtraction for measurements while preserving physical image pixels. Footprints, centroids, fluxes and elongation can still change; assess those changes and source associations explicitly rather than requiring identical shapes. Evaluate another noise estimator separately, after this comparison. Photometry's local sky does not solve frame extraction.
 
 Keep path coverage and score calibration separate: continuous background interpolation avoids hard cell boundaries, and digital tracking already reads motion-sized halos, while per-tile noise estimates can still change scores near a reference-tile boundary. Successor validation needs crossing and near-threshold controls, retained source support/associations, star-by-star photometry, false-candidate review and runtime across gradients, extended emission and flat sky. Preserve the master reference's coverage. Current implementation: [extraction](ALGORITHM.md#3-single-frame-extraction-internals), [master stars](ALGORITHM.md#7-master-star-extraction), [faint search](ALGORITHM.md#faint-mover-search), [SourceExtractor](src/main/java/io/github/ppissias/jtransient/core/SourceExtractor.java).
+
+Retain the frozen profile, executable/source and dependency snapshots, native baseline results, input hashes and boundary controls for resumption. The local resume bundle and its verification are located through the machine's ignored environment notes; detailed experimental material remains outside the algorithm reference and repository.
 
 ## VS-9. Selected stars and the linearity-check minimum
 

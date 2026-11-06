@@ -67,7 +67,12 @@ public final class ApiConsumer {
 
         require(config.enableFaintStreakSearch && !object.fromFaintStreakSearch, "Faint-streak search defaults changed");
         try (JTransientEngine engine = new JTransientEngine()) {
+            var quality = engine.evaluateFrameQuality(frames, config, null);
+            require(quality.frames().size() == frames.size(), "QC must describe every input");
+            require(quality.equals(engine.evaluateFrameQuality(frames.size(), frames::get, config, null)),
+                    "File-backed and in-memory QC must agree");
             PipelineResult result = engine.runPipeline(frames, config, null);
+            require(quality.keptFrames() == result.telemetry.totalFramesKept, "QC selection differs from detection");
             require(new io.github.ppissias.jtransient.telemetry.FaintMoverSearchTelemetry().searchedFrameIndices.isEmpty(),
                     "Faint-mover original frame identities missing from the API");
             for (var candidate : result.faintMoverCandidates) checkReviewEvidence(candidate);

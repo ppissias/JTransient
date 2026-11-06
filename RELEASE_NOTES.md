@@ -12,6 +12,8 @@
 
 ## 1.0.8 (unreleased)
 
+- **Standalone frame quality control (additive API).** `JTransientEngine.evaluateFrameQuality` accepts an in-memory list or an input count and stable concurrent `FrameLoader`. Both share detection's exact quality measurements, session thresholds, registration/coverage exclusions and rejection priority, without transient extraction, stacks, linking or photometry. The detached immutable `FrameQualityResult` describes every original frame, including rejected ones, unavailable limits and padding-edge registration fits. Streaming uses two reads per frame with bounded worker image memory. Existing pipeline signatures, configuration defaults and scientific selection are unchanged.
+
 - **Faint-mover review retention.** The run-owned pixel pool increases to 64 MiB. Detection scores, candidate cutouts and scientific selection are unchanged; unavailable review remains explicit.
 
 - **Faint-search work previews and progress (F28, additive observer contract).** Optional requested snapshots carry copied active-tile/trial-path geometry on an example original frame, without borrowing pixels or treating trials as candidates. Joined workers emit throttled phase-local estimated work and completed-tile counts during long tiles. Existing skip/truncation, cancellation, scientific scoring and selection remain unchanged; `FaintMoverSearch.Input.observer` supports direct callers.

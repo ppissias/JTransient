@@ -154,6 +154,133 @@ public class JTransientEngine implements AutoCloseable {
         workers.limitWork(frames.size(), largestFramePixels);
     }
 
+    /** Reads one original input position. Calls may repeat and run concurrently; return stable, read-only pixels. */
+    @FunctionalInterface
+    public interface FrameLoader {
+        /** Loads the same identity, dimensions, clock and pixels each time until the operation returns. */
+        ImageFrame load(int inputPosition) throws Exception;
+    }
+
+    /**
+     * Evaluates precisely the pipeline's frame-quality and common-area rejection rules, without transient extraction,
+     * stacks, linking or photometry. List order is captured; descriptors/pixels are borrowed read-only until return.
+     * The result is detached. The same input validation, cancellation and single-operation rules as runPipeline apply.
+     */
+    public FrameQualityResult evaluateFrameQuality(List<ImageFrame> inputFrames, DetectionConfig config,
+                                                  TransientEngineProgressListener listener) {
+        List<ImageFrame> frames = copyFrameList(inputFrames);
+        return executeOperation(() -> {
+            DetectionConfig captured = OperationContext.compute(StageId.INPUT_VALIDATION, null,
+                    () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.MASTER_STACK));
+            OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkPipelineInput(frames, null));
+            return evaluateQualityInternal(frames.size(), frames::get, captured, listener);
+        });
+    }
+
+    /**
+     * Bounded-memory quality assessment for all inputs. The first pass validates matrices/metadata and measures
+     * registration coverage; the second measures quality against the same session area used by detection. Only
+     * coverage arrays and scalar measurements survive a read. The loader must supply stable images, and support
+     * concurrent independent reads during the second pass. Loader failures retain their cause in operation diagnostics.
+     */
+    public FrameQualityResult evaluateFrameQuality(int frameCount, FrameLoader loader, DetectionConfig config,
+                                                  TransientEngineProgressListener listener) {
+        return executeOperation(() -> {
+            DetectionConfig captured = OperationContext.compute(StageId.INPUT_VALIDATION, null,
+                    () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.MASTER_STACK));
+            OperationContext.run(StageId.INPUT_VALIDATION, null, () -> {
+                if (frameCount < 1) throw new IllegalArgumentException("No frames to process.");
+                Objects.requireNonNull(loader, "loader");
+            });
+            return evaluateQualityInternal(frameCount, loader, captured, listener);
+        });
+    }
+
+    /** Operation-owned scalar identity and mutable quality measurement, never an image-buffer owner. */
+    private record QualityFrame(InputRules.FrameFacts facts, FrameQualityAnalyzer.FrameMetrics metrics,
+                                FrameRegistration registration) { }
+
+    /** Scans registration once per input, then measures quality on bounded workers and shares the pipeline decision. */
+    private FrameQualityResult evaluateQualityInternal(int frameCount, FrameLoader loader, DetectionConfig config,
+                                                       TransientEngineProgressListener listener) throws Exception {
+        PipelineTelemetry telemetry = new PipelineTelemetry();
+        telemetry.totalFramesLoaded = frameCount;
+        List<InputRules.FrameFacts> facts = new ArrayList<>(frameCount);
+        List<Pixel> driftPoints = new ArrayList<>();
+        List<Integer> excluded = new ArrayList<>();
+        List<FrameCoverage> coverages = new ArrayList<>();
+        int maxPadding = 0;
+        for (int i = 0; i < frameCount; i++) {
+            CancellationScope.check();
+            int position = i;
+            ImageFrame frame = OperationContext.call(StageId.INPUT_VALIDATION, new FrameIdentity(i, null),
+                    () -> loader.load(position));
+            InputRules.FrameFacts checked = OperationContext.compute(StageId.INPUT_VALIDATION, null,
+                    () -> InputRules.checkFrame(frame, position));
+            facts.add(checked);
+            FrameDriftAnalyzer.DriftAnalysisResult measured = OperationContext.compute(StageId.REGISTRATION,
+                    new FrameIdentity(frame.sequenceIndex, frame.filename),
+                    () -> FrameDriftAnalyzer.analyze(List.of(frame)));
+            driftPoints.addAll(measured.driftPoints);
+            excluded.addAll(measured.failedRegistrationFrames);
+            coverages.addAll(measured.frameCoverages);
+            maxPadding = Math.max(maxPadding, measured.maxPaddingPixels);
+            if (listener != null) OperationContext.notify(listener::onProgressUpdate, (i + 1) * 30 / frameCount,
+                    "Checking registration and coverage " + (i + 1) + " of " + frameCount);
+        }
+        OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkFacts(facts));
+        facts.sort(Comparator.comparingInt(InputRules.FrameFacts::sequenceIndex));
+        driftPoints.sort(Comparator.comparingDouble(point -> point.value));
+        excluded.sort(Integer::compareTo);
+        coverages.sort(Comparator.comparingInt(FrameCoverage::getSequenceIndex));
+        var drift = new FrameDriftAnalyzer.DriftAnalysisResult(driftPoints, maxPadding, excluded, coverages);
+        telemetry.driftExcludedFrames.addAll(drift.failedRegistrationFrames);
+        QualityArea quality = qualityArea(drift.frameCoverages, telemetry);
+        Map<Integer, FrameRegistration> registrations = registrationsBySequence(drift);
+        InputRules.FrameFacts first = facts.get(0);
+        workers.limitWork(frameCount, (long) first.width() * first.height());
+        AtomicInteger completed = new AtomicInteger();
+        List<Callable<QualityFrame>> tasks = new ArrayList<>();
+        for (InputRules.FrameFacts expected : facts) {
+            tasks.add(() -> OperationContext.call(StageId.FRAME_QUALITY,
+                    new FrameIdentity(expected.sequenceIndex(), expected.filename()), () -> {
+                        CancellationScope.check();
+                        ImageFrame frame = loader.load(expected.inputPosition());
+                        InputRules.FrameFacts actual = InputRules.checkFrame(frame, expected.inputPosition());
+                        if (!expected.equals(actual)) throw new IllegalArgumentException("Frame changed between quality passes: "
+                                + expected.filename());
+                        FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(frame.pixelData,
+                                config, quality.area);
+                        metrics.filename = frame.filename;
+                        synchronized (completed) {
+                            int count = completed.incrementAndGet();
+                            if (listener != null) OperationContext.notify(listener::onProgressUpdate,
+                                    30 + count * 60 / frameCount, "Measuring frame quality " + count + " of " + frameCount);
+                        }
+                        return new QualityFrame(expected, metrics, registrations.get(expected.sequenceIndex()));
+                    }));
+        }
+        List<QualityFrame> measured = new ArrayList<>(WorkerPool.invokeAll(tasks));
+        measured.sort(Comparator.comparingInt(frame -> frame.facts().sequenceIndex()));
+        if (listener != null) OperationContext.notify(listener::onProgressUpdate, 95, "Applying session quality thresholds...");
+        selectAndRecordQuality(measured, telemetry, drift.frameCoverages, quality, config);
+        if (listener != null) OperationContext.notify(listener::onProgressUpdate, 100, "Quality control complete");
+        return FrameQualityResult.capture(telemetry, registrations);
+    }
+
+    /** Copies small scalar identities while retaining the operation-owned mutable metrics for shared rejection. */
+    private static List<QualityFrame> qualityEntries(List<PreparedFrame> prepared) {
+        List<QualityFrame> entries = new ArrayList<>(prepared.size());
+        for (int i = 0; i < prepared.size(); i++) {
+            PreparedFrame p = prepared.get(i);
+            ImageFrame frame = p.frame();
+            entries.add(new QualityFrame(new InputRules.FrameFacts(i, frame.sequenceIndex, frame.filename,
+                    frame.pixelData[0].length, frame.pixelData.length, frame.timestamp, frame.exposureDuration),
+                    p.metrics(), p.registration()));
+        }
+        return entries;
+    }
+
     /**
      * Generates the Master Stack independently so it can be reused across iterative pipeline runs.
      * Highly optimized: Skips transient extraction and only runs quality analysis to drop outliers.
@@ -250,7 +377,7 @@ public class JTransientEngine implements AutoCloseable {
         }
 
         OperationContext.compute(StageId.FRAME_SELECTION, null,
-                () -> rejectUnusableFrames(completedResults, telemetry.driftExcludedFrames, quality.coverageOutliers, config));
+                () -> rejectUnusableFrames(qualityEntries(completedResults), telemetry.driftExcludedFrames, quality.coverageOutliers, config));
 
         List<ImageFrame> cleanFrames = PreparedFrame.retained(completedResults).stream().map(PreparedFrame::frame).toList();
         List<Integer> keptFrames = new ArrayList<>();
@@ -571,60 +698,11 @@ public class JTransientEngine implements AutoCloseable {
             OperationContext.notify(listener::onProgressUpdate, 42, "Filtering outlier frames...");
         }
 
-        // Pass the config down to the evaluator
-        SessionEvaluator.SessionThresholds sessionThresholds =
-                OperationContext.compute(StageId.FRAME_SELECTION, null,
-                        () -> rejectUnusableFrames(completedResults, telemetry.driftExcludedFrames, quality.coverageOutliers, config));
-        telemetry.qualityThresholds.available = sessionThresholds.available;
-        telemetry.qualityThresholds.minAllowedStarCount = sessionThresholds.minAllowedStarCount;
-        telemetry.qualityThresholds.maxAllowedFwhm = sessionThresholds.maxAllowedFwhm;
-        telemetry.qualityThresholds.maxAllowedEccentricity = sessionThresholds.maxAllowedEccentricity;
-        telemetry.qualityThresholds.maxAllowedBrightStarEccentricity = sessionThresholds.maxAllowedBrightStarEccentricity;
-        telemetry.qualityThresholds.backgroundMedianBaseline = sessionThresholds.backgroundMedianBaseline;
-        telemetry.qualityThresholds.maxAllowedBackgroundDeviation = sessionThresholds.maxAllowedBackgroundDeviation;
-        telemetry.qualityThresholds.minAllowedBackgroundMedian = sessionThresholds.minAllowedBackgroundMedian;
-        telemetry.qualityThresholds.maxAllowedBackgroundMedian = sessionThresholds.maxAllowedBackgroundMedian;
-
+        DataArea dataArea = selectAndRecordQuality(qualityEntries(completedResults), telemetry,
+                driftAnalysis.frameCoverages, quality, config);
         List<PreparedFrame> retainedFrames = PreparedFrame.retained(completedResults);
-        List<ImageFrame> cleanFrames = retainedFrames.stream().map(PreparedFrame::frame).toList();
         List<SourceExtractor.ExtractionResult> cleanFramesData = retainedFrames.stream()
                 .map(PreparedFrame::extractionResult).toList();
-
-        for (int i = 0; i < completedResults.size(); i++) {
-            PreparedFrame prepared = completedResults.get(i);
-            FrameQualityAnalyzer.FrameMetrics metrics = prepared.metrics();
-            PipelineTelemetry.FrameQualityStat qualityStat = new PipelineTelemetry.FrameQualityStat();
-            qualityStat.frameIndex = prepared.frame().sequenceIndex;
-            qualityStat.filename = metrics.filename;
-            qualityStat.backgroundMedian = metrics.backgroundMedian;
-            qualityStat.backgroundNoise = metrics.backgroundNoise;
-            qualityStat.medianFWHM = metrics.medianFWHM;
-            qualityStat.medianEccentricity = metrics.medianEccentricity;
-            qualityStat.brightStarMedianEccentricity = metrics.brightStarMedianEccentricity;
-            qualityStat.starCount = metrics.starCount;
-            qualityStat.usableShapeStarCount = metrics.usableShapeStarCount;
-            qualityStat.brightStarShapeStarCount = metrics.brightStarShapeStarCount;
-            qualityStat.fwhmStarCount = metrics.fwhmStarCount;
-            qualityStat.rejected = metrics.isRejected;
-            qualityStat.rejectionReason = metrics.rejectionReason;
-            telemetry.frameQualityStats.add(qualityStat);
-
-            if (metrics.isRejected) {
-                telemetry.totalFramesRejected++;
-                PipelineTelemetry.FrameRejectionStat rejStat = new PipelineTelemetry.FrameRejectionStat();
-                rejStat.frameIndex = prepared.frame().sequenceIndex;
-                rejStat.filename = metrics.filename;
-                rejStat.reason = metrics.rejectionReason;
-                rejStat.medianEccentricity = metrics.medianEccentricity;
-                rejStat.brightStarMedianEccentricity = metrics.brightStarMedianEccentricity;
-                rejStat.brightStarShapeStarCount = metrics.brightStarShapeStarCount;
-                telemetry.rejectedFrames.add(rejStat);
-            } else {
-                telemetry.totalFramesKept++;
-            }
-        }
-
-        DataArea dataArea = sessionDataArea(driftAnalysis.frameCoverages, cleanFrames, telemetry);
         if (dataArea != null) {
             // Outside this area some kept frame has no data, so the median stack and the star mask are wrong there.
             for (SourceExtractor.ExtractionResult frameData : cleanFramesData) {
@@ -642,6 +720,59 @@ public class JTransientEngine implements AutoCloseable {
                 wholeFrame,
                 registrations
         );
+    }
+
+    /** Applies the same rejection priorities and copies the same scalar telemetry for detection and QC-only runs. */
+    private static DataArea selectAndRecordQuality(List<QualityFrame> measured, PipelineTelemetry telemetry,
+                                                   List<FrameCoverage> coverages, QualityArea quality,
+                                                   DetectionConfig config) {
+        SessionEvaluator.SessionThresholds sessionThresholds = OperationContext.compute(StageId.FRAME_SELECTION, null,
+                () -> rejectUnusableFrames(measured, telemetry.driftExcludedFrames, quality.coverageOutliers, config));
+        telemetry.qualityThresholds.available = sessionThresholds.available;
+        telemetry.qualityThresholds.minAllowedStarCount = sessionThresholds.minAllowedStarCount;
+        telemetry.qualityThresholds.maxAllowedFwhm = sessionThresholds.maxAllowedFwhm;
+        telemetry.qualityThresholds.maxAllowedEccentricity = sessionThresholds.maxAllowedEccentricity;
+        telemetry.qualityThresholds.maxAllowedBrightStarEccentricity = sessionThresholds.maxAllowedBrightStarEccentricity;
+        telemetry.qualityThresholds.backgroundMedianBaseline = sessionThresholds.backgroundMedianBaseline;
+        telemetry.qualityThresholds.maxAllowedBackgroundDeviation = sessionThresholds.maxAllowedBackgroundDeviation;
+        telemetry.qualityThresholds.minAllowedBackgroundMedian = sessionThresholds.minAllowedBackgroundMedian;
+        telemetry.qualityThresholds.maxAllowedBackgroundMedian = sessionThresholds.maxAllowedBackgroundMedian;
+
+        for (int i = 0; i < measured.size(); i++) {
+            QualityFrame prepared = measured.get(i);
+            FrameQualityAnalyzer.FrameMetrics metrics = prepared.metrics();
+            PipelineTelemetry.FrameQualityStat qualityStat = new PipelineTelemetry.FrameQualityStat();
+            qualityStat.frameIndex = prepared.facts().sequenceIndex();
+            qualityStat.filename = metrics.filename;
+            qualityStat.backgroundMedian = metrics.backgroundMedian;
+            qualityStat.backgroundNoise = metrics.backgroundNoise;
+            qualityStat.medianFWHM = metrics.medianFWHM;
+            qualityStat.medianEccentricity = metrics.medianEccentricity;
+            qualityStat.brightStarMedianEccentricity = metrics.brightStarMedianEccentricity;
+            qualityStat.starCount = metrics.starCount;
+            qualityStat.usableShapeStarCount = metrics.usableShapeStarCount;
+            qualityStat.brightStarShapeStarCount = metrics.brightStarShapeStarCount;
+            qualityStat.fwhmStarCount = metrics.fwhmStarCount;
+            qualityStat.rejected = metrics.isRejected;
+            qualityStat.rejectionReason = metrics.rejectionReason;
+            telemetry.frameQualityStats.add(qualityStat);
+
+            if (metrics.isRejected) {
+                telemetry.totalFramesRejected++;
+                PipelineTelemetry.FrameRejectionStat rejStat = new PipelineTelemetry.FrameRejectionStat();
+                rejStat.frameIndex = prepared.facts().sequenceIndex();
+                rejStat.filename = metrics.filename;
+                rejStat.reason = metrics.rejectionReason;
+                rejStat.medianEccentricity = metrics.medianEccentricity;
+                rejStat.brightStarMedianEccentricity = metrics.brightStarMedianEccentricity;
+                rejStat.brightStarShapeStarCount = metrics.brightStarShapeStarCount;
+                telemetry.rejectedFrames.add(rejStat);
+            } else {
+                telemetry.totalFramesKept++;
+            }
+        }
+
+        return sessionDataArea(coverages, measured.stream().filter(frame -> !frame.metrics().isRejected).toList(), telemetry);
     }
 
     private static Map<Integer, FrameRegistration> registrationsBySequence(FrameDriftAnalyzer.DriftAnalysisResult drift) {
@@ -663,15 +794,15 @@ public class JTransientEngine implements AutoCloseable {
      * @param coverageOutliers rejection reasons of the frames that alone shrink the common data area, by sequence index
      * @return the session thresholds used for the outlier rejection
      */
-    private static SessionEvaluator.SessionThresholds rejectUnusableFrames(List<PreparedFrame> preparedFrames,
+    private static SessionEvaluator.SessionThresholds rejectUnusableFrames(List<QualityFrame> preparedFrames,
                                                                           Collection<Integer> driftExcludedFrames,
                                                                           Map<Integer, String> coverageOutliers,
                                                                           DetectionConfig config) {
-        List<FrameQualityAnalyzer.FrameMetrics> sessionMetrics = preparedFrames.stream().map(PreparedFrame::metrics).toList();
+        List<FrameQualityAnalyzer.FrameMetrics> sessionMetrics = preparedFrames.stream().map(QualityFrame::metrics).toList();
         SessionEvaluator.SessionThresholds thresholds = SessionEvaluator.rejectOutlierFrames(sessionMetrics, config);
-        for (PreparedFrame prepared : preparedFrames) {
+        for (QualityFrame prepared : preparedFrames) {
             FrameQualityAnalyzer.FrameMetrics metrics = prepared.metrics();
-            int sequenceIndex = prepared.frame().sequenceIndex;
+            int sequenceIndex = prepared.facts().sequenceIndex();
             if (driftExcludedFrames.contains(sequenceIndex)) {
                 // A partly blank frame can keep enough stars to pass the session statistics, but its sky does
                 // not match the other frames.
@@ -732,7 +863,7 @@ public class JTransientEngine implements AutoCloseable {
      * @param keptFrames the frames kept by quality control
      * @return the area, or null when no frame was kept
      */
-    private static DataArea sessionDataArea(List<FrameCoverage> coverages, List<ImageFrame> keptFrames,
+    private static DataArea sessionDataArea(List<FrameCoverage> coverages, List<QualityFrame> keptFrames,
                                             PipelineTelemetry telemetry) {
         Map<Integer, FrameCoverage> bySequence = new HashMap<>();
         for (FrameCoverage coverage : coverages) {
@@ -740,11 +871,11 @@ public class JTransientEngine implements AutoCloseable {
         }
         Map<Integer, String> names = new HashMap<>();
         List<FrameCoverage> kept = new ArrayList<>();
-        for (ImageFrame frame : keptFrames) {
-            FrameCoverage coverage = bySequence.get(frame.sequenceIndex);
+        for (QualityFrame frame : keptFrames) {
+            FrameCoverage coverage = bySequence.get(frame.facts().sequenceIndex());
             if (coverage != null) {
                 kept.add(coverage);
-                names.put(frame.sequenceIndex, frame.filename);
+                names.put(frame.facts().sequenceIndex(), frame.facts().filename());
             }
         }
         if (kept.isEmpty()) {

@@ -64,19 +64,35 @@ final class InputRules {
         if (frames == null) {
             throw new IllegalArgumentException("The frame list is null.");
         }
+        List<FrameFacts> facts = new ArrayList<>(frames.size());
         for (int i = 0; i < frames.size(); i++) {
-            ImageFrame frame = frames.get(i);
-            if (frame == null) {
-                throw new IllegalArgumentException("Frame " + (i + 1) + " of the list is null.");
-            }
-            if (frame.pixelData == null || frame.pixelData.length == 0 || frame.pixelData[0] == null
-                    || frame.pixelData[0].length == 0) {
-                throw new IllegalArgumentException(name(frame) + " has no pixel data.");
-            }
-            if (!isRectangular(frame.pixelData)) {
-                throw new IllegalArgumentException(name(frame) + " has rows of different lengths.");
-            }
+            facts.add(checkFrame(frames.get(i), i));
         }
+        checkFacts(facts);
+    }
+
+    /** Scalar identity/shape facts permit the same cohort rules without retaining a streamed frame's pixels. */
+    record FrameFacts(int inputPosition, int sequenceIndex, String filename, int width, int height,
+                      long timestamp, long exposureDuration) { }
+
+    /** Validates one physical matrix with the existing error priority, then copies its scalar facts. */
+    static FrameFacts checkFrame(ImageFrame frame, int position) {
+        if (frame == null) {
+            throw new IllegalArgumentException("Frame " + (position + 1) + " of the list is null.");
+        }
+        if (frame.pixelData == null || frame.pixelData.length == 0 || frame.pixelData[0] == null
+                || frame.pixelData[0].length == 0) {
+            throw new IllegalArgumentException(name(frame) + " has no pixel data.");
+        }
+        if (!isRectangular(frame.pixelData)) {
+            throw new IllegalArgumentException(name(frame) + " has rows of different lengths.");
+        }
+        return new FrameFacts(position, frame.sequenceIndex, frame.filename, frame.pixelData[0].length,
+                frame.pixelData.length, frame.timestamp, frame.exposureDuration);
+    }
+
+    /** Applies the exact shared size, identity, clock and exposure rules after all physical matrices were checked. */
+    static void checkFacts(List<FrameFacts> frames) {
         if (frames.isEmpty()) {
             return;
         }
@@ -86,29 +102,29 @@ final class InputRules {
         checkExposures(frames);
     }
 
-    private static void checkSizes(List<ImageFrame> frames) {
-        ImageFrame reference = frames.get(0);
+    private static void checkSizes(List<FrameFacts> frames) {
+        FrameFacts reference = frames.get(0);
         List<String> different = new ArrayList<>();
-        for (ImageFrame frame : frames) {
-            if (frame.pixelData.length != reference.pixelData.length
-                    || frame.pixelData[0].length != reference.pixelData[0].length) {
-                different.add(name(frame) + " (" + describeSize(frame.pixelData) + ")");
+        for (FrameFacts frame : frames) {
+            if (frame.height != reference.height
+                    || frame.width != reference.width) {
+                different.add(name(frame) + " (" + describeSize(frame) + ")");
             }
         }
         if (!different.isEmpty()) {
             throw new IllegalArgumentException("All frames must have the same size. " + name(reference) + " is "
-                    + describeSize(reference.pixelData) + "; " + nameList(different) + " differ.");
+                    + describeSize(reference) + "; " + nameList(different) + " differ.");
         }
     }
 
-    private static void checkSequenceIndices(List<ImageFrame> frames) {
-        Map<Integer, ImageFrame> byIndex = new HashMap<>();
-        for (ImageFrame frame : frames) {
+    private static void checkSequenceIndices(List<FrameFacts> frames) {
+        Map<Integer, FrameFacts> byIndex = new HashMap<>();
+        for (FrameFacts frame : frames) {
             if (frame.sequenceIndex < 0) {
                 throw new IllegalArgumentException(name(frame) + " has a negative sequence index ("
                         + frame.sequenceIndex + ").");
             }
-            ImageFrame other = byIndex.put(frame.sequenceIndex, frame);
+            FrameFacts other = byIndex.put(frame.sequenceIndex, frame);
             if (other != null) {
                 throw new IllegalArgumentException("Each frame needs its own sequence index: " + name(other)
                         + " and " + name(frame) + " both have " + frame.sequenceIndex + ".");
@@ -116,9 +132,9 @@ final class InputRules {
         }
     }
 
-    private static void checkTimestamps(List<ImageFrame> frames) {
+    private static void checkTimestamps(List<FrameFacts> frames) {
         List<String> without = new ArrayList<>();
-        for (ImageFrame frame : frames) {
+        for (FrameFacts frame : frames) {
             if (frame.timestamp == -1L) {
                 without.add(name(frame));
             }
@@ -129,10 +145,10 @@ final class InputRules {
         }
     }
 
-    private static void checkExposures(List<ImageFrame> frames) {
-        List<ImageFrame> timed = new ArrayList<>();
+    private static void checkExposures(List<FrameFacts> frames) {
+        List<FrameFacts> timed = new ArrayList<>();
         List<String> without = new ArrayList<>();
-        for (ImageFrame frame : frames) {
+        for (FrameFacts frame : frames) {
             if (frame.exposureDuration > 0L) {
                 timed.add(frame);
             } else {
@@ -147,10 +163,10 @@ final class InputRules {
                     + without.size() + " of " + frames.size() + " frames have none: " + nameList(without) + ".");
         }
         timed.sort(Comparator.comparingLong(frame -> frame.exposureDuration));
-        List<List<ImageFrame>> groups = new ArrayList<>();
-        List<ImageFrame> group = null;
+        List<List<FrameFacts>> groups = new ArrayList<>();
+        List<FrameFacts> group = null;
         long groupShortest = 0;
-        for (ImageFrame frame : timed) {
+        for (FrameFacts frame : timed) {
             if (group == null || frame.exposureDuration - groupShortest > exposureTolerance(groupShortest)) {
                 group = new ArrayList<>();
                 groups.add(group);
@@ -161,15 +177,15 @@ final class InputRules {
         if (groups.size() == 1) {
             return;
         }
-        groups.sort(Comparator.comparingInt((List<ImageFrame> g) -> g.size()).reversed());
+        groups.sort(Comparator.comparingInt((List<FrameFacts> g) -> g.size()).reversed());
         StringBuilder message = new StringBuilder("All frames must share one exposure time (within 2 %, at least 0.1 s): ");
         for (int i = 0; i < groups.size(); i++) {
-            List<ImageFrame> g = groups.get(i);
+            List<FrameFacts> g = groups.get(i);
             message.append(i == 0 ? "" : i == groups.size() - 1 ? " and " : ", ")
                     .append(g.size()).append(g.size() == 1 ? " frame of " : " frames of ").append(exposureLabel(g));
             if (i > 0) {
                 List<String> names = new ArrayList<>();
-                for (ImageFrame frame : g) {
+                for (FrameFacts frame : g) {
                     names.add(name(frame));
                 }
                 message.append(" (").append(nameList(names)).append(')');
@@ -183,7 +199,7 @@ final class InputRules {
         return Math.max(EXPOSURE_MIN_TOLERANCE_MILLIS, Math.round(EXPOSURE_RELATIVE_TOLERANCE * shortestMillis));
     }
 
-    private static String exposureLabel(List<ImageFrame> group) {
+    private static String exposureLabel(List<FrameFacts> group) {
         String shortest = seconds(group.get(0).exposureDuration);
         String longest = seconds(group.get(group.size() - 1).exposureDuration);
         return (shortest.equals(longest) ? shortest : shortest + "–" + longest) + " s";
@@ -204,6 +220,16 @@ final class InputRules {
 
     private static String describeSize(short[][] pixels) {
         return (pixels.length == 0 || pixels[0] == null ? 0 : pixels[0].length) + " × " + pixels.length;
+    }
+
+    /** Formats a checked matrix's scalar dimensions without reading or retaining its pixels. */
+    private static String describeSize(FrameFacts frame) {
+        return frame.width + " × " + frame.height;
+    }
+
+    /** Uses the same diagnostic name for a streamed metadata snapshot. */
+    private static String name(FrameFacts frame) {
+        return frame.filename != null && !frame.filename.isBlank() ? frame.filename : "frame " + frame.sequenceIndex;
     }
 
     private static String name(ImageFrame frame) {
