@@ -793,7 +793,7 @@ The following eight **gates** then look for supporting evidence or alternative e
 
 After both initial scores pass, zero failed gates gives **HIGH_CONFIDENCE**, one gives **POSSIBLE**, and two or more gives **REJECTED**. These are evidence tiers, not numerical probabilities or confirmation of an astrophysical variable. **NOT_SCORED** means the star lacked usable measurements or another prerequisite. **CONSTANT** means it did not pass both initial variability scores; a rapidly varying or poorly sampled star can receive that label too.
 
-The current detector is consequently most sensitive to changes well sampled over several consecutive exposures. A single-frame flash, a short eclipse, or a cycle with only a few samples can be missed despite a large true change. The detailed sections below describe the calculations and exclusions; they should be read with that sensitivity limit in mind. For practical observing terminology and time-series diagnostics, see the [AAVSO VPhot guide](https://www.aavso.org/sites/default/files/publications_files/VPHOT%20Users%20Guide%20V3.2.pdf).
+The current detector is consequently most sensitive to changes well sampled over several consecutive exposures. A single-frame flash, a short eclipse, or a cycle with only a few samples can be missed despite a large true change. The detailed sections below describe the calculations and exclusions; they should be read with that sensitivity limit in mind.
 
 <a id="photometry-1"></a>
 ### 16.1 Design Principles
@@ -1337,6 +1337,8 @@ The tuner provides a starting extraction configuration for a subsequent full pip
 ## 21. Experimental Faint-Mover Search
 
 When `enableFaintMoverSearch` is on (it is off by default), `FaintMoverSearch` looks for point-like movers too faint for the single frames by digital tracking: the kept frames are shifted along trial motions and added, so a mover's light adds up while the noise averages down. It runs after residual analysis and before photometry, so it can mask the run's streaks and recognise its moving tracks. Its candidates are a separate list, `PipelineResult.faintMoverCandidates`, strongest first; no track, anomaly or other result changes. A candidate is unverified: its score is empirical, not a calibrated significance.
+
+**Method reference.** [Heinze, Metchev & Trollo (2015), AJ 150, 125](https://doi.org/10.1088/0004-6256/150/4/125) describes constant-velocity digital tracking, motion-grid spacing constrained by image blur, and verification in separate time subsets. These are the shared methodological contributions; the residual preparation, empirical scoring and selection rules below describe this engine's implementation. The paper's survey performance does not establish this engine's sensitivity.
 
 **Frames and times.** Every kept frame needs a capture time; mid-exposure times are used. A gap of over 120 minutes between consecutive kept frames separates sessions, since one constant motion does not hold across nights, and only the session with the most frames is searched (`framesOutsideSession` counts the others). At least 8 frames are needed.
 
