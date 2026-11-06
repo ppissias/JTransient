@@ -685,6 +685,7 @@ Enables optional local rescue and activity clustering after common-motion filter
 Enables the object-like local rescue candidate pass.
 
 - returns weak heuristic candidates as `MICRO_DRIFT`, `SPARSE_LOCAL_DRIFT`, or `LOCAL_REPEAT`
+- local repeats require at least three detections; clustered detections can share a frame
 - these are kept separate from ordinary confirmed tracks
 
 ### `enableLocalActivityClusters` (default `false`)

@@ -781,7 +781,8 @@ public final class ResidualTransientAnalyzer {
      * Internal rescue heuristics kept out of DetectionConfig so the public config surface stays compact.
      */
     private static final class LocalRescueThresholds {
-        private final int minRepeatPoints = 2;
+        /** Minimum detection count; proximity clusters can include more than one detection from a frame. */
+        private final int minRepeatPoints = 3;
         private final int minMotionPoints = 4;
         private final int maxFrameGap = 2;
         private final double maxStepPixelsPerFrame = 4.0;

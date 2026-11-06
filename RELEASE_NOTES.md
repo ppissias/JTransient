@@ -12,6 +12,8 @@
 
 ## 1.0.8 (unreleased)
 
+- **Local-rescue repeat minimum.** Local repeats now require at least three detections instead of two. This remains a detection-count check; proximity clusters may contain several detections from one frame. Moving rescue classes retain their four-detection minimum. Photometry settings and defaults are unchanged.
+
 - **Standalone frame quality control (additive API).** `JTransientEngine.evaluateFrameQuality` accepts an in-memory list or an input count and stable concurrent `FrameLoader`. Both share detection's exact quality measurements, session thresholds, registration/coverage exclusions and rejection priority, without transient extraction, stacks, linking or photometry. The detached immutable `FrameQualityResult` describes every original frame, including rejected ones, unavailable limits and padding-edge registration fits. Streaming uses two reads per frame with bounded worker image memory. Existing pipeline signatures, configuration defaults and scientific selection are unchanged.
 
 - **Faint-mover review retention.** The run-owned pixel pool increases to 64 MiB. Detection scores, candidate cutouts and scientific selection are unchanged; unavailable review remains explicit.

@@ -15,6 +15,43 @@ import static org.junit.Assert.assertTrue;
 
 public class ResidualTransientAnalyzerTest {
 
+    /** The repeat minimum counts detections, and an otherwise valid two-point repeat is no longer exported. */
+    @Test
+    public void rejectsRepeatsWithOnlyTwoDetections() {
+        List<List<DetectedObject>> remaining = emptyFrameList(6);
+        addPoint(remaining, 1, 100.0, 100.0, 8.0, 9.0);
+        addPoint(remaining, 2, 100.2, 100.0, 8.0, 9.0);
+
+        assertTrue(ResidualTransientAnalyzer.analyze(remaining, new DetectionConfig()).localRescueCandidates.isEmpty());
+    }
+
+    /** A supported three-point repeat remains eligible under the raised detection-count minimum. */
+    @Test
+    public void keepsRepeatsWithThreeDetections() {
+        List<List<DetectedObject>> remaining = emptyFrameList(6);
+        for (int frame = 1; frame <= 3; frame++) {
+            addPoint(remaining, frame, 100.0 + 0.2 * frame, 100.0, 8.0, 9.0);
+        }
+
+        var candidates = ResidualTransientAnalyzer.analyze(remaining, new DetectionConfig()).localRescueCandidates;
+        assertEquals(1, candidates.size());
+        assertEquals(3, candidates.get(0).metrics.pointCount);
+    }
+
+    /** The maintainer chose three detections; clustered detections from two frames remain eligible. */
+    @Test
+    public void minimumDoesNotRequireThreeDistinctFrames() {
+        List<List<DetectedObject>> remaining = emptyFrameList(6);
+        addPoint(remaining, 1, 100.0, 100.0, 8.0, 9.0);
+        addPoint(remaining, 1, 100.2, 100.0, 8.0, 9.0);
+        addPoint(remaining, 2, 100.1, 100.0, 8.0, 9.0);
+
+        var candidates = ResidualTransientAnalyzer.analyze(remaining, new DetectionConfig()).localRescueCandidates;
+        assertEquals(1, candidates.size());
+        assertEquals(3, candidates.get(0).metrics.pointCount);
+        assertEquals(2, candidates.get(0).metrics.uniqueFrameCount);
+    }
+
     @Test
     public void findsCoherentMicroDriftAcrossManyNearbyFrames() {
         DetectionConfig config = new DetectionConfig();
@@ -63,7 +100,7 @@ public class ResidualTransientAnalyzerTest {
 
         assertEquals(1, analysis.localRescueCandidates.size());
         assertEquals(ResidualTransientAnalysis.LocalRescueKind.LOCAL_REPEAT, analysis.localRescueCandidates.get(0).kind);
-        assertTrue(analysis.localRescueCandidates.get(0).points.size() >= 2);
+        assertTrue(analysis.localRescueCandidates.get(0).points.size() >= 3);
     }
 
     @Test

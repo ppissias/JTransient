@@ -740,6 +740,8 @@ Local rescue candidates are ranked weak local patterns classified as:
 - `SPARSE_LOCAL_DRIFT`
 - `LOCAL_REPEAT`
 
+Local repeats require at least three detections. This is a point-count minimum, not a distinct-frame minimum: the proximity-cluster path can include several detections from the same frame. The two moving rescue classes still require at least four detections. These weak candidates need visual review; the minimum does not establish that a source is real.
+
 Accepted local rescue candidates consume their detections before optional local activity clustering runs. Local activity clusters then group remaining nearby detections by `localActivityClusterRadiusPixels` and require at least `localActivityClusterMinFrames` unique frames.
 
 The result is exported as `PipelineResult.residualTransientAnalysis`; it does not add entries to `PipelineResult.tracks` or `PipelineResult.anomalies`.
