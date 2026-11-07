@@ -14,6 +14,7 @@ These are proposals, not implementation authorisations. Retain current algorithm
 | [XC-3](#xc-3-local-background-and-noise-for-frame-extraction) | Open; parked at maintainer request | Resume with local sky correction alone, keeping baseline noise and thresholds fixed; preserve associations, photometry and boundary calibration. |
 | [VS-9](#vs-9-selected-stars-and-the-linearity-check-minimum) | Deferred policy | Distinguish insufficient Check-B evidence from measured nonlinearity; retained-subset scoring is not implemented. |
 | [VS-11](#vs-11-photometry-strictness-defaults-and-recovery-review) | Deferred follow-ups | Six bounded photometry questions below; the initial audit and adopted VS-12 work are complete. |
+| [RV-1](#rv-1-findings-from-the-pull-request-1-review) | Open; no fix agreed | Seven code-review findings, led by hot pixels that can pass the follows-sky test on steadily drifting frames. Decide each item separately. |
 
 **Mover consolidation decision (2026-11-05).** The digital-tracking delivery (SM-F2 and SpacePixels F25) is complete. Close the current SM-F1/SM-F3 temporal, morphology, position and gate investigations and the bounded SM-F6 validation/review campaign. Retire SM-F4 residual weighting and SM-F5 acceleration as separate open proposals; both remain unimplemented, with no validated replacement selected. Keep one conditional extension item, SM-F7, below. Retain the present scientific filters and defaults; this closure does not claim universal completeness, calibrated confidence or the absence of difficult sources. The existing archive and [code history](docs/research/slow-movers/CODE-HISTORY.md) remain available separately.
 
@@ -100,6 +101,68 @@ Revisit with known-linear sparse/range-limited inputs and genuine response fault
 **Deferred.** The agreed blank-sky factor scales reported errors only. Applying it to median-SNR selection and Check B would make those selections use measured correlated-noise errors, but would change the scored population and possibly readiness. Evaluate variable recovery, false candidates and `photometryMinSnr` on the reference regression before changing that contract. See [errors and flags](ALGORITHM.md#photometry-6-3).
 
 **Boundaries.** Weighted Check-D slope tracking and per-candidate ensemble refits stay closed under [Declined](#declined). Catalogue-calibrated magnitudes belong to [SpacePixels F24](../SpacePixels/FEATURE-REQUESTS.md#f24-calibrated-magnitudes-for-variable-stars); fixed-camera analysis to [SpacePixels F23](../SpacePixels/FEATURE-REQUESTS.md#f23-fixed-camera-and-all-sky-sequence-analysis). Keep the current empirical noise model and reported-error contract unless a separate change is agreed.
+
+## RV-1. Findings from the pull request 1 review
+
+**Open; no fix is agreed.** The cloud code review of [pull request 1](https://github.com/ppissias/JTransient/pull/1) (2026-11-07) reported one normal-severity finding and six nits. GitHub refused the review's comment on the pull request, so this entry is the record of its findings. They are kept together at the maintainer's request, although RV-1.5 to RV-1.7 are code-quality items of the kind [DESIGN-IMPROVEMENTS.md](DESIGN-IMPROVEMENTS.md) normally holds.
+
+Each mechanism below was checked by reading the reviewed source, which is identical to commit `1b7e4fd`; line numbers refer to that commit. None was reproduced by running the code or on real data. Evaluate each item and record the decision with its change, as [DEVELOPER.md](DEVELOPER.md#working-rules) requires, and retain current behavior until then.
+
+| Item | Severity | Effect | Applies when |
+|---|---|---|---|
+| [RV-1.1](#rv-11-hot-pixels-can-pass-the-follows-sky-test) | Normal | Possible false tracks or repeats | Steady sub-pixel drift without dither |
+| [RV-1.2](#rv-12-faint-trails-can-be-reported-twice) | Nit | Same trail exported twice | Default configuration; normal pass finds only point-like pieces of a trail |
+| [RV-1.3](#rv-13-worker-limit-is-recalculated-after-the-faint-searches) | Nit | Slower photometry | Photometry on (off by default), heap under pressure |
+| [RV-1.4](#rv-14-very-large-faint-mover-time-limit-overflows) | Nit | Faint-mover search stops at once | Search on (off by default), limit of about 9.2e9 seconds or more |
+| [RV-1.5](#rv-15-orphaned-notifyobserver-javadoc) | Nit | Documentation only | Always |
+| [RV-1.6](#rv-16-duplicated-star-veto-overlap-rule) | Nit | Maintenance risk | Always |
+| [RV-1.7](#rv-17-diagnostics-are-copied-under-the-evidence-pool-lock) | Nit | Run time and garbage collection | Faint-mover search on, many passing peaks |
+
+### RV-1.1 Hot pixels can pass the follows-sky test
+
+**Possible false detections compared with the last release, which has no follows-sky exception.** [`CameraFixedRejector.followsSky`](src/main/java/io/github/ppissias/jtransient/core/CameraFixedRejector.java) (lines 219-252) leaves a group to linking when its straight-line fit in the registered frames has an rms below 1 px and below half the rms of its fit in camera coordinates. [ALGORITHM.md](ALGORITHM.md#94-camera-fixed-sources) says a group on frames that drift steadily without dither stays camera-fixed, because both fits are tight.
+
+The camera fit may not be tight on real registrations. For a pure translation, [`FrameRegistration.fit`](src/main/java/io/github/ppissias/jtransient/core/FrameRegistration.java) (lines 93-131) fits the whole-pixel fill edges measured by `FrameCoverage`, so a true shift of 0, 0.8, 1.6, 2.4, 3.2 px becomes whole-pixel steps such as 0, 1, 2, 2, 3 px. That rounding adds about 0.3 px rms to each drifting axis of the camera positions. A hot pixel's registered positions follow the true drift with only centroid noise, which the review puts at about 0.05 px. The group then counts as following the sky, its detections stay in `transients`, and their straight path can link into a false track or a local-rescue repeat.
+
+- **Trigger.** Steady sub-pixel drift without dither, pure translation, sub-pixel registration upstream, at least 4 frames and at least 4 px of spread in the frames. From the rms formula alone, the per-axis centroid scatter must also be below about 0.12 px for drift along one axis, or 0.17 px along both; this is an estimate, not a measurement.
+- **Test gap.** `CameraFixedRejectorTest.aMoverRidingASteadyDriftCannotBeToldFromAHotPixel` builds exact fractional shifts with `FrameRegistration.of`, so it does not exercise the rounded fill-edge fit.
+- **Next step.** Reproduce it with registrations fitted from `FrameCoverage`, then measure how often real sessions reach it. The review proposes no fix. A fix must keep the slow movers that the follows-sky exception protects, so it needs the [algorithm-change comparison](DEVELOPER.md#real-data-checks).
+
+### RV-1.2 Faint trails can be reported twice
+
+**Default configuration.** In [`TrackLinker`](src/main/java/io/github/ppissias/jtransient/core/TrackLinker.java) (lines 325-347), `FaintStreakFragmentGrouper.assemble` absorbs same-frame point detections only into the streak tracks that already exist, before the faint-search tracks are added; a new line needs at least 4 pieces and an 80 px span. `FaintStreakLinking.add` later joins only rescued anomalies to the new tracks. Unrescued normal pieces on the trail therefore stay in `unclassifiedTransients`, which common-motion rejection and residual analysis both read, and the trail appears both as a streak track and as unclassified transients.
+
+**Correction to the review.** It also says these pieces can become a `LOCAL_REPEAT`, citing `ResidualTransientAnalyzerTest.minimumDoesNotRequireThreeDistinctFrames`. That test uses detections from two frames, and a `LOCAL_REPEAT` needs a cluster radius of at most 2.5 px and a total displacement of at most 3 px, so pieces spread along a trail would not normally qualify. Three close pieces in a single frame were not checked.
+
+[ALGORITHM.md](ALGORITHM.md#135-faint-streak-search) says the search changes nothing of the normal pass, and absorbing these pieces would change what the normal pass exports. Decide whether that is wanted, with evidence on trail recovery and false absorption.
+
+### RV-1.3 Worker limit is recalculated after the faint searches
+
+**Run time only.** The Javadoc of `searchFaintStreaks` and `searchFaintMovers` in [`JTransientEngine`](src/main/java/io/github/ppissias/jtransient/engine/JTransientEngine.java) says the run's limit is "set again" afterwards. The `finally` blocks (lines 990 and 1052) instead recalculate it through `WorkerPool.limitWork` from the heap in use at that moment, which also includes extraction results, stacks and uncollected garbage from the search. The only later batch that runs under a recalculated limit is photometry's (`VariableStarAnalyzer`, line 878), so under heap pressure it can get fewer workers, down to one.
+
+Restoring the saved limit would match the comment, but a fresh estimate may be safer when the heap really is fuller. If the recalculation stays, correct the Javadoc.
+
+### RV-1.4 Very large faint-mover time limit overflows
+
+**Experimental search, off by default.** [`FaintMoverSearch`](src/main/java/io/github/ppissias/jtransient/core/FaintMoverSearch.java) computes `plan.startedNanos + (long) (faintMoverMaxSeconds * 1e9)` (line 514). At about 9.2e9 seconds (about 292 years), the addition overflows when `System.nanoTime()` is positive, leaving a negative deadline. `DetectionConfigRules` accepts any finite value above 0, including `Double.MAX_VALUE`, so a caller who sets a huge limit to mean "no limit" gets a search that stops before its first tile and reports truncation.
+
+Compare elapsed time with `System.nanoTime() - started` against a limit that saturates, as the `System.nanoTime` documentation recommends, at all four comparison sites (lines 521, 579, 581 and 745).
+
+### RV-1.5 Orphaned `notifyObserver` Javadoc
+
+**Documentation only.** In [`JTransientEngine`](src/main/java/io/github/ppissias/jtransient/engine/JTransientEngine.java), the new search methods were inserted between `notifyObserver` (line 1056) and its Javadoc, which now sits at line 962 directly above the `searchFaintStreaks` Javadoc. Move it back above `notifyObserver`.
+
+### RV-1.6 Duplicated star-veto overlap rule
+
+**Maintenance risk.** `FaintStreakSearch.maskOverlap` ([lines 333-345](src/main/java/io/github/ppissias/jtransient/core/FaintStreakSearch.java)) repeats the private `TransientVeto.computeMaskOverlapFraction` ([lines 147-162](src/main/java/io/github/ppissias/jtransient/core/TransientVeto.java)), so a change to one would make the normal pass and the faint search veto stars differently. The copies differ only in that `TransientVeto` takes the width from the first row and checks for cancellation at each pixel; on a rectangular mask both return the same value.
+
+Make the `TransientVeto` method package-private and call it from `FaintStreakSearch`.
+
+### RV-1.7 Diagnostics are copied under the evidence-pool lock
+
+**Run time and garbage collection.** `EvidencePool.capture` in [`FaintMoverSearch`](src/main/java/io/github/ppissias/jtransient/core/FaintMoverSearch.java) (lines 303-310) is synchronized and starts by copying the peak's full diagnostics: up to 128 frames of up to 256 x 256 floats, about 33 MB, plus two half maps. Only then does it insert the copy and evict down to the 64 MiB budget. Tile workers with passing peaks wait on that lock, and a peak ranked below the weakest entry of a full pool can be copied only to be evicted at once.
+
+Check the rank or reserve the size inside the lock, copy outside it, then insert and evict inside it. Only review evidence is copied, so candidates change only if the extra time makes the search reach `faintMoverMaxSeconds`.
 
 ## Declined
 
