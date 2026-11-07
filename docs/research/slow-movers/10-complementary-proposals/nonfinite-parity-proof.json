@@ -1,9 +1,0 @@
-{
-  "dataset": "dc-reg",
-  "context": "case-03",
-  "candidateValuesAndReviewHashesEqual": true,
-  "nonTimeCountersEqual": true,
-  "unavailableFirstHalfCandidates": 1,
-  "originalResultSha256": "9a5fe045870a93e036c1cb214a6d4f937b3737b91b6da1039bd98b8bbce6e739",
-  "failedComparatorReplaySha256": "65b67929693b9d26fb05a0d828f787f6879c6473a9d7352305b7c54f15bd960d"
-}

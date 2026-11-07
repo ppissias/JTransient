@@ -1,7 +1,0 @@
-{
-  "exactCases": 77,
-  "passed": true,
-  "excludedFields": [
-    "telemetry.elapsedMs"
-  ]
-}
