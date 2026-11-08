@@ -13,6 +13,8 @@ These are proposals, not implementation authorisations. Retain current algorithm
 | [PT-10](#pt-10-minimum-fill-for-timed-point-tracks) | Proposed | Require timed point tracks to cover a minimum share of the frames they span; measure faint real movers first. |
 | [SM-F7](#sm-f7-slow-and-faint-mover-extensions) | Deferred; no further campaign scheduled | Revisit specific mover losses or a demonstrated resource bottleneck; retain digital tracking and current maximum-stack gates. |
 | [SM-F8](#sm-f8-frame-check-for-runs-of-leaky-frames) | Proposed; later addition | Leave out runs of frames whose star tails leak past the faint-mover mask, which the few-frame check cannot stop when they cover a third of the frames or more. Needs a second affected session. |
+| [SM-F9](#sm-f9-slow-mover-candidates-made-by-hot-pixels) | Proposed | Reject maximum-stack candidates that stay at one camera position: hot pixels that the drift draws into short dashes. |
+| [SM-F10](#sm-f10-faint-mover-paths-beside-a-star) | Proposed | Reject faint-mover paths that stay beside the star mask for most of the session; validate on movers that pass bright stars first. |
 | [XC-3](#xc-3-local-background-and-noise-for-frame-extraction) | Open; parked at maintainer request; new evidence (2026-11-08) | Resume with local sky correction alone, keeping baseline noise and thresholds fixed; preserve associations, photometry and boundary calibration. |
 | [VS-9](#vs-9-selected-stars-and-the-linearity-check-minimum) | Deferred policy | Distinguish insufficient Check-B evidence from measured nonlinearity; retained-subset scoring is not implemented. |
 | [VS-11](#vs-11-photometry-strictness-defaults-and-recovery-review) | Deferred follow-ups | Six bounded photometry questions below; the initial audit and adopted VS-12 work are complete. |
@@ -82,6 +84,22 @@ Before adopting a lead, demonstrate incremental recovery or useful complete-cove
 
 **Proposal: a frame check.** Measure the light just past the mask of about 150 moderately bright, unsaturated stars (over 100 sigma in the stack; the brightest stars' masks hide the lobes) in 12 directions, in frame noises. Flag runs of 3 or more consecutive frames at 0.5-0.75 or more, each pointing within 45 degrees of the one before, and leave them out of the faint-mover search. Across 25 datasets this flagged exactly frames 4-11 of that session, 6 of 211 frames in one wide-field DSLR sequence (whether they cause candidates is unknown), and nothing else. It was designed on the only known bad session, so it needs another affected session before adoption. It would cover the long bad stretches that the few-frame check cannot.
 
+## SM-F9. Slow-mover candidates made by hot pixels
+
+**Proposed (2026-11-08).** In a batch of 102 archive sessions, two uncalibrated sessions gave 36 and 23 slow-mover candidates, where most sessions gave none: a 44-frame session on a 0.4 MP sensor and a 6-frame session on a 1.9 MP sensor. Their maximum-stack cut-outs are full of short parallel dashes with the length and direction of the session's drift (5 x 1 px and 7 x 2 px). They are hot pixels that registration moves along with the dither and the drift.
+
+The camera-fixed rejection does not see them. It works on frame detections, and a single hot pixel is below `minDetectionPixels`, so it never becomes one; only the maximum stack joins its positions into an object large enough for `masterSlowMoverMinPixels`. The slow-mover stage has no camera check of its own: [`SlowMoverFrameEvidence`](src/main/java/io/github/ppissias/jtransient/core/SlowMoverFrameEvidence.java) only leaves out frames whose footprint is registration fill.
+
+**Proposal.** Before a maximum-stack candidate is accepted, follow its brightest pixel back to camera coordinates in each frame (its position minus the frame's offset). Reject it when one camera position, within a pixel, is above the noise in most of the frames, as a hot pixel is; a real slow mover moves in camera coordinates as well. A cheaper shape test, a dash as long as the drift and pointing along it, would also reject a real mover that happens to move with the drift. Validate on the slow movers that the reference datasets keep, and count what remains on the two sessions.
+
+## SM-F10. Faint-mover paths beside a star
+
+**Proposed (2026-11-08).** A 32-frame, three-hour session on a 1.4 MP sensor gave 131 faint-mover candidates, about 90 per MPix; no other archive session gave more than 9 per MPix. Run again with the few-frame check, 82 remained. Of those, 95% lie within 5 px of the star mask (73% on it), and 56% share one direction and almost the same rate, about 20 px over the session. The cut-outs show the path sliding past a bright star whose halo, or a tail in the later frames with elongated stars, reaches past the mask while the sky brightness changes strongly over the session. The stationary check does not catch them, because the star is masked in the zero-motion stack (stationary score about 0).
+
+Measured on the 82 paths: the share of each path's frames within 1.5 FWHM of the star mask has a median of 97%, and 76% of the paths stay that close in 80% of their frames or more. Random straight paths with the same velocities do so in 7% of cases (median 0%). [SM-F8](#sm-f8-frame-check-for-runs-of-leaky-frames) already rejects a blanket wider mask, which lost 3 of 12 injected movers passing a bright star.
+
+**Proposal.** Reject a candidate whose path stays within about 1.5 FWHM of the star mask in at least about 80% of its frames. A real mover passing a star is near it only while it crosses; it is lost only when its whole motion over the session is shorter than about a star's masked footprint, where it cannot be told from the halo anyway. Before adoption, check the 12 injected movers passing bright stars and klangwolke-2's 10 known candidates (all must stay), and the false candidates on this session and on the SM-F8 session.
+
 ## XC-3. Local background and noise for frame extraction
 
 **Open, parked at the maintainer's request; retain the current per-frame model.** A continuous local sky/noise prototype improved fixed-flux recovery, but also lost some controlled recoveries, changed source associations and photometry classifications/readiness, and added many unverified findings. No production algorithm, gate or default change is selected. The master reference's existing local-sky pass remains unchanged.
@@ -147,7 +165,7 @@ Each mechanism below was checked by reading the reviewed source, which is identi
 
 | Item | Severity | Effect | Applies when |
 |---|---|---|---|
-| [RV-1.1](#rv-11-hot-pixels-can-pass-the-follows-sky-test) | Normal | Possible false tracks or repeats | Steady sub-pixel drift without dither |
+| [RV-1.1](#rv-11-hot-pixels-can-pass-the-follows-sky-test) | Normal | False tracks; seen in 4 of 102 archive sessions | Steady sub-pixel drift without dither |
 | [RV-1.2](#rv-12-faint-trails-can-be-reported-twice) | Nit | Same trail exported twice | Default configuration; normal pass finds only point-like pieces of a trail |
 | [RV-1.3](#rv-13-worker-limit-is-recalculated-after-the-faint-searches) | Nit | Slower photometry | Photometry on (the default), heap under pressure |
 | [RV-1.4](#rv-14-very-large-faint-mover-time-limit-overflows) | Nit | Faint-mover search stops at once | Search on (the default), limit of about 9.2e9 seconds or more |
@@ -163,7 +181,8 @@ The camera fit may not be tight on real registrations. For a pure translation, [
 
 - **Trigger.** Steady sub-pixel drift without dither, pure translation, sub-pixel registration upstream, at least 4 frames and at least 4 px of spread in the frames. From the rms formula alone, the per-axis centroid scatter must also be below about 0.12 px for drift along one axis, or 0.17 px along both; this is an estimate, not a measurement.
 - **Test gap.** `CameraFixedRejectorTest.aMoverRidingASteadyDriftCannotBeToldFromAHotPixel` builds exact fractional shifts with `FrameRegistration.of`, so it does not exercise the rounded fill-edge fit.
-- **Next step.** Reproduce it with registrations fitted from `FrameCoverage`, then measure how often real sessions reach it. The review proposes no fix. A fix must keep the slow movers that the follows-sky exception protects, so it needs the [algorithm-change comparison](DEVELOPER.md#real-data-checks).
+- **Real sessions (2026-11-08).** In a batch of 102 archive sessions, 7 moving tracks in 4 sessions are hot pixels that passed this test. Each follows its frames' whole-pixel offsets (the report's drift table) to within 0.4-0.9 px. Its straight-line fit has an rms of 0.07-0.12 px in the registered frames and 0.35-0.42 px in camera coordinates, about the rounding of whole-pixel offsets (0.29 px per drifting axis), so the ratio is 0.18-0.35, under the 0.5 limit. In three of the four sessions the hot pixel is the only track reported.
+- **Next step.** Reproduce it with registrations fitted from `FrameCoverage`; real sessions do reach it (above). The review proposes no fix. A fix must keep the slow movers that the follows-sky exception protects, so it needs the [algorithm-change comparison](DEVELOPER.md#real-data-checks).
 
 ### RV-1.2 Faint trails can be reported twice
 
