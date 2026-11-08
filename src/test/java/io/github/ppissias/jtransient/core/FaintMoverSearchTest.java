@@ -113,6 +113,10 @@ public class FaintMoverSearchTest {
                 for (int x = 0; x < SIZE; x++) {
                     double value = SKY + NOISE * random.nextGaussian();
                     for (double[] s : sources) {
+                        // An optional sixth and seventh value limit the source to those frames.
+                        if (s.length > 5 && (k < s[5] || k > s[6])) {
+                            continue;
+                        }
                         double dx = x - (s[0] + s[2] * minutes);
                         double dy = y - (s[1] + s[3] * minutes);
                         value += s[4] * Math.exp(-(dx * dx + dy * dy) / (2 * sigma * sigma));
@@ -183,6 +187,34 @@ public class FaintMoverSearchTest {
             assertEquals(f.signal, f.residual[y * d.width + x], 0);
             assertEquals(d.scoreX + (int) Math.round(c.vx * (k * CADENCE / 60000.0 - midMinutes())), f.sampleX);
         }
+    }
+
+    /** Three frames carrying a strong residual on a path, as a tail past a star's mask does, cannot make a candidate. */
+    @Test
+    public void aFewStrongFramesDoNotMakeACandidate() throws Exception {
+        // Too faint to reach the score alone, but enough for the half that lacks the strong frames.
+        double[] steady = {100, 120, 0.4, -0.25, 0.65 * NOISE};
+        double[] fewFrames = {100, 120, 0.4, -0.25, 8 * NOISE, 3, 5};
+        FaintMoverSearch.Result result = run(input(frames(11, steady, fewFrames)), new DetectionConfig());
+        assertTrue("the few frames alone must not pass", result.candidates.isEmpty());
+        assertTrue("this check is what stopped it", result.telemetry.rejectedFewFrames > 0);
+
+        // Switched off, the same path passes the other checks.
+        DetectionConfig off = new DetectionConfig();
+        off.enableFaintMoverFrameLimit = false;
+        FaintMoverSearch.Result without = run(input(frames(11, steady, fewFrames)), off);
+        assertEquals(1, without.candidates.size());
+        assertEquals(0, without.telemetry.rejectedFewFrames);
+    }
+
+    /** A brighter mover that is also strong in a few frames, as the mean of its frames supports, is still found. */
+    @Test
+    public void aSteadyMoverWithOneOutlyingFrameIsKept() throws Exception {
+        double[] steady = {100, 120, 0.4, -0.25, 2.5 * NOISE};
+        double[] oneFrame = {100, 120, 0.4, -0.25, 6 * NOISE, 7, 7};
+        FaintMoverSearch.Result result = run(input(frames(12, steady, oneFrame)), new DetectionConfig());
+        assertEquals(1, result.candidates.size());
+        assertEquals(0, result.telemetry.rejectedFewFrames);
     }
 
     @Test

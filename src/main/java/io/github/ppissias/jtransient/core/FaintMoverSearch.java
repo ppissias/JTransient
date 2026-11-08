@@ -103,6 +103,12 @@ public final class FaintMoverSearch {
      * {@link #MIN_HALF_FRAMES} and {@link #MIN_HALF_COVERAGE} of its frames cannot be tested; at least one half must be.
      */
     static final double MIN_HALF_SCORE = 3.0;
+    /**
+     * With {@code enableFaintMoverFrameLimit}, the score must still pass when no frame adds more than the path's typical
+     * frame plus this many frame noises. A faint mover is about equally faint in every frame; a few frames carrying the
+     * same residual, such as faint star tails past the mask, are not.
+     */
+    static final double FRAME_LIMIT_SIGMA = 3.0;
     static final int MIN_HALF_FRAMES = 3;
     static final double MIN_HALF_COVERAGE = 1.0 / 3.0;
     /**
@@ -334,6 +340,7 @@ public final class FaintMoverSearch {
         int refinedPeaks;
         int belowScore;
         int rejectedSplitHalf;
+        int rejectedFewFrames;
         int rejectedStationary;
         /** Whether the time limit stopped the tile; its peaks are then left out. */
         boolean timedOut;
@@ -539,6 +546,7 @@ public final class FaintMoverSearch {
                 telemetry.refinedPeaks += tile.refinedPeaks;
                 telemetry.belowScore += tile.belowScore;
                 telemetry.rejectedSplitHalf += tile.rejectedSplitHalf;
+                telemetry.rejectedFewFrames += tile.rejectedFewFrames;
                 telemetry.rejectedStationary += tile.rejectedStationary;
                 telemetry.followingCamera += tile.followingCamera;
             }
@@ -1134,6 +1142,11 @@ public final class FaintMoverSearch {
             result.rejectedSplitHalf++;
             return null;
         }
+        if (plan.config.enableFaintMoverFrameLimit
+                && frameLimitedScore(plan, residuals, bad, streakMasks, width, topX, topY, sx, sy, noise) < plan.config.faintMoverMinScore) {
+            result.rejectedFewFrames++;
+            return null;
+        }
         double stationary = Double.NEGATIVE_INFINITY;
         int[] zero = new int[n];
         for (int dy = -STATIONARY_RADIUS; dy <= STATIONARY_RADIUS; dy++) {
@@ -1163,6 +1176,31 @@ public final class FaintMoverSearch {
         double subY = vertex(cutout[r - 1][r], cutout[r][r], cutout[r + 1][r]);
         return new Peak(tx + topX + subX, ty + topY + subY, topVx, topVy, top, firstHalf, secondHalf, stationary,
                 camera, cutout, new PeakLocation(tx, ty, w, h, topX, topY, noise));
+    }
+
+    /**
+     * The path's score when no frame adds more than its typical unmasked frame plus {@link #FRAME_LIMIT_SIGMA} frame
+     * noises. The stack's spread gives the frame noise, as the frames are independent.
+     */
+    private static double frameLimitedScore(Plan plan, float[][] residuals, boolean[] bad, BitSet[] streakMasks, int width,
+                                             int x, int y, int[] sx, int[] sy, double noise) {
+        int n = residuals.length;
+        float[] values = new float[n];
+        float[] unmasked = new float[n];
+        int valid = 0;
+        for (int k = 0; k < n; k++) {
+            int i = (y + plan.margin + sy[k]) * width + x + plan.margin + sx[k];
+            values[k] = residuals[k][i];
+            if (!bad[i] && (streakMasks[k] == null || !streakMasks[k].get(i))) {
+                unmasked[valid++] = values[k];
+            }
+        }
+        double limit = centreAndSpread(unmasked, valid)[0] + FRAME_LIMIT_SIGMA * noise * Math.sqrt(n);
+        double sum = 0;
+        for (float value : values) {
+            sum += Math.min(value, limit);
+        }
+        return sum / (n * noise);
     }
 
     /**

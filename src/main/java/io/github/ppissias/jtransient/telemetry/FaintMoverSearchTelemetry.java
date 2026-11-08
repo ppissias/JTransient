@@ -14,7 +14,7 @@ package io.github.ppissias.jtransient.telemetry;
  * check kept.
  *
  * <p>The counts follow one population in the order the checks see it: {@link #refinedPeaks} = {@link #belowScore} +
- * {@link #rejectedSplitHalf} + {@link #rejectedStationary} + {@link #followingCamera} + {@link #duplicates} +
+ * {@link #rejectedSplitHalf} + {@link #rejectedFewFrames} + {@link #rejectedStationary} + {@link #followingCamera} + {@link #duplicates} +
  * {@link #matchedTracks} + {@link #nearStronger} + {@link #candidates}.</p>
  */
 public class FaintMoverSearchTelemetry {
@@ -53,6 +53,8 @@ public class FaintMoverSearchTelemetry {
     public int belowScore;
     /** Peaks one half of the session does not support. */
     public int rejectedSplitHalf;
+    /** Peaks whose score comes from a few frames: below the minimum once no frame may stand far above the path's typical frame. */
+    public int rejectedFewFrames;
     /** Peaks that do not score clearly above the stationary stack. */
     public int rejectedStationary;
     /** Peaks that repeat a stronger peak at a nearby position and motion (neighbouring tiles). */

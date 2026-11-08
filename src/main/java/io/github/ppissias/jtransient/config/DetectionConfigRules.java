@@ -520,7 +520,7 @@ public final class DetectionConfigRules {
         add(metadata, Stage.PHOTOMETRY, Domain.NON_NEGATIVE, "photometryMaxRegistrationSpreadPixels linearityMaxConcentrationDrift linearityMinRangeMag linearityMaxFrameSlope linearityMinZeroPointRangeMag variableMinSpanMinutes variableScoreSigma variableMinAmplitudeMag variableLimitedMinAmplitudeMag variableAmplitudeNoiseFactor variableMaxApertureAmplitudeDifference variableSystematicsResponseFactor variableLocalRadiusPixels");
         add(metadata, Stage.PHOTOMETRY, Domain.ENCODING_LEVELS, "linearityMinDistinctLevels");
         add(metadata, Stage.PHOTOMETRY, Domain.CORRELATION, "variableMinSplitHalfCorrelation");
-        add(metadata, Stage.FAINT_MOVERS, Domain.BOOLEAN, "enableFaintMoverSearch");
+        add(metadata, Stage.FAINT_MOVERS, Domain.BOOLEAN, "enableFaintMoverSearch enableFaintMoverFrameLimit");
         add(metadata, Stage.FAINT_MOVERS, Domain.POSITIVE, "faintMoverMinDisplacementFwhm faintMoverMaxSpeedPixelsPerMinute faintMoverMinScore faintMoverMaxSeconds");
         if (!metadata.keySet().equals(FIELDS.keySet())) {
             throw new IllegalStateException("DetectionConfig metadata must cover every instance field exactly once.");

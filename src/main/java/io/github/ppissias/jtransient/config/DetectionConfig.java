@@ -636,6 +636,13 @@ public class DetectionConfig implements Cloneable {
      */
     public double faintMoverMinScore = 8.0;
 
+    /** * Rejects a candidate whose score comes from a few frames: the score must still reach
+     * {@link #faintMoverMinScore} when no frame adds more than the path's typical frame plus three frame noises. A faint
+     * mover is about equally faint in every frame; a residual that a few frames share, such as faint star tails past
+     * the star mask in a run of frames, is not.
+     */
+    public boolean enableFaintMoverFrameLimit = true;
+
     /** * Time limit for the search, in seconds; the search then stops and reports the part it searched. */
     public double faintMoverMaxSeconds = 600.0;
 

@@ -135,6 +135,7 @@ All fields are public and mutable. A few implementation details matter when you 
   - [faintMoverMinDisplacementFwhm (default 2.0)](#faintmovermindisplacementfwhm-default-20)
   - [faintMoverMaxSpeedPixelsPerMinute (default 1.0)](#faintmovermaxspeedpixelsperminute-default-10)
   - [faintMoverMinScore (default 8.0)](#faintmoverminscore-default-80)
+  - [enableFaintMoverFrameLimit (default true)](#enablefaintmoverframelimit-default-true)
   - [faintMoverMaxSeconds (default 600.0)](#faintmovermaxseconds-default-6000)
 - [10. Auto-Tuners](#10-auto-tuners)
 - [11. Practical Starting Point](#11-practical-starting-point)
@@ -878,6 +879,10 @@ Fastest motion searched, in pixels per minute. The number of trial motions grows
 ### `faintMoverMinScore` (default `8.0`)
 
 Score a candidate must reach: its PSF-filtered stack over the noise of such stacks in its tile. Empirical, not a calibrated significance. On the reference sessions, null controls (shuffled times, mirrored residuals) left at most about one candidate at 8 away from bright movers.
+
+### `enableFaintMoverFrameLimit` (default `true`)
+
+Rejects a candidate whose score comes from a few frames. Each frame's contribution along the path is capped at the path's median unmasked frame plus 3 frame noises, and the capped score must still reach `faintMoverMinScore`; the telemetry counts these rejections as `rejectedFewFrames`. A faint mover is about equally faint in every frame, so the cap rarely touches it; a residual that a run of frames shares, such as faint star tails past the star mask, loses most of its score. It cannot stop a residual spread over about a third of the frames or more. Switch it off to compare with the earlier behaviour.
 
 ### `faintMoverMaxSeconds` (default `600.0`)
 

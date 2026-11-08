@@ -637,8 +637,8 @@ public class PipelineTelemetry {
         sb.append(String.format(java.util.Locale.US, "  Tiles searched: %d of %d%s | Pixels searched: %d | %.1f s\n",
                 f.tilesSearched, f.tiles, f.truncated ? " (time limit reached)" : "", f.searchedPixels,
                 f.elapsedMs / 1000.0));
-        sb.append(String.format("  Peaks refined: %d | below score: %d | one half: %d | stationary: %d | duplicates: %d\n",
-                f.refinedPeaks, f.belowScore, f.rejectedSplitHalf, f.rejectedStationary, f.duplicates));
+        sb.append(String.format("  Peaks refined: %d | below score: %d | one half: %d | few frames: %d | stationary: %d | duplicates: %d\n",
+                f.refinedPeaks, f.belowScore, f.rejectedSplitHalf, f.rejectedFewFrames, f.rejectedStationary, f.duplicates));
         sb.append(String.format("  Moving tracks: %d | side lobes: %d | camera-fixed: %d | Candidates: %d\n\n",
                 f.matchedTracks, f.nearStronger, f.followingCamera, f.candidates));
     }
