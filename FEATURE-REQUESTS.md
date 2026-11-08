@@ -10,8 +10,10 @@ These are proposals, not implementation authorisations. Retain current algorithm
 |---|---|---|
 | [QC-1](#qc-1-star-count-rejection-envelope) | Deferred | Consider a count-envelope floor only if corrected common-area counts reject useful frames too readily. |
 | [PT-5](#pt-5-registration-quality-and-shared-jitter-tolerances) | Proposed assessment | Measure residual stellar registration quality before deciding whether shared jitter tolerances need to change. |
+| [PT-10](#pt-10-minimum-fill-for-timed-point-tracks) | Proposed | Require timed point tracks to cover a minimum share of the frames they span; measure faint real movers first. |
 | [SM-F7](#sm-f7-slow-and-faint-mover-extensions) | Deferred; no further campaign scheduled | Revisit specific mover losses or a demonstrated resource bottleneck; retain digital tracking and current maximum-stack gates. |
-| [XC-3](#xc-3-local-background-and-noise-for-frame-extraction) | Open; parked at maintainer request | Resume with local sky correction alone, keeping baseline noise and thresholds fixed; preserve associations, photometry and boundary calibration. |
+| [SM-F8](#sm-f8-frame-check-for-runs-of-leaky-frames) | Proposed; later addition | Leave out runs of frames whose star tails leak past the faint-mover mask, which the few-frame check cannot stop when they cover a third of the frames or more. Needs a second affected session. |
+| [XC-3](#xc-3-local-background-and-noise-for-frame-extraction) | Open; parked at maintainer request; new evidence (2026-11-08) | Resume with local sky correction alone, keeping baseline noise and thresholds fixed; preserve associations, photometry and boundary calibration. |
 | [VS-9](#vs-9-selected-stars-and-the-linearity-check-minimum) | Deferred policy | Distinguish insufficient Check-B evidence from measured nonlinearity; retained-subset scoring is not implemented. |
 | [VS-11](#vs-11-photometry-strictness-defaults-and-recovery-review) | Deferred follow-ups | Six bounded photometry questions below; the initial audit and adopted VS-12 work are complete. |
 | [RV-1](#rv-1-findings-from-the-pull-request-1-review) | Open; no fix agreed | Seven code-review findings, led by hot pixels that can pass the follows-sky test on steadily drifting frames. Decide each item separately. |
@@ -31,6 +33,26 @@ Revisit with stable, cloudy and sparse sessions showing useful frames lost by th
 Measure residual stellar alignment across the field, including translation, rotation, sparse/crowded fields and uncertain matches. Determine whether photometry measurements can supply one shared, authoritative assessment, its cost, and its place relative to extraction and frame rejection. The fill-edge camera transform is not a measure of remaining stellar misalignment.
 
 Separate measured uncertainty from detection-policy minima before changing jitter consumers. Validate useful-mover retention and stationary false tracks on good and poor registrations; coordinate any new settings with SpacePixels. Current behavior: [registration](ALGORITHM.md#1-border-drift-diagnostics), [configuration](CONFIG.md).
+
+## PT-10. Minimum fill for timed point tracks
+
+**Proposed; no rule is agreed.** In a long sequence a timed point track needs only five points, wherever they fall: the required count is the frame count divided by `trackMinFrameRatio`, capped at `absoluteMaxPointsRequired` (5). `TimedPointLinker` has no continuity rule; the rhythm check runs only in the geometric linker and in streak consolidation. Where single-frame detections are dense, unrelated ones line up by chance. Current behavior: [time-based linking](ALGORITHM.md#10-time-based-point-linking).
+
+**Evidence (2026-11-08).** A SpacePixels archive batch at maximum auto-tune gave long DSLR sequences hundreds of moving tracks each. A typical false track has 5-6 points spread over most of the session and appears in 5-8% (median) of the kept frames between its first and last point. These tracks don't follow the frame drift (0-1% within 20% of its velocity), and they sit where detections are dense ([XC-3](#xc-3-local-background-and-noise-for-frame-extraction)). Real tracks fill their span:
+
+| Sequence | Moving tracks | Tracks that appear in at least 30% of their span |
+|---|---|---|
+| DSLR, M31, 101 frames | 1,661 | 0 |
+| DSLR, wide field, 150 frames | 1,366 | 1 |
+| DSLR, wide field, defocused, 42 frames | 1,505 | 108 |
+| DSLR, M31, 97 frames | 640 | 1 |
+| M33 field, 38 frames | 129 | 44 |
+| klangwolke-2, known asteroids | 3 | 3 (fill 43-100%, median 83%) |
+| Apophis | 1 | 1 (100%) |
+
+**Proposal.** Require a track's points to cover a minimum share of the kept frames it spans, for example 30%, or limit the longest gap between consecutive points. Applied while a track grows rather than only at the end, the rule would also shorten the third-point search ([JT-06](DESIGN-IMPROVEMENTS.md#jt-06-look-up-third-points-by-position-in-the-time-based-linker)).
+
+**Before adopting.** Only four real tracks were checked. A faint real mover that falls below the threshold in many frames, crosses star masks or bright regions, or loses rejected frames could drop under the line. Measure injected faint movers and the reference regression, and compare a fill share with a gap limit. Timed tracks may still bend ([PT-3](#declined)). Reducing the detection density first ([XC-3](#xc-3-local-background-and-noise-for-frame-extraction)) may remove most of these tracks; decide the order from that comparison.
 
 <!-- Stable targets for retired request IDs in historical documents. -->
 <a id="sm-f1-temporal-confirmation-of-slow-mover-candidates"></a>
@@ -52,6 +74,14 @@ Keep these conditional leads together:
 
 Before adopting a lead, demonstrate incremental recovery or useful complete-coverage benefit against the current implementation, with source attribution, matched domains and controls, bounded cost and retained baseline findings. Agreement is also required on engine/application settings, result provenance and review behavior. Catalogue compatibility remains post-detection evidence; empirical scores remain uncalibrated. Do not reopen general threshold sweeps or repeat the reviewed grids without a specific unanswered failure.
 
+## SM-F8. Frame check for runs of leaky frames
+
+**Proposed; a later addition to the delivered few-frame check.** In a 68-frame session, every star in frames 4-11 had a faint one-sided tail in the same direction, roughly 1% of its light or less, and quality control passed those frames (bright-star elongation 1.16-1.31 against a 1.32 limit). Bright stars' tails reached past the faint-mover star mask, and the search reported 200 false candidates. The few-frame check, `enableFaintMoverFrameLimit` (on by default, see [ALGORITHM.md](ALGORITHM.md#faint-mover-search)), removes candidates whose score comes from a few frames. On a crop of that session it left 1 of 174, whose strongest frames were in that run. It cannot stop a residual that a third or more of the frames share.
+
+**Evidence for the check (2026-11-08, real-engine runs on crops).** Injected movers were recovered as before: 25 of 35 in quiet sky and 12 of 12 passing a bright star. klangwolke-2 kept its 10 known candidates with unchanged scores, and other false candidates on the injected crop fell from 102 to 2. A wider mask around bright stars (cores over 100 sigma grown by 1.5 FWHM) was rejected: it lost 3 of the 12 movers passing a bright star. Leaving out each path's strongest 18% of frames was rejected too, because it loses 41% of real movers at score 8 over 65 frames (simulation). Tightening quality control on elongation would also reject 26 of the session's 60 other frames.
+
+**Proposal: a frame check.** Measure the light just past the mask of about 150 moderately bright, unsaturated stars (over 100 sigma in the stack; the brightest stars' masks hide the lobes) in 12 directions, in frame noises. Flag runs of 3 or more consecutive frames at 0.5-0.75 or more, each pointing within 45 degrees of the one before, and leave them out of the faint-mover search. Across 25 datasets this flagged exactly frames 4-11 of that session, 6 of 211 frames in one wide-field DSLR sequence (whether they cause candidates is unknown), and nothing else. It was designed on the only known bad session, so it needs another affected session before adoption. It would cover the long bad stretches that the few-frame check cannot.
+
 ## XC-3. Local background and noise for frame extraction
 
 **Open, parked at the maintainer's request; retain the current per-frame model.** A continuous local sky/noise prototype improved fixed-flux recovery, but also lost some controlled recoveries, changed source associations and photometry classifications/readiness, and added many unverified findings. No production algorithm, gate or default change is selected. The master reference's existing local-sky pass remains unchanged.
@@ -59,6 +89,13 @@ Before adopting a lead, demonstrate incremental recovery or useful complete-cove
 The next proposed experiment changes only the continuous local sky level, retaining the baseline's exact per-frame global noise estimates and configured seed/grow multipliers. Use consistent local background subtraction for measurements while preserving physical image pixels. Footprints, centroids, fluxes and elongation can still change; assess those changes and source associations explicitly rather than requiring identical shapes. Evaluate another noise estimator separately, after this comparison. Photometry's local sky does not solve frame extraction.
 
 Keep path coverage and score calibration separate: continuous background interpolation avoids hard cell boundaries, and digital tracking already reads motion-sized halos, while per-tile noise estimates can still change scores near a reference-tile boundary. Successor validation needs crossing and near-threshold controls, retained source support/associations, star-by-star photometry, false-candidate review and runtime across gradients, extended emission and flat sky. Preserve the master reference's coverage. Current implementation: [extraction](ALGORITHM.md#3-single-frame-extraction-internals), [master stars](ALGORITHM.md#7-master-star-extraction), [faint search](ALGORITHM.md#faint-mover-search), [SourceExtractor](src/main/java/io/github/ppissias/jtransient/core/SourceExtractor.java).
+
+**New evidence (2026-11-08).** A SpacePixels archive batch at maximum auto-tune gave long DSLR sequences hundreds of false moving tracks each ([PT-10](#pt-10-minimum-fill-for-timed-point-tracks)). Per-frame extraction thresholds the raw frame at one frame-wide median plus k sigma, so where the sky or an extended object is brighter than that median the threshold sits closer to the noise. Measured in 128-px blocks, in units of each block's own pixel noise:
+- In a 101-frame M31 sequence, the 3.7% of blocks below 6 (the galaxy) hold 88% of the track points.
+- In a 150-frame wide-field sequence with a gradient, the 23% of blocks below 6 hold 94%.
+- Flat sky sits at 7-8, because the frame-wide sigma is about twice the pixel noise. The values differ between cameras; the comparison holds within a sequence.
+
+In these sequences the auto-tuner also raised `maxMaskOverlapFraction` (0.65-0.85, against 0.5 in quiet sequences), and 12-21% of their track points lie on the saved star mask. Revisit that choice after a local-sky change. This evidence supports resuming with the planned local-sky experiment; whether to resume is the maintainer's decision.
 
 Retain the frozen profile, executable/source and dependency snapshots, native baseline results, input hashes and boundary controls for resumption. The local resume bundle and its verification are located through the machine's ignored environment notes; detailed experimental material remains outside the algorithm reference and repository.
 
