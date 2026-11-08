@@ -17,8 +17,8 @@ All fields are public and mutable. A few implementation details matter when you 
 
 - [Shared rules and compatibility](#shared-rules-and-compatibility)
 - [1. Extraction And Blob Classification](#1-extraction-and-blob-classification)
-  - [detectionSigmaMultiplier (default 5.0)](#detectionsigmamultiplier-default-50)
-  - [growSigmaMultiplier (default 3.0)](#growsigmamultiplier-default-30)
+  - [detectionSigmaMultiplier (default 3.5)](#detectionsigmamultiplier-default-35)
+  - [growSigmaMultiplier (default 2.75)](#growsigmamultiplier-default-275)
   - [minDetectionPixels (default 10)](#mindetectionpixels-default-10)
   - [streakMinElongation (default 6.0)](#streakminelongation-default-60)
   - [streakMinPixels (default 25)](#streakminpixels-default-25)
@@ -36,8 +36,8 @@ All fields are public and mutable. A few implementation details matter when you 
   - [masterGrowSigmaMultiplier (default 0.0)](#mastergrowsigmamultiplier-default-00)
   - [enableSlowMoverDetection (default true)](#enableslowmoverdetection-default-true)
   - [masterSlowMoverMinPixels (default 15)](#masterslowmoverminpixels-default-15)
-  - [masterSlowMoverSigmaMultiplier (default 4.0)](#masterslowmoversigmamultiplier-default-40)
-  - [masterSlowMoverGrowSigmaMultiplier (default 3.5)](#masterslowmovergrowsigmamultiplier-default-35)
+  - [masterSlowMoverSigmaMultiplier (default 3.5)](#masterslowmoversigmamultiplier-default-35)
+  - [masterSlowMoverGrowSigmaMultiplier (default 2.75)](#masterslowmovergrowsigmamultiplier-default-275)
   - [slowMoverMinAxisRatio (default 1.2)](#slowmoverminaxisratio-default-12)
   - [slowMoverMaxAxisRatio (default 2.8)](#slowmovermaxaxisratio-default-28)
   - [slowMoverMinFillFactor (default 0.5)](#slowmoverminfillfactor-default-05)
@@ -58,7 +58,7 @@ All fields are public and mutable. A few implementation details matter when you 
   - [minBrightStarEccentricityEnvelope (default 0.10)](#minbrightstareccentricityenvelope-default-010)
   - [minFwhmEnvelope (default 0.5)](#minfwhmenvelope-default-05)
 - [4. Tracking And Stationary-Star Vetoing](#4-tracking-and-stationary-star-vetoing)
-  - [maxStarJitter (default 1.5)](#maxstarjitter-default-15)
+  - [maxStarJitter (default 1.0)](#maxstarjitter-default-10)
   - [maxMaskOverlapFraction (default 0.75)](#maxmaskoverlapfraction-default-075)
   - [predictionTolerance (default 3.0)](#predictiontolerance-default-30)
   - [angleToleranceDegrees (default 2.0)](#angletolerancedegrees-default-20)
@@ -100,7 +100,7 @@ All fields are public and mutable. A few implementation details matter when you 
   - [localActivityClusterMinFrames (default 3)](#localactivityclusterminframes-default-3)
   - [Residual Rescue Heuristics](#residual-rescue-heuristics)
 - [8. Variable-Star Photometry](#8-variable-star-photometry)
-  - [enableVariableStarDetection (default false)](#enablevariablestardetection-default-false)
+  - [enableVariableStarDetection (default true)](#enablevariablestardetection-default-true)
   - [photometryMaxStars (default 0)](#photometrymaxstars-default-0)
   - [photometryMinSnr (default 10.0)](#photometryminsnr-default-100)
   - [photometryMaxElongation (default 1.5)](#photometrymaxelongation-default-15)
@@ -131,7 +131,7 @@ All fields are public and mutable. A few implementation details matter when you 
   - [variableSystematicsResponseFactor (default 2.0)](#variablesystematicsresponsefactor-default-20)
   - [variableLocalRadiusPixels / variableMaxLocalCorrelation (defaults 100.0 / 0.3)](#variablelocalradiuspixels--variablemaxlocalcorrelation-defaults-1000--03)
 - [9. Faint-Mover Search (Experimental)](#9-faint-mover-search-experimental)
-  - [enableFaintMoverSearch (default false)](#enablefaintmoversearch-default-false)
+  - [enableFaintMoverSearch (default true)](#enablefaintmoversearch-default-true)
   - [faintMoverMinDisplacementFwhm (default 2.0)](#faintmovermindisplacementfwhm-default-20)
   - [faintMoverMaxSpeedPixelsPerMinute (default 1.0)](#faintmovermaxspeedpixelsperminute-default-10)
   - [faintMoverMinScore (default 8.0)](#faintmoverminscore-default-80)
@@ -164,7 +164,7 @@ This document tracks the fields that actually exist in `src/main/java/io/github/
 
 ## 1. Extraction And Blob Classification
 
-### `detectionSigmaMultiplier` (default `5.0`)
+### `detectionSigmaMultiplier` (default `3.5`)
 
 Primary seed threshold for `SourceExtractor.extractSources(...)`.
 
@@ -173,7 +173,7 @@ Primary seed threshold for `SourceExtractor.extractSources(...)`.
 - lower values detect fainter structure but increase noise
 - both auto-tuners search this field
 
-### `growSigmaMultiplier` (default `3.0`)
+### `growSigmaMultiplier` (default `2.75`)
 
 Secondary hysteresis threshold used while the BFS expands a blob.
 
@@ -313,14 +313,14 @@ Minimum blob size for slow-mover extraction.
 
 - applied to both the maximum-stack candidates and median-mask objects
 
-### `masterSlowMoverSigmaMultiplier` (default `4.0`)
+### `masterSlowMoverSigmaMultiplier` (default `3.5`)
 
 Seed threshold for the slow-mover extraction pass.
 
 - applied to the maximum stack
 - also applied to the comparison extraction on the median master stack
 
-### `masterSlowMoverGrowSigmaMultiplier` (default `3.5`)
+### `masterSlowMoverGrowSigmaMultiplier` (default `2.75`)
 
 Temporary grow threshold used only during the slow-mover extraction pass.
 
@@ -449,7 +449,7 @@ Absolute floor on the FWHM rejection envelope.
 
 ## 4. Tracking And Stationary-Star Vetoing
 
-### `maxStarJitter` (default `1.5`)
+### `maxStarJitter` (default `1.0`)
 
 Core motion/jitter scale used across the tracker.
 
@@ -729,7 +729,7 @@ A pure power-law stretch applied from zero passes all checks, so `READY` means n
 
 Apertures use a FWHM measured in this stage from second moments of bright stars. The extraction FWHM (`sqrt(lambda1 + lambda2)`) reads about 1.4 times larger for round stars and is only used to size the moment window and as a fallback.
 
-### `enableVariableStarDetection` (default `false`)
+### `enableVariableStarDetection` (default `true`)
 
 Master switch for the whole stage.
 
@@ -864,7 +864,7 @@ Candidates that pass every gate are `HIGH_CONFIDENCE`, one failure gives `POSSIB
 
 Digital tracking of point-like movers too faint for the single frames: the kept frames are shifted along trial motions and added, so a mover's light adds up while the noise averages down. Its candidates are a separate, unverified list (`PipelineResult.faintMoverCandidates`), not tracks, and no other result changes. The method, its checks and measurements are in [ALGORITHM.md](ALGORITHM.md#faint-mover-search).
 
-### `enableFaintMoverSearch` (default `false`)
+### `enableFaintMoverSearch` (default `true`)
 
 Runs the search after residual analysis. It needs capture times on the kept frames and at least 8 kept frames in one session; frames separated from the others by a gap of over two hours are left out. Its run time grows with the number of trial motions, frames and pixels: about 70-90 s for 28 frames of 60 megapixels over 75 minutes and 300 s for 106 frames of 5 megapixels over four hours on a 16-core desktop.
 

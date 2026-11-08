@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * The faint-mover search (experimental, off by default): digital tracking of point-like movers too faint for the single
+ * The faint-mover search (experimental, on by default): digital tracking of point-like movers too faint for the single
  * frames. The kept frames are shifted along trial motions and added, so a mover's light adds up while the noise
  * averages down.
  *

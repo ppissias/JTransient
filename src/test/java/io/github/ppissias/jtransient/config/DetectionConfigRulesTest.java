@@ -46,6 +46,7 @@ public class DetectionConfigRulesTest {
     @Test
     public void operationScopesIgnoreUnreadOptionalValuesButProfilesRemainSerializable() {
         DetectionConfig config = new DetectionConfig();
+        config.enableVariableStarDetection = false; // switched on below, to show the stage then reads the value
         config.variableScoreSigma = Double.NaN;
         config.rhythmAllowedVariance = Double.POSITIVE_INFINITY;
         snapshot(config, Operation.TRANSIENTS);
@@ -64,6 +65,7 @@ public class DetectionConfigRulesTest {
     @Test
     public void legacyAlignmentReturnsDetachedChangesInTheOriginalDirections() {
         DetectionConfig config = new DetectionConfig();
+        config.detectionSigmaMultiplier = 5; // the grow threshold is lowered to this
         config.growSigmaMultiplier = 7;
         config.slowMoverMinAxisRatio = 3;
         config.slowMoverMaxAxisRatio = 2;

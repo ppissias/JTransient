@@ -186,7 +186,7 @@ Runtime diagnostics include every completed major phase from extraction through 
 
 ### 2. Detect variable stars
 
-Variable-star detection is an optional stage of `runPipeline(...)`. It is off by default. When enabled, it measures forced aperture photometry of isolated master stars in every retained frame. It then checks whether the frames respond linearly to light, removes per-frame transparency and gradients with an ensemble solve, and scores each star against stars of similar brightness in the same session. See [Variable-star photometry](ALGORITHM.md#variable-star-photometry) for the details.
+Variable-star detection is an optional stage of `runPipeline(...)`. It is on by default; set `enableVariableStarDetection = false` to skip it. When enabled, it measures forced aperture photometry of isolated master stars in every retained frame. It then checks whether the frames respond linearly to light, removes per-frame transparency and gradients with an ensemble solve, and scores each star against stars of similar brightness in the same session. See [Variable-star photometry](ALGORITHM.md#variable-star-photometry) for the details.
 
 ```java
 import io.github.ppissias.jtransient.config.DetectionConfig;

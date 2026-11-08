@@ -64,7 +64,7 @@ Separate measured uncertainty from detection-policy minima before changing jitte
 
 ## SM-F7. Slow and faint mover extensions
 
-**Deferred; no additional experiment or integration is scheduled.** Digital tracking is the delivered faint-source route, experimental and off by default. Maximum-stack morphology remains a separate candidate route, with copied position/time evidence and cautious track comparisons for review. The completed investigations do not justify changing its filters, the default axis-ratio limit, or the digital-tracking checks. See the current [maximum-stack method](ALGORITHM.md#slow-movers) and [digital tracking](ALGORITHM.md#faint-mover-search).
+**Deferred; no additional experiment or integration is scheduled.** Digital tracking is the delivered faint-source route, experimental and on by default. Maximum-stack morphology remains a separate candidate route, with copied position/time evidence and cautious track comparisons for review. The completed investigations do not justify changing its filters, the default axis-ratio limit, or the digital-tracking checks. See the current [maximum-stack method](ALGORITHM.md#slow-movers) and [digital tracking](ALGORITHM.md#faint-mover-search).
 
 Keep these conditional leads together:
 
@@ -149,8 +149,8 @@ Each mechanism below was checked by reading the reviewed source, which is identi
 |---|---|---|---|
 | [RV-1.1](#rv-11-hot-pixels-can-pass-the-follows-sky-test) | Normal | Possible false tracks or repeats | Steady sub-pixel drift without dither |
 | [RV-1.2](#rv-12-faint-trails-can-be-reported-twice) | Nit | Same trail exported twice | Default configuration; normal pass finds only point-like pieces of a trail |
-| [RV-1.3](#rv-13-worker-limit-is-recalculated-after-the-faint-searches) | Nit | Slower photometry | Photometry on (off by default), heap under pressure |
-| [RV-1.4](#rv-14-very-large-faint-mover-time-limit-overflows) | Nit | Faint-mover search stops at once | Search on (off by default), limit of about 9.2e9 seconds or more |
+| [RV-1.3](#rv-13-worker-limit-is-recalculated-after-the-faint-searches) | Nit | Slower photometry | Photometry on (the default), heap under pressure |
+| [RV-1.4](#rv-14-very-large-faint-mover-time-limit-overflows) | Nit | Faint-mover search stops at once | Search on (the default), limit of about 9.2e9 seconds or more |
 | [RV-1.5](#rv-15-orphaned-notifyobserver-javadoc) | Nit | Documentation only | Always |
 | [RV-1.6](#rv-16-duplicated-star-veto-overlap-rule) | Nit | Maintenance risk | Always |
 | [RV-1.7](#rv-17-diagnostics-are-copied-under-the-evidence-pool-lock) | Nit | Run time and garbage collection | Faint-mover search on, many passing peaks |
@@ -181,7 +181,7 @@ Restoring the saved limit would match the comment, but a fresh estimate may be s
 
 ### RV-1.4 Very large faint-mover time limit overflows
 
-**Experimental search, off by default.** [`FaintMoverSearch`](src/main/java/io/github/ppissias/jtransient/core/FaintMoverSearch.java) computes `plan.startedNanos + (long) (faintMoverMaxSeconds * 1e9)` (line 514). At about 9.2e9 seconds (about 292 years), the addition overflows when `System.nanoTime()` is positive, leaving a negative deadline. `DetectionConfigRules` accepts any finite value above 0, including `Double.MAX_VALUE`, so a caller who sets a huge limit to mean "no limit" gets a search that stops before its first tile and reports truncation.
+**Experimental search, on by default.** [`FaintMoverSearch`](src/main/java/io/github/ppissias/jtransient/core/FaintMoverSearch.java) computes `plan.startedNanos + (long) (faintMoverMaxSeconds * 1e9)` (line 514). At about 9.2e9 seconds (about 292 years), the addition overflows when `System.nanoTime()` is positive, leaving a negative deadline. `DetectionConfigRules` accepts any finite value above 0, including `Double.MAX_VALUE`, so a caller who sets a huge limit to mean "no limit" gets a search that stops before its first tile and reports truncation.
 
 Compare elapsed time with `System.nanoTime() - started` against a limit that saturates, as the `System.nanoTime` documentation recommends, at all four comparison sites (lines 521, 579, 581 and 745).
 

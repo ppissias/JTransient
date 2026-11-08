@@ -43,13 +43,13 @@ public class DetectionConfig implements Cloneable {
      * The engine calculates the background median and sigma (noise).
      * A pixel must be strictly brighter than (Median + (Sigma * detectionSigmaMultiplier)) to spawn a new object.
      */
-    public double detectionSigmaMultiplier = 5;
+    public double detectionSigmaMultiplier = 3.5;
 
     /** * Dual-Thresholding (Hysteresis): Once a bright "seed" pixel is found, the Breadth-First Search (BFS)
      * algorithm expands outward, absorbing neighbors. It stops when pixel values drop below this secondary, lower threshold.
      * This prevents "region spilling" (leaking into the noise) while capturing the faint, fading edges of real streaks.
      */
-    public double growSigmaMultiplier = 3;
+    public double growSigmaMultiplier = 2.75;
 
     /** * The absolute physical floor. If the BFS region-growing finishes and the total blob size is
      * less than this value, it is immediately discarded as read-noise or a hot pixel.
@@ -138,13 +138,13 @@ public class DetectionConfig implements Cloneable {
      * Background-sigma multiplier a pixel must exceed to start a source in either stack.
      * Lower values find fainter sources but may also admit more noise.
      */
-    public double masterSlowMoverSigmaMultiplier = 4;
+    public double masterSlowMoverSigmaMultiplier = 3.5;
 
     /**
      * Background-sigma multiplier neighboring pixels must exceed to join a seeded source.
      * Used on both stacks; lower values enlarge footprints and may merge nearby sources.
      */
-    public double masterSlowMoverGrowSigmaMultiplier = 3.5;
+    public double masterSlowMoverGrowSigmaMultiplier = 2.75;
 
     /**
      * Minimum length-to-width ratio of a maximum-stack footprint's oriented raw-pixel extents.
@@ -269,7 +269,7 @@ public class DetectionConfig implements Cloneable {
      * between perfectly aligned frames. Used to dilate the Master Star Mask and as the minimum speed limit
      * for moving objects.
      */
-    public double maxStarJitter = 1.5;
+    public double maxStarJitter = 1.0;
 
     /** * Instead of a strict 1-pixel touch destroying a transient, allow it to overlap the master star mask
      * up to this fraction (e.g., 0.25 = 25%). This rescues high-energy transients or moving objects
@@ -313,7 +313,7 @@ public class DetectionConfig implements Cloneable {
     public boolean strictExposureKinematics = true;
 
     /** * Controls whether the frame-agnostic geometric point-track linker also runs when timestamps are available.
-     * Off by default, so timed sessions use only the time-based linker (the SpacePixels profile turns it on).
+     * Off by default, so timed sessions use only the time-based linker.
      * If timestamps are missing, the engine still forces geometric linking because it is the only point-track fallback.
      */
     public boolean enableGeometricTrackLinking = false;
@@ -475,9 +475,10 @@ public class DetectionConfig implements Cloneable {
     // --- Master switch and star selection ---
 
     /** * Master switch for stationary-star photometry and variable-star detection.
-     * Runs after track linking on the frames that passed the session quality filter.
+     * Runs after track linking on the frames that passed the session quality filter. On by default; it reports
+     * whether the session is ready for photometry, and needs at least {@link #variableMinFrames} frames.
      */
-    public boolean enableVariableStarDetection = false;
+    public boolean enableVariableStarDetection = true;
 
     /** * Maximum number of master stars measured; 0 measures every usable star. When capped, stars are
      * picked evenly across the field and across the brightness range.
@@ -619,9 +620,10 @@ public class DetectionConfig implements Cloneable {
 
     /** * Searches for point-like movers too faint for the single frames by shifting the kept frames along trial
      * motions and adding them (digital tracking). Experimental: its candidates are a separate, unverified list, and
-     * it adds run time that grows with the square of {@link #faintMoverMaxSpeedPixelsPerMinute}. Needs capture times.
+     * it adds run time that grows with the square of {@link #faintMoverMaxSpeedPixelsPerMinute}, bounded by
+     * {@link #faintMoverMaxSeconds}. On by default; it skips itself without capture times or with fewer than 8 frames.
      */
-    public boolean enableFaintMoverSearch = false;
+    public boolean enableFaintMoverSearch = true;
 
     /** * Slowest motion searched, as the distance moved over the session in star widths (FWHM). Slower objects stay
      * in the median stack and cannot be told from the static field.
