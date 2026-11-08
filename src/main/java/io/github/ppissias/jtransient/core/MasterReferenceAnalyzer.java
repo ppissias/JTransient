@@ -117,7 +117,8 @@ public final class MasterReferenceAnalyzer {
      * the given sigma if higher and grown as the first. An object of the second pass is added when it shares no pixel
      * with one of the first, so the list holds no object twice and the star mask covers at least what the first pass
      * alone covers. Objects are kept up to the image edge: the star mask has to cover every star that a frame
-     * detection inside the data area can touch, including stars cut by the edge.
+     * detection inside the data area can touch, including stars cut by the edge. When the stack holds registration
+     * fill, both passes measure the sky inside its data area ({@link #skyArea}).
      *
      * @param stack median stack, stored (signed-short) pixels
      * @param sigma seed threshold in units of the measured noise
@@ -129,8 +130,9 @@ public final class MasterReferenceAnalyzer {
         int height = stack.length;
         int width = stack[0].length;
         DataArea wholeImage = DataArea.wholeImage(width, height);
+        DataArea sky = skyArea(stack);
         List<DetectedObject> stars = new ArrayList<>(
-                OperationContext.compute(StageId.MASTER_REFERENCE, null, () -> SourceExtractor.extractSources(stack, sigma, minPixels, config, null, wholeImage)).objects);
+                OperationContext.compute(StageId.MASTER_REFERENCE, null, () -> SourceExtractor.extractSources(stack, sigma, minPixels, config, sky, wholeImage)).objects);
         short[][] flat = SkyBackground.flatten(stack);
         if (flat == stack) {
             return stars;
@@ -145,7 +147,7 @@ public final class MasterReferenceAnalyzer {
             }
         }
         for (DetectedObject candidate
-                : OperationContext.compute(StageId.MASTER_REFERENCE, null, () -> SourceExtractor.extractSources(flat, Math.max(sigma, LOCAL_PASS_MIN_SIGMA), minPixels, config, null,
+                : OperationContext.compute(StageId.MASTER_REFERENCE, null, () -> SourceExtractor.extractSources(flat, Math.max(sigma, LOCAL_PASS_MIN_SIGMA), minPixels, config, sky,
                 wholeImage)).objects) {
             if (candidate.rawPixels == null) {
                 continue;
@@ -163,5 +165,18 @@ public final class MasterReferenceAnalyzer {
             }
         }
         return stars;
+    }
+
+    /**
+     * Where the sky of a stack is measured: its data area when it holds registration fill, otherwise the whole image
+     * (null). Fill counted with the sky widens the clipping window by about the square root of its share times the sky
+     * level, so above about a ninth of the image the window never drops the fill and the threshold rises above
+     * the stars. A stack without fill keeps the whole-image measure, as the frames' own data area would only drop the
+     * edge margin.
+     */
+    static DataArea skyArea(short[][] stack) {
+        DataArea data = DataArea.ofFrame(stack);
+        long whole = DataArea.fullFrame(stack[0].length, stack.length).getPixelCount();
+        return data.getPixelCount() > 0 && data.getPixelCount() < whole ? data : null;
     }
 }

@@ -332,6 +332,8 @@ The engine next extracts stationary objects from the median master stack using a
 1. on the stack with one sky level for the whole stack, as the frames are searched;
 2. on a copy with the smooth sky subtracted (`SkyBackground.flatten`), seeded at 5 sigma (or the master sigma if higher) and grown as the first. An object of this pass is added when it shares no pixel with one of the first pass, so no object is listed twice and the mask covers at least what the first pass covers.
 
+When the stack holds registration fill, both passes measure its sky level and noise inside its data area, as the frames do (`MasterReferenceAnalyzer.skyArea`); a stack without fill is measured over the whole image. Counted with the sky, fill widens the clipping window by about the square root of its share times the sky level, so with more than about a ninth of the stack as fill the clipping never removes it. On a real session whose frames drifted by about a sixth of the frame, the master's noise came out about 240 times the frames' and the star mask was empty. Smaller shares inflated the estimate less and gave a shallower mask.
+
 The local-sky pass finds stationary sources that a global noise estimate can miss in a gradient. The original global pass remains because frame extraction also uses one sky level and can detect emission larger than a local sky box; those persistent extended objects still need masking. Local seeds use at least 5 sigma so that a threshold selected against inflated global noise is not reused unchanged against the smaller local noise. Both passes contribute to the master reference.
 
 The sky map:

@@ -78,6 +78,63 @@ public class MasterReferenceAnalyzerTest {
         assertTrue("the faint star on the dark side is found", starFound);
     }
 
+    /**
+     * A master whose frames drifted far keeps a wide band of registration fill. Measured with the sky, the fill inflated
+     * the noise about 240-fold on a real session and the star mask came out empty; measured in the data area, the stars
+     * are found.
+     */
+    @Test
+    public void wideRegistrationFillDoesNotEmptyTheStarMask() {
+        int width = 600;
+        int height = 400;
+        int dataWidth = 400;  // a third of the width is fill
+        int dataHeight = 320; // and a fifth of the height
+        java.util.Random random = new java.util.Random(11);
+        short[][] stack = new short[height][width];
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                stack[y][x] = x < dataWidth && y < dataHeight
+                        ? (short) (Math.round(16000 + 25 * random.nextGaussian()) - 32768)
+                        : Short.MIN_VALUE;
+            }
+        }
+        java.util.List<int[]> placed = new java.util.ArrayList<>();
+        for (int i = 0; i < 12; i++) {
+            int sx = 30 + (i % 4) * 100;
+            int sy = 40 + (i / 4) * 100;
+            placed.add(new int[]{sx, sy});
+            for (int dy = -5; dy <= 5; dy++) {
+                for (int dx = -5; dx <= 5; dx++) {
+                    stack[sy + dy][sx + dx] += (short) Math.round(600 * Math.exp(-(dx * dx + dy * dy) / (2 * 1.5 * 1.5)));
+                }
+            }
+        }
+        DetectionConfig config = new DetectionConfig();
+        config.growSigmaMultiplier = 2.5;
+
+        assertTrue("the whole-image sky finds no star: the failure this guards against",
+                SourceExtractor.extractSources(stack, 3.5, 5, config, null, DataArea.wholeImage(width, height)).objects.isEmpty());
+        java.util.List<DetectedObject> stars = MasterReferenceAnalyzer.extractStars(stack, 3.5, 5, config);
+        for (int[] star : placed) {
+            assertTrue("star at " + star[0] + "," + star[1] + " is in the mask",
+                    stars.stream().anyMatch(s -> Math.hypot(s.x - star[0], s.y - star[1]) < 2));
+        }
+        assertEquals(placed.size(), stars.size());
+    }
+
+    @Test
+    public void aStackWithoutFillMeasuresItsSkyOnTheWholeImage() {
+        short[][] stack = new short[50][60];
+        assertEquals(null, MasterReferenceAnalyzer.skyArea(stack));
+        for (int y = 0; y < 50; y++) {
+            for (int x = 40; x < 60; x++) {
+                stack[y][x] = Short.MIN_VALUE;
+            }
+        }
+        DataArea sky = MasterReferenceAnalyzer.skyArea(stack);
+        assertTrue(sky != null && sky.getPixelCount() > 0 && sky.getPixelCount() < 50L * 60);
+    }
+
     @Test
     public void thePassAgainstTheLocalSkyAddsNoNoisePeaks() {
         int width = 1536;
