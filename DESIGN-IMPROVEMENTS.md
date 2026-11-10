@@ -29,21 +29,19 @@ A fresh review of the engine (about 20,000 lines of main code and 7,700 of tests
 | [JT-02](#jt-02-centralize-shared-validation-and-setting-rules) | Centralize shared validation and setting rules | Medium | In-depth review first |
 | [JT-04](#jt-04-review-logging-across-the-three-repositories) | Review logging across SpacePixels, JTransient and JPlateSolve | Medium | Review first |
 | [JT-05](#jt-05-let-the-pipeline-method-read-as-the-algorithm) | Let the pipeline method read as the algorithm | Medium | Small |
-| [JT-06](#jt-06-look-up-third-points-by-position-in-the-time-based-linker) | Look up third points by position in the time-based linker | High | Small to medium |
 
 **Working order.** Verify the dead-code subset of JT-01 first. Evaluate JT-02 in depth before choosing changes, and review JT-04 across all three repositories before choosing a logging approach. Keep each change independently reviewable. JT-05 remains a small orchestration cleanup; release-artifact checks continue through the existing [coordinated publishing procedure](../SpacePixels/PUBLISHING.md#maven-central-publishing).
 
 ### JT-01. Remove dead code and compatibility aliases
 
 **Problem.**
-- `core.SpatialGrid` (216 lines) has no users anywhere: not in the main code, the tests or SpacePixels.
 - `PipelineResult.slowMoverStackData` is the same array as `maximumStackData`. `slowMoverMedianVetoMask` is the same as `SlowMoverAnalysis.medianMask`, and `slowMoverCandidates` lists the same objects as `SlowMoverAnalysis.candidates`. `SlowMoverAnalysis` keeps further aliases.
 - `SlowMoverSummaryTelemetry.toLegacyTelemetry(candidates)` converts to older counters, and its parameter is "retained for compatibility" and unused.
 - `TrackerTelemetry` keeps a "legacy zero-based position", which `ExtractedFramesContext.labelTrackerFrames` relabels afterwards.
 
 The libraries are now developed together with SpacePixels, so none of these needs to survive.
 
-**Proposal.** Delete `SpatialGrid`. Keep one name per product, drop the aliases and the legacy telemetry conversion, and update SpacePixels' report code (about 70 references) in the same change. Record the original frame identity in the tracker telemetry directly.
+**Proposal.** Keep one name per product, drop the aliases and the legacy telemetry conversion, and update SpacePixels' report code (about 70 references) in the same change. Record the original frame identity in the tracker telemetry directly.
 
 **Issue review (2026-10-24; evaluate before implementation).**
 - Verify absence of callers separately from deciding to remove an exposed capability. `PipelineResult` and its builder are public, and their products are documented in README.md and PIPELINE.md. Update the API consumer, SpacePixels reports and examples together, and document intentional signature changes.
@@ -99,25 +97,6 @@ The phase comments are numbered 0, 0.5, 4 and 5.
 - A small private helper is reasonable if it preserves stage-specific result types and leaves branch decisions visible. Do not introduce an untyped stage framework to shorten the method.
 - Preserve the ordering of progress, stage timing and observer delivery, including disabled/empty stages and early returns. PIPELINE.md distinguishes observer exceptions, which are isolated, from progress-listener exceptions, which fail the operation. Keep that distinction when centralizing callbacks and timing.
 - Compare scientific results and stage/observer sequences separately from elapsed-time values. Retain the current failure-context, per-worker frame identity and joined cancellation guarantees; extract orchestration without simultaneously changing diagnostic policy.
-
-### JT-06. Look up third points by position in the time-based linker
-
-**Problem.** `TimedPointLinker.link` starts a track from a pair of points, then tests every detection in every later frame as the next point. Almost all of them fail the first test, the strict-exposure jump limit, because they are too far away. The track-linking diagnostics of a SpacePixels archive batch (2026-11-08) show the cost:
-
-| Sequence | Frames | Third-point tests | Rejected as too far | Linking time |
-|---|---|---|---|---|
-| DSLR, M31 | 101 | 183 billion | 88% | 23.8 min |
-| DSLR, Andromeda field | 150 | 157 billion | 94% | 21.1 min |
-| DSLR, Andromeda field, defocused | 42 | 107 billion | 98% | 12.1 min |
-| DSLR, comet field | 98 | 0.34 billion | 45% | 0.1 min |
-
-That is about 8 ns per test, so these tests account for the linking time: 76% of the engine's elapsed time on the M31 run. The cost grows with the detections per frame and the square of the frame count, so large sequences with many faint detections are the slow ones. A thread dump of a running batch showed it in this loop.
-
-**Proposal.** Index each frame's detections by position, for example in a coarse grid. For each anchor, look up only the detections within that anchor's largest allowed jump (the bound the strict-exposure test already computes from its size, exposure and the time step), and test them in their original order so the best-match choice and its ties stay the same. Keep the full scan where there is no bound: strict exposure kinematics switched off, or a missing timestamp or exposure. The first-pair loop could use the same index; it is a smaller cost (158 million too-far rejections on the M31 run). JT-01 proposes deleting the unused `core.SpatialGrid`; check whether it fits this use first.
-
-**Before implementing.**
-- The diagnostics table counts every rejected point, and the skipped points would no longer be counted. Either keep the counts exact (add the skipped, unclaimed points with a positive time step to the too-far count) or change the counter's meaning and accept a changed report table. Decide this first, because the results must stay byte-identical.
-- Verify: byte-identical reports on the reference datasets ([DEVELOPER.md](DEVELOPER.md#real-data-checks)), and unit tests for a point just inside and just outside the allowed jump, frames without timestamps, and strict kinematics off. Measure the speed-up on a slow archive sequence, such as the 42-frame defocused one, after the archive batch has finished (maintainer, 2026-11-08).
 
 ## Removed from the previous plan (2026-10-23)
 

@@ -543,6 +543,8 @@ When `strictExposureKinematics` is enabled, the allowed jump is bounded from exp
 
 `maxAllowedJump = (((sqrt(pixelArea) + maxStarJitter) / exposureDuration) * dt * 1.5) + maxStarJitter`
 
+Candidate lookups for third and subsequent points use a 2D spatial grid (`SpatialGrid`) over each candidate frame's detections to inspect only points within `maxAllowedJump`. Candidates are returned and evaluated in their original detection list order so tie-breaking and ranking remain deterministic. If strict exposure kinematics is disabled or timestamps are missing, the search falls back to a full linear scan of that frame.
+
 Candidate time-based tracks are ranked by:
 
 - length

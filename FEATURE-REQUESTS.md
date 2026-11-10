@@ -52,7 +52,7 @@ Separate measured uncertainty from detection-policy minima before changing jitte
 | klangwolke-2, known asteroids | 3 | 3 (fill 43-100%, median 83%) |
 | Apophis | 1 | 1 (100%) |
 
-**Proposal.** Require a track's points to cover a minimum share of the kept frames it spans, for example 30%, or limit the longest gap between consecutive points. Applied while a track grows rather than only at the end, the rule would also shorten the third-point search ([JT-06](DESIGN-IMPROVEMENTS.md#jt-06-look-up-third-points-by-position-in-the-time-based-linker)).
+**Proposal.** Require a track's points to cover a minimum share of the kept frames it spans, for example 30%, or limit the longest gap between consecutive points. Applied while a track grows rather than only at the end, the rule would also shorten candidate evaluation across long spans (the local third-point search is accelerated by `SpatialGrid`, JT-06).
 
 **Before adopting.** Only four real tracks were checked. A faint real mover that falls below the threshold in many frames, crosses star masks or bright regions, or loses rejected frames could drop under the line. Measure injected faint movers and the reference regression, and compare a fill share with a gap limit. Timed tracks may still bend ([PT-3](#declined)). Reducing the detection density first ([XC-3](#xc-3-local-background-and-noise-for-frame-extraction)) may remove most of these tracks; decide the order from that comparison.
 
