@@ -38,6 +38,26 @@ final class TimedPointLinker {
         double angleToleranceRad = Math.toRadians(config.angleToleranceDegrees);
         List<RankedTrackCandidate> timeTrackCandidates = new ArrayList<>();
 
+        SpatialGrid[] frameGrids = null;
+        if (config.strictExposureKinematics) {
+            frameGrids = new SpatialGrid[numFrames];
+            for (int f = 0; f < numFrames; f++) {
+                CancellationScope.check();
+                List<DetectedObject> frameDetections = transients.get(f);
+                List<DetectedObject> unclaimed = new ArrayList<>(frameDetections.size());
+                for (DetectedObject obj : frameDetections) {
+                    if (!assignments.isClaimed(obj)) {
+                        unclaimed.add(obj);
+                    }
+                }
+                frameGrids[f] = new SpatialGrid(unclaimed, 64.0);
+            }
+        }
+
+        final int maxQueryCandidates = 512;
+        DetectedObject[] queryBuffer = new DetectedObject[maxQueryCandidates];
+        SpatialGrid.IndexedObject[] scratchBuffer = new SpatialGrid.IndexedObject[maxQueryCandidates];
+
         if (DiagnosticContext.enabled()) DiagnosticContext.println("DEBUG: [PHASE 3.5] Timestamps detected. Running Time-Based Velocity Linking...");
         if (listener != null) listener.onProgressUpdate(50, "Analyzing precise velocity kinematics...");
 
@@ -116,7 +136,102 @@ final class TimedPointLinker {
                             DetectedObject bestMatch = null;
                             double bestVError = Double.MAX_VALUE;
 
-                            for (DetectedObject p3 : transients.get(f3)) {
+                            List<DetectedObject> f3Detections = transients.get(f3);
+                            if (f3Detections.isEmpty()) {
+                                continue;
+                            }
+
+                            SpatialGrid f3Grid = (frameGrids != null) ? frameGrids[f3] : null;
+                            long f3Timestamp = f3Detections.get(0).timestamp;
+                            boolean canUseSpatial = f3Grid != null
+                                    && f3Grid.size() > 0
+                                    && currentLineAnchor.timestamp != -1
+                                    && currentLineAnchor.exposureDuration > 0
+                                    && f3Timestamp != -1;
+
+                            if (canUseSpatial) {
+                                double dt23 = f3Timestamp - currentLineAnchor.timestamp;
+                                if (dt23 <= 0) {
+                                    telemetry.countP3NonPositiveDelta += f3Grid.size();
+                                    continue;
+                                }
+
+                                double maxMovementInExposure = Math.sqrt(currentLineAnchor.pixelArea) + config.maxStarJitter;
+                                double maxVelocity = maxMovementInExposure / currentLineAnchor.exposureDuration;
+                                double maxAllowedJump = (maxVelocity * dt23) * 1.5 + config.maxStarJitter;
+
+                                int candidateCount = f3Grid.queryCandidates(currentLineAnchor.x, currentLineAnchor.y,
+                                        maxAllowedJump, queryBuffer, scratchBuffer);
+
+                                if (candidateCount >= 0) {
+                                    for (int ci = 0; ci < candidateCount; ci++) {
+                                        DetectedObject p3 = queryBuffer[ci];
+
+                                        double dist23 = TrackGeometry.distance(currentLineAnchor.x, currentLineAnchor.y, p3.x, p3.y);
+                                        if (dist23 > maxAllowedJump) {
+                                            telemetry.countP3Jump++;
+                                            continue;
+                                        }
+
+                                        // --- TRUE KINEMATIC VELOCITY & ANGLE MATCHING ---
+                                        double v23 = dist23 / dt23;
+                                        double vDiff = Math.abs(v23 - currentVelocity);
+
+                                        // Allowed variance is a combination of the percentage tolerance AND the physical sub-pixel seeing jitter
+                                        double allowedVDiff = (currentVelocity * config.timeBasedVelocityTolerance) + (config.maxStarJitter / dt23);
+
+                                        if (vDiff > allowedVDiff) {
+                                            telemetry.countP3VelocityMismatch++;
+                                            continue;
+                                        }
+
+                                        // Ensure the point physically lies on the exact trajectory line
+                                        double currentBaselineDist = TrackGeometry.distance(p1.x, p1.y, currentLineAnchor.x, currentLineAnchor.y);
+                                        double lineError = TrackGeometry.distanceToLineOptimized(p1, currentLineAnchor, p3, currentBaselineDist);
+
+                                        if (lineError > config.predictionTolerance) {
+                                            telemetry.countP3NotLine++;
+                                            continue;
+                                        }
+
+                                        double actualAngle = Math.atan2(p3.y - currentLineAnchor.y, p3.x - currentLineAnchor.x);
+                                        // Dynamically relax the angle tolerance for short jumps where sub-pixel jitter causes massive angular swings
+                                        double dynamicAngleTolerance = Math.max(angleToleranceRad, Math.atan2(config.maxStarJitter + 1.0, dist23));
+
+                                        if (!TrackGeometry.isDirectionConsistent(expectedAngle, actualAngle, dynamicAngleTolerance)) {
+                                            telemetry.countP3WrongDirection++;
+                                            continue;
+                                        }
+
+                                        if (!TrackGeometry.isProfileConsistent(currentLineAnchor, p3, config)) {
+                                            telemetry.countP3Size++;
+                                            continue;
+                                        }
+
+                                        // Prioritize the point that best matches the expected velocity
+                                        if (vDiff < bestVError) {
+                                            bestVError = vDiff;
+                                            bestMatch = p3;
+                                        }
+                                    }
+
+                                    telemetry.countP3Jump += (f3Grid.size() - candidateCount);
+                                    if (bestMatch != null) {
+                                        currentTrack.addPoint(bestMatch);
+
+                                        // UPDATE PROGRESSIVE VECTOR: Anchor to Point 1 to prevent "drunk" jitter accumulation!
+                                        double totalDt = bestMatch.timestamp - p1.timestamp;
+                                        double totalDist = TrackGeometry.distance(p1.x, p1.y, bestMatch.x, bestMatch.y);
+                                        currentVelocity = totalDist / totalDt;
+                                        expectedAngle = Math.atan2(bestMatch.y - p1.y, bestMatch.x - p1.x);
+
+                                        currentLineAnchor = bestMatch;
+                                    }
+                                    continue;
+                                }
+                            }
+
+                            for (DetectedObject p3 : f3Detections) {
                                 if (assignments.isClaimed(p3)) continue;
 
                                 double dt23 = p3.timestamp - currentLineAnchor.timestamp;
