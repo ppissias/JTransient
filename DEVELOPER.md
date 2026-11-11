@@ -54,7 +54,7 @@ The shared working rules are in SpacePixels' [DEVELOPER.md](../SpacePixels/DEVEL
 - never overwrite the user's saved SpacePixels settings;
 - restore Java preferences after any GUI harness;
 - discuss a fix before implementing it;
-- remove the observing site from published images;
+- do not commit a manual, documentation, or GitHub image that shows observer coordinates;
 - use descriptive messages for code commits and a generic message such as "Update docs" for documentation commits;
 - don't rewrite history;
 - refer to people as they/them.
