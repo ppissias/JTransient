@@ -112,8 +112,8 @@ Retain the frozen profile, executable/source and dependency snapshots, native ba
 
 ### Input datasets
 
-- **Primary benchmark:** `klangwolke-2` (using `_16bit_converted`), the highest-quality reference dataset, with ~69 detected candidates (high-confidence and possible) and rich catalogue ground truth.
-- **Multi-candidate reference sessions:** Sessions from the variable-star batch and archive yielding significant variable detections (above 5–6 candidates), such as `M81-kumar-L-dataset-registered` (28 candidates) and other eligible archive sessions.
+- **Primary benchmark:** `klangwolke-2` (using `_16bit_converted`), the golden reference. The saved 2026.11-02 report `detections_20261109_202345` has 70 variable candidates (51 high confidence, 19 possible). Catalogue confirmation of those candidates is this investigation.
+- **Multi-candidate reference sessions:** Sessions from the variable-star batch and archive yielding significant variable detections (above 5–6 candidates). `M81-kumar-L-dataset-registered` has 18 candidates in `detections_20261111_174343`. The inventory in the local `REFERENCE-DATASETS.md` names the other sessions and their saved counts.
 
 ### Investigation scope
 

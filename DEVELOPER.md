@@ -114,7 +114,7 @@ All packages are under `io.github.ppissias.jtransient`.
 
 ## Real-data checks
 
-The reference datasets and the comparison method are described in SpacePixels' [DEVELOPER.md](../SpacePixels/DEVELOPER.md#real-data-regression); their location is in `LOCAL-ENVIRONMENT.txt`.
+The comparison method is in SpacePixels' [DEVELOPER.md](../SpacePixels/DEVELOPER.md#real-data-regression). The dataset inventory, tiers and baselines are the local `REFERENCE-DATASETS.md` named from `LOCAL-ENVIRONMENT.txt`. Klangwolke-2 is the golden reference and is part of every engine change.
 - **Structural change:** compare full `PipelineResult` snapshots before and after, with stacks and masks hashed and timings excluded. They must be byte-identical.
 - **Algorithm change:** compare the rejected frames, tracks, anomalies and variable-star candidates star by star, and the run times, and report the differences to the maintainer before committing.
 
