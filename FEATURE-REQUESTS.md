@@ -8,23 +8,20 @@ These are proposals, not implementation authorisations. Retain current algorithm
 
 | ID | Status | Remaining scope and trigger |
 |---|---|---|
-| [QC-1](#qc-1-star-count-rejection-envelope) | Deferred | Consider a count-envelope floor only if corrected common-area counts reject useful frames too readily. |
+| [QC-1](#qc-1-star-count-rejection-envelope) | Proposed | Consider a count-envelope floor if corrected common-area counts reject useful frames too readily. |
 | [PT-5](#pt-5-registration-quality-and-shared-jitter-tolerances) | Proposed assessment | Measure residual stellar registration quality before deciding whether shared jitter tolerances need to change. |
 | [PT-10](#pt-10-minimum-fill-for-timed-point-tracks) | Proposed | Require timed point tracks to cover a minimum share of the frames they span; measure faint real movers first. |
-| [SM-F7](#sm-f7-slow-and-faint-mover-extensions) | Deferred; no further campaign scheduled | Revisit specific mover losses or a demonstrated resource bottleneck; retain digital tracking and current maximum-stack gates. |
 | [SM-F8](#sm-f8-frame-check-for-runs-of-leaky-frames) | Proposed; later addition | Leave out runs of frames whose star tails leak past the faint-mover mask, which the few-frame check cannot stop when they cover a third of the frames or more. Needs a second affected session. |
 | [SM-F9](#sm-f9-slow-mover-candidates-made-by-hot-pixels) | Proposed | Reject maximum-stack candidates that stay at one camera position: hot pixels that the drift draws into short dashes. |
 | [SM-F10](#sm-f10-faint-mover-paths-beside-a-star) | Proposed | Reject faint-mover paths that stay beside the star mask for most of the session; validate on movers that pass bright stars first. |
 | [XC-3](#xc-3-local-background-and-noise-for-frame-extraction) | Open; parked at maintainer request; new evidence (2026-11-08) | Resume with local sky correction alone, keeping baseline noise and thresholds fixed; preserve associations, photometry and boundary calibration. |
-| [VS-9](#vs-9-selected-stars-and-the-linearity-check-minimum) | Deferred policy | Distinguish insufficient Check-B evidence from measured nonlinearity; retained-subset scoring is not implemented. |
-| [VS-11](#vs-11-photometry-strictness-defaults-and-recovery-review) | Deferred follow-ups | Six bounded photometry questions below; the initial audit and adopted VS-12 work are complete. |
 | [RV-1](#rv-1-findings-from-the-pull-request-1-review) | Open; no fix agreed | Seven code-review findings, led by hot pixels that can pass the follows-sky test on steadily drifting frames. Decide each item separately. |
 
-**Mover consolidation decision (2026-11-05).** The digital-tracking delivery (SM-F2 and SpacePixels F25) is complete. Close the current SM-F1/SM-F3 temporal, morphology, position and gate investigations and the bounded SM-F6 validation/review campaign. Retire SM-F4 residual weighting and SM-F5 acceleration as separate open proposals; both remain unimplemented, with no validated replacement selected. Keep one conditional extension item, SM-F7, below. Retain the present scientific filters and defaults; this closure does not claim universal completeness, calibrated confidence or the absence of difficult sources. The existing archive and [code history](docs/research/slow-movers/CODE-HISTORY.md) remain available separately.
+**Mover consolidation decision (2026-11-05).** The digital-tracking delivery (SM-F2 and SpacePixels F25) is complete. Close the current SM-F1/SM-F3 temporal, morphology, position and gate investigations and the bounded SM-F6 validation/review campaign. Retire SM-F4 residual weighting and SM-F5 acceleration as separate open proposals; both remain unimplemented, with no validated replacement selected. Retain the present scientific filters and defaults; this closure does not claim universal completeness, calibrated confidence or the absence of difficult sources. The existing archive and [code history](docs/research/slow-movers/CODE-HISTORY.md) remain available separately.
 
 ## QC-1. Star-count rejection envelope
 
-**Deferred.** Counts share a common quality area, but their rejection envelope has no absolute or relative floor. A narrow count distribution can make a small loss sufficient to reject a frame. No allowance or formula is agreed.
+**Proposed.** Counts share a common quality area, but their rejection envelope has no absolute or relative floor. A narrow count distribution can make a small loss sufficient to reject a frame. No allowance or formula is agreed.
 
 Revisit with stable, cloudy and sparse sessions showing useful frames lost by this rule. Compare recovery, false detections, gaps and strictness levels before choosing a floor; retaining more frames alone is not an improvement. Current behavior: [session rejection](ALGORITHM.md#5-session-level-frame-rejection), [SessionEvaluator](src/main/java/io/github/ppissias/jtransient/quality/SessionEvaluator.java).
 
@@ -63,18 +60,9 @@ Separate measured uncertainty from detection-policy minima before changing jitte
 <a id="sm-f5-faint-mover-runtime-and-memory-scaling"></a>
 <a id="sm-f6-faint-mover-validation-and-candidate-review"></a>
 <a id="sm-f7-complementary-high-sensitivity-moving-object-searches"></a>
-
-## SM-F7. Slow and faint mover extensions
-
-**Deferred; no additional experiment or integration is scheduled.** Digital tracking is the delivered faint-source route, experimental and on by default. Maximum-stack morphology remains a separate candidate route, with copied position/time evidence and cautious track comparisons for review. The completed investigations do not justify changing its filters, the default axis-ratio limit, or the digital-tracking checks. See the current [maximum-stack method](ALGORITHM.md#slow-movers) and [digital tracking](ALGORITHM.md#faint-mover-search).
-
-Keep these conditional leads together:
-
-- **Weak close companions.** Temporal-bin proposals followed by the unchanged full-sequence verifier added targeted injected companions; the native full-field follow-up added no detection. Revisit only with a credible observed missed companion or an independent case that can distinguish source light from contamination. This is an additive proposal method, not a temporal veto on maximum-stack candidates. PSF-filtered frame-point linking has not demonstrated a useful complete comparison and is not a scheduled implementation.
-- **Star or trail overlap.** Revisit local source separation, masking or candidate construction when a concrete useful mover is lost. Broad mask, shape, support, clipping or score relaxations have recovery/control costs; none earns a default change. Descriptive correlation and nominal fit covariance do not justify a new motion gate or automatic duplicate suppression.
-- **Complete coverage within a useful budget.** Investigate exact computation reuse or another acceleration if an actual workload cannot finish within its required time/memory budget. Existing cancellation, time/heap/trial guards and partial-coverage reporting remain. A computation-only optimisation must preserve scientific values; an approximation needs its own sensitivity/control decision.
-
-Before adopting a lead, demonstrate incremental recovery or useful complete-coverage benefit against the current implementation, with source attribution, matched domains and controls, bounded cost and retained baseline findings. Agreement is also required on engine/application settings, result provenance and review behavior. Catalogue compatibility remains post-detection evidence; empirical scores remain uncalibrated. Do not reopen general threshold sweeps or repeat the reviewed grids without a specific unanswered failure.
+<a id="sm-f7-slow-and-faint-mover-extensions"></a>
+<a id="vs-9-selected-stars-and-the-linearity-check-minimum"></a>
+<a id="vs-11-photometry-strictness-defaults-and-recovery-review"></a>
 
 ## SM-F8. Frame check for runs of leaky frames
 
@@ -116,46 +104,6 @@ Keep path coverage and score calibration separate: continuous background interpo
 In these sequences the auto-tuner also raised `maxMaskOverlapFraction` (0.65-0.85, against 0.5 in quiet sequences), and 12-21% of their track points lie on the saved star mask. Revisit that choice after a local-sky change. This evidence supports resuming with the planned local-sky experiment; whether to resume is the maintainer's decision.
 
 Retain the frozen profile, executable/source and dependency snapshots, native baseline results, input hashes and boundary controls for resumption. The local resume bundle and its verification are located through the machine's ignored environment notes; detailed experimental material remains outside the algorithm reference and repository.
-
-## VS-9. Selected stars and the linearity-check minimum
-
-**Deferred readiness policy.** The star-cap warning is delivered and is not pending. Check B already uses `INCONCLUSIVE` when too few high-SNR shape measurements are initially available; too little counted range or too few references after restriction can still give `FAIL` without measured nonlinearity.
-
-Decide whether those cases warrant different classification and whether a separately validated retained subset can be scored when the original session fails. The completed review demonstrated no recovered valid variable from these changes. Preserve the original-session diagnosis, required reference count and minimum-final-frame guard; do not iterate rejection/refitting until a session becomes READY.
-
-Revisit with known-linear sparse/range-limited inputs and genuine response faults, measuring variable recovery and false candidates under original versus retained-subset readiness. Current contracts: [Check B](ALGORITHM.md#photometry-8-3), [readiness verdict](ALGORITHM.md#photometry-10), [configuration validation](src/main/java/io/github/ppissias/jtransient/config/DetectionConfigRules.java).
-
-## VS-11. Photometry strictness, defaults and recovery review
-
-**The audit and adopted VS-12 changes are complete.** Only the following six questions remain. Investigation is authorised; a scientific-policy or default change still needs evidence and agreement. Low-count readiness belongs solely to VS-9. Current behavior is in [photometry](ALGORITHM.md#16-variable-star-photometry) and the [release notes](RELEASE_NOTES.md#108-unreleased).
-
-**Initial-settings decision (2026-11-06).** Retain the current general defaults, including 50 magnitude neighbours, the 100-pixel local radius and the 0.05/0.10-mag amplitude floors. Larger comparison pools and a lower Ready amplitude floor give field-dependent additions or tier promotions, without a consistent recovery benefit in the bounded image controls. Broader spatial radii do not justify a change. This closes the general starting-settings sweep; the specific questions below remain deferred or open as stated. Catalogue associations are review evidence, not session-variable truth or a false-positive calibration.
-
-### Late-frame population lifecycle
-
-**Deferred.** Check D and spatial rejection occur after population/contamination statistics. Revisit with a READY/LIMITED session that actually has late frame exclusions; the previous review showed no recovered valid variable. Compare one bounded recomputation on final active frames, preserving reasons, identities and the reference convention, without a rejection/refitting loop. See [contaminated shape](ALGORITHM.md#photometry-7-1) and [spatial exclusion](ALGORITHM.md#photometry-9-4).
-
-### Reason-specific LIMITED handling
-
-**Deferred.** No gain was demonstrated from changing the LIMITED amplitude floor. Compare real low-amplitude variable recovery and false candidates under inadequate range/transparency evidence and genuine response faults before assigning reason-specific policies. Retain the current floor until then. See [verdict](ALGORITHM.md#photometry-10) and [gates](ALGORITHM.md#photometry-11-4).
-
-### Spatial correction of comparison cutouts
-
-**Deferred; SpacePixels presentation.** Cutouts match sky and zero point but omit the spatial-plane difference. Revisit only with a visible mismatch; choose an explicit main-reference or selected-solution display contract and handle unavailable corrections. A display approximation must not claim exact selected-curve calibration or change measurements.
-
-### Brief and fast variability
-
-**Deferred.** The current cleaner, persistence gate and positive-correlation statistic suppress very brief or rapidly alternating signals. The completed peak-removal check addresses one artifact cause, not a brief-event search. Re-establish the current residual-artifact baseline before testing an additional path with image-level variables and realistic constant-star controls over cadence, missingness, seeing and blends. Keep the existing gates and the adopted gap rule. See [cleaning](ALGORITHM.md#photometry-11-1), [scores](ALGORITHM.md#photometry-11-2) and [coverage](ALGORITHM.md#photometry-11-5).
-
-### Peak-removal check follow-up
-
-**Open diagnosis.** Milder fading/brightening imbalances and residual single-pointing fadings remain unexplained. More reference comparisons catch artifacts at the cost of rejecting more real profile-shaped dimmings; a pixel-phase-matched reference would need better subpixel registration. Establish the cause and genuine-event cost before changing the session gate or one-pixel test. See [light-curve cleaning](ALGORITHM.md#photometry-11-1); general registration measurement belongs to PT-5.
-
-### Blank-sky factor in star selection
-
-**Deferred.** The agreed blank-sky factor scales reported errors only. Applying it to median-SNR selection and Check B would make those selections use measured correlated-noise errors, but would change the scored population and possibly readiness. Evaluate variable recovery, false candidates and `photometryMinSnr` on the reference regression before changing that contract. See [errors and flags](ALGORITHM.md#photometry-6-3).
-
-**Boundaries.** Weighted Check-D slope tracking and per-candidate ensemble refits stay closed under [Declined](#declined). Catalogue-calibrated magnitudes belong to [SpacePixels F24](../SpacePixels/FEATURE-REQUESTS.md#f24-calibrated-magnitudes-for-variable-stars); fixed-camera analysis to [SpacePixels F23](../SpacePixels/FEATURE-REQUESTS.md#f23-fixed-camera-and-all-sky-sequence-analysis). Keep the current empirical noise model and reported-error contract unless a separate change is agreed.
 
 ## RV-1. Findings from the pull request 1 review
 

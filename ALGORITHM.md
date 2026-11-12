@@ -296,7 +296,7 @@ Four absolute floors keep the rejection envelopes from becoming too tight:
 
 The background envelope is also never smaller than the session's median per-frame sky noise.
 
-The star-count envelope has no absolute or relative floor. With counts measured over the same quality area, a narrow spread can put the lower limit close to the median, so a small count loss can reject a frame. The current rule remains median minus the configured multiple of the MAD sigma; a possible floor is deferred under [QC-1](FEATURE-REQUESTS.md#qc-1-star-count-rejection-envelope).
+The star-count envelope has no absolute or relative floor. With counts measured over the same quality area, a narrow spread can put the lower limit close to the median, so a small count loss can reject a frame. The current rule remains median minus the configured multiple of the MAD sigma; a possible floor is proposed under [QC-1](FEATURE-REQUESTS.md#qc-1-star-count-rejection-envelope).
 
 Rejected frames are recorded in `PipelineTelemetry.rejectedFrames`. Only the retained frames participate in stacking and tracking.
 
@@ -757,7 +757,7 @@ The optional branch measures stationary stars in retained frames, checks whether
 
 ### Photometry in plain English
 
-Photometry measures a star's brightness. Here the aim is to find stars whose brightness changes during one observing session, after correcting for changes shared by other stars. The result is a list of candidates for inspection. The checks and their current limits are explained below; the [remaining photometry investigations](FEATURE-REQUESTS.md#vs-11-photometry-strictness-defaults-and-recovery-review) track deferred policy and sensitivity work.
+Photometry measures a star's brightness. Here the aim is to find stars whose brightness changes during one observing session, after correcting for changes shared by other stars. The result is a list of candidates for inspection. The checks and their current limits are explained below; earlier photometry investigations and audit history are in git history.
 
 **What is measured.** A star is spread across several pixels by the atmosphere, optics and sampling. This pattern is its **point-spread function (PSF)**. **FWHM**, full width at half maximum, describes the width of its central profile at half its peak height. It is a width, not an aperture radius. The algorithm measures a representative FWHM in each frame, then uses it to size circular measuring regions.
 
@@ -1385,4 +1385,4 @@ At most 1,000 candidates are returned. Ceiling drops also increment `belowScore`
 <a id="faint-mover-complementary-proposals"></a>
 <a id="faint-mover-limits"></a>
 
-**Limitations.** The model uses one constant motion, whole-pixel scoring shifts and one star size per run. Star masks can hide a path; median subtraction can attenuate low-displacement sources; nearby strong sources and track/side-lobe checks can exclude real companions. Structured bright-star residuals and chance alignments of sensor defects can survive. Steady undithered camera drift can be indistinguishable from a source moving with that drift. A good score, descriptive coadd or post-detection catalogue match is not calibrated discovery confidence. Temporal-bin and frame-point proposal methods and temporal-variance weighting are not production stages. Conditional extensions are collected in [SM-F7](FEATURE-REQUESTS.md#sm-f7-slow-and-faint-mover-extensions); current filters and defaults remain.
+**Limitations.** The model uses one constant motion, whole-pixel scoring shifts and one star size per run. Star masks can hide a path; median subtraction can attenuate low-displacement sources; nearby strong sources and track/side-lobe checks can exclude real companions. Structured bright-star residuals and chance alignments of sensor defects can survive. Steady undithered camera drift can be indistinguishable from a source moving with that drift. A good score, descriptive coadd or post-detection catalogue match is not calibrated discovery confidence. Temporal-bin and frame-point proposal methods and temporal-variance weighting are not production stages; earlier conditional extension proposals are in git history, and current filters and defaults remain.
