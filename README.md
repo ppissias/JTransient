@@ -101,6 +101,7 @@ Notes:
 Each engine uses a bounded worker pool, limited by CPU count, frame count and estimated scratch
 memory for the largest frame. The memory estimate reserves 16 bytes per pixel plus 1 MiB per worker,
 with a budget of at most one quarter of the maximum heap and half the remaining heap headroom.
+When memory is the limit, the pool collects garbage once before measuring the heap.
 This reduces concurrent allocation pressure; it does not guarantee that a large input set fits in
 memory. Reuse an engine sequentially, not for concurrent pipeline calls, and call `shutdown()`
 when finished, or use it in try-with-resources (`JTransientEngine` implements `AutoCloseable`).

@@ -16,7 +16,7 @@ These are proposals, not implementation authorisations. Retain current algorithm
 | [SM-F10](#sm-f10-faint-mover-paths-beside-a-star) | Proposed | Reject faint-mover paths that stay beside the star mask for most of the session; validate on movers that pass bright stars first. |
 | [XC-3](#xc-3-local-background-and-noise-for-frame-extraction) | Open; parked at maintainer request; new evidence (2026-11-08) | Resume with local sky correction alone, keeping baseline noise and thresholds fixed; preserve associations, photometry and boundary calibration. |
 | [VS-13](#vs-13-variable-star-recovery-and-false-candidate-investigation) | Investigation plan recorded; experiments pending | Audit known-variable recovery and suspicious candidates on saved reference runs before proposing individual photometry changes. |
-| [RV-1](#rv-1-findings-from-the-pull-request-1-review) | Open; no fix agreed | Seven code-review findings, led by hot pixels that can pass the follows-sky test on steadily drifting frames. Decide each item separately. |
+| [RV-1](#rv-1-findings-from-the-pull-request-1-review) | Open; no fix agreed | Six code-review findings, led by hot pixels that can pass the follows-sky test on steadily drifting frames. Decide each item separately. |
 
 **Mover consolidation decision (2026-11-05).** The digital-tracking delivery (SM-F2 and SpacePixels F25) is complete. Close the current SM-F1/SM-F3 temporal, morphology, position and gate investigations and the bounded SM-F6 validation/review campaign. Retire SM-F4 residual weighting and SM-F5 acceleration as separate open proposals; both remain unimplemented, with no validated replacement selected. Retain the present scientific filters and defaults; this closure does not claim universal completeness, calibrated confidence or the absence of difficult sources. The existing archive and [code history](docs/research/slow-movers/CODE-HISTORY.md) remain available separately.
 
@@ -155,7 +155,6 @@ Each mechanism below was checked by reading the reviewed source, which is identi
 |---|---|---|---|
 | [RV-1.1](#rv-11-hot-pixels-can-pass-the-follows-sky-test) | Normal | False tracks; seen in 4 of 102 archive sessions | Steady sub-pixel drift without dither |
 | [RV-1.2](#rv-12-faint-trails-can-be-reported-twice) | Nit | Same trail exported twice | Default configuration; normal pass finds only point-like pieces of a trail |
-| [RV-1.3](#rv-13-worker-limit-is-recalculated-after-the-faint-searches) | Nit | Slower photometry | Photometry on (the default), heap under pressure |
 | [RV-1.4](#rv-14-very-large-faint-mover-time-limit-overflows) | Nit | Faint-mover search stops at once | Search on (the default), limit of about 9.2e9 seconds or more |
 | [RV-1.5](#rv-15-orphaned-notifyobserver-javadoc) | Nit | Documentation only | Always |
 | [RV-1.6](#rv-16-duplicated-star-veto-overlap-rule) | Nit | Maintenance risk | Always |
@@ -179,12 +178,6 @@ The camera fit may not be tight on real registrations. For a pure translation, [
 **Correction to the review.** It also says these pieces can become a `LOCAL_REPEAT`, citing `ResidualTransientAnalyzerTest.minimumDoesNotRequireThreeDistinctFrames`. That test uses detections from two frames, and a `LOCAL_REPEAT` needs a cluster radius of at most 2.5 px and a total displacement of at most 3 px, so pieces spread along a trail would not normally qualify. Three close pieces in a single frame were not checked.
 
 [ALGORITHM.md](ALGORITHM.md#135-faint-streak-search) says the search changes nothing of the normal pass, and absorbing these pieces would change what the normal pass exports. Decide whether that is wanted, with evidence on trail recovery and false absorption.
-
-### RV-1.3 Worker limit is recalculated after the faint searches
-
-**Run time only.** The Javadoc of `searchFaintStreaks` and `searchFaintMovers` in [`JTransientEngine`](src/main/java/io/github/ppissias/jtransient/engine/JTransientEngine.java) says the run's limit is "set again" afterwards. The `finally` blocks (lines 990 and 1052) instead recalculate it through `WorkerPool.limitWork` from the heap in use at that moment, which also includes extraction results, stacks and uncollected garbage from the search. The only later batch that runs under a recalculated limit is photometry's (`VariableStarAnalyzer`, line 878), so under heap pressure it can get fewer workers, down to one.
-
-Restoring the saved limit would match the comment, but a fresh estimate may be safer when the heap really is fuller. If the recalculation stays, correct the Javadoc.
 
 ### RV-1.4 Very large faint-mover time limit overflows
 
