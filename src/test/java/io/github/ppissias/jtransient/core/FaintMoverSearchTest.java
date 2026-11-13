@@ -89,22 +89,27 @@ public class FaintMoverSearchTest {
     private static final long START = 1_700_000_000_000L;
     private static final long CADENCE = 120_000L;
 
-    /** Star size measurements of a Gaussian of {@link #FWHM} (the extraction measures about sqrt(2) wider). */
-    private static List<FrameQualityAnalyzer.FrameMetrics> metrics() {
+    /** Star size measurements of a Gaussian of the FWHM (the extraction measures about sqrt(2) wider). */
+    private static List<FrameQualityAnalyzer.FrameMetrics> metrics(double fwhm) {
         List<FrameQualityAnalyzer.FrameMetrics> metrics = new ArrayList<>();
         for (int k = 0; k < FRAMES; k++) {
             FrameQualityAnalyzer.FrameMetrics m = new FrameQualityAnalyzer.FrameMetrics();
-            m.medianFWHM = FWHM * Math.sqrt(2);
+            m.medianFWHM = fwhm * Math.sqrt(2);
             m.fwhmStarCount = 50;
             metrics.add(m);
         }
         return metrics;
     }
 
-    /** Noise frames, sky {@link #SKY}, with Gaussian sources: {x0, y0, vx, vy (px/min), peak} each. */
+    /** Noise frames, sky {@link #SKY}, with Gaussian sources of {@link #FWHM}: {x0, y0, vx, vy (px/min), peak} each. */
     private static List<ImageFrame> frames(long seed, double[]... sources) {
+        return frames(seed, FWHM, sources);
+    }
+
+    /** Noise frames, sky {@link #SKY}, with Gaussian sources of the FWHM: {x0, y0, vx, vy (px/min), peak} each. */
+    private static List<ImageFrame> frames(long seed, double fwhm, double[]... sources) {
         Random random = new Random(seed);
-        double sigma = FWHM / 2.3548;
+        double sigma = fwhm / 2.3548;
         List<ImageFrame> frames = new ArrayList<>();
         for (int k = 0; k < FRAMES; k++) {
             double minutes = k * CADENCE / 60000.0;
@@ -130,9 +135,13 @@ public class FaintMoverSearchTest {
     }
 
     private static FaintMoverSearch.Input input(List<ImageFrame> frames) {
+        return input(frames, FWHM);
+    }
+
+    private static FaintMoverSearch.Input input(List<ImageFrame> frames, double fwhm) {
         FaintMoverSearch.Input input = new FaintMoverSearch.Input();
         input.frames = frames;
-        input.frameMetrics = metrics();
+        input.frameMetrics = metrics(fwhm);
         input.masterStack = MasterMapGenerator.createMedianMasterStack(frames);
         return input;
     }
@@ -171,6 +180,9 @@ public class FaintMoverSearchTest {
         assertEquals(1, result.telemetry.tilesSearched);
         assertFalse(result.telemetry.truncated);
         assertEquals(FWHM, result.telemetry.fwhmPixels, 0.01);
+        // Narrow stars, and frames 2 star sizes apart at the fastest motion: the coarse search is the full one.
+        assertEquals(1, result.telemetry.coarseBin);
+        assertEquals(FRAMES, result.telemetry.coarseFrames);
         assertNotNull(c.diagnostics);
         var d = c.diagnostics;
         assertNull(d.unavailableReason);
@@ -391,6 +403,86 @@ public class FaintMoverSearchTest {
         assertTrue(result.candidates.isEmpty());
         assertTrue(messages.getLast().contains("truncated at its time limit"));
         assertFalse(messages.getLast().contains("completed"));
+    }
+
+    /**
+     * With wide stars the coarse search adds 2 x 2 pixels and pairs of frames; refinement on the full residuals of every
+     * frame gives exactly the candidate of the full-resolution coarse search.
+     */
+    @Test
+    public void wideStarsUseACheaperCoarseSearchAndKeepTheCandidate() throws Exception {
+        double fwhm = 5.0;
+        double[] mover = {100, 120, 0.4, -0.25, 1.4 * NOISE};
+        FaintMoverSearch.Input input = input(frames(3, fwhm, mover), fwhm);
+        DetectionConfig config = new DetectionConfig();
+
+        DetectionConfig normal = new DetectionConfig();
+        normal.faintMoverSearchSpeed = FaintMoverSearch.SPEED_NORMAL;
+
+        FaintMoverSearch.Result cheaper = FaintMoverSearch.search(FaintMoverSearch.plan(input, config));
+        FaintMoverSearch.Result full = FaintMoverSearch.search(FaintMoverSearch.plan(input, normal));
+
+        // 2 min apart at 1 px/min is 0.4 star sizes: pairs; 4 min is 0.8: not three.
+        assertEquals(FaintMoverSearch.SPEED_FAST, cheaper.telemetry.searchSpeed);
+        assertEquals(FaintMoverSearch.SPEED_NORMAL, full.telemetry.searchSpeed);
+        assertEquals(2, cheaper.telemetry.coarseBin);
+        assertEquals(FRAMES / 2, cheaper.telemetry.coarseFrames);
+        assertEquals(1, full.telemetry.coarseBin);
+        assertEquals(FRAMES, full.telemetry.coarseFrames);
+        assertEquals(1, full.candidates.size());
+        assertEquals(1, cheaper.candidates.size());
+        FaintMoverCandidate a = full.candidates.get(0);
+        FaintMoverCandidate b = cheaper.candidates.get(0);
+        assertTrue(a.score >= 8);
+        assertEquals(a.score, b.score, 0);
+        assertEquals(a.x, b.x, 0);
+        assertEquals(a.y, b.y, 0);
+        assertEquals(a.vx, b.vx, 0);
+        assertEquals(a.vy, b.vy, 0);
+        assertEquals(a.firstHalfScore, b.firstHalfScore, 0);
+        assertEquals(a.secondHalfScore, b.secondHalfScore, 0);
+        double t = midMinutes();
+        assertEquals(mover[0] + mover[2] * t, b.x, 1.0);
+        assertEquals(mover[1] + mover[3] * t, b.y, 1.0);
+    }
+
+    /** At the faster speed, narrow stars are binned and frames grouped too; the mover is still found on its path. */
+    @Test
+    public void theFasterSpeedBinsNarrowStarsAndStillFindsTheMover() throws Exception {
+        double[] mover = {100, 120, 0.4, -0.25, 1.6 * NOISE};
+        DetectionConfig config = new DetectionConfig();
+        config.faintMoverSearchSpeed = FaintMoverSearch.SPEED_FASTER;
+        FaintMoverSearch.Result result = run(input(frames(1, mover)), config);
+
+        // Star size 3 px: binned; 2 min apart at 1 px/min is 0.67 star sizes (within 1.3), 4 min is 1.33: pairs.
+        assertEquals(FaintMoverSearch.SPEED_FASTER, result.telemetry.searchSpeed);
+        assertEquals(2, result.telemetry.coarseBin);
+        assertEquals(FRAMES / 2, result.telemetry.coarseFrames);
+        assertEquals(1, result.candidates.size());
+        FaintMoverCandidate c = result.candidates.get(0);
+        double t = midMinutes();
+        assertEquals(mover[0] + mover[2] * t, c.x, 1.0);
+        assertEquals(mover[1] + mover[3] * t, c.y, 1.0);
+        assertEquals(mover[2], c.vx, 0.05);
+        assertEquals(mover[3], c.vy, 0.05);
+    }
+
+    @Test
+    public void coarseFramesAddConsecutiveFramesCloseInTime() {
+        int[] inOrder = {0, 1, 2, 3, 4, 5};
+        // 1 px/min, up to 3.25 px within a group: frames up to 3.25 min apart are added, the gap of 14 min separates.
+        assertEquals("[[0, 1], [2, 3], [4, 5]]", java.util.Arrays.deepToString(
+                FaintMoverSearch.coarseGroups(new double[]{0, 2, 4, 6, 20, 22}, inOrder, 1.0, 3.25)));
+        // 1.95 px: no two frames; each frame alone, in kept order.
+        assertEquals("[[0], [1], [2], [3], [4], [5]]", java.util.Arrays.deepToString(
+                FaintMoverSearch.coarseGroups(new double[]{0, 2, 4, 6, 20, 22}, inOrder, 1.0, 1.95)));
+        // Groups follow time, not kept order.
+        assertEquals("[[1, 0], [3, 2]]", java.util.Arrays.deepToString(
+                FaintMoverSearch.coarseGroups(new double[]{2, 0, 6, 4}, new int[]{1, 0, 3, 2}, 1.0, 3.25)));
+        // A slower fastest motion adds more frames: 6.5 min at 0.5 px/min.
+        assertEquals("[[0, 1, 2, 3, 4, 5, 6], [7, 8, 9]]", java.util.Arrays.deepToString(
+                FaintMoverSearch.coarseGroups(new double[]{0, 1, 2, 3, 4, 5, 6, 7, 8, 9},
+                        new int[]{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 0.5, 3.25)));
     }
 
     @Test

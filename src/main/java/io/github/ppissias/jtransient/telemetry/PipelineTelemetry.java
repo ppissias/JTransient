@@ -634,6 +634,11 @@ public class PipelineTelemetry {
                 "  Speeds: %.3f-%.3f px/min | Grid: %d motions, step %.3f px/min, refined to %.4f\n",
                 f.minSpeedPixelsPerMinute, f.maxSpeedPixelsPerMinute, f.coarseMotions, f.coarseStepPixelsPerMinute,
                 f.fineStepPixelsPerMinute));
+        sb.append(String.format(java.util.Locale.US,
+                "  Coarse search (%s speed): %d frames%s, %s | refined on all %d frames at full resolution\n",
+                f.searchSpeed == 0 ? "normal" : f.searchSpeed == 2 ? "faster" : "fast",
+                f.coarseFrames, f.coarseFrames < f.frames ? " (consecutive frames added)" : "",
+                f.coarseBin > 1 ? f.coarseBin + "x" + f.coarseBin + " pixels added" : "full resolution", f.frames));
         sb.append(String.format(java.util.Locale.US, "  Tiles searched: %d of %d%s | Pixels searched: %d | %.1f s\n",
                 f.tilesSearched, f.tiles, f.truncated ? " (time limit reached)" : "", f.searchedPixels,
                 f.elapsedMs / 1000.0));

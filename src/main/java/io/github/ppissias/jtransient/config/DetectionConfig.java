@@ -645,6 +645,15 @@ public class DetectionConfig implements Cloneable {
      */
     public boolean enableFaintMoverFrameLimit = true;
 
+    /** * How much cheaper the search's first pass, which tries every motion at every position, may be:
+     * 0 (normal) adds every pixel of every frame; 1 (fast, the default) adds 2 x 2 pixels when stars are at least 3.5 px
+     * wide and consecutive frames while the fastest motion moves at most 0.65 star sizes across them, which loses little
+     * signal; 2 (faster) adds 2 x 2 pixels when stars are at least 2 px wide and frames across up to 1.3 star sizes, and
+     * can miss more candidates close to the limits. Every candidate is refined and checked on all frames at full
+     * resolution, so a candidate's score means the same at every speed.
+     */
+    public int faintMoverSearchSpeed = 1;
+
     /** * Time limit for the search, in seconds; the search then stops and reports the part it searched. */
     public double faintMoverMaxSeconds = 600.0;
 

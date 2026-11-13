@@ -68,7 +68,9 @@ public final class DetectionConfigRules {
     public enum Domain {
         BOOLEAN, FINITE, POSITIVE, NON_NEGATIVE, FRACTION, PERCENTAGE, CORRELATION, ANGLE,
         ELONGATION, STRICT_ELONGATION, DISABLED_RATIO, NONPOSITIVE_UNCAPPED, NONPOSITIVE_DEFAULT,
-        MASTER_GROW, ENCODING_LEVELS
+        MASTER_GROW, ENCODING_LEVELS,
+        /** 0, 1 or 2: the faint-mover search's normal, fast and faster first pass. */
+        SEARCH_SPEED
     }
 
     /**
@@ -464,6 +466,7 @@ public final class DetectionConfigRules {
             case STRICT_ELONGATION -> value > 1;
             case DISABLED_RATIO -> value <= 0 || value >= 1;
             case ENCODING_LEVELS -> value >= 0 && value <= 65_536;
+            case SEARCH_SPEED -> value == 0 || value == 1 || value == 2;
             default -> true;
         };
     }
@@ -522,6 +525,7 @@ public final class DetectionConfigRules {
         add(metadata, Stage.PHOTOMETRY, Domain.CORRELATION, "variableMinSplitHalfCorrelation");
         add(metadata, Stage.FAINT_MOVERS, Domain.BOOLEAN, "enableFaintMoverSearch enableFaintMoverFrameLimit");
         add(metadata, Stage.FAINT_MOVERS, Domain.POSITIVE, "faintMoverMinDisplacementFwhm faintMoverMaxSpeedPixelsPerMinute faintMoverMinScore faintMoverMaxSeconds");
+        add(metadata, Stage.FAINT_MOVERS, Domain.SEARCH_SPEED, "faintMoverSearchSpeed");
         if (!metadata.keySet().equals(FIELDS.keySet())) {
             throw new IllegalStateException("DetectionConfig metadata must cover every instance field exactly once.");
         }

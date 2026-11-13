@@ -97,6 +97,23 @@ public final class FaintMoverSearch {
     static final int FINE_STEPS = 4;
     /** The refined peak is the best position within this many pixels of the coarse one. */
     static final int REFINE_RADIUS = 2;
+    /** {@code faintMoverSearchSpeed} values: every pixel and frame; cheaper where little is lost; cheaper still. */
+    static final int SPEED_NORMAL = 0;
+    static final int SPEED_FAST = 1;
+    static final int SPEED_FASTER = 2;
+    /**
+     * By search speed: with stars at least this wide, in pixels, the coarse search adds {@link #COARSE_BIN} x
+     * {@link #COARSE_BIN} pixels. At the fast speed binned stars stay at least 1.75 px wide; at the faster one, 1 px.
+     * Refinement and every check use the full-resolution residuals.
+     */
+    static final double[] COARSE_BIN_MIN_FWHM = {Double.POSITIVE_INFINITY, 3.5, 2.0};
+    static final int COARSE_BIN = 2;
+    /**
+     * By search speed: the coarse search adds consecutive frames together while the fastest motion moves at most this
+     * many star sizes from the first to the last of them. At the fast speed no frame lies more than a third of the star
+     * size from the group's path; at the faster one, two thirds.
+     */
+    static final double[] COARSE_GROUP_MAX_FWHM = {0.0, 0.65, 1.3};
     /**
      * Each half of the session must reach this score along the candidate's motion, counting only its frames whose path
      * position lies outside the masks (star cores, fill, streaks). A half with fewer such frames than
@@ -180,8 +197,9 @@ public final class FaintMoverSearch {
         /** Memory one tile's work needs, in bytes. */
         public final long bytesPerTile;
         /**
-         * Coarse motions x searched frames x pixels of the data area, zero when the search cannot run. The search's run
-         * time grows in proportion: about 7e-11 seconds per unit on a 16-core desktop (measured 2026-11-03).
+         * Additions of the coarse search: coarse motions x coarse frames x pixels of the data area / bin², zero when the
+         * search cannot run. The search's run time grows about in proportion: about 7e-11 seconds per unit on a 16-core
+         * desktop at full resolution (measured 2026-11-03); binned additions cost more each.
          */
         public final double estimatedWork;
         final Input input;
@@ -198,6 +216,16 @@ public final class FaintMoverSearch {
         /** Whole-pixel shifts of the searched frames along each coarse motion, [motion][frame]. */
         final int[][] shiftX;
         final int[][] shiftY;
+        /** Pixels added in each direction for the coarse search: 1, or {@link #COARSE_BIN} for wide stars. */
+        final int coarseBin;
+        /**
+         * The searched frames (indices in kept order) added into each coarse frame; one frame each, in kept order, when
+         * no frames are close enough in time.
+         */
+        final int[][] coarseGroups;
+        /** Whole binned-pixel shifts of the coarse frames along each coarse motion, [motion][coarse frame]. */
+        final int[][] coarseShiftX;
+        final int[][] coarseShiftY;
         final double coarseStep;
         final double fineStep;
         final double maxSpeed;
@@ -209,7 +237,7 @@ public final class FaintMoverSearch {
         private Plan(String skippedReason, Input input, DetectionConfig config, FaintMoverSearchTelemetry telemetry,
                      double fwhm, List<ImageFrame> frames, int[] frameIndex, double[] minutes, long referenceTimeMillis,
                      int[] timeOrder, double[][] motions, double coarseStep, double maxSpeed, int margin, float[] kernel,
-                     List<int[]> tiles, long startedNanos) {
+                     int coarseBin, int[][] coarseGroups, List<int[]> tiles, long startedNanos) {
             this.skippedReason = skippedReason;
             this.input = input;
             this.config = config;
@@ -229,6 +257,20 @@ public final class FaintMoverSearch {
                     shiftY[mi][k] = (int) Math.round(motions[mi][1] * minutes[k]);
                 }
             }
+            this.coarseBin = coarseBin;
+            this.coarseGroups = coarseGroups;
+            this.coarseShiftX = new int[motions.length][coarseGroups.length];
+            this.coarseShiftY = new int[motions.length][coarseGroups.length];
+            for (int gi = 0; gi < coarseGroups.length; gi++) {
+                double groupMinutes = 0;
+                for (int k : coarseGroups[gi]) {
+                    groupMinutes += minutes[k] / coarseGroups[gi].length;
+                }
+                for (int mi = 0; mi < motions.length; mi++) {
+                    coarseShiftX[mi][gi] = (int) Math.round(motions[mi][0] * groupMinutes / coarseBin);
+                    coarseShiftY[mi][gi] = (int) Math.round(motions[mi][1] * groupMinutes / coarseBin);
+                }
+            }
             this.coarseStep = coarseStep;
             this.fineStep = coarseStep / FINE_STEPS;
             this.maxSpeed = maxSpeed;
@@ -237,10 +279,13 @@ public final class FaintMoverSearch {
             this.tiles = tiles;
             this.startedNanos = startedNanos;
             this.tileCount = tiles.size();
-            this.bytesPerTile = tileBytes(margin, frames.size());
+            this.bytesPerTile = tileBytes(margin, frames.size(), coarseBin, coarseGroups.length);
             double pixels = input.dataArea != null ? input.dataArea.getPixelCount()
                     : input.masterStack != null ? (double) input.masterStack.length * input.masterStack[0].length : 0;
-            this.estimatedWork = skippedReason == null ? (double) motions.length * frames.size() * pixels : 0.0;
+            this.estimatedWork = skippedReason == null
+                    ? (double) motions.length * coarseGroups.length * pixels / (coarseBin * coarseBin) : 0.0;
+            telemetry.coarseBin = coarseBin;
+            telemetry.coarseFrames = coarseGroups.length;
         }
     }
 
@@ -357,6 +402,7 @@ public final class FaintMoverSearch {
     public static Plan plan(Input input, DetectionConfig config) {
         long started = System.nanoTime();
         FaintMoverSearchTelemetry telemetry = new FaintMoverSearchTelemetry();
+        telemetry.searchSpeed = Math.max(SPEED_NORMAL, Math.min(SPEED_FASTER, config.faintMoverSearchSpeed));
         List<ImageFrame> kept = input.frames;
         telemetry.frames = kept.size();
         FaintStreakSearch.Width width = input.frameMetrics != null
@@ -441,10 +487,14 @@ public final class FaintMoverSearch {
             timeOrder[k] = order[k];
         }
 
+        int speed = telemetry.searchSpeed;
+        int coarseBin = fwhm >= COARSE_BIN_MIN_FWHM[speed] ? COARSE_BIN : 1;
+        int[][] coarseGroups = speed == SPEED_NORMAL ? singleFrames(n)
+                : coarseGroups(minutes, timeOrder, maxSpeed, COARSE_GROUP_MAX_FWHM[speed] * fwhm);
         float[] kernel = FaintStreakSearch.kernel(fwhm / 2.3548);
         int maxShift = (int) Math.ceil((maxSpeed + coarse) * maxAbs);
         int margin = maxShift + Math.max(kernel.length / 2 + 2, CUTOUT / 2 + REFINE_RADIUS + 1);
-        long tileBytes = tileBytes(margin, n);
+        long tileBytes = tileBytes(margin, n, coarseBin, coarseGroups.length);
         if (tileBytes > MAX_TILE_HEAP_SHARE * Runtime.getRuntime().maxMemory()) {
             return skipped(input, config, telemetry, String.format(java.util.Locale.US,
                     "one tile's work would need %d MB; lower the fastest motion or use fewer frames",
@@ -464,7 +514,69 @@ public final class FaintMoverSearch {
         }
         telemetry.tiles = tiles.size();
         return new Plan(null, input, config, telemetry, fwhm, frames, frameIndex, minutes, reference, timeOrder,
-                motions, coarse, maxSpeed, margin, kernel, tiles, started);
+                motions, coarse, maxSpeed, margin, kernel, coarseBin, coarseGroups, tiles, started);
+    }
+
+    /**
+     * The searched frames added into each coarse frame: frames consecutive in time while the fastest motion moves at
+     * most {@code limit} pixels from the first to the last of them. When no two frames are that close, each frame is its
+     * own coarse frame, in kept order, and the coarse search is the full one.
+     *
+     * @param minutes the searched frames' mid-exposure times, in kept order
+     * @param timeOrder kept-order indices sorted by time
+     * @param maxSpeed the fastest searched motion, in pixels per minute
+     * @param limit the largest motion within a group, in pixels
+     * @return kept-order indices of each coarse frame's frames
+     */
+    static int[][] coarseGroups(double[] minutes, int[] timeOrder, double maxSpeed, double limit) {
+        int n = minutes.length;
+        List<int[]> groups = new ArrayList<>();
+        int from = 0;
+        while (from < n) {
+            int to = from + 1;
+            while (to < n && (minutes[timeOrder[to]] - minutes[timeOrder[from]]) * maxSpeed <= limit) {
+                to++;
+            }
+            groups.add(Arrays.copyOfRange(timeOrder, from, to));
+            from = to;
+        }
+        return groups.size() == n ? singleFrames(n) : groups.toArray(new int[0][]);
+    }
+
+    /**
+     * The coarse search's reductions at a search speed, for run-time estimates made before a run: the pixels added in
+     * each direction and the number of coarse frames. The search applies the same rules to its kept frames and the star
+     * size it measures.
+     *
+     * @param speed {@code faintMoverSearchSpeed}; out-of-range values are treated as the nearest speed
+     * @param fwhm star size (Gaussian FWHM), in pixels
+     * @param midMinutes the frames' mid-exposure times, in minutes, in any order; not modified
+     * @param maxSpeed the fastest searched motion, in pixels per minute
+     * @return {bin, coarse frames}
+     */
+    public static int[] coarseSearchShape(int speed, double fwhm, double[] midMinutes, double maxSpeed) {
+        int s = Math.max(SPEED_NORMAL, Math.min(SPEED_FASTER, speed));
+        int bin = fwhm >= COARSE_BIN_MIN_FWHM[s] ? COARSE_BIN : 1;
+        int n = midMinutes.length;
+        if (s == SPEED_NORMAL) {
+            return new int[]{bin, n};
+        }
+        double[] sorted = midMinutes.clone();
+        Arrays.sort(sorted);
+        int[] order = new int[n];
+        for (int k = 0; k < n; k++) {
+            order[k] = k;
+        }
+        return new int[]{bin, coarseGroups(sorted, order, maxSpeed, COARSE_GROUP_MAX_FWHM[s] * fwhm).length};
+    }
+
+    /** Each of n searched frames as its own coarse frame, in kept order. */
+    private static int[][] singleFrames(int n) {
+        int[][] single = new int[n][];
+        for (int k = 0; k < n; k++) {
+            single[k] = new int[]{k};
+        }
+        return single;
     }
 
     /**
@@ -498,10 +610,15 @@ public final class FaintMoverSearch {
         return block;
     }
 
-    /** Memory one tile's work needs: every searched frame's residual of the tile with its margin, and the maps. */
-    static long tileBytes(int margin, int frames) {
+    /**
+     * Memory one tile's work needs: every searched frame's residual of the tile with its margin, the coarse frames when
+     * they are binned or grouped, and the maps.
+     */
+    static long tileBytes(int margin, int frames, int coarseBin, int coarseFrames) {
         long side = TILE + 2L * margin;
-        return side * side * (4L * frames + 12L) + (long) TILE * TILE * 20L;
+        long coarseSide = side / coarseBin + 1;
+        long coarse = coarseBin == 1 && coarseFrames == frames ? 0L : coarseSide * coarseSide * 4L * coarseFrames;
+        return side * side * (4L * frames + 12L) + coarse + (long) TILE * TILE * 20L;
     }
 
     /**
@@ -638,7 +755,7 @@ public final class FaintMoverSearch {
         telemetry.skippedReason = reason;
         telemetry.elapsedMs = (System.nanoTime() - started) / 1_000_000L;
         return new Plan(reason, input, config, telemetry, telemetry.fwhmPixels, List.of(), new int[0], new double[0],
-                0L, new int[0], new double[0][], 1.0, 0.0, 0, new float[]{1f}, List.of(), started);
+                0L, new int[0], new double[0][], 1.0, 0.0, 0, new float[]{1f}, 1, new int[0][], List.of(), started);
     }
 
     /** The coarse motions, {vx, vy} in pixels per minute, on a square grid with the speeds in the range. */
@@ -708,7 +825,6 @@ public final class FaintMoverSearch {
     private static TileResult searchTile(Plan plan, int tx, int ty, int w, int h, long deadline, EvidencePool evidence, TileProgress progress) {
         progress.update(0, "preparing residuals", -1);
         TileResult result = new TileResult();
-        int n = plan.frames.size();
         int m = plan.margin;
         int width = w + 2 * m;
         PreparedTile prepared = prepareTile(plan, tx, ty, w, h, progress);
@@ -738,18 +854,24 @@ public final class FaintMoverSearch {
             progress.finish();
             return result;
         }
-        float scale = (float) (1.0 / (n * noise));
-
-        // Coarse search: the best score and its motion at every position.
+        // Coarse search on the coarse frames: the best score and its motion at every coarse position.
+        CoarseTile coarse = coarseTile(plan, residuals, innerBad, w, h);
+        double coarseNoise = coarse.residuals() == residuals ? noise : coarseNoise(plan, coarse);
+        if (!(coarseNoise > 0)) {
+            progress.finish();
+            return result;
+        }
+        float[][] coarseFrames = coarse.residuals();
+        int cw = coarse.width();
+        int ch = coarse.height();
+        float scale = (float) (1.0 / (coarseFrames.length * coarseNoise));
         double[][] motions = plan.motions;
-        int[][] shiftX = plan.shiftX;
-        int[][] shiftY = plan.shiftY;
-        float[] best = new float[w * h];
+        float[] best = new float[cw * ch];
         Arrays.fill(best, Float.NEGATIVE_INFINITY);
-        int[] bestMotion = new int[w * h];
-        float[] acc = new float[STRIP_ROWS * w];
-        for (int s0 = 0; s0 < h; s0 += STRIP_ROWS) {
-            int rows = Math.min(STRIP_ROWS, h - s0);
+        int[] bestMotion = new int[cw * ch];
+        float[] acc = new float[STRIP_ROWS * cw];
+        for (int s0 = 0; s0 < ch; s0 += STRIP_ROWS) {
+            int rows = Math.min(STRIP_ROWS, ch - s0);
             if (System.nanoTime() > deadline) {
                 result.timedOut = true;
                 return result;
@@ -757,22 +879,12 @@ public final class FaintMoverSearch {
             for (int mi = 0; mi < motions.length; mi++) {
                 CancellationScope.check();
                 if ((mi & 63) == 0) progress.update(100_000 + (int) (800_000L * ((long) (s0 / STRIP_ROWS) * motions.length + mi)
-                        / (((h + STRIP_ROWS - 1L) / STRIP_ROWS) * motions.length)), "coarse trial motions", mi);
-                Arrays.fill(acc, 0, rows * w, 0f);
-                for (int k = 0; k < n; k++) {
-                    float[] r = residuals[k];
-                    int sx = shiftX[mi][k];
-                    int sy = shiftY[mi][k];
-                    for (int row = 0; row < rows; row++) {
-                        int src = (s0 + row + m + sy) * width + m + sx;
-                        int dst = row * w;
-                        for (int x = 0; x < w; x++) {
-                            acc[dst + x] += r[src + x];
-                        }
-                    }
-                }
-                int base = s0 * w;
-                for (int i = 0; i < rows * w; i++) {
+                        / (((ch + STRIP_ROWS - 1L) / STRIP_ROWS) * motions.length)), "coarse trial motions", mi);
+                Arrays.fill(acc, 0, rows * cw, 0f);
+                addCoarseFrames(coarseFrames, plan.coarseShiftX[mi], plan.coarseShiftY[mi], coarse.stride(),
+                        coarse.margin(), s0, rows, cw, acc);
+                int base = s0 * cw;
+                for (int i = 0; i < rows * cw; i++) {
                     float value = acc[i] * scale;
                     if (value > best[base + i]) {
                         best[base + i] = value;
@@ -781,25 +893,34 @@ public final class FaintMoverSearch {
                 }
             }
         }
+        boolean[] coarseBad = coarse.bad();
         for (int i = 0; i < best.length; i++) {
-            if (innerBad[i]) {
+            if (coarseBad[i]) {
                 best[i] = Float.NEGATIVE_INFINITY;
             }
         }
 
-        // Local maxima, refined and checked.
+        // Local maxima, refined and checked on the full-resolution residuals of every frame.
         progress.update(900_000, "checking provisional peaks", -1);
-        float[] localMax = maxFilter(best, w, h, PEAK_RADIUS);
+        int bin = plan.coarseBin;
+        float[] localMax = maxFilter(best, cw, ch, Math.max(1, Math.round((float) PEAK_RADIUS / bin)));
         double keep = COARSE_KEEP_FRACTION * plan.config.faintMoverMinScore;
-        for (int y = 0; y < h; y++) {
-            progress.update(900_000 + (int) (100_000L * y / h), "checking provisional peaks", -1);
-            for (int x = 0; x < w; x++) {
-                int i = y * w + x;
+        for (int cy = 0; cy < ch; cy++) {
+            progress.update(900_000 + (int) (100_000L * cy / ch), "checking provisional peaks", -1);
+            for (int cx = 0; cx < cw; cx++) {
+                int i = cy * cw + cx;
                 if (best[i] < keep || best[i] != localMax[i]) {
                     continue;
                 }
                 CancellationScope.check();
                 result.refinedPeaks++;
+                int x = cx;
+                int y = cy;
+                if (bin > 1) {
+                    int pixel = bestPixelOfBin(plan, residuals, width, w, h, cx, cy, bestMotion[i]);
+                    x = pixel % w;
+                    y = pixel / w;
+                }
                 Peak peak = refine(plan, residuals, bad, streakMasks, width, w, h, x, y, motions[bestMotion[i]], noise,
                         tx, ty, result);
                 if (peak != null) {
@@ -810,6 +931,165 @@ public final class FaintMoverSearch {
         }
         progress.finish();
         return result;
+    }
+
+    /**
+     * A tile's coarse frames, which the coarse search adds along each motion: the full-resolution residuals themselves,
+     * or their sums over {@code bin x bin} pixels and over each group of frames. Coarse pixel (x, y) of the inner area
+     * covers inner pixels {@code bin * x} to {@code bin * x + bin - 1}; {@code bad} marks coarse pixels whose pixels are
+     * all left out. Rows are {@code stride} apart and start {@code margin} coarse pixels before the inner area.
+     */
+    private record CoarseTile(float[][] residuals, int stride, int margin, int width, int height, boolean[] bad) { }
+
+    /** Builds a tile's coarse frames from its full-resolution residuals, which stay unchanged. */
+    private static CoarseTile coarseTile(Plan plan, float[][] residuals, boolean[] innerBad, int w, int h) {
+        int bin = plan.coarseBin;
+        int[][] groups = plan.coarseGroups;
+        int m = plan.margin;
+        int width = w + 2 * m;
+        if (bin == 1 && groups.length == residuals.length) {
+            return new CoarseTile(residuals, width, m, w, h, innerBad);
+        }
+        int height = h + 2 * m;
+        int coarseMargin = m / bin;
+        int offset = m - coarseMargin * bin;
+        int stride = (width - offset) / bin;
+        int rows = (height - offset) / bin;
+        float[][] coarse = new float[groups.length][];
+        for (int gi = 0; gi < groups.length; gi++) {
+            CancellationScope.check();
+            float[] c = new float[stride * rows];
+            for (int k : groups[gi]) {
+                float[] r = residuals[k];
+                for (int cy = 0; cy < rows; cy++) {
+                    int dst = cy * stride;
+                    for (int dy = 0; dy < bin; dy++) {
+                        int src = (offset + cy * bin + dy) * width + offset;
+                        for (int cx = 0; cx < stride; cx++) {
+                            int s = src + cx * bin;
+                            float sum = 0f;
+                            for (int dx = 0; dx < bin; dx++) {
+                                sum += r[s + dx];
+                            }
+                            c[dst + cx] += sum;
+                        }
+                    }
+                }
+            }
+            coarse[gi] = c;
+        }
+        int cw = (w + bin - 1) / bin;
+        int ch = (h + bin - 1) / bin;
+        boolean[] bad = new boolean[cw * ch];
+        for (int cy = 0; cy < ch; cy++) {
+            for (int cx = 0; cx < cw; cx++) {
+                boolean allBad = true;
+                for (int y = cy * bin; y < Math.min(h, cy * bin + bin) && allBad; y++) {
+                    for (int x = cx * bin; x < Math.min(w, cx * bin + bin); x++) {
+                        if (!innerBad[y * w + x]) {
+                            allBad = false;
+                            break;
+                        }
+                    }
+                }
+                bad[cy * cw + cx] = allBad;
+            }
+        }
+        return new CoarseTile(coarse, stride, coarseMargin, cw, ch, bad);
+    }
+
+    /**
+     * Adds the coarse frames, shifted along one motion, into {@code acc} for a strip of coarse rows, four frames per
+     * pass over {@code acc}. Each sum is formed frame by frame in order, exactly as when adding them one at a time.
+     */
+    private static void addCoarseFrames(float[][] frames, int[] sx, int[] sy, int stride, int margin, int s0, int rows,
+                                        int w, float[] acc) {
+        int n = frames.length;
+        int k = 0;
+        for (; k + 4 <= n; k += 4) {
+            float[] r0 = frames[k];
+            float[] r1 = frames[k + 1];
+            float[] r2 = frames[k + 2];
+            float[] r3 = frames[k + 3];
+            for (int row = 0; row < rows; row++) {
+                int line = (s0 + row + margin) * stride + margin;
+                int a0 = line + sy[k] * stride + sx[k];
+                int a1 = line + sy[k + 1] * stride + sx[k + 1];
+                int a2 = line + sy[k + 2] * stride + sx[k + 2];
+                int a3 = line + sy[k + 3] * stride + sx[k + 3];
+                int dst = row * w;
+                for (int x = 0; x < w; x++) {
+                    float sum = acc[dst + x];
+                    sum += r0[a0 + x];
+                    sum += r1[a1 + x];
+                    sum += r2[a2 + x];
+                    sum += r3[a3 + x];
+                    acc[dst + x] = sum;
+                }
+            }
+        }
+        for (; k < n; k++) {
+            float[] r = frames[k];
+            for (int row = 0; row < rows; row++) {
+                int src = (s0 + row + margin + sy[k]) * stride + margin + sx[k];
+                int dst = row * w;
+                for (int x = 0; x < w; x++) {
+                    acc[dst + x] += r[src + x];
+                }
+            }
+        }
+    }
+
+    /** The robust spread of the coarse frames' stacks along the same reference motion as {@link #stackNoise}. */
+    private static double coarseNoise(Plan plan, CoarseTile coarse) {
+        int reference = referenceMotion(plan);
+        int[] sx = plan.coarseShiftX[reference];
+        int[] sy = plan.coarseShiftY[reference];
+        float[][] frames = coarse.residuals();
+        int g = frames.length;
+        int cw = coarse.width();
+        int ch = coarse.height();
+        int cm = coarse.margin();
+        int stride = coarse.stride();
+        float[] sample = new float[Math.min(SAMPLE_SIZE, cw * ch)];
+        int step = Math.max(1, cw * ch / sample.length);
+        int count = 0;
+        for (int i = 0; i < cw * ch && count < sample.length; i += step) {
+            if (coarse.bad()[i]) {
+                continue;
+            }
+            int x = i % cw;
+            int y = i / cw;
+            float sum = 0f;
+            for (int k = 0; k < g; k++) {
+                sum += frames[k][(y + cm + sy[k]) * stride + x + cm + sx[k]];
+            }
+            sample[count++] = sum / g;
+        }
+        return count > 0 ? centreAndSpread(sample, count)[1] : 0.0;
+    }
+
+    /**
+     * The full-resolution inner pixel ({@code y * w + x}) with the largest stack along the coarse motion within a
+     * coarse pixel's bin and a one-pixel border. Refinement starts there, as it does from a full-resolution coarse maximum.
+     */
+    private static int bestPixelOfBin(Plan plan, float[][] residuals, int width, int w, int h, int cx, int cy, int motion) {
+        int bin = plan.coarseBin;
+        int[] sx = plan.shiftX[motion];
+        int[] sy = plan.shiftY[motion];
+        int n = residuals.length;
+        double top = Double.NEGATIVE_INFINITY;
+        int best = Math.min(h - 1, cy * bin) * w + Math.min(w - 1, cx * bin);
+        for (int y = Math.max(0, cy * bin - 1); y <= Math.min(h - 1, cy * bin + bin); y++) {
+            for (int x = Math.max(0, cx * bin - 1); x <= Math.min(w - 1, cx * bin + bin); x++) {
+                double value = stackAt(residuals, plan.margin, width, x, y, sx, sy, 0, n);
+                if (value > top) {
+                    top = value;
+                    best = y * w + x;
+                }
+            }
+        }
+        return best;
     }
 
     /**
@@ -1051,15 +1331,23 @@ public final class FaintMoverSearch {
         }
     }
 
-    /** Robust spread of the stack along a motion halfway through the speed range, over the unmasked positions. */
-    private static double stackNoise(Plan plan, float[][] residuals, int width, int w, int h, boolean[] innerBad) {
-        double[] reference = plan.motions[0];
+    /** The index of the first coarse motion nearest to halfway through the speed range; its stacks set a tile's noise. */
+    private static int referenceMotion(Plan plan) {
+        int reference = 0;
         double target = (plan.telemetry.minSpeedPixelsPerMinute + plan.maxSpeed) / 2;
-        for (double[] motion : plan.motions) {
-            if (Math.abs(Math.hypot(motion[0], motion[1]) - target) < Math.abs(Math.hypot(reference[0], reference[1]) - target)) {
-                reference = motion;
+        for (int mi = 0; mi < plan.motions.length; mi++) {
+            double[] motion = plan.motions[mi];
+            double[] current = plan.motions[reference];
+            if (Math.abs(Math.hypot(motion[0], motion[1]) - target) < Math.abs(Math.hypot(current[0], current[1]) - target)) {
+                reference = mi;
             }
         }
+        return reference;
+    }
+
+    /** Robust spread of the stack along a motion halfway through the speed range, over the unmasked positions. */
+    private static double stackNoise(Plan plan, float[][] residuals, int width, int w, int h, boolean[] innerBad) {
+        double[] reference = plan.motions[referenceMotion(plan)];
         int n = residuals.length;
         int m = plan.margin;
         int[] sx = new int[n];

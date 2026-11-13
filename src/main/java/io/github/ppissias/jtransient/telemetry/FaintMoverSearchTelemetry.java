@@ -40,6 +40,18 @@ public class FaintMoverSearchTelemetry {
     public double fineStepPixelsPerMinute;
     /** Motions in the coarse grid. */
     public int coarseMotions;
+    /** The search speed used: 0 normal, 1 fast, 2 faster ({@code DetectionConfig.faintMoverSearchSpeed}). */
+    public int searchSpeed = 1;
+    /**
+     * Pixels added in each direction for the coarse search: 1 at full resolution, 2 for wide stars. Refinement and every
+     * check use the full-resolution residuals.
+     */
+    public int coarseBin = 1;
+    /**
+     * Frames the coarse search adds along each motion: the searched frames, or fewer when consecutive frames close
+     * enough in time are added together first. Refinement and every check use every searched frame.
+     */
+    public int coarseFrames;
     /** Tiles the search area was divided into, and those searched before the time limit. */
     public int tiles;
     public int tilesSearched;

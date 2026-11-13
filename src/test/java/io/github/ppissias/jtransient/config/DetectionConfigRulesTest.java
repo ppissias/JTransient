@@ -17,7 +17,7 @@ public class DetectionConfigRulesTest {
     public void metadataCoversEveryFieldAndPreservesItsTypeAndDefault() throws Exception {
         Set<String> fields = Arrays.stream(DetectionConfig.class.getFields())
                 .filter(field -> !Modifier.isStatic(field.getModifiers())).map(java.lang.reflect.Field::getName).collect(Collectors.toSet());
-        assertEquals(114, fields.size());
+        assertEquals(115, fields.size());
         assertEquals(fields, metadata().keySet());
         for (var metadata : metadata().values()) {
             var field = DetectionConfig.class.getField(metadata.id());
@@ -159,6 +159,13 @@ public class DetectionConfigRulesTest {
         }
         config.maxFwhmRatio = 0.5;
         assertTrue(has(config, RuleId.NUMERIC_DOMAIN));
+        DetectionConfig speeds = new DetectionConfig();
+        for (int speed : new int[]{0, 1, 2}) {
+            speeds.faintMoverSearchSpeed = speed;
+            assertFalse(has(speeds, RuleId.NUMERIC_DOMAIN));
+        }
+        speeds.faintMoverSearchSpeed = 3;
+        assertTrue(has(speeds, RuleId.NUMERIC_DOMAIN));
         config.enableVariableStarDetection = false;
         config.photometryMaxStars = 1;
         assertFalse(has(config, RuleId.PHOTOMETRY_STAR_CAP));
