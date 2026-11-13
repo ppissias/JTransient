@@ -964,7 +964,8 @@ public class JTransientEngine implements AutoCloseable {
      * Runs the faint-streak search over the kept frames. A worker holds one frame's smoothed 16-bit copy (2 bytes per
      * pixel), the extraction's pixel marks (1 byte per pixel) and the footprints of that frame's objects of at least
      * {@code streakMinPixels} (a few bytes per pixel on dense fields), about a third of the normal extraction task the
-     * pool budgets at 16 bytes per pixel; the limit counts half its pixels, and the run's limit is set again afterwards.
+     * pool budgets at 16 bytes per pixel; the limit counts half its pixels, and the run's limit is estimated again
+     * afterwards from the frames and the heap then in use.
      */
     private FaintStreakSearch.Result searchFaintStreaks(ExtractedFramesContext context, short[][] masterStackData,
                                                         DetectionConfig config) throws Exception {
@@ -994,7 +995,8 @@ public class JTransientEngine implements AutoCloseable {
     /**
      * Runs the faint-mover search over the kept frames, with the run's streaks masked: the normal streak detections,
      * the faint-streak search's candidates and the streak tracks' detections. A worker holds one tile's residuals of
-     * every kept frame ({@link FaintMoverSearch.Plan#bytesPerTile}); the run's limit is set again afterwards.
+     * every kept frame ({@link FaintMoverSearch.Plan#bytesPerTile}); the run's limit is estimated again afterwards from
+     * the frames and the heap then in use.
      */
     private FaintMoverSearch.Result searchFaintMovers(ExtractedFramesContext context, short[][] masterStackData,
                                                       TrackLinker.TrackingResult trackResult,

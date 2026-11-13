@@ -25,8 +25,9 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
  * nested batches never wait for a full pool. Outside an operation, a batch runs on the calling thread.</p>
  *
  * <p>The worker limit is the smaller of the pool size, the work count and a scratch-memory estimate: 16 bytes per
- * image pixel plus 1 MiB per worker, within a quarter of the maximum heap and half of the heap now free. It is an
- * estimate, not a reservation.</p>
+ * image pixel plus 1 MiB per worker, within a quarter of the maximum heap and half of the heap now free. When memory is
+ * the limit, garbage is collected once first, since the heap in use counts objects no longer referenced until a
+ * collection. It is an estimate, not a reservation.</p>
  */
 public final class WorkerPool implements AutoCloseable {
     private static final long SCRATCH_BYTES_PER_PIXEL = 16;
@@ -83,9 +84,28 @@ public final class WorkerPool implements AutoCloseable {
             throw new IllegalStateException("Set the worker limit on the thread that runs the operation.");
         }
         Runtime runtime = Runtime.getRuntime();
-        binding.workers = workerCount(maxWorkers, workCount, pixelsPerWork,
-                runtime.maxMemory(), runtime.totalMemory() - runtime.freeMemory());
+        binding.workers = workerCount(maxWorkers, workCount, pixelsPerWork, runtime.maxMemory(),
+                () -> runtime.totalMemory() - runtime.freeMemory(), System::gc);
         return binding.workers;
+    }
+
+    /**
+     * The worker limit for these CPU and work figures and the heap now in use. The heap in use includes objects nothing
+     * refers to any more until the next garbage collection, so when memory would allow fewer workers than the CPUs and
+     * the work, this collects garbage once and measures again; otherwise it never collects.
+     *
+     * @param usedHeap reads the heap in use, in bytes
+     * @param collectGarbage requests a garbage collection
+     */
+    static int workerCount(int maxWorkers, int workCount, long pixelsPerWork, long maximumHeap,
+                           java.util.function.LongSupplier usedHeap, Runnable collectGarbage) {
+        int unlimited = Math.max(1, Math.min(Math.max(1, workCount), maxWorkers));
+        int workers = workerCount(maxWorkers, workCount, pixelsPerWork, maximumHeap, usedHeap.getAsLong());
+        if (workers >= unlimited) {
+            return workers;
+        }
+        collectGarbage.run();
+        return Math.max(workers, workerCount(maxWorkers, workCount, pixelsPerWork, maximumHeap, usedHeap.getAsLong()));
     }
 
     /** The worker limit for these CPU, work and heap figures; at least one, and saturating oversized estimates. */

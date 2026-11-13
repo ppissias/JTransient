@@ -261,6 +261,34 @@ public class WorkerPoolTest {
         assertThrows(IllegalArgumentException.class, () -> new WorkerPool(0));
     }
 
+    /**
+     * When memory limits the workers, garbage is collected once and the heap measured again, so garbage left by earlier
+     * stages no longer reduces the workers; when CPUs or work limit them, nothing is collected.
+     */
+    @Test
+    public void memoryLimitedWorkersAreCountedAfterCollectingGarbage() {
+        long maximum = 8 * GIBIBYTE;
+        long tile = 256L * 1024 * 1024 / 16; // a 256 MiB tile, in pixels of the scratch estimate
+        AtomicInteger collections = new AtomicInteger();
+        long[] used = {7 * GIBIBYTE};
+        // 7 GiB in use, of which 4 GiB is garbage: before collecting, half of the 1 GiB free gives one 257 MiB worker;
+        // after, 5 GiB is free and a quarter of the heap (2 GiB) gives seven.
+        int workers = WorkerPool.workerCount(16, 32, tile, maximum, () -> used[0],
+                () -> { collections.incrementAndGet(); used[0] = 3 * GIBIBYTE; });
+        assertEquals(1, collections.get());
+        assertEquals(7, workers);
+        // Nothing to collect: the same count as before, after one collection.
+        collections.set(0);
+        used[0] = 7 * GIBIBYTE;
+        assertEquals(1, WorkerPool.workerCount(16, 32, tile, maximum, () -> used[0], collections::incrementAndGet));
+        assertEquals(1, collections.get());
+        // Limited by the CPUs or the work, not memory: no collection.
+        collections.set(0);
+        assertEquals(4, WorkerPool.workerCount(4, 32, 100, maximum, () -> 0L, collections::incrementAndGet));
+        assertEquals(2, WorkerPool.workerCount(16, 2, 100, maximum, () -> 0L, collections::incrementAndGet));
+        assertEquals(0, collections.get());
+    }
+
     /** Scopes close on their own thread in reverse order; close stops the threads and rejects new operations. */
     @Test
     public void scopesAndCloseAreExplicit() throws Exception {
