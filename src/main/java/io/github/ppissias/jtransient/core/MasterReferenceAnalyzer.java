@@ -70,10 +70,23 @@ public final class MasterReferenceAnalyzer {
     public static MasterReferenceAnalysis analyze(List<ImageFrame> cleanFrames,
                                                   short[][] providedMasterStack,
                                                   DetectionConfig config) {
+        return analyze(cleanFrames, providedMasterStack, config, List.of());
+    }
+
+    /**
+     * {@link #analyze(List, short[][], DetectionConfig)} with rectangles left out of detection, which hold registration
+     * fill in the stack: its sky is measured outside them.
+     *
+     * @param excludedRectangles each {first column, first row, width, height}; empty for none
+     */
+    public static MasterReferenceAnalysis analyze(List<ImageFrame> cleanFrames,
+                                                  short[][] providedMasterStack,
+                                                  DetectionConfig config,
+                                                  List<int[]> excludedRectangles) {
         short[][] masterStackData = providedMasterStack != null
                 ? providedMasterStack
                 : OperationContext.compute(StageId.MEDIAN_STACK, null, () -> MasterMapGenerator.createMedianMasterStack(cleanFrames));
-        return analyzeFromMasterStack(masterStackData, config);
+        return analyzeFromMasterStack(masterStackData, config, excludedRectangles);
     }
 
     /**
@@ -91,6 +104,18 @@ public final class MasterReferenceAnalyzer {
      */
     public static MasterReferenceAnalysis analyzeFromMasterStack(short[][] masterStackData,
                                                                  DetectionConfig config) {
+        return analyzeFromMasterStack(masterStackData, config, List.of());
+    }
+
+    /**
+     * {@link #analyzeFromMasterStack(short[][], DetectionConfig)} with rectangles left out of detection, which hold
+     * registration fill in the stack.
+     *
+     * @param excludedRectangles each {first column, first row, width, height}; empty for none
+     */
+    public static MasterReferenceAnalysis analyzeFromMasterStack(short[][] masterStackData,
+                                                                 DetectionConfig config,
+                                                                 List<int[]> excludedRectangles) {
         if (masterStackData == null || masterStackData.length == 0 || masterStackData[0].length == 0) {
             throw new IllegalArgumentException("masterStackData must be non-empty");
         }
@@ -106,7 +131,8 @@ public final class MasterReferenceAnalyzer {
         extractionConfig.growSigmaMultiplier = effectiveMasterGrowSigma(config);
 
         List<DetectedObject> masterStars = extractStars(masterStackData,
-                extractionConfig.masterSigmaMultiplier, extractionConfig.masterMinDetectionPixels, extractionConfig);
+                extractionConfig.masterSigmaMultiplier, extractionConfig.masterMinDetectionPixels, extractionConfig,
+                excludedRectangles);
 
         return new MasterReferenceAnalysis(masterStackData, masterStars, sensorWidth, sensorHeight);
     }
@@ -127,10 +153,21 @@ public final class MasterReferenceAnalyzer {
      */
     public static List<DetectedObject> extractStars(short[][] stack, double sigma, int minPixels,
                                                                     DetectionConfig config) {
+        return extractStars(stack, sigma, minPixels, config, List.of());
+    }
+
+    /**
+     * {@link #extractStars(short[][], double, int, DetectionConfig)} with rectangles left out of detection, which hold
+     * registration fill in the stack: its sky is measured outside them.
+     *
+     * @param excludedRectangles each {first column, first row, width, height}; empty for none
+     */
+    public static List<DetectedObject> extractStars(short[][] stack, double sigma, int minPixels,
+                                                    DetectionConfig config, List<int[]> excludedRectangles) {
         int height = stack.length;
         int width = stack[0].length;
         DataArea wholeImage = DataArea.wholeImage(width, height);
-        DataArea sky = skyArea(stack);
+        DataArea sky = skyArea(stack, excludedRectangles);
         List<DetectedObject> stars = new ArrayList<>(
                 OperationContext.compute(StageId.MASTER_REFERENCE, null, () -> SourceExtractor.extractSources(stack, sigma, minPixels, config, sky, wholeImage)).objects);
         short[][] flat = SkyBackground.flatten(stack);
@@ -175,7 +212,12 @@ public final class MasterReferenceAnalyzer {
      * edge margin.
      */
     static DataArea skyArea(short[][] stack) {
-        DataArea data = DataArea.ofFrame(stack);
+        return skyArea(stack, List.of());
+    }
+
+    /** {@link #skyArea(short[][])} without rectangles left out of detection, which hold registration fill in it. */
+    static DataArea skyArea(short[][] stack, List<int[]> excludedRectangles) {
+        DataArea data = DataArea.ofFrame(stack).excluding(excludedRectangles);
         long whole = DataArea.fullFrame(stack[0].length, stack.length).getPixelCount();
         return data.getPixelCount() > 0 && data.getPixelCount() < whole ? data : null;
     }

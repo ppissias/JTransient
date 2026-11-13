@@ -116,7 +116,8 @@ public final class FaintStreakSearch {
         DataArea searchArea = (dataArea != null ? dataArea : DataArea.fullFrame(sensorWidth, height)).inset(radius);
 
         List<DetectedObject> smoothedStars = MasterReferenceAnalyzer.analyzeFromMasterStack(
-                smooth(masterStack, kernel, 1.0, 0.0), smoothedConfig).masterStars;
+                smooth(masterStack, kernel, 1.0, 0.0), smoothedConfig,
+                dataArea != null ? dataArea.excludedRectangles() : java.util.List.of()).masterStars;
         boolean[][] starMask = MasterVetoMask.build(smoothedStars, sensorWidth, height, config.maxStarJitter);
 
         double noiseFactor = noiseFactor(kernel);

@@ -23,6 +23,9 @@ import java.util.List;
  * <p>It is the intersection of the frames' {@link FrameCoverage}s. Each frame's own data area is a shifted (and
  * possibly rotated) rectangle, so the intersection is one run per row and per column. The margin covers the soft
  * edge that interpolation leaves next to the fill (1–2 px on the reference data) plus one pixel.</p>
+ *
+ * <p>Rectangles that detection leaves out, such as sensor defects, can be cut from it as holes ({@link #excluding}):
+ * {@link #contains}, {@link #containsDisc}, {@link #rowRuns} and the pixel count leave them out.</p>
  */
 public final class DataArea {
     /** Pixels at or below this level (in ADU) are registration fill, or dead pixels inside the image. */
@@ -38,20 +41,115 @@ public final class DataArea {
     private final int height;
     private final int[] rowStart;
     private final int[] rowEnd;
+    /** Rectangles left out of the area, each {first column, last column, first row, last row}; empty for none. */
+    private final int[][] holes;
+    /** The rectangles as given to {@link #excluding}, each {first column, first row, width, height}. */
+    private final List<int[]> excluded;
     private final long pixelCount;
 
     private DataArea(int width, int height, int[] rowStart, int[] rowEnd) {
+        this(width, height, rowStart, rowEnd, new int[0][], List.of());
+    }
+
+    private DataArea(int width, int height, int[] rowStart, int[] rowEnd, int[][] holes, List<int[]> excluded) {
         this.width = width;
         this.height = height;
         this.rowStart = rowStart;
         this.rowEnd = rowEnd;
+        this.holes = holes;
+        this.excluded = excluded;
         long count = 0;
         for (int y = 0; y < height; y++) {
-            if (rowStart[y] <= rowEnd[y]) {
-                count += rowEnd[y] - rowStart[y] + 1;
+            int[] runs = rowRuns(y);
+            for (int i = 0; i < runs.length; i += 2) {
+                count += runs[i + 1] - runs[i] + 1;
             }
         }
         this.pixelCount = count;
+    }
+
+    /**
+     * This area without rectangles that detection leaves out, such as sensor defects, each kept {@link #MARGIN} pixels
+     * away as the fill is.
+     *
+     * @param rectangles each {first column, first row, width, height}, in frame pixels
+     * @return the area with these holes added to its own
+     */
+    public DataArea excluding(List<int[]> rectangles) {
+        if (rectangles == null || rectangles.isEmpty()) {
+            return this;
+        }
+        int[][] grown = java.util.Arrays.copyOf(holes, holes.length + rectangles.size());
+        List<int[]> all = new ArrayList<>(excluded);
+        int i = holes.length;
+        for (int[] r : rectangles) {
+            grown[i++] = new int[]{r[0] - MARGIN, r[0] + r[2] - 1 + MARGIN, r[1] - MARGIN, r[1] + r[3] - 1 + MARGIN};
+            all.add(r.clone());
+        }
+        return new DataArea(width, height, rowStart, rowEnd, grown, List.copyOf(all));
+    }
+
+    /** Whether rectangles have been left out of this area ({@link #excluding}). */
+    public boolean hasHoles() {
+        return holes.length > 0;
+    }
+
+    /** The rectangles left out of this area, as given to {@link #excluding}; empty for none. */
+    public List<int[]> excludedRectangles() {
+        List<int[]> copies = new ArrayList<>(excluded.size());
+        for (int[] r : excluded) {
+            copies.add(r.clone());
+        }
+        return copies;
+    }
+
+    /**
+     * The runs of columns of the row inside the area, between its start and end and outside its holes.
+     *
+     * @return {first, last, first, last, ...}, in increasing order; empty when the row is outside the area
+     */
+    public int[] rowRuns(int y) {
+        if (y < 0 || y >= height || rowStart[y] > rowEnd[y]) {
+            return new int[0];
+        }
+        if (holes.length == 0) {
+            return new int[]{rowStart[y], rowEnd[y]};
+        }
+        List<int[]> cuts = new ArrayList<>();
+        for (int[] hole : holes) {
+            if (y >= hole[2] && y <= hole[3] && hole[1] >= rowStart[y] && hole[0] <= rowEnd[y]) {
+                cuts.add(hole);
+            }
+        }
+        if (cuts.isEmpty()) {
+            return new int[]{rowStart[y], rowEnd[y]};
+        }
+        cuts.sort((a, b) -> Integer.compare(a[0], b[0]));
+        int[] runs = new int[2 * (cuts.size() + 1)];
+        int n = 0;
+        int next = rowStart[y];
+        for (int[] cut : cuts) {
+            if (cut[0] > next) {
+                runs[n++] = next;
+                runs[n++] = cut[0] - 1;
+            }
+            next = Math.max(next, cut[1] + 1);
+        }
+        if (next <= rowEnd[y]) {
+            runs[n++] = next;
+            runs[n++] = rowEnd[y];
+        }
+        return java.util.Arrays.copyOf(runs, n);
+    }
+
+    /** Whether the pixel lies in one of the holes. */
+    private boolean inHole(int x, int y) {
+        for (int[] hole : holes) {
+            if (x >= hole[0] && x <= hole[1] && y >= hole[2] && y <= hole[3]) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -236,12 +334,17 @@ public final class DataArea {
             start[y] = s <= e ? s : width;
             end[y] = s <= e ? e : -1;
         }
-        return new DataArea(width, height, start, end);
+        int[][] grown = new int[holes.length][];
+        for (int i = 0; i < holes.length; i++) {
+            int[] h = holes[i];
+            grown[i] = new int[]{h[0] - pixels, h[1] + pixels, h[2] - pixels, h[3] + pixels};
+        }
+        return new DataArea(width, height, start, end, grown, excluded);
     }
 
     /** Whether the pixel lies inside the area. */
     public boolean contains(int x, int y) {
-        return y >= 0 && y < height && x >= rowStart[y] && x <= rowEnd[y];
+        return y >= 0 && y < height && x >= rowStart[y] && x <= rowEnd[y] && !inHole(x, y);
     }
 
     /** Whether the pixel nearest to the position lies inside the area. */
@@ -263,11 +366,19 @@ public final class DataArea {
             if (fromX < rowStart[y] || toX > rowEnd[y]) {
                 return false;
             }
+            for (int[] hole : holes) {
+                if (y >= hole[2] && y <= hole[3] && fromX <= hole[1] && toX >= hole[0]) {
+                    return false;
+                }
+            }
         }
         return true;
     }
 
-    /** First column of the area in the row, larger than {@link #getRowEnd} when the row is outside it. */
+    /**
+     * First column of the area in the row, larger than {@link #getRowEnd} when the row is outside it. Holes
+     * ({@link #excluding}) lie between the start and the end; {@link #rowRuns} leaves them out.
+     */
     public int getRowStart(int y) {
         return rowStart[y];
     }

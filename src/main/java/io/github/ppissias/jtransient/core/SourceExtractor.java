@@ -303,12 +303,13 @@ public class SourceExtractor {
         boolean inArea = area != null && area.getPixelCount() > 0 && area.getWidth() == width && area.getHeight() == height;
         for (int y = 0; y < height; y++) {
             CancellationScope.check();
-            int fromX = inArea ? area.getRowStart(y) : 0;
-            int toX = inArea ? area.getRowEnd(y) : width - 1;
-            for (int x = fromX; x <= toX; x++) {
-                CancellationScope.check();
-                int val = PixelEncoding.toShiftedPositiveInt(image[y][x]);
-                histogram[val]++;
+            int[] runs = inArea ? area.rowRuns(y) : new int[]{0, width - 1};
+            for (int r = 0; r < runs.length; r += 2) {
+                for (int x = runs[r]; x <= runs[r + 1]; x++) {
+                    CancellationScope.check();
+                    int val = PixelEncoding.toShiftedPositiveInt(image[y][x]);
+                    histogram[val]++;
+                }
             }
         }
 

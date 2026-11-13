@@ -44,6 +44,28 @@ public class FrameQualityResultTest {
         assertThrows(UnsupportedOperationException.class, () -> expected.frames().clear());
     }
 
+    /**
+     * With excluded areas, standalone QC measures what detection measures with the same areas, which differs from the
+     * measurement without them, and leaves the caller's pixels untouched.
+     */
+    @Test public void qualityWithExcludedAreasMatchesPipelineWithThem() {
+        List<ImageFrame> frames = frames(8);
+        List<short[][]> before = frames.stream()
+                .map(f -> Arrays.stream(f.pixelData).map(short[]::clone).toArray(short[][]::new)).toList();
+        DetectionConfig config = new DetectionConfig();
+        List<ExcludedArea> areas = List.of(new ExcludedArea(55, 0, 20, 140), new ExcludedArea(100, 95, 40, 45));
+        try (var engine = new JTransientEngine(2)) {
+            PipelineResult full = engine.runPipeline(frames, config, null, null, null, areas);
+            var fits = new HashMap<Integer, io.github.ppissias.jtransient.core.FrameRegistration>();
+            for (var fit : FrameDriftAnalyzer.analyze(frames).frameRegistrations) fits.put(fit.sequenceIndex, fit);
+            FrameQualityResult expected = FrameQualityResult.capture(full.telemetry, fits);
+            assertEquals(expected, engine.evaluateFrameQuality(frames, config, null, areas));
+            assertEquals(expected, engine.evaluateFrameQuality(frames.size(), frames::get, config, null, areas));
+            assertNotEquals("the areas change the measurement", expected, engine.evaluateFrameQuality(frames, config, null));
+        }
+        for (int i = 0; i < frames.size(); i++) assertTrue(Arrays.deepEquals(before.get(i), frames.get(i).pixelData));
+    }
+
     /** Too few inputs and absent clocks are useful quality results, with the same unavailable threshold semantics. */
     @Test public void fewFramesAndMissingClockAreReported() {
         List<ImageFrame> frames = frames(2).stream().map(f -> new ImageFrame(f.sequenceIndex, f.filename,
