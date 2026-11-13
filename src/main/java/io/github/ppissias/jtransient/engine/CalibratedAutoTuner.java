@@ -166,6 +166,7 @@ public final class CalibratedAutoTuner {
         private final int cropBorderMargin;
         private final int minCropBorderMargin;
         private final int cropPaddingClearance;
+        private final List<ExcludedArea> excludedAreas;
 
         /** Copies and validates a builder before progress callbacks or scientific work can start. */
         private Options(Builder builder) {
@@ -188,6 +189,7 @@ public final class CalibratedAutoTuner {
             cropBorderMargin = builder.cropBorderMargin;
             minCropBorderMargin = builder.minCropBorderMargin;
             cropPaddingClearance = builder.cropPaddingClearance;
+            excludedAreas = builder.excludedAreas == null ? List.of() : List.copyOf(builder.excludedAreas);
             require(falsePositiveBudgetPerMpixFrame.length > 0, "falsePositiveBudgetPerMpixFrame must not be empty");
             for (double value : falsePositiveBudgetPerMpixFrame) {
                 require(Double.isFinite(value) && value >= 0, "falsePositiveBudgetPerMpixFrame contains an invalid value");
@@ -347,6 +349,11 @@ public final class CalibratedAutoTuner {
             return cropPaddingClearance;
         }
 
+        /** The areas the run leaves out of detection, which the measurement leaves out too; empty for none. */
+        public List<ExcludedArea> excludedAreas() {
+            return excludedAreas;
+        }
+
         /** Rejects invalid policy values without invoking callbacks or reading image data. */
         private static void require(boolean condition, String message) {
             if (!condition) throw new IllegalArgumentException(message);
@@ -392,6 +399,14 @@ public final class CalibratedAutoTuner {
             public int minCropBorderMargin;
             /** cropPaddingClearance policy; array values are copied by build(). */
             public int cropPaddingClearance;
+            /**
+             * Rectangles the detection run will leave out (see {@link JTransientEngine#runPipeline(List,
+             * DetectionConfig, TransientEngineProgressListener, short[][], PipelineStageObserver, List)}). The
+             * measurement crops stay where they are and measure without them, as detection does: the areas become
+             * fill and holes, rates are per remaining pixel, and no test star is placed in them. A crop more than half
+             * inside the areas is dropped. Null or empty for none; copied by build().
+             */
+            public List<ExcludedArea> excludedAreas;
 
             /** Copies fixed default values and detaches their arrays into a caller-owned builder. */
             public Builder() {
@@ -414,6 +429,7 @@ public final class CalibratedAutoTuner {
                 cropBorderMargin = CalibratedAutoTuner.CROP_BORDER_MARGIN;
                 minCropBorderMargin = CalibratedAutoTuner.MIN_CROP_BORDER_MARGIN;
                 cropPaddingClearance = CalibratedAutoTuner.CROP_PADDING_CLEARANCE;
+                excludedAreas = List.of();
             }
 
             /** Copies an immutable policy without consulting process-wide defaults. */
@@ -437,6 +453,7 @@ public final class CalibratedAutoTuner {
                 cropBorderMargin = options.cropBorderMargin;
                 minCropBorderMargin = options.minCropBorderMargin;
                 cropPaddingClearance = options.cropPaddingClearance;
+                excludedAreas = options.excludedAreas;
             }
 
             /** Builds an immutable validated policy whose arrays no longer alias the builder. */
@@ -611,6 +628,10 @@ public final class CalibratedAutoTuner {
         public int skippedCrops;
         /** Pool frames left out as blank or failed registrations. */
         public int excludedBlankFrames;
+        /** Measurement crops that hold part of an excluded area and measure without it. */
+        public int cropsWithExcludedAreas;
+        /** Measurement crops dropped because more than half of them lies inside excluded areas. */
+        public int cropsDroppedForExcludedAreas;
         /** Per-frame settings skipped because their raw noise could never fit a budget. */
         public int skippedFrameSettings;
         /** Whether the measured area was large enough to confirm each profile's noise budget. */
@@ -883,11 +904,29 @@ public final class CalibratedAutoTuner {
                     return calibration;
                 }
             }
+            if (!options.excludedAreas.isEmpty()) {
+                int before = crops.size();
+                crops.removeIf(crop -> excludedShare(crop, options.excludedAreas) > MAX_EXCLUDED_CROP_SHARE);
+                calibration.cropsDroppedForExcludedAreas = before - crops.size();
+                if (crops.isEmpty()) {
+                    calibration.failureReason = "No tuning crop fits outside the excluded areas.";
+                    return calibration;
+                }
+            }
             int cropSize = crops.get(0)[2];
+            // Each crop's own sky, as detection sees it: the excluded areas inside it are fill and holes.
+            CropSky[] cropSky = new CropSky[crops.size()];
+            for (int c = 0; c < crops.size(); c++) {
+                cropSky[c] = CropSky.of(crops.get(c), options.excludedAreas);
+                if (cropSky[c].area != null) calibration.cropsWithExcludedAreas++;
+            }
             workers.limitWork(Math.max(pool.size(), crops.size()), (long) cropSize * cropSize * 3);
             // On small frames the crops overlap; every pixel is counted in one crop only. Objects are found up to
             // DataArea.MARGIN px from a crop's edge, so the rates are per searchable pixel.
             BitSet[] owned = cropOwnership(crops, cropSize);
+            for (int c = 0; c < crops.size(); c++) {
+                cropSky[c].keepOwnedOutside(owned[c], cropSize);
+            }
             double[] ownedMpix = new double[crops.size()];
             double ownedMpixPerFrame = 0;
             for (int c = 0; c < crops.size(); c++) {
@@ -911,11 +950,13 @@ public final class CalibratedAutoTuner {
 
             // --- Master stacks per crop, from the whole pool, like production ---
             List<short[][]> masters = new ArrayList<>();
-            for (int[] crop : crops) {
+            for (int c = 0; c < crops.size(); c++) {
                 CancellationScope.check();
+                int[] crop = crops.get(c);
+                CropSky sky = cropSky[c];
                 List<ImageFrame> cropped = new ArrayList<>();
                 for (ImageFrame f : pool) {
-                    cropped.add(new ImageFrame(f.sequenceIndex, f.filename, crop(f.pixelData, crop), f.timestamp, f.exposureDuration));
+                    cropped.add(new ImageFrame(f.sequenceIndex, f.filename, sky.fill(crop(f.pixelData, crop)), f.timestamp, f.exposureDuration));
                 }
                 masters.add(OperationContext.compute(StageId.MEDIAN_STACK, null,
                         () -> MasterMapGenerator.createMedianMasterStack(cropped)));
@@ -931,13 +972,13 @@ public final class CalibratedAutoTuner {
             for (int c = 0; c < crops.size(); c++) {
                 CancellationScope.check();
                 for (ImageFrame f : measurementFrames) {
-                    measurementCrops.add(crop(f.pixelData, crops.get(c)));
+                    measurementCrops.add(cropSky[c].fill(crop(f.pixelData, crops.get(c))));
                     measurementCropIndex.add(c);
                 }
             }
-            double psfSigma = measurePsfSigma(measurementCrops, baseConfig, preview);
+            double psfSigma = measurePsfSigma(measurementCrops, measurementCropIndex, cropSky, baseConfig, preview);
             calibration.fwhm = 2.355 * psfSigma;
-            calibration.jitter = measureJitter(measurementCrops, measurementCropIndex, masters, baseConfig, preview);
+            calibration.jitter = measureJitter(measurementCrops, measurementCropIndex, masters, cropSky, baseConfig, preview);
             double psfCoreArea = Math.PI * (calibration.fwhm / 2.0) * (calibration.fwhm / 2.0);
 
             // --- Negative and injected images ---
@@ -954,7 +995,8 @@ public final class CalibratedAutoTuner {
                 ImageFrame sourceFrame = measurementFrames.get(i % measurementFrames.size());
                 FrameIdentity identity = new FrameIdentity(sourceFrame.sequenceIndex, sourceFrame.filename);
                 CropFrame prepared = OperationContext.compute(StageId.CALIBRATION, identity,
-                        () -> prepareCropFrame(c, measurementCrops.get(measurementIndex), masters.get(c), psfSigma, baseConfig, random, options));
+                        () -> prepareCropFrame(c, measurementCrops.get(measurementIndex), masters.get(c), psfSigma, baseConfig, random, options,
+                                cropSky[c]));
                 prepared.sourceFrame = identity;
                 Pixel drift = driftBySequence.get(sourceFrame.sequenceIndex);
                 if (drift != null) {
@@ -990,14 +1032,16 @@ public final class CalibratedAutoTuner {
                 CancellationScope.check();
                 long masked = 0;
                 for (int c = 0; c < crops.size(); c++) {
-                    masks[m][c] = buildMask(masters.get(c), masterSettings.get(m), dilation, baseConfig);
+                    masks[m][c] = buildMask(masters.get(c), masterSettings.get(m), dilation, baseConfig, cropSky[c]);
                     masked += masks[m][c].cardinality();
                     int maskIndex = m, cropIndex = c;
                     preview.offer(() -> new AutoTuneSnapshot(MASK, "Trial star mask · region " + (cropIndex + 1)
                             + " · " + Preview.masterLabel(masterSettings.get(maskIndex)), masters.get(cropIndex),
                             masks[maskIndex][cropIndex], List.of(), List.of()));
                 }
-                coverage[m] = masked / ((double) crops.size() * cropSize * cropSize);
+                double skyPixels = 0;
+                for (CropSky sky : cropSky) skyPixels += (double) cropSize * cropSize - sky.excludedPixels;
+                coverage[m] = masked / skyPixels;
             }
             int deepestMask = 0;
             for (int m = 1; m < coverage.length; m++) {
@@ -1018,7 +1062,7 @@ public final class CalibratedAutoTuner {
             for (CropFrame cf : cropFrames) {
                 CancellationScope.check();
                 BitSet starMask = masks[deepestMask][cf.crop];
-                streakTasks.add(() -> streakCorridor(cf.positive, starMask, nearStarRadius, baseConfig));
+                streakTasks.add(() -> streakCorridor(cf.positive, starMask, nearStarRadius, baseConfig, cropSky[cf.crop].area));
             }
             List<BitSet> corridors = WorkerPool.invokeAll(streakTasks);
             for (int i = 0; i < cropFrames.size(); i++) {
@@ -1043,7 +1087,7 @@ public final class CalibratedAutoTuner {
                 FrameSetting fs = frameSettings.get(s);
                 progress(listener, 20 + (int) (75.0 * s / frameSettings.size()),
                         String.format(Locale.US, "Measuring sigma %.2f, grow %.2f, minPix %d", fs.sigma, fs.grow, fs.minPixels));
-                List<Detection[][]> detections = extractAll(cropFrames, fs, baseConfig, cropSize, preview, matchRadius);
+                List<Detection[][]> detections = extractAll(cropFrames, fs, baseConfig, cropSize, preview, matchRadius, cropSky);
 
                 // Settings that already drown in noise before any veto can never meet a budget; skip the costly
                 // per-mask evaluation for them (noisy data at low thresholds produces huge detection counts).
@@ -1153,6 +1197,10 @@ public final class CalibratedAutoTuner {
         if (calibration.skippedFrameSettings > 0) {
             report.append(String.format(Locale.US, "Skipped %d detection settings that were far too noisy for any budget.%n", calibration.skippedFrameSettings));
         }
+        if (calibration.cropsWithExcludedAreas > 0 || calibration.cropsDroppedForExcludedAreas > 0) {
+            report.append(String.format(Locale.US, "Excluded areas: %d crops measured without them, %d dropped (mostly inside them).%n",
+                    calibration.cropsWithExcludedAreas, calibration.cropsDroppedForExcludedAreas));
+        }
         if (calibration.excludedBlankFrames > 0) {
             report.append(String.format(Locale.US, "Left out %d blank or failed-registration frames.%n", calibration.excludedBlankFrames));
         }
@@ -1187,12 +1235,17 @@ public final class CalibratedAutoTuner {
      * lie mostly inside the star mask are merged chains of stars and are ignored.
      */
     static BitSet streakCorridor(short[][] image, BitSet starMask, int radius, DetectionConfig base) {
+        return streakCorridor(image, starMask, radius, base, null);
+    }
+
+    /** {@link #streakCorridor(short[][], BitSet, int, DetectionConfig)} within the crop's sky; null for the whole crop. */
+    static BitSet streakCorridor(short[][] image, BitSet starMask, int radius, DetectionConfig base, DataArea sky) {
         int size = image.length;
         DetectionConfig cfg = base.clone();
         cfg.detectionSigmaMultiplier = STREAK_PASS_SIGMA;
         cfg.growSigmaMultiplier = STREAK_PASS_GROW;
         BitSet streaks = new BitSet(size * size);
-        for (DetectedObject obj : extractInCrop(image, STREAK_PASS_SIGMA, cfg.minDetectionPixels, cfg)) {
+        for (DetectedObject obj : extractInCrop(image, STREAK_PASS_SIGMA, cfg.minDetectionPixels, cfg, sky)) {
             CancellationScope.check();
             if (!obj.isStreak || obj.rawPixels == null || obj.rawPixels.isEmpty()) continue;
             int inStars = 0;
@@ -1207,6 +1260,78 @@ public final class CalibratedAutoTuner {
             }
         }
         return dilate(streaks, size, radius);
+    }
+
+    /** Crops with more than this share of their pixels inside excluded areas are dropped: too little sky is left. */
+    private static final double MAX_EXCLUDED_CROP_SHARE = 0.5;
+
+    /**
+     * One crop's sky as detection sees it: the excluded areas inside the crop, in its own coordinates, become fill
+     * ({@link #fill}) and holes ({@link #area}). Without areas it changes nothing.
+     */
+    static final class CropSky {
+        private static final CropSky WHOLE = new CropSky(new ExcludedPixels(List.of()), null, List.of(), 0);
+
+        private final ExcludedPixels pixels;
+        /** The crop's data area less the excluded areas; null when the crop holds none. */
+        final DataArea area;
+        /** The excluded areas in the crop, each {x, y, width, height} in crop pixels. */
+        final List<int[]> rectangles;
+        /** Crop pixels inside the excluded areas, each counted once. */
+        final long excludedPixels;
+
+        private CropSky(ExcludedPixels pixels, DataArea area, List<int[]> rectangles, long excludedPixels) {
+            this.pixels = pixels;
+            this.area = area;
+            this.rectangles = rectangles;
+            this.excludedPixels = excludedPixels;
+        }
+
+        static CropSky of(int[] crop, List<ExcludedArea> areas) {
+            List<ExcludedArea> local = new ArrayList<>();
+            for (ExcludedArea area : areas) {
+                int x0 = Math.max(area.x(), crop[0]);
+                int y0 = Math.max(area.y(), crop[1]);
+                long x1 = Math.min((long) area.x() + area.width(), crop[0] + crop[2]);
+                long y1 = Math.min((long) area.y() + area.height(), crop[1] + crop[2]);
+                if (x1 > x0 && y1 > y0) {
+                    local.add(new ExcludedArea(x0 - crop[0], y0 - crop[1], (int) (x1 - x0), (int) (y1 - y0)));
+                }
+            }
+            if (local.isEmpty()) return WHOLE;
+            ExcludedPixels pixels = new ExcludedPixels(local);
+            List<int[]> rectangles = pixels.rectangles();
+            return new CropSky(pixels, DataArea.fullFrame(crop[2], crop[2]).excluding(rectangles), rectangles,
+                    covered(crop[2], local));
+        }
+
+        /** Writes fill into the excluded areas of this crop's own copy and returns it. */
+        short[][] fill(short[][] cropCopy) {
+            pixels.fill(cropCopy);
+            return cropCopy;
+        }
+
+        /** Keeps only the counted pixels where detection can find objects: outside the holes and their margin. */
+        void keepOwnedOutside(BitSet owned, int cropSize) {
+            if (area == null) return;
+            for (int i = owned.nextSetBit(0); i >= 0; i = owned.nextSetBit(i + 1)) {
+                if (!area.contains(i % cropSize, i / cropSize)) owned.clear(i);
+            }
+        }
+
+        private static long covered(int size, List<ExcludedArea> local) {
+            BitSet inside = new BitSet(size * size);
+            for (ExcludedArea a : local) {
+                for (int y = a.y(); y < a.y() + a.height(); y++) inside.set(y * size + a.x(), y * size + a.x() + a.width());
+            }
+            return inside.cardinality();
+        }
+    }
+
+    /** The share of a square crop {x, y, size} inside at least one of the areas. */
+    static double excludedShare(int[] crop, List<ExcludedArea> areas) {
+        CropSky sky = CropSky.of(crop, areas);
+        return sky.excludedPixels / ((double) crop[2] * crop[2]);
     }
 
     /** Whether a square crop {x, y, size} lies inside the area. */
@@ -1409,7 +1534,7 @@ public final class CalibratedAutoTuner {
     }
 
     private static List<Detection[][]> extractAll(List<CropFrame> cropFrames, FrameSetting fs, DetectionConfig base,
-            int width, Preview preview, double matchRadius) throws Exception {
+            int width, Preview preview, double matchRadius, CropSky[] cropSky) throws Exception {
         DetectionConfig cfg = base.clone();
         cfg.detectionSigmaMultiplier = fs.sigma;
         cfg.growSigmaMultiplier = fs.grow;
@@ -1419,8 +1544,9 @@ public final class CalibratedAutoTuner {
         for (CropFrame cf : cropFrames) {
             CancellationScope.check();
             tasks.add(() -> OperationContext.compute(StageId.FRAME_EXTRACTION, cf.sourceFrame, () -> {
-                Detection[][] detections = {extract(cf.positive, fs, cfg, width),
-                        extract(cf.negative, fs, cfg, width), extract(cf.injected, fs, cfg, width)};
+                DataArea sky = cropSky[cf.crop].area;
+                Detection[][] detections = {extract(cf.positive, fs, cfg, width, sky),
+                        extract(cf.negative, fs, cfg, width, sky), extract(cf.injected, fs, cfg, width, sky)};
                 if (cf == display) preview.offer(() -> new AutoTuneSnapshot(EXTRACTION, Preview.frameLabel(cf, fs)
                         + "\nArtificial-star recovery before mask veto", cf.injected, null,
                         Preview.recovery(cf, detections[2], null, 1.0, matchRadius), List.of()));
@@ -1430,8 +1556,8 @@ public final class CalibratedAutoTuner {
         return WorkerPool.invokeAll(tasks);
     }
 
-    private static Detection[] extract(short[][] image, FrameSetting fs, DetectionConfig cfg, int width) {
-        List<DetectedObject> objects = extractInCrop(image, fs.sigma, fs.minPixels, cfg);
+    private static Detection[] extract(short[][] image, FrameSetting fs, DetectionConfig cfg, int width, DataArea sky) {
+        List<DetectedObject> objects = extractInCrop(image, fs.sigma, fs.minPixels, cfg, sky);
         Detection[] out = new Detection[objects.size()];
         for (int i = 0; i < out.length; i++) {
             CancellationScope.check();
@@ -1442,18 +1568,19 @@ public final class CalibratedAutoTuner {
 
     /**
      * Objects of a crop, kept up to {@link DataArea#MARGIN} px from its edge. Crops lie inside the data area, so no
-     * edge band or darkness test is needed.
+     * edge band or darkness test is needed. With excluded areas in the crop ({@code sky} not null), its sky is
+     * measured and objects are kept only outside them, as in detection.
      */
     private static List<DetectedObject> extractInCrop(short[][] image, double sigma, int minPixels,
-                                                                      DetectionConfig cfg) {
-        return SourceExtractor.extractSources(image, sigma, minPixels, cfg, null,
-                DataArea.fullFrame(image[0].length, image.length)).objects;
+                                                      DetectionConfig cfg, DataArea sky) {
+        return SourceExtractor.extractSources(image, sigma, minPixels, cfg, sky,
+                sky != null ? sky : DataArea.fullFrame(image[0].length, image.length)).objects;
     }
 
-    /** Stars of a master cut-out, found as the pipeline finds its master stars. */
+    /** Stars of a master cut-out, found as the pipeline finds its master stars, without the crop's excluded areas. */
     private static List<DetectedObject> extractMasterStars(short[][] master, double sigma, int minPixels,
-                                                                           DetectionConfig cfg) {
-        return MasterReferenceAnalyzer.extractStars(master, sigma, minPixels, cfg);
+                                                           DetectionConfig cfg, CropSky sky) {
+        return MasterReferenceAnalyzer.extractStars(master, sigma, minPixels, cfg, sky.rectangles);
     }
 
     private static double overlap(Detection d, BitSet mask) {
@@ -1468,14 +1595,14 @@ public final class CalibratedAutoTuner {
         return inside / (double) d.pixels.length;
     }
 
-    private static BitSet buildMask(short[][] master, MasterSetting ms, int dilation, DetectionConfig base) {
+    private static BitSet buildMask(short[][] master, MasterSetting ms, int dilation, DetectionConfig base, CropSky sky) {
         DetectionConfig cfg = base.clone();
         cfg.masterSigmaMultiplier = ms.seed;
         cfg.growSigmaMultiplier = ms.grow;
         int h = master.length;
         int w = master[0].length;
         BitSet mask = new BitSet(w * h);
-        List<DetectedObject> stars = extractMasterStars(master, ms.seed, ms.minPixels, cfg);
+        List<DetectedObject> stars = extractMasterStars(master, ms.seed, ms.minPixels, cfg, sky);
         for (DetectedObject star : stars) {
             CancellationScope.check();
             if (star.rawPixels == null) continue;
@@ -1521,7 +1648,7 @@ public final class CalibratedAutoTuner {
      * spread over the injection levels, placed on a jittered grid away from the crop edges.
      */
     private static CropFrame prepareCropFrame(int crop, short[][] positive, short[][] master, double psfSigma,
-                                              DetectionConfig base, Random random, Options options) {
+                                              DetectionConfig base, Random random, Options options, CropSky sky) {
         int h = positive.length;
         int w = positive[0].length;
         short[][] negative = new short[h][w];
@@ -1536,7 +1663,7 @@ public final class CalibratedAutoTuner {
                 injected[y][x] = positive[y][x];
             }
         }
-        double backgroundSigma = SourceExtractor.calculateBackgroundSigmaClipped(positive, w, h, 3.0, base).sigma;
+        double backgroundSigma = SourceExtractor.calculateBackgroundSigmaClipped(positive, w, h, 3.0, base, sky.area).sigma;
 
         int levels = options.injectionPeakSnr.length;
         int count = levels * options.injectionsPerLevelPerCropFrame;
@@ -1556,6 +1683,11 @@ public final class CalibratedAutoTuner {
             xs[s] = margin + (col + 0.2 + 0.6 * random.nextDouble()) * cellW;
             ys[s] = margin + (row + 0.2 + 0.6 * random.nextDouble()) * cellH;
             lv[s] = s % levels;
+            // Detection cannot find a source in or next to an excluded area: no test star there.
+            if (sky.area != null && !sky.area.containsDisc(xs[s], ys[s], radius)) {
+                xs[s] = Double.NaN;
+                continue;
+            }
             double amplitude = options.injectionPeakSnr[lv[s]] * backgroundSigma;
             int cx = (int) Math.round(xs[s]);
             int cy = (int) Math.round(ys[s]);
@@ -1573,6 +1705,19 @@ public final class CalibratedAutoTuner {
                 }
             }
         }
+        if (sky.area != null) {
+            int kept = 0;
+            for (int s = 0; s < count; s++) {
+                if (Double.isNaN(xs[s])) continue;
+                xs[kept] = xs[s];
+                ys[kept] = ys[s];
+                lv[kept] = lv[s];
+                kept++;
+            }
+            xs = Arrays.copyOf(xs, kept);
+            ys = Arrays.copyOf(ys, kept);
+            lv = Arrays.copyOf(lv, kept);
+        }
         CropFrame frame = new CropFrame(crop, positive, negative, injected, xs, ys, lv);
         frame.backgroundSigma = backgroundSigma;
         return frame;
@@ -1581,16 +1726,19 @@ public final class CalibratedAutoTuner {
     /**
      * PSF Gaussian sigma from second moments of bright, isolated, unsaturated stars.
      */
-    private static double measurePsfSigma(List<short[][]> images, DetectionConfig base, Preview preview) {
+    private static double measurePsfSigma(List<short[][]> images, List<Integer> cropOfImage, CropSky[] cropSky,
+                                          DetectionConfig base, Preview preview) {
         DetectionConfig probe = base.clone();
         probe.growSigmaMultiplier = 3.0;
         List<Double> sigmas = new ArrayList<>();
-        for (short[][] image : images) {
+        for (int i = 0; i < images.size(); i++) {
             CancellationScope.check();
+            short[][] image = images.get(i);
+            DataArea sky = cropSky[cropOfImage.get(i)].area;
             int h = image.length;
             int w = image[0].length;
-            double background = SourceExtractor.calculateBackgroundSigmaClipped(image, w, h, 3.0, base).median;
-            List<DetectedObject> objects = extractInCrop(image, 5.0, 5, probe);
+            double background = SourceExtractor.calculateBackgroundSigmaClipped(image, w, h, 3.0, base, sky).median;
+            List<DetectedObject> objects = extractInCrop(image, 5.0, 5, probe, sky);
             preview.offer(() -> new AutoTuneSnapshot(STARS, "Measuring star size · detected stars in this sample",
                     image, null, objects.stream().limit(200).map(star -> new AutoTuneSnapshot.Marker(
                             star.x, star.y, AutoTuneSnapshot.Mark.DETECTION)).toList(), List.of()));
@@ -1644,20 +1792,21 @@ public final class CalibratedAutoTuner {
      * between master-stack stars and frame stars, at least 1 px.
      */
     private static double measureJitter(List<short[][]> images, List<Integer> cropOfImage, List<short[][]> masters,
-                                        DetectionConfig base, Preview preview) {
+                                        CropSky[] cropSky, DetectionConfig base, Preview preview) {
         DetectionConfig probe = base.clone();
         probe.growSigmaMultiplier = 3.0;
         List<List<DetectedObject>> masterStars = new ArrayList<>();
-        for (short[][] master : masters) {
+        for (int c = 0; c < masters.size(); c++) {
             CancellationScope.check();
             DetectionConfig mc = probe.clone();
             mc.growSigmaMultiplier = base.masterSigmaMultiplier;
-            masterStars.add(usable(extractMasterStars(master, base.masterSigmaMultiplier, base.masterMinDetectionPixels, mc)));
+            masterStars.add(usable(extractMasterStars(masters.get(c), base.masterSigmaMultiplier, base.masterMinDetectionPixels, mc,
+                    cropSky[c])));
         }
         List<Double> distances = new ArrayList<>();
         for (int i = 0; i < images.size(); i++) {
             CancellationScope.check();
-            List<DetectedObject> frameStars = usable(extractInCrop(images.get(i), 4.0, 5, probe));
+            List<DetectedObject> frameStars = usable(extractInCrop(images.get(i), 4.0, 5, probe, cropSky[cropOfImage.get(i)].area));
             preview.image(STARS, "Measuring residual registration jitter · region " + (cropOfImage.get(i) + 1), images.get(i));
             List<DetectedObject> reference = masterStars.get(cropOfImage.get(i));
             for (DetectedObject star : reference) {

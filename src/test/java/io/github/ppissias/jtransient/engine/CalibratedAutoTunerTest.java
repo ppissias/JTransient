@@ -190,8 +190,92 @@ public class CalibratedAutoTunerTest {
                 CalibratedAutoTuner.configFor(failed, base, AutoTuneProfile.MEDIUM).detectionSigmaMultiplier, 1e-12);
     }
 
-    /** Six aligned frames: isolated Gaussian stars of 3 px FWHM over a flat sky with Poisson-like noise. */
+    /**
+     * A crop's sky leaves out the excluded areas inside it: their pixels become fill, they are holes in its data area,
+     * and no object is counted in or next to them. A crop without areas is measured whole.
+     */
+    @Test
+    public void cropSkyLeavesTheAreasInsideTheCropOut() {
+        int[] crop = {100, 200, 400};
+        List<ExcludedArea> areas = List.of(new ExcludedArea(150, 0, 20, 2000), new ExcludedArea(0, 590, 1000, 50));
+        CalibratedAutoTuner.CropSky sky = CalibratedAutoTuner.CropSky.of(crop, areas);
+        assertEquals("a 20 x 400 column and a 400 x 10 band, overlapping in 20 x 10", 20 * 400 + 400 * 10 - 200, sky.excludedPixels);
+        assertEquals(sky.excludedPixels / (400.0 * 400), CalibratedAutoTuner.excludedShare(crop, areas), 1e-12);
+        short[][] image = new short[400][400];
+        sky.fill(image);
+        assertEquals(Short.MIN_VALUE, image[0][50]);
+        assertEquals(Short.MIN_VALUE, image[395][300]);
+        assertEquals(0, image[100][100]);
+        assertFalse(sky.area.contains(55, 100));
+        assertTrue(sky.area.contains(100, 100));
+        java.util.BitSet owned = new java.util.BitSet(400 * 400);
+        owned.set(0, 400 * 400);
+        sky.keepOwnedOutside(owned, 400);
+        assertFalse(owned.get(100 * 400 + 50));
+        assertTrue(owned.get(100 * 400 + 100));
+        CalibratedAutoTuner.CropSky clear = CalibratedAutoTuner.CropSky.of(new int[]{400, 0, 100}, areas);
+        assertEquals(null, clear.area);
+        assertEquals(0, clear.excludedPixels);
+    }
+
+    /** With excluded areas over more than half of every crop, calibration says so instead of measuring them. */
+    @Test
+    public void calibrationNamesExcludedAreasThatLeaveNoCrop() {
+        var builder = CalibratedAutoTuner.Options.builder();
+        builder.excludedAreas = List.of(new ExcludedArea(0, 0, SIZE, 600));
+        CalibratedAutoTuner.Calibration blocked = CalibratedAutoTuner.calibrate(createFrames(0), new DetectionConfig(),
+                builder.build(), null);
+        assertFalse(blocked.success);
+        assertEquals("No tuning crop fits outside the excluded areas.", blocked.failureReason);
+        assertEquals(List.of(new ExcludedArea(0, 0, SIZE, 600)), builder.build().excludedAreas());
+        assertTrue(CalibratedAutoTuner.Options.defaults().excludedAreas().isEmpty());
+    }
+
+    /**
+     * Spurious single-frame sources along a defective column count as false detections and raise the chosen
+     * thresholds; with the column excluded they no longer count. An excluded area over clean sky leaves the choice as it
+     * was.
+     */
+    @Test
+    public void anExcludedDefectNoLongerCountsAndCleanSkyStaysTheSame() {
+        List<ImageFrame> defective = createFrames(80);
+        CalibratedAutoTuner.Calibration withDefect = CalibratedAutoTuner.calibrate(defective, new DetectionConfig(), null);
+        var builder = CalibratedAutoTuner.Options.builder();
+        builder.excludedAreas = List.of(new ExcludedArea(DEFECT_X - 6, 0, DEFECT_WIDTH + 12, SIZE));
+        CalibratedAutoTuner.Calibration excluded = CalibratedAutoTuner.calibrate(defective, new DetectionConfig(),
+                builder.build(), null);
+        var clean = CalibratedAutoTuner.Options.builder();
+        clean.excludedAreas = List.of(new ExcludedArea(200, 0, 30, SIZE));
+        CalibratedAutoTuner.Calibration cleanArea = CalibratedAutoTuner.calibrate(createFrames(0), new DetectionConfig(),
+                clean.build(), null);
+        int medium = AutoTuneProfile.MEDIUM.ordinal();
+        CalibratedAutoTuner.Candidate cleanChoice = calibration.chosen[medium];
+        assertTrue("the defect raises the threshold: " + withDefect.chosen[medium].sigma,
+                withDefect.chosen[medium].sigma > cleanChoice.sigma);
+        assertTrue(excluded.success);
+        assertEquals("every crop holds the column", excluded.crops, excluded.cropsWithExcludedAreas);
+        assertTrue(excluded.measuredMpixFrames < withDefect.measuredMpixFrames);
+        for (CalibratedAutoTuner.Calibration same : new CalibratedAutoTuner.Calibration[]{excluded, cleanArea}) {
+            CalibratedAutoTuner.Candidate choice = same.chosen[medium];
+            assertEquals(cleanChoice.sigma, choice.sigma, 1e-12);
+            assertEquals(cleanChoice.growSigma, choice.growSigma, 1e-12);
+            assertEquals(cleanChoice.minPixels, choice.minPixels);
+            assertEquals(cleanChoice.recoveredFraction, choice.recoveredFraction, 0.02);
+        }
+    }
+
+    private static final int DEFECT_X = 600;
+    private static final int DEFECT_WIDTH = 16;
+
     private static List<ImageFrame> createFrames() {
+        return createFrames(0);
+    }
+
+    /**
+     * Six aligned frames: isolated Gaussian stars of 3 px FWHM over a flat sky with Poisson-like noise, and in each
+     * frame {@code defectSources} faint star-like sources at random places along a defective column.
+     */
+    private static List<ImageFrame> createFrames(int defectSources) {
         Random random = new Random(3);
         List<double[]> stars = new ArrayList<>();
         for (int i = 0; i < 400; i++) {
@@ -216,6 +300,18 @@ public class CalibratedAutoTunerTest {
                         double px = x - star[0];
                         double py = y - star[1];
                         image[y][x] += norm * Math.exp(-(px * px + py * py) / (2 * sigma * sigma));
+                    }
+                }
+            }
+            Random defect = new Random(1000 + f);
+            for (int d = 0; d < defectSources; d++) {
+                double dx0 = DEFECT_X + defect.nextDouble() * DEFECT_WIDTH;
+                double dy0 = 60 + defect.nextDouble() * (SIZE - 120);
+                double peak = (3 + 9 * defect.nextDouble()) * Math.sqrt(SKY + 25);
+                for (int y = (int) dy0 - 6; y <= (int) dy0 + 6; y++) {
+                    for (int x = (int) dx0 - 6; x <= (int) dx0 + 6; x++) {
+                        double px = x - dx0, py = y - dy0;
+                        image[y][x] += peak * Math.exp(-(px * px + py * py) / (2 * sigma * sigma));
                     }
                 }
             }

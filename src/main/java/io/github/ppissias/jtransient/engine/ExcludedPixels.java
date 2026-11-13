@@ -79,13 +79,21 @@ final class ExcludedPixels {
         for (int y = 0; y < image.length; y++) {
             copy[y] = image[y].clone();
         }
+        fill(copy);
+        return copy;
+    }
+
+    /** Writes the fill level into the areas of an image the caller owns, keeping nothing to restore. */
+    void fill(short[][] image) {
+        if (areas.isEmpty() || image == null || image.length == 0) {
+            return;
+        }
         for (ExcludedArea area : areas) {
-            int[] r = clip(area, copy);
+            int[] r = clip(area, image);
             for (int y = r[2]; y < r[3]; y++) {
-                Arrays.fill(copy[y], r[0], r[1], FILL);
+                Arrays.fill(image[y], r[0], r[1], FILL);
             }
         }
-        return copy;
     }
 
     /**
