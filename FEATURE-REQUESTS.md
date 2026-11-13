@@ -15,7 +15,7 @@ These are proposals, not implementation authorisations. Retain current algorithm
 | [SM-F9](#sm-f9-slow-mover-candidates-made-by-hot-pixels) | Proposed | Reject maximum-stack candidates that stay at one camera position: hot pixels that the drift draws into short dashes. |
 | [SM-F10](#sm-f10-faint-mover-paths-beside-a-star) | Proposed | Reject faint-mover paths that stay beside the star mask for most of the session; validate on movers that pass bright stars first. |
 | [XC-3](#xc-3-local-background-and-noise-for-frame-extraction) | Open; parked at maintainer request; new evidence (2026-11-08) | Resume with local sky correction alone, keeping baseline noise and thresholds fixed; preserve associations, photometry and boundary calibration. |
-| [VS-13](#vs-13-variable-star-recovery-and-false-candidate-investigation) | Proposed investigation | Empirical assessment of known variable-star recovery and false-candidate mechanisms across Klangwolke-2 and multi-candidate reference sessions. |
+| [VS-13](#vs-13-variable-star-recovery-and-false-candidate-investigation) | Investigation plan recorded; experiments pending | Audit known-variable recovery and suspicious candidates on saved reference runs before proposing individual photometry changes. |
 | [RV-1](#rv-1-findings-from-the-pull-request-1-review) | Open; no fix agreed | Seven code-review findings, led by hot pixels that can pass the follows-sky test on steadily drifting frames. Decide each item separately. |
 
 **Mover consolidation decision (2026-11-05).** The digital-tracking delivery (SM-F2 and SpacePixels F25) is complete. Close the current SM-F1/SM-F3 temporal, morphology, position and gate investigations and the bounded SM-F6 validation/review campaign. Retire SM-F4 residual weighting and SM-F5 acceleration as separate open proposals; both remain unimplemented, with no validated replacement selected. Retain the present scientific filters and defaults; this closure does not claim universal completeness, calibrated confidence or the absence of difficult sources. The existing archive and [code history](docs/research/slow-movers/CODE-HISTORY.md) remain available separately.
@@ -108,44 +108,42 @@ Retain the frozen profile, executable/source and dependency snapshots, native ba
 
 ## VS-13. Variable-star recovery and false-candidate investigation
 
-**Proposed investigation (2026-11-12).** A comprehensive empirical study comparing JTransient's variable-star detections against external catalogue ground truth across the primary and multi-candidate reference datasets. The goal is two-fold: verify completeness by checking how well the engine recovers known catalogued variables that should be detectable, and evaluate purity by analysing false-positive candidates that lack catalogue counterparts to identify why subtle frame noise or artifacts trigger detection.
+**Investigation plan (2026-11-13; proposed 2026-11-12).** Compare JTransient's measured stars and variable-star candidates with external catalogue evidence to understand known-variable recovery and false-candidate mechanisms. Begin with a per-star baseline audit, then propose experiments from the observed failures. Experiments are pending; no production algorithm or default change is selected.
 
 ### Input datasets
 
 - **Primary benchmark:** `klangwolke-2` (using `_16bit_converted`), the golden reference. The saved 2026.11-02 report `detections_20261109_202345` has 70 variable candidates (51 high confidence, 19 possible). Catalogue confirmation of those candidates is this investigation.
-- **Multi-candidate reference sessions:** Sessions from the variable-star batch and archive yielding significant variable detections (above 5–6 candidates). `M81-kumar-L-dataset-registered` has 18 candidates in `detections_20261111_174343`. The inventory in the local `REFERENCE-DATASETS.md` names the other sessions and their saved counts.
+- **Initial comparison sessions:** `Andromeda-variables-check` and `M81-kumar-L-dataset-registered`. The latter has 18 candidates in `detections_20261111_174343`. Start from the saved reports and configurations named in the local `REFERENCE-DATASETS.md`; rerun when additional measurements are needed.
+- **Crowded-field follow-up:** `m13-variable-stars`, using an appropriate cluster-variable catalogue alongside VSX. VSX generally excludes globular-cluster variables, so its coverage alone cannot establish recovery or false-candidate rates there.
 
 ### Investigation scope
 
-1. **True-positive recovery (known catalogued variables):**
-   - Cross-match fetched catalogue variables (VSX, Gaia DR3) against the engine's scored stars and reported candidates (`HIGH_CONFIDENCE`, `POSSIBLE`, `REJECTED`).
-   - Focus on variables with **detectable variability** rather than subtle sub-threshold noise (e.g. amplitudes $\ge 0.10$ mag, avoiding marginal ~0.03 mag variations).
-   - Filter for **temporal visibility**: check published periods and variability types against session duration (e.g. period $\le 2 \times$ session span, or known short-period pulsating / eclipsing variables that undergo observable variation during the observing window).
-   - Filter for **photometric feasibility**: exclude targets that are too faint for reliable aperture SNR given the session's sky noise and exposure depth.
-   - For any expected detectable variable that was missed or demoted to `REJECTED`, pinpoint the exact stage responsible:
+1. **Known-variable recovery:**
+   - Inventory every catalogue variable in the usable field, including those absent from the measured-star list. Cross-match against extracted sources, measured/scored stars and reported candidates (`HIGH_CONFIDENCE`, `POSSIBLE`, `REJECTED`), retaining match separation and ambiguity. Ordinary Gaia DR3 matches supply identity and context; variability requires an explicit variability record.
+   - Assess **detectability during this session** using brightness, empirical measurement noise/SNR, usable frames, observing duration, cadence and filter, together with catalogue amplitude, variability type and reliable period/epoch information where available. Catalogue amplitude or a span-to-period ratio alone does not establish observable variation; an eclipse may fall outside the observations. Keep insufficient evidence explicit rather than counting every unrecovered catalogue entry as a miss.
+   - For each star, record whether it was not extracted, excluded from measurement, measured below the variability threshold, rejected by a candidate gate, or reported as a candidate. Trace the responsible stage:
      - Extraction / star selection (e.g. `photometryMinSnr`, saturation, proximity to edges/neighbours);
      - Check B qualification / linear range exclusion;
      - Contamination / spatial exclusion;
      - Candidate gate failure (e.g. `APERTURE`, `PERSISTENCE`, `AMPLITUDE_FLOOR`, `LINEARITY`).
 
-2. **False-positive analysis (uncatalogued detections):**
-   - Examine candidates reported as variables that have no catalogue match in well-surveyed fields (likely false positives).
+2. **Suspicious-candidate analysis:**
+   - Review matched and unmatched candidates. Absence from a catalogue is not evidence of constant brightness, and a positional match does not establish that the measured variation is astrophysical. Account for catalogue coverage, passbands, uncertain values and blends; distinguish supported variability, demonstrated artifacts and unresolved cases.
+   - Compare candidate light curves with seeing, registration shifts, sky background, transparency and neighbouring stars; inspect aperture dependence and whether a few frames dominate the signal.
    - Trace the mechanisms allowing subtle or random frame noise to mimic real astrophysical variability:
      - Frame noise fluctuations aligning spuriously across apertures;
      - Star profile / seeing variations across exposures in undersampled frames;
      - Border, registration drift, or padding interpolation artifacts;
      - Undetected cosmic rays or cosmetic flaws leaking past star-peak / outlier cleaners;
      - Blended neighbours or faint unmasked companions contaminating the aperture.
-   - Determine whether specific gates, outlier filters, or noise-dependent thresholds can suppress these false candidates without losing real variables.
+   - Use demonstrated mechanisms to propose one experiment at a time. Compare recovery and false candidates with the frozen baseline, and reserve a separate dataset from tuning to check whether an improvement carries across fields. Controlled variable-signal injection into scratch copies is a later sensitivity experiment if needed.
 
 ### Deliverables and verification
 
-- Run non-destructively on existing reference data and saved reports without altering current detection defaults or production code.
-- Produce a structured audit report summarizing:
-  - Known variable recovery rate (detected vs. expected detectable), categorized by amplitude and period;
-  - Missed-variable failure points by pipeline gate;
-  - Root causes and classifications of uncatalogued false detections;
-  - Evidence-based proposals for any gate or threshold improvements for the maintainer to review before implementation.
+- Keep input data and saved reports intact; place diagnostic harnesses, rerun outputs and detailed evidence in a scratch folder outside the repositories, with isolated settings as required by the developer guide.
+- First deliver a per-star audit with clearly explained successes, misses, artifacts and unresolved cases. Summarize recovery against the explicitly justified detectable subset, failures by pipeline stage, and any confirmed false-candidate mechanisms. Report uncertain eligibility separately.
+- Review evidence-based proposals with the maintainer before implementing algorithm or threshold changes. Each eventual engine change follows the ordinary cross-repository tests and real-data checks.
+- Catalogue limitations: [VSX submission guidance](https://vsx.aavso.org/index.php?view=about.notice) and [VSX FAQ](https://vsx.aavso.org/vsx/index.php?view=about.faq).
 
 ## RV-1. Findings from the pull request 1 review
 

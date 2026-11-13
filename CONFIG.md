@@ -136,6 +136,7 @@ All fields are public and mutable. A few implementation details matter when you 
   - [faintMoverMaxSpeedPixelsPerMinute (default 1.0)](#faintmovermaxspeedpixelsperminute-default-10)
   - [faintMoverMinScore (default 8.0)](#faintmoverminscore-default-80)
   - [enableFaintMoverFrameLimit (default true)](#enablefaintmoverframelimit-default-true)
+  - [faintMoverSearchSpeed (default 1)](#faintmoversearchspeed-default-1)
   - [faintMoverMaxSeconds (default 600.0)](#faintmovermaxseconds-default-6000)
 - [10. Auto-Tuners](#10-auto-tuners)
 - [11. Practical Starting Point](#11-practical-starting-point)
@@ -866,7 +867,7 @@ Digital tracking of point-like movers too faint for the single frames: the kept 
 
 ### `enableFaintMoverSearch` (default `true`)
 
-Runs the search after residual analysis. It needs capture times on the kept frames and at least 8 kept frames in one session; frames separated from the others by a gap of over two hours are left out. Its run time grows with the number of trial motions, frames and pixels: about 70-90 s for 28 frames of 60 megapixels over 75 minutes and 300 s for 106 frames of 5 megapixels over four hours on a 16-core desktop.
+Runs the search after residual analysis. It needs capture times on the kept frames and at least 8 kept frames in one session; frames separated from the others by a gap of over two hours are left out. Its run time grows with the number of trial motions, frames and pixels: about 70-90 s for 28 frames of 60 megapixels over 75 minutes and 300 s for 106 frames of 5 megapixels over four hours on a 16-core desktop. With wide stars or frames close in time, the first pass adds pixels or frames together and the search is several times faster; see `faintMoverSearchSpeed`.
 
 ### `faintMoverMinDisplacementFwhm` (default `2.0`)
 
@@ -883,6 +884,18 @@ Score a candidate must reach: its PSF-filtered stack over the noise of such stac
 ### `enableFaintMoverFrameLimit` (default `true`)
 
 Rejects a candidate whose score comes from a few frames. Each frame's contribution along the path is capped at the path's median unmasked frame plus 3 frame noises, and the capped score must still reach `faintMoverMinScore`; the telemetry counts these rejections as `rejectedFewFrames`. A faint mover is about equally faint in every frame, so the cap rarely touches it; a residual that a run of frames shares, such as faint star tails past the star mask, loses most of its score. It cannot stop a residual spread over about a third of the frames or more. Switch it off to compare with the earlier behaviour.
+
+### `faintMoverSearchSpeed` (default `1`)
+
+How much cheaper the first pass, which tries every motion at every position, may be. Every candidate is still refined and checked on all frames at full resolution, so its score means the same at every speed; a cheaper first pass can only miss candidates.
+
+| Value | First pass | Measured, against the search before this setting existed |
+|---|---|---|
+| `0` normal | Every pixel of every frame | Identical results, up to about twice as fast |
+| `1` fast | 2 × 2 pixels added when the star size is at least 3.5 px; consecutive frames added while the fastest motion moves at most 0.65 star sizes across them | 3.5 to 7 times faster on two DECam sessions with 4–5 px stars, missing about one in 50–100 recovered synthetic movers, each close to the score or stationary limit; identical results and 1.8 times faster on a 106-frame session with 2.35 px stars |
+| `2` faster | 2 × 2 pixels added when the star size is at least 2 px; frames added across up to 1.3 star sizes | About 9 times faster on the DECam session and 13 times on the 2.35 px session, which kept every recovered synthetic mover but missed its one real candidate, close to the score and half-session limits |
+
+The telemetry records the speed (`searchSpeed`) and what it did (`coarseBin`, `coarseFrames`). Other values are reported as outside the domain and treated as the nearest of these.
 
 ### `faintMoverMaxSeconds` (default `600.0`)
 
