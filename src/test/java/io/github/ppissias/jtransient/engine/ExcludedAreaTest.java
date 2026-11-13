@@ -92,6 +92,67 @@ public class ExcludedAreaTest {
         }
     }
 
+    /**
+     * The master stack and the transient inspection with excluded areas give what detection gives with the same areas:
+     * the same stack and stars, no transient inside an area (also after re-detecting a frame), and the caller's frames
+     * unchanged afterwards.
+     */
+    @Test
+    public void masterStackAndInspectionLeaveTheAreasOutAsDetectionDoes() throws Exception {
+        List<double[]> stars = stars(new Random(3));
+        List<ImageFrame> frames = new ArrayList<>();
+        for (int f = 0; f < 7; f++) {
+            double[] flash = f == 2 ? new double[]{65, 110} : f == 4 ? new double[]{120, 110} : null;
+            frames.add(new ImageFrame(f, "frame" + f, createFrame(new Random(100 + f), stars, 0, flash),
+                    1_760_000_000_000L + f * 120_000L, 60_000L));
+        }
+        List<short[][]> before = new ArrayList<>();
+        for (ImageFrame frame : frames) before.add(copy(frame.pixelData));
+        List<ExcludedArea> areas = List.of(new ExcludedArea(50, 0, 30, SIZE), new ExcludedArea(0, 0, 20, SIZE));
+        DetectionConfig config = new DetectionConfig();
+        try (JTransientEngine engine = new JTransientEngine()) {
+            PipelineResult detected = engine.runPipeline(frames, config, null, null, null, areas);
+
+            JTransientEngine.MasterStackResult stack = engine.generateMasterStackWithDetails(frames, config, null, areas);
+            assertArrayEquals("the same stack as detection", detected.masterStackData, stack.masterStack);
+            assertEquals(Short.MIN_VALUE, stack.masterStack[100][60]);
+            assertFalse(Arrays.deepEquals(stack.masterStack,
+                    engine.generateMasterStackWithDetails(frames, config, null).masterStack));
+
+            TransientInspection inspection = engine.inspectTransients(frames, config, null, areas);
+            assertEquals(areas, inspection.reference().excludedAreas());
+            assertEquals(detected.masterStars.size(), inspection.reference().masterStars().size());
+            for (int f = 0; f < frames.size(); f++) {
+                assertArrayEquals("frame " + f + " restored", before.get(f), frames.get(f).pixelData);
+            }
+            boolean outsideFound = false;
+            for (int k = 0; k < inspection.frames().size(); k++) {
+                List<DetectedObject> opening = inspection.frames().get(k).transients;
+                List<DetectedObject> again = engine.redetectFrame(inspection.reference(), k, config).transients;
+                assertEquals("re-detection " + k + " matches the inspection", positions(opening), positions(again));
+                for (DetectedObject object : again) {
+                    for (ExcludedArea area : areas) {
+                        assertFalse("transient at " + object.x + "," + object.y,
+                                area.contains((int) Math.round(object.x), (int) Math.round(object.y)));
+                    }
+                    if (Math.hypot(object.x - 120, object.y - 110) < 3) outsideFound = true;
+                }
+            }
+            assertTrue("the flash outside the areas is found", outsideFound);
+        }
+        assertArrayEquals(before.get(0), ExcludedArea.filledCopy(before.get(0), List.of()));
+        short[][] filled = ExcludedArea.filledCopy(before.get(0), areas);
+        assertEquals(Short.MIN_VALUE, filled[5][10]);
+        assertEquals(before.get(0)[5][30], filled[5][30]);
+        assertFalse(before.get(0)[5][10] == Short.MIN_VALUE);
+    }
+
+    private static List<String> positions(List<DetectedObject> objects) {
+        List<String> text = new ArrayList<>();
+        for (DetectedObject o : objects) text.add(o.x + "," + o.y);
+        return text;
+    }
+
     private static boolean foundNear(PipelineResult result, double x, double y) {
         for (List<DetectedObject> frame : result.allTransients) {
             for (DetectedObject object : frame) {

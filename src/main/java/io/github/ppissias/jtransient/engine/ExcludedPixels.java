@@ -31,6 +31,11 @@ final class ExcludedPixels {
         this.areas = areas == null ? List.of() : List.copyOf(areas);
     }
 
+    /** The areas, as given. */
+    List<ExcludedArea> areas() {
+        return areas;
+    }
+
     /** Whether there is nothing to exclude. */
     boolean isEmpty() {
         return areas.isEmpty();

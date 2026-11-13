@@ -353,13 +353,37 @@ public class JTransientEngine implements AutoCloseable {
      */
     public MasterStackResult generateMasterStackWithDetails(List<ImageFrame> inputFrames, DetectionConfig config,
                                                             TransientEngineProgressListener listener) {
+        return generateMasterStackWithDetails(inputFrames, config, listener, List.of());
+    }
+
+    /**
+     * {@link #generateMasterStackWithDetails(List, DetectionConfig, TransientEngineProgressListener)} that leaves
+     * {@code excludedAreas} out, as {@link #runPipeline(List, DetectionConfig, TransientEngineProgressListener,
+     * short[][], PipelineStageObserver, List)} does: the frame selection measures quality without them, and the stack
+     * holds registration fill (0 ADU) inside them. The borrowed frames are filled during the call and restored before
+     * it returns, as in that run.
+     *
+     * @param excludedAreas rectangles in the frames' pixel coordinates; null or empty for none
+     */
+    public MasterStackResult generateMasterStackWithDetails(List<ImageFrame> inputFrames, DetectionConfig config,
+                                                            TransientEngineProgressListener listener,
+                                                            List<ExcludedArea> excludedAreas) {
         List<ImageFrame> operationFrames = copyFrameList(inputFrames);
-        return executeOperation(() -> generateMasterStackWithDetailsInternal(operationFrames,
-                OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.MASTER_STACK)), listener));
+        ExcludedPixels excluded = new ExcludedPixels(excludedAreas);
+        return executeOperation(() -> {
+            try {
+                return generateMasterStackWithDetailsInternal(operationFrames,
+                        OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.MASTER_STACK)),
+                        listener, excluded);
+            } finally {
+                excluded.restore();
+            }
+        });
     }
 
     private MasterStackResult generateMasterStackWithDetailsInternal(List<ImageFrame> inputFrames, DetectionConfig config,
-                                                            TransientEngineProgressListener listener) throws Exception {
+                                                            TransientEngineProgressListener listener,
+                                                            ExcludedPixels excluded) throws Exception {
         ensureOpen();
         OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkPipelineInput(inputFrames, null));
         limitWorkToFrames(inputFrames);
@@ -374,7 +398,11 @@ public class JTransientEngine implements AutoCloseable {
         PipelineTelemetry telemetry = new PipelineTelemetry();
         inputFrames.sort(Comparator.comparingInt(f -> f.sequenceIndex));
         FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = analyzeDitherAndDrift(inputFrames, config, null, telemetry);
-        QualityArea quality = qualityArea(driftAnalysis.frameCoverages, telemetry);
+        // As in the pipeline: registration from the whole frames, then the excluded areas become fill.
+        for (ImageFrame frame : inputFrames) {
+            excluded.paint(frame.pixelData);
+        }
+        QualityArea quality = qualityArea(driftAnalysis.frameCoverages, telemetry).excluding(excluded.rectangles());
         Map<Integer, FrameRegistration> registrations = registrationsBySequence(driftAnalysis);
 
         List<Callable<PreparedFrame>> tasks = new ArrayList<>();
@@ -489,7 +517,8 @@ public class JTransientEngine implements AutoCloseable {
     public List<FrameTransients> detectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) {
         List<ImageFrame> operationFrames = copyFrameList(inputFrames);
         return executeOperation(() -> detectTransientsInternal(operationFrames,
-                OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.TRANSIENTS)), listener, providedMasterStack)).frames();
+                OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.TRANSIENTS)), listener, providedMasterStack,
+                List.of())).frames();
     }
 
     /**
@@ -497,9 +526,25 @@ public class JTransientEngine implements AutoCloseable {
      * can be re-detected later without building the reference again.
      */
     public TransientInspection inspectTransients(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener) {
+        return inspectTransients(inputFrames, config, listener, List.of());
+    }
+
+    /**
+     * {@link #inspectTransients(List, DetectionConfig, TransientEngineProgressListener)} that leaves
+     * {@code excludedAreas} out, as {@link #runPipeline(List, DetectionConfig, TransientEngineProgressListener,
+     * short[][], PipelineStageObserver, List)} does. The borrowed frames are filled during the call and restored before
+     * it returns; the reference keeps the areas, so {@link #redetectFrame} measures a filled copy of its frame.
+     *
+     * @param excludedAreas rectangles in the frames' pixel coordinates; null or empty for none
+     */
+    public TransientInspection inspectTransients(List<ImageFrame> inputFrames, DetectionConfig config,
+                                                 TransientEngineProgressListener listener,
+                                                 List<ExcludedArea> excludedAreas) {
         List<ImageFrame> operationFrames = copyFrameList(inputFrames);
+        List<ExcludedArea> areas = excludedAreas == null ? List.of() : List.copyOf(excludedAreas);
         return executeOperation(() -> detectTransientsInternal(operationFrames,
-                OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.TRANSIENTS)), listener, null));
+                OperationContext.compute(StageId.INPUT_VALIDATION, null, () -> DetectionConfigRules.snapshot(config, DetectionConfigRules.Operation.TRANSIENTS)), listener, null,
+                areas));
     }
 
     /**
@@ -516,8 +561,10 @@ public class JTransientEngine implements AutoCloseable {
 
     private FrameTransients redetectFrameInternal(TransientReference reference, ImageFrame frame, DetectionConfig config) {
         ensureOpen();
+        // The inspection restored its frames; the areas it left out are filled again, in a copy.
+        short[][] pixels = new ExcludedPixels(reference.excludedAreas()).paintedCopy(frame.pixelData);
         SourceExtractor.ExtractionResult extracted = OperationContext.compute(StageId.FRAME_EXTRACTION, null, () -> SourceExtractor.extractSources(
-                frame.pixelData, config.detectionSigmaMultiplier, config.minDetectionPixels, config,
+                pixels, config.detectionSigmaMultiplier, config.minDetectionPixels, config,
                 reference.backgroundArea(), reference.searchArea()));
         for (DetectedObject object : extracted.objects) {
             object.sourceFrameIndex = frame.sequenceIndex;
@@ -535,11 +582,22 @@ public class JTransientEngine implements AutoCloseable {
         return new FrameTransients(frame.filename, filtered.allTransients.get(0), extracted);
     }
 
-    private TransientInspection detectTransientsInternal(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack) throws Exception {
+    private TransientInspection detectTransientsInternal(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack,
+                                                         List<ExcludedArea> excludedAreas) throws Exception {
+        ExcludedPixels excluded = new ExcludedPixels(excludedAreas);
+        try {
+            return detectTransientsInternal(inputFrames, config, listener, providedMasterStack, excluded);
+        } finally {
+            excluded.restore();
+        }
+    }
+
+    private TransientInspection detectTransientsInternal(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack,
+                                                         ExcludedPixels excluded) throws Exception {
         ensureOpen();
         OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkPipelineInput(inputFrames, providedMasterStack));
-        ExtractedFramesContext context = extractSourcesFromFrames(inputFrames, config, listener, null,
-                new ExcludedPixels(List.of()));
+        ExtractedFramesContext context = extractSourcesFromFrames(inputFrames, config, listener, null, excluded);
+        excluded.paint(providedMasterStack);
 
         if (providedMasterStack != null) {
             if (listener != null) OperationContext.notify(listener::onProgressUpdate, 45, "Using pre-computed Master Stack for Veto Mask...");
@@ -552,7 +610,8 @@ public class JTransientEngine implements AutoCloseable {
         MasterReferenceAnalyzer.MasterReferenceAnalysis masterReference = OperationContext.compute(StageId.MASTER_REFERENCE, null, () -> MasterReferenceAnalyzer.analyze(
                 context.cleanFrames,
                 providedMasterStack,
-                config
+                config,
+                excluded.rectangles()
         ));
         short[][] masterStackData = masterReference.masterStackData;
         List<DetectedObject> masterStars = masterReference.masterStars;
@@ -595,7 +654,8 @@ public class JTransientEngine implements AutoCloseable {
                 config.masterSigmaMultiplier,
                 config.masterGrowSigmaMultiplier,
                 config.masterMinDetectionPixels,
-                config.maxStarJitter);
+                config.maxStarJitter,
+                excluded.areas());
         return new TransientInspection(reference, finalResult);
     }
 

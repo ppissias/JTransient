@@ -27,6 +27,16 @@ public record ExcludedArea(int x, int y, int width, int height) {
         }
     }
 
+    /**
+     * A copy of the image as detection sees it with these areas: registration fill (0 ADU) inside them, the image
+     * unchanged elsewhere. The image itself is not changed; it is returned as it is when there are no areas.
+     *
+     * @param areas rectangles in the image's pixel coordinates; null or empty for none
+     */
+    public static short[][] filledCopy(short[][] image, java.util.List<ExcludedArea> areas) {
+        return new ExcludedPixels(areas).paintedCopy(image);
+    }
+
     /** Whether the pixel at column {@code px}, row {@code py} lies inside the area. */
     public boolean contains(int px, int py) {
         return px >= x && px < (long) x + width && py >= y && py < (long) y + height;
