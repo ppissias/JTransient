@@ -70,7 +70,7 @@ Photometry's ordinary `analyze` captures/validates aligned containers and a conf
 
 ## Per-operation tuner options (1.0.6)
 
-`CalibratedAutoTuner` exposes immutable `Options`, `Options.builder()`, `Options.defaults()` and `toBuilder()`. Builders copy fixed private defaults; build and array accessors defensively copy grids. Explicit options control crop/search/budget policy without mutable global knobs. The calibration retains the effective policy. Pixels remain borrowed until joined completion.
+`CalibratedAutoTuner` exposes immutable `Options`, `Options.builder()`, `Options.defaults()` and `toBuilder()`. Builders copy fixed private defaults; build and array accessors defensively copy grids. Explicit options control crop/search/budget policy without mutable global knobs. The calibration retains the effective policy. Pixels remain borrowed until joined completion. `Builder.excludedAreas` takes the areas the detection run will leave out; the tuner then measures without them (`Calibration.cropsWithExcludedAreas`, `cropsDroppedForExcludedAreas`).
 
 ## Per-operation diagnostics (1.0.6)
 
