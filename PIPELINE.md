@@ -270,7 +270,7 @@ The method uses the same registration/coverage and quality selection as `runPipe
 What it returns:
 
 - the median `short[][]` master stack
-- `generateMasterStackWithDetails(...)` also returns the kept frames and the rejected frames with their reasons (`MasterStackResult`)
+- `generateMasterStackWithDetails(...)` also returns the kept frames and the rejected frames with their reasons (`MasterStackResult`); an overload with a last `List<ExcludedArea>` argument builds the stack a run with those areas builds, with fill inside them (the frames are filled during the call and restored before it returns)
 
 Use this when you want to reuse the same master stack across repeated `detectTransients(...)` or `runPipeline(...)` calls.
 
@@ -308,6 +308,8 @@ What it returns:
 It returns neither a maximum stack nor a `PipelineResult`. Use this when you want JTransient to do extraction plus stationary-star filtering, but you intend to do your own track assembly.
 
 `inspectTransients(frames, config, listener)` returns those detections together with a `TransientReference` holding the kept frames, data areas, master stars and star mask. `redetectFrame(reference, keptIndex, config)` extracts one kept frame with new per-frame settings and applies that same mask without rebuilding it. Master settings, including `maxStarJitter`, do not change the kept mask; build a new inspection to change the reference. The reference borrows its pixel buffers, mask and detections, which must remain unmodified while it is in use.
+
+`inspectTransients(frames, config, listener, excludedAreas)` leaves those areas out as `runPipeline` does: the frames are filled during the call and restored before it returns, and the reference keeps the areas (`TransientReference.excludedAreas()`), so `redetectFrame` measures a filled copy of its frame and finds what the inspection found with the same settings. `ExcludedArea.filledCopy(image, areas)` gives a single image as detection sees it, for callers that extract one frame themselves.
 
 ## `JTransientEngine.runPipeline(...)`
 
