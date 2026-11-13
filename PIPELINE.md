@@ -49,6 +49,8 @@ The public surface is split into three layers:
 
 For file-backed inputs, `evaluateFrameQuality(frameCount, FrameLoader, config, listener)` uses two passes: one for validated metadata and registration coverage, then bounded parallel quality measurement on the same common area. The loader receives the original zero-based input position and must return stable metadata/pixels across repeated calls, supporting concurrent independent reads in the second pass. The engine checks metadata stability; the caller must prevent or detect pixel-file changes. Both overloads capture settings, preserve original sequence identities, borrow pixels read-only until joined completion, and share normal engine cancellation, operation ownership and failure diagnostics. Statistical baselines and forced-exclusion priority are identical to a full pipeline run; no new rejection rule is added.
 
+Both overloads also take a `List<ExcludedArea>` as a last argument, for the areas the run will leave out (see `runPipeline` below). Registration is then measured on the whole frames and quality without the areas, exactly as the run does with the same areas. The frames stay read-only: each one is measured on a copy with the areas filled, so the second pass holds two images per worker.
+
 ```java
 try (JTransientEngine engine = new JTransientEngine()) {
     FrameQualityResult quality = engine.evaluateFrameQuality(frames, config, listener);
@@ -332,7 +334,18 @@ PipelineResult runPipeline(
         short[][] providedMasterStack,          // null: build the median stack
         PipelineStageObserver observer          // null: none
 )
+
+PipelineResult runPipeline(
+        List<ImageFrame> inputFrames,
+        DetectionConfig config,
+        TransientEngineProgressListener listener,
+        short[][] providedMasterStack,
+        PipelineStageObserver observer,
+        List<ExcludedArea> excludedAreas        // null or empty: none
+)
 ```
+
+`ExcludedArea` is a rectangle (`x`, `y`, `width`, `height`, in the frames' pixels) that detection leaves out of every frame, such as a blurred edge or a bad column ([algorithm](ALGORITHM.md#excluded-areas)). The engine measures the frames' registration first, then writes the fill level (0 ADU) into these rectangles of the borrowed frames and of `providedMasterStack`, and writes the original values back before it returns, also on failure or cancellation. It keeps a copy of the excluded pixels only. Callers must not read those frames from other threads during the run. `PipelineResult.dataArea` has the rectangles as holes (`DataArea.excludedRectangles()`).
 
 This is the full engine entrypoint. It executes the [complete algorithm](ALGORITHM.md#high-level-flow), including camera-fixed rejection, common-motion filtering and the enabled slow-mover/residual/photometry branches.
 
