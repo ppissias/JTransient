@@ -43,6 +43,11 @@ public final class PhotometryFlags {
      * removal on undersampled frames).
      */
     public static final int PEAK_REMOVED = 1 << 8;
+    /**
+     * A moving object travelled more than one FWHM during the exposure: its light is a trail, so a round aperture
+     * misses part of it and the flux reads low.
+     */
+    public static final int TRAILED = 1 << 9;
 
     private PhotometryFlags() {
     }
@@ -61,6 +66,7 @@ public final class PhotometryFlags {
         if ((flags & BAD_FLUX) != 0) names.add("BAD_FLUX");
         if ((flags & CONTAMINATED) != 0) names.add("CONTAMINATED");
         if ((flags & PEAK_REMOVED) != 0) names.add("PEAK_REMOVED");
+        if ((flags & TRAILED) != 0) names.add("TRAILED");
         return names;
     }
 }

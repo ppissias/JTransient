@@ -176,100 +176,21 @@ final class ApertureMeasurer {
             double cx = star.x + m.offsetX;
             double cy = star.y + m.offsetY;
 
-            if (!insideImage(pixels, cx, cy, outerRadius)) {
-                m.flags[i] |= PhotometryFlags.EDGE_OR_VOID;
+            Aperture aperture = measureAperture(pixels, cx, cy, m.radii, R_MAIN, innerRadius, outerRadius,
+                    maxApertureRadius, otherStarMask, saturationThreshold, skyBuffer);
+            floorShares[i] = aperture.floorShare();
+            m.flags[i] |= aperture.flags();
+            if (aperture.sums() == null) {
                 continue;
             }
-
-            // --- Sky annulus ---
-            int skyCount = 0;
-            int floorCount = 0;
-            int annulusCount = 0;
-            int ro = (int) Math.ceil(outerRadius);
-            int x0 = (int) Math.round(cx);
-            int y0 = (int) Math.round(cy);
-            for (int y = y0 - ro; y <= y0 + ro; y++) {
-                CancellationScope.check();
-                for (int x = x0 - ro; x <= x0 + ro; x++) {
-                    double d = Math.hypot(x - cx, y - cy);
-                    if (d < innerRadius || d > outerRadius) {
-                        continue;
-                    }
-                    int v = PixelEncoding.toShiftedPositiveInt(pixels[y][x]);
-                    annulusCount++;
-                    if (v == 0) {
-                        floorCount++;
-                    }
-                    if (otherStarMask != null && otherStarMask[y][x]) {
-                        continue;
-                    }
-                    if (skyCount < skyBuffer.length) {
-                        skyBuffer[skyCount++] = v;
-                    }
-                }
-            }
-            floorShares[i] = annulusCount > 0 ? (double) floorCount / annulusCount : Double.NaN;
-            double[] skyStats = clippedMedianAndSigma(skyBuffer, skyCount);
-            if (skyStats == null || floorShares[i] > MAX_FLOOR_SHARE_IN_ANNULUS) {
-                m.flags[i] |= PhotometryFlags.EDGE_OR_VOID;
-                continue;
-            }
-            double sky = skyStats[0];
-            double skySigma = skyStats[1];
-            // The sky level and noise come from the clipped sample; its size, not the annulus's, sets their error.
-            double skySample = skyStats[2];
-            m.sky[i] = sky;
-
-            // --- Apertures with sub-pixel weights ---
-            double[] sums = new double[RADIUS_COUNT];
-            double[] areas = new double[RADIUS_COUNT];
-            int peak = 0;
-            boolean voidPixel = false;
-            int ra = (int) Math.ceil(maxApertureRadius + 1);
-            for (int y = y0 - ra; y <= y0 + ra; y++) {
-                CancellationScope.check();
-                for (int x = x0 - ra; x <= x0 + ra; x++) {
-                    double d = Math.hypot(x - cx, y - cy);
-                    if (d > maxApertureRadius + 1) {
-                        continue;
-                    }
-                    int v = PixelEncoding.toShiftedPositiveInt(pixels[y][x]);
-                    double signal = v - sky;
-                    for (int r = 0; r < RADIUS_COUNT; r++) {
-                        double w = pixelWeight(x - cx, y - cy, d, m.radii[r]);
-                        if (w > 0) {
-                            sums[r] += w * signal;
-                            areas[r] += w;
-                        }
-                    }
-                    if (d <= m.radii[R_MAIN]) {
-                        peak = Math.max(peak, v);
-                        // Registration fill or a dead pixel. A darkness test relative to the sky would also catch
-                        // ordinary noise when the sky is only a few sigma above zero.
-                        if (v <= DataArea.FILL_LEVEL) {
-                            voidPixel = true;
-                        }
-                    }
-                }
-            }
+            m.sky[i] = aperture.sky();
             for (int r = 0; r < RADIUS_COUNT; r++) {
                 CancellationScope.check();
-                m.flux[r][i] = sums[r];
-            }
-            if (voidPixel) {
-                m.flags[i] |= PhotometryFlags.EDGE_OR_VOID;
-            }
-            if (peak >= saturationThreshold) {
-                m.flags[i] |= PhotometryFlags.SATURATED;
-            }
-            if (!(sums[R_MAIN] > 0)) {
-                m.flags[i] |= PhotometryFlags.BAD_FLUX;
+                m.flux[r][i] = aperture.sums()[r];
             }
             for (int r = 0; r < RADIUS_COUNT; r++) {
-                if (sums[r] > 0) {
-                    double nAp = areas[r];
-                    double fluxSigma = skySigma * Math.sqrt(nAp * (1.0 + nAp / skySample));
-                    m.magError[r][i] = 1.0857 * fluxSigma / sums[r];
+                if (aperture.sums()[r] > 0) {
+                    m.magError[r][i] = 1.0857 * aperture.fluxSigma(r) / aperture.sums()[r];
                 }
             }
         }
@@ -480,6 +401,118 @@ final class ApertureMeasurer {
         if (Double.isFinite(measured) && measured > 0.5) {
             m.fwhm = measured;
         }
+    }
+
+    /**
+     * One position's forced aperture measurement: the sky level and noise from a sigma-clipped annulus (pixels of
+     * {@code otherStarMask} left out), and sky-subtracted sums with sub-pixel weights in every radius. {@code sums} is
+     * null when the position is too near the edge or its annulus is mostly void, which {@code flags} then says.
+     *
+     * @param flags          {@link PhotometryFlags#EDGE_OR_VOID}, {@link PhotometryFlags#SATURATED} (peak in the main
+     *                       radius at or above {@code saturationThreshold}) and {@link PhotometryFlags#BAD_FLUX} (main
+     *                       sum not positive)
+     * @param floorShare     share of annulus pixels at the zero floor, NaN when the annulus was not read
+     * @param areas          the weighted pixel count of each radius
+     * @param skySample      the clipped sky sample's size, which sets the sky level's own error
+     */
+    record Aperture(double[] sums, double[] areas, double sky, double skySigma, double skySample, double floorShare, int flags) {
+        /** The flux error of radius {@code r} from the sky noise, including the sky level's own error. */
+        double fluxSigma(int r) {
+            return skySigma * Math.sqrt(areas[r] * (1.0 + areas[r] / skySample));
+        }
+    }
+
+    /**
+     * Measures one position in every radius of {@code radii}; {@code mainRadius} is the index whose aperture is checked
+     * for saturation, void pixels and a positive sum. {@code skyBuffer} is scratch space of at least the annulus area.
+     * Shared by the comparison-star photometry and {@link MovingObjectPhotometry}.
+     */
+    static Aperture measureAperture(short[][] pixels, double cx, double cy, double[] radii, int mainRadius,
+                                    double innerRadius, double outerRadius, double maxApertureRadius,
+                                    boolean[][] otherStarMask, double saturationThreshold, double[] skyBuffer) {
+        if (!insideImage(pixels, cx, cy, outerRadius)) {
+            return new Aperture(null, null, Double.NaN, Double.NaN, Double.NaN, Double.NaN, PhotometryFlags.EDGE_OR_VOID);
+        }
+        // --- Sky annulus ---
+        int skyCount = 0;
+        int floorCount = 0;
+        int annulusCount = 0;
+        int ro = (int) Math.ceil(outerRadius);
+        int x0 = (int) Math.round(cx);
+        int y0 = (int) Math.round(cy);
+        for (int y = y0 - ro; y <= y0 + ro; y++) {
+            CancellationScope.check();
+            for (int x = x0 - ro; x <= x0 + ro; x++) {
+                double d = Math.hypot(x - cx, y - cy);
+                if (d < innerRadius || d > outerRadius) {
+                    continue;
+                }
+                int v = PixelEncoding.toShiftedPositiveInt(pixels[y][x]);
+                annulusCount++;
+                if (v == 0) {
+                    floorCount++;
+                }
+                if (otherStarMask != null && otherStarMask[y][x]) {
+                    continue;
+                }
+                if (skyCount < skyBuffer.length) {
+                    skyBuffer[skyCount++] = v;
+                }
+            }
+        }
+        double floorShare = annulusCount > 0 ? (double) floorCount / annulusCount : Double.NaN;
+        double[] skyStats = clippedMedianAndSigma(skyBuffer, skyCount);
+        if (skyStats == null || floorShare > MAX_FLOOR_SHARE_IN_ANNULUS) {
+            return new Aperture(null, null, Double.NaN, Double.NaN, Double.NaN, floorShare, PhotometryFlags.EDGE_OR_VOID);
+        }
+        double sky = skyStats[0];
+        double skySigma = skyStats[1];
+        // The sky level and noise come from the clipped sample; its size, not the annulus's, sets their error.
+        double skySample = skyStats[2];
+
+        // --- Apertures with sub-pixel weights ---
+        double[] sums = new double[radii.length];
+        double[] areas = new double[radii.length];
+        int peak = 0;
+        boolean voidPixel = false;
+        int ra = (int) Math.ceil(maxApertureRadius + 1);
+        for (int y = y0 - ra; y <= y0 + ra; y++) {
+            CancellationScope.check();
+            for (int x = x0 - ra; x <= x0 + ra; x++) {
+                double d = Math.hypot(x - cx, y - cy);
+                if (d > maxApertureRadius + 1) {
+                    continue;
+                }
+                int v = PixelEncoding.toShiftedPositiveInt(pixels[y][x]);
+                double signal = v - sky;
+                for (int r = 0; r < radii.length; r++) {
+                    double w = pixelWeight(x - cx, y - cy, d, radii[r]);
+                    if (w > 0) {
+                        sums[r] += w * signal;
+                        areas[r] += w;
+                    }
+                }
+                if (d <= radii[mainRadius]) {
+                    peak = Math.max(peak, v);
+                    // Registration fill or a dead pixel. A darkness test relative to the sky would also catch
+                    // ordinary noise when the sky is only a few sigma above zero.
+                    if (v <= DataArea.FILL_LEVEL) {
+                        voidPixel = true;
+                    }
+                }
+            }
+        }
+        int flags = 0;
+        if (voidPixel) {
+            flags |= PhotometryFlags.EDGE_OR_VOID;
+        }
+        if (peak >= saturationThreshold) {
+            flags |= PhotometryFlags.SATURATED;
+        }
+        if (!(sums[mainRadius] > 0)) {
+            flags |= PhotometryFlags.BAD_FLUX;
+        }
+        return new Aperture(sums, areas, sky, skySigma, skySample, floorShare, flags);
     }
 
     /**
