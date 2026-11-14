@@ -90,10 +90,80 @@ public class MovingObjectPhotometryTest {
         var edge = MovingObjectPhotometry.measure(frame(5, 40, 200, 1), 5, 40, FWHM, 120_000, 0, 65_000);
         assertTrue(Double.isNaN(edge.flux()));
         assertTrue((edge.flags() & PhotometryFlags.EDGE_OR_VOID) != 0);
-        assertTrue((MovingObjectPhotometry.measure(frame(40, 40, 200, 1), 40, 40, FWHM, 120_000, 3.5, 65_000).flags()
-                & PhotometryFlags.TRAILED) != 0);
+        assertTrue("a trail longer than the aperture radius", (MovingObjectPhotometry.measure(frame(40, 40, 200, 1), 40, 40, FWHM,
+                120_000, 5.0, 65_000).flags() & PhotometryFlags.TRAILED) != 0);
+        assertEquals("one FWHM of trail stays inside the aperture", 0, MovingObjectPhotometry.measure(frame(40, 40, 200, 1), 40, 40,
+                FWHM, 120_000, 3.0, 65_000).flags() & PhotometryFlags.TRAILED);
         assertTrue((MovingObjectPhotometry.measure(frame(40, 40, 200, 1), 40, 40, FWHM, 120_000, 0, 1100).flags()
                 & PhotometryFlags.SATURATED) != 0);
+    }
+
+    /**
+     * A mover crossing a bright fixed star: measured directly, its flux jumps while the star is in the aperture; measured
+     * after subtracting the frames' median, the star cancels and the mover's light stays constant.
+     */
+    @Test
+    public void aFixedStarCancelsOnTheMedianReference() {
+        Random random = new Random(5);
+        double sigma = FWHM / 2.3548;
+        var cutouts = new java.util.ArrayList<io.github.ppissias.jtransient.core.SubStackAstrometry.Cutout>();
+        double[] xs = new double[25];
+        for (int k = 0; k < 25; k++) {
+            xs[k] = 20 + k * 40.0 / 24;
+            short[][] pixels = new short[SIZE][SIZE];
+            for (int j = 0; j < SIZE; j++) for (int i = 0; i < SIZE; i++) {
+                double star = 2000 * Math.exp(-((i - 40.0) * (i - 40.0) + (j - 40.0) * (j - 40.0)) / (2 * sigma * sigma));
+                double mover = 200 * Math.exp(-((i - xs[k]) * (i - xs[k]) + (j - 40.0) * (j - 40.0)) / (2 * sigma * sigma));
+                pixels[j][i] = PixelEncoding.fromShiftedPositiveInt((int) Math.round(SKY + NOISE * random.nextGaussian() + star + mover));
+            }
+            cutouts.add(new io.github.ppissias.jtransient.core.SubStackAstrometry.Cutout(300, 500, pixels, k * 120_000L, 120_000));
+        }
+        var reference = io.github.ppissias.jtransient.core.SubStackAstrometry.medianReference(cutouts);
+        int crossing = 12;
+        var direct = MovingObjectPhotometry.measure(cutouts.get(crossing).pixels(), xs[crossing], 40, FWHM, 120_000, 0, 65_000);
+        assertTrue("the star adds its light when measured directly", direct.flux() > 5 * expected(200));
+        for (int k = 0; k < 25; k++) {
+            var m = MovingObjectPhotometry.measureOnReference(cutouts.get(k), reference, xs[k] + 300, 40 + 500, FWHM, 0, 65_000);
+            assertEquals("frame " + k, expected(200), m.flux(), 5 * m.fluxError() + 0.05 * expected(200));
+        }
+    }
+
+    /**
+     * A point source's concentration index is the Gaussian's (about 0.74 within 0.7 FWHM of 2.5 FWHM, a little less on pixels); a blurred frame
+     * among sharp ones is flagged, a frame whose stars are blurred alike is not.
+     */
+    @Test
+    public void flagsAnUnusualShape() {
+        var sharp = MovingObjectPhotometry.measure(frame(40.3, 39.6, 400, 3), 40.3, 39.6, FWHM, 120_000, 0, 65_000);
+        assertEquals("pixelation lowers it a little", 0.72, sharp.concentration(), 0.04);
+        double[] concentration = new double[12];
+        double[] frames = new double[12];
+        Random random = new Random(9);
+        for (int k = 0; k < 12; k++) {
+            concentration[k] = 0.74 * (1 + 0.01 * random.nextGaussian());
+            frames[k] = Double.NaN;
+        }
+        concentration[4] = 0.5;
+        boolean[] flagged = MovingObjectPhotometry.contaminated(concentration, frames);
+        for (int k = 0; k < 12; k++) assertEquals("frame " + k, k == 4, flagged[k]);
+        frames = new double[12];
+        java.util.Arrays.fill(frames, 0.74);
+        frames[4] = 0.5;
+        flagged = MovingObjectPhotometry.contaminated(concentration, frames);
+        assertTrue("the whole frame was blurred", !flagged[4]);
+        assertTrue("too few measurements: nothing flagged", !MovingObjectPhotometry.contaminated(new double[]{0.7, 0.7, 0.3},
+                new double[]{Double.NaN, Double.NaN, Double.NaN})[2]);
+    }
+
+    /** A frame whose bright star is clipped at 50000 saturates below that; without clipped pixels, near the 16-bit top. */
+    @Test
+    public void findsTheSaturationLevel() {
+        short[][] pixels = frame(40, 40, 0, 4);
+        for (int j = 38; j <= 42; j++) for (int i = 38; i <= 42; i++) pixels[j][i] = PixelEncoding.fromShiftedPositiveInt(50_000);
+        assertEquals(0.85 * 50_000, MovingObjectPhotometry.saturationThreshold(pixels), 1);
+        assertEquals(0.85 * 0.95 * 65_535, MovingObjectPhotometry.saturationThreshold(frame(40, 40, 400, 4)), 1);
+        assertTrue("a star peaking just under the clip level is saturated", (MovingObjectPhotometry.measure(frame(20, 20, 46_000, 4), 20, 20,
+                FWHM, 120_000, 0, MovingObjectPhotometry.saturationThreshold(pixels)).flags() & PhotometryFlags.SATURATED) != 0);
     }
 
     /** Comparison stars dimmed together on one frame give that frame's offset; too few stars give none. */

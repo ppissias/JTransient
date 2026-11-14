@@ -68,7 +68,7 @@ public final class SubStackAstrometry {
                 throw new IllegalArgumentException("cut-outs must share one origin and size");
             }
         }
-        float[][] reference = median(cutouts, width, height);
+        float[][] reference = medianReference(cutouts);
         var measurements = new ArrayList<Measurement>();
         int n = cutouts.size();
         for (int g = 0; g < groups; g++) {
@@ -85,8 +85,13 @@ public final class SubStackAstrometry {
         return List.copyOf(measurements);
     }
 
-    /** The per-pixel median of all cut-outs, NaN where every frame is fill. */
-    private static float[][] median(List<Cutout> cutouts, int width, int height) {
+    /**
+     * The per-pixel median of cut-outs that share one origin and size, in the shifted (unsigned) pixel domain; NaN where
+     * every frame is fill. Fixed stars and galaxies are in it, a mover that crosses each pixel in only a few frames is
+     * not, so subtracting it leaves the mover alone. Shared by the sub-stacks and the moving-object photometry.
+     */
+    public static float[][] medianReference(List<Cutout> cutouts) {
+        int height = cutouts.getFirst().pixels().length, width = cutouts.getFirst().pixels()[0].length;
         float[][] reference = new float[height][width];
         float[] values = new float[cutouts.size()];
         for (int y = 0; y < height; y++) {

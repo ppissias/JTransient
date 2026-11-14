@@ -57,9 +57,9 @@ public final class VariableStarAnalyzer {
     private static final int SHAPE_REFERENCE_EXCLUDING_FLAGS = PhotometryFlags.SATURATED | PhotometryFlags.NONLINEAR
             | PhotometryFlags.EDGE_OR_VOID | PhotometryFlags.CROSSING | PhotometryFlags.BAD_FLUX;
     /** A measurement whose relative concentration deviates by more than this many robust sigmas is contaminated. */
-    private static final double SHAPE_OUTLIER_SIGMA = 5.0;
+    static final double SHAPE_OUTLIER_SIGMA = 5.0;
     /** Lower bound on the per-star relative-concentration spread (fractional), so very stable stars are not over-flagged. */
-    private static final double MIN_SHAPE_SPREAD = 0.02;
+    static final double MIN_SHAPE_SPREAD = 0.02;
     private static final int MIN_SHAPE_MEASUREMENTS = 5;
     /** Share of the photometry progress spent measuring the frames. */
     private static final int MEASURING_PROGRESS_SHARE = 80;

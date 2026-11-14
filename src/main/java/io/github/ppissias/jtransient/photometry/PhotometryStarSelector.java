@@ -147,30 +147,45 @@ final class PhotometryStarSelector {
         double[] pileUps = new double[frames.size()];
         int found = 0;
         for (ImageFrame frame : frames) {
-            int[] histogram = new int[65536];
-            int max = 0;
-            for (short[] row : frame.pixelData) {
-                for (short value : row) {
-                    int v = PixelEncoding.toShiftedPositiveInt(value);
-                    histogram[v]++;
-                    if (v > max) {
-                        max = v;
-                    }
-                }
-            }
-            int tolerance = Math.max(1, (int) Math.round(PILE_UP_TOLERANCE * max));
-            int atTop = 0;
-            for (int v = Math.max(0, max - tolerance); v <= max; v++) {
-                atTop += histogram[v];
-            }
-            if (atTop >= PILE_UP_MIN_PIXELS) {
-                pileUps[found++] = max;
+            double level = pileUpLevel(frame.pixelData);
+            if (!Double.isNaN(level)) {
+                pileUps[found++] = level;
             }
         }
         if (found == 0) {
             return NO_PILE_UP_FRACTION * 65535.0;
         }
         return PhotometryMath.median(pileUps, found);
+    }
+
+    /**
+     * One frame's saturation level, as {@link #estimateSaturationLevel} finds it for a session: the top of the histogram
+     * when clipped pixels pile up there, else 95% of the 16-bit maximum.
+     */
+    static double saturationLevel(short[][] pixels) {
+        double level = pileUpLevel(pixels);
+        return Double.isNaN(level) ? NO_PILE_UP_FRACTION * 65535.0 : level;
+    }
+
+    /** The frame's brightest level when at least {@code PILE_UP_MIN_PIXELS} pixels pile up at it, else NaN. */
+    private static double pileUpLevel(short[][] pixels) {
+        int[] histogram = new int[65536];
+        int max = 0;
+        for (short[] row : pixels) {
+            for (short value : row) {
+                int v = PixelEncoding.toShiftedPositiveInt(value);
+                histogram[v]++;
+                if (v > max) {
+                    max = v;
+                }
+            }
+        }
+        int tolerance = Math.max(1, (int) Math.round(PILE_UP_TOLERANCE * max));
+        int atTop = 0;
+        for (int v = Math.max(0, max - tolerance); v <= max; v++) {
+            atTop += histogram[v];
+        }
+        return atTop >= PILE_UP_MIN_PIXELS ? max : Double.NaN;
     }
 
     /**
