@@ -573,7 +573,7 @@ Minimum number of frames required before session-level rejection is applied.
 
 ### `starCountSigmaDeviation` (default `2.0`)
 
-Controls how far star count may fall below the session median before rejection.
+Controls how far star count may fall below the session median before rejection. Whatever the session's spread, a drop of less than 5 % of the median count is never rejected.
 
 ### `fwhmSigmaDeviation` (default `2.5`)
 

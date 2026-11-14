@@ -297,7 +297,7 @@ Four absolute floors keep the rejection envelopes from becoming too tight:
 - `minBrightStarEccentricityEnvelope`
 - `minFwhmEnvelope`
 
-The background envelope is also never smaller than the session's median per-frame sky noise.
+The background envelope is also never smaller than the session's median per-frame sky noise. The star-count limit is never closer to the median than 5 % of it (`SessionEvaluator.MIN_STAR_COUNT_TOLERANCE`): the frames of a very steady session have almost the same count, and one star less is not a reason to drop a frame.
 
 The star-count envelope has no absolute or relative floor. With counts measured over the same quality area, a narrow spread can put the lower limit close to the median, so a small count loss can reject a frame. The current rule remains median minus the configured multiple of the MAD sigma; a possible floor is proposed under [QC-1](FEATURE-REQUESTS.md#qc-1-star-count-rejection-envelope).
 
