@@ -19,6 +19,8 @@ Machine-specific paths (tools, test datasets, scratch folders, memory limits) ar
 ## Contents
 
 - [Principles](#principles)
+- [Design patterns in use](#design-patterns-in-use)
+- [How to add](#how-to-add)
 - [Working rules](#working-rules)
 - [Build and test](#build-and-test)
 - [The packages](#the-packages)
@@ -29,13 +31,7 @@ Machine-specific paths (tools, test datasets, scratch folders, memory limits) ar
 
 ## Principles
 
-Scientific correctness and preservation of valid results constrain every design change. Within that constraint, the maintainer's goals for the code, in order:
-
-1. **Readable code.** A reader should understand a class from its name, its Javadoc and its fields. Prefer plain, direct code over clever generality.
-2. **A clear design with clear boundaries.** Each piece of mutable state has one authoritative owner. Each package has one job, and its dependencies point one way.
-3. **No abstraction or engineering without a real need.** An interface normally needs two implementations or a test seam that is actually used; an explicit listener or ownership boundary can also justify one. A layer needs a responsibility of its own. A compatibility path needs a caller that still uses it. Remove unused machinery after identifying the contracts it protects. Fewer classes or files alone do not make a design simpler.
-4. **A few chosen design patterns, applied consistently.** Reuse them when their responsibilities fit; consistency does not justify an unnecessary abstraction.
-5. **One implementation of each behaviour.** Code that must give the same result is written once and called from every place that needs it: a preview, a check or a tool that shows what detection will do runs detection's own code. A second implementation is acceptable when it has a reason of its own, such as bounded memory, speed or a different measurement. It then gives that reason in its Javadoc, and a test pins the two together where they must agree. Prefer a parameter or a small shared step to a copy; sharing is a real need in the sense of principle 3, but share the step, not a framework.
+Scientific correctness and preservation of valid results constrain every design change. Within that constraint, the maintainer's goals for the code are the same in all three repositories and are stated once, in SpacePixels' [DEVELOPER.md](../SpacePixels/DEVELOPER.md#principles): readable code, a clear design with clear boundaries, no abstraction without a real need, a few design patterns applied consistently, and one implementation of each behaviour.
 
 The rules that follow for the engine:
 
@@ -49,6 +45,31 @@ The rules that follow for the engine:
 - **One coordinated source set with SpacePixels and JPlateSolve.** There is no promise to keep old signatures. Change the API and its SpacePixels callers together, and prefer deleting an old path to keeping an alias. Document intentional public API breaks and update the API consumer checks and usage examples; absence of a SpacePixels caller does not prove a documented library capability is unused.
 
 The principles guide changes; they do not mean all current products are deeply immutable or all operation context is passed as parameters. `WorkerPool` propagates cancellation, failure labels and diagnostics through scopes. The current options, diagnostics and validation contracts are described in [PIPELINE.md](PIPELINE.md). The [shared-validation review](DESIGN-IMPROVEMENTS.md#jt-02-centralize-shared-validation-and-setting-rules) and [cross-repository logging review](DESIGN-IMPROVEMENTS.md#jt-04-review-logging-across-the-three-repositories) assess future changes; current contracts remain in force.
+
+**What checks the rules.** `check` runs the bytecode architecture check (`verifyArchitecture`), `apiConsumer` compiles and runs a consumer of the public API, and the equality tests pin the tools to the pipeline (`FrameQualityResultTest`, `ExcludedAreaTest`, the tuner's mask-overlap test). The real-data comparison covers the science. The rest relies on review.
+
+## Design patterns in use
+
+| Pattern | Use it when | Where |
+|---|---|---|
+| Stage as a class with a static entry | the pipeline gets a step | `TransientVeto.apply`, `StreakLinker.link`; `TrackLinker` and `JTransientEngine` call the stages in a fixed order |
+| Shared front end | an entry point needs the session's frames measured or selected | `registerSession`, `measureFrames` and the frame selection in `JTransientEngine` |
+| Captured configuration | an operation starts | `DetectionConfigRules.snapshot`; a stage's own settings are clones |
+| Scopes | a long loop must stop on cancel, or a failure or diagnostic needs its stage and frame | `CancellationScope`, `OperationContext`, `DiagnosticContext`, carried across workers by `WorkerPool` |
+| Result builder | the pipeline result gains a product | `PipelineResult` |
+| Optional observer | a caller watches a run without being able to change it | `PipelineStageObserver`, `AutoTuneObserver` |
+| Borrowed pixels, restored on return | a stage must change the caller's frames in place | `ExcludedPixels` |
+
+## How to add
+
+**A pipeline stage.**
+1. Write a class in `core` with a static entry, explicit inputs and a result. It reads no files and keeps no state between runs.
+2. Call it from `TrackLinker` or `JTransientEngine` at its place in the order, inside `OperationContext.compute` with its `StageId`.
+3. Put its settings in `DetectionConfig` ([Changing DetectionConfig](#changing-detectionconfig)) and its counts in the telemetry.
+4. Call `CancellationScope.check()` in its long loops.
+5. Describe it in ALGORITHM.md and its products in PIPELINE.md, and show its effect on real data before committing.
+
+**An entry point that runs part of the pipeline** (a preview, a check, a tool). Call the pipeline's own steps: the shared front end, `MasterVetoMask`, the stage classes. Add a test that its output equals the pipeline's, as `FrameQualityResultTest` and `ExcludedAreaTest` do.
 
 ## Working rules
 
@@ -112,7 +133,7 @@ All packages are under `io.github.ppissias.jtransient`.
 - `runPipeline` stops after quality control when it keeps fewer than `JTransientEngine.MIN_KEPT_FRAMES` (3) frames and returns a completed result marked `PipelineResult.tooFewFrames`. Applications present that result; they do not rewrite results themselves. `TrackLinker` keeps its own three-frame guard.
 - `CameraFixedRejector` uses usable fill-edge registrations to remove camera-fixed point detections after the veto and before linking. It does not replace common-motion filtering or validate slow-mover candidates.
 - Same-frame groups of rescued anomalies are private consolidation inputs. An unmerged group stays separate anomalies; there is no suspected-streak result category.
-- Session rejection uses medians and MAD with the configured absolute envelope floors. The background limit is at least the median frame noise; equalised sky levels alone must not produce an arbitrarily tight rejection window.
+- Session rejection uses medians and MAD with the configured absolute envelope floors. The star-count limit stays at least 5 % below the median count. The background limit is at least the median frame noise; equalised sky levels alone must not produce an arbitrarily tight rejection window.
 
 ## Real-data checks
 
