@@ -1691,29 +1691,43 @@ public final class FaintMoverSearch {
         return candidates;
     }
 
-    /** Copies bounded evidence from the resident tile; a null tile reports why no review pixels were retained. */
+    /**
+     * Copies bounded evidence from the resident tile; a null tile reports why no review pixels were retained. A path
+     * that fits {@link FaintMoverDiagnostics#fixedRectangleFits} shares one rectangle; a longer one gets a square per
+     * frame that follows its scoring-path sample.
+     */
     private static FaintMoverDiagnostics diagnostics(Plan plan, Peak peak, PreparedTile tile) {
         int n = plan.frames.size();
-        if (n > 128) return FaintMoverDiagnostics.unavailable("more than 128 searched frames");
         var p = peak.location;
         int[] sx = new int[n], sy = new int[n];
         shifts(plan, peak.vx, peak.vy, sx, sy);
         int minX = Arrays.stream(sx).min().orElse(0), maxX = Arrays.stream(sx).max().orElse(0);
         int minY = Arrays.stream(sy).min().orElse(0), maxY = Arrays.stream(sy).max().orElse(0);
-        int x = Math.max(Math.max(0, p.tx - plan.margin), p.tx + p.x + minX - 35);
-        int y = Math.max(Math.max(0, p.ty - plan.margin), p.ty + p.y + minY - 35);
-        int endX = Math.min(Math.min(plan.input.masterStack[0].length, p.tx + p.width + plan.margin), p.tx + p.x + maxX + 36);
-        int endY = Math.min(Math.min(plan.input.masterStack.length, p.ty + p.height + plan.margin), p.ty + p.y + maxY + 36);
+        int context = FaintMoverDiagnostics.CONTEXT;
+        int imageWidth = plan.input.masterStack[0].length, imageHeight = plan.input.masterStack.length;
+        int x = Math.max(Math.max(0, p.tx - plan.margin), p.tx + p.x + minX - context);
+        int y = Math.max(Math.max(0, p.ty - plan.margin), p.ty + p.y + minY - context);
+        int endX = Math.min(Math.min(imageWidth, p.tx + p.width + plan.margin), p.tx + p.x + maxX + context + 1);
+        int endY = Math.min(Math.min(imageHeight, p.ty + p.height + plan.margin), p.ty + p.y + maxY + context + 1);
         int w = endX - x, h = endY - y;
-        if (w <= 0 || h <= 0 || w > 256 || h > 256)
-            return FaintMoverDiagnostics.unavailable("diagnostic rectangle exceeds 256 pixels per side");
+        boolean follow = !FaintMoverDiagnostics.fixedRectangleFits(w, h, n);
+        if (follow) {
+            w = h = FaintMoverDiagnostics.FOLLOWING_SIDE;
+            x = p.tx + p.x + sx[0] - context;
+            y = p.ty + p.y + sy[0] - context;
+        }
+        if (4L * n * w * h > REVIEW_BUDGET_BYTES)
+            return FaintMoverDiagnostics.unavailable("review pixels exceed the 64 MiB review-pixel budget");
         if (tile == null) return FaintMoverDiagnostics.unavailable("64 MiB review-pixel budget exceeded");
         int stride = p.width + 2 * plan.margin;
         List<FaintMoverDiagnostics.Frame> frames = new ArrayList<>();
         for (int k = 0; k < n; k++) {
             CancellationScope.check();
-            float[] pixels = new float[w * h];
-            for (int row = 0; row < h; row++) {
+            int ox = follow ? p.tx + p.x + sx[k] - context : x;
+            int oy = follow ? p.ty + p.y + sy[k] - context : y;
+            float[] pixels = follow ? followingCutout(plan, p, tile.residuals[k], ox, oy, imageWidth, imageHeight)
+                    : new float[w * h];
+            if (!follow) for (int row = 0; row < h; row++) {
                 int start = (y - p.ty + plan.margin + row) * stride + x - p.tx + plan.margin;
                 System.arraycopy(tile.residuals[k], start, pixels, row * w, w);
             }
@@ -1723,11 +1737,29 @@ public final class FaintMoverSearch {
             ImageFrame frame = plan.frames.get(k);
             long mid = frame.timestamp + Math.max(0L, frame.exposureDuration) / 2;
             frames.add(new FaintMoverDiagnostics.Frame(frame.sequenceIndex, mid, p.tx + p.x + sx[k],
-                    p.ty + p.y + sy[k], unmasked, tile.residuals[k][sample], pixels));
+                    p.ty + p.y + sy[k], ox, oy, unmasked, tile.residuals[k][sample], pixels));
         }
         float[][] first = Double.isFinite(peak.firstHalf) ? diagnosticHalf(plan, tile, p, sx, sy, 0, n / 2) : null;
         float[][] second = Double.isFinite(peak.secondHalf) ? diagnosticHalf(plan, tile, p, sx, sy, n / 2, n) : null;
-        return new FaintMoverDiagnostics(null, x, y, w, h, p.tx + p.x, p.ty + p.y, frames, first, second);
+        return new FaintMoverDiagnostics(null, x, y, w, h, follow, p.tx + p.x, p.ty + p.y, frames, first, second);
+    }
+
+    /** Copies one path-following square from a tile's residuals; pixels outside the image or the tile are NaN. */
+    private static float[] followingCutout(Plan plan, PeakLocation p, float[] residuals, int ox, int oy,
+                                           int imageWidth, int imageHeight) {
+        int side = FaintMoverDiagnostics.FOLLOWING_SIDE;
+        int stride = p.width + 2 * plan.margin;
+        float[] pixels = new float[side * side];
+        Arrays.fill(pixels, Float.NaN);
+        int fromX = Math.max(ox, Math.max(0, p.tx - plan.margin));
+        int toX = Math.min(ox + side, Math.min(imageWidth, p.tx + p.width + plan.margin));
+        int fromY = Math.max(oy, Math.max(0, p.ty - plan.margin));
+        int toY = Math.min(oy + side, Math.min(imageHeight, p.ty + p.height + plan.margin));
+        for (int gy = fromY; gy < toY && fromX < toX; gy++) {
+            int start = (gy - p.ty + plan.margin) * stride + fromX - p.tx + plan.margin;
+            System.arraycopy(residuals, start, pixels, (gy - oy) * side + fromX - ox, toX - fromX);
+        }
+        return pixels;
     }
 
     /** Copies the half-score map with its original mask count, time order and full-stack normalisation. */

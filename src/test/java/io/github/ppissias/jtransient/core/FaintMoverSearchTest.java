@@ -188,6 +188,11 @@ public class FaintMoverSearchTest {
         assertNull(d.unavailableReason);
         assertEquals(FRAMES, d.frames.size());
         assertTrue(d.width <= 256 && d.height <= 256);
+        assertFalse(d.followsPath);
+        for (var f : d.frames) {
+            assertEquals(d.x, f.x);
+            assertEquals(d.y, f.y);
+        }
         assertEquals(c.firstHalfScore, centralMaximum(d.firstHalf), 0.00001);
         assertEquals(c.secondHalfScore, centralMaximum(d.secondHalf), 0.00001);
         for (int k = 0; k < FRAMES; k++) {
@@ -260,6 +265,46 @@ public class FaintMoverSearchTest {
         org.junit.Assert.assertArrayEquals(saved, d.frames.getFirst().residual, 0);
         assertEquals(result.candidates.size(), result.telemetry.diagnosticsAvailable);
         assertTrue(result.telemetry.diagnosticBytes > 0 && result.telemetry.diagnosticBytes <= 64L * 1024 * 1024);
+    }
+
+    /** A path longer than a fixed review rectangle allows is reviewed with one square per frame that follows it. */
+    @Test public void aLongPathGetsReviewCutoutsThatFollowIt() throws Exception {
+        // 200 px across the 260 px field in 30 minutes: the whole-path rectangle would be 260 px wide.
+        double[] mover = {30, 130, 200.0 / 30, 0, 4 * NOISE};
+        DetectionConfig config = new DetectionConfig();
+        config.faintMoverMaxSpeedPixelsPerMinute = 8;
+        var result = run(input(frames(3, mover)), config);
+        assertEquals(1, result.candidates.size());
+        var c = result.candidates.getFirst();
+        assertEquals(mover[2], c.vx, 0.1);
+        var d = c.diagnostics;
+        assertNull(d.unavailableReason);
+        assertTrue(d.followsPath);
+        assertEquals(FaintMoverDiagnostics.FOLLOWING_SIDE, d.width);
+        assertEquals(FaintMoverDiagnostics.FOLLOWING_SIDE, d.height);
+        assertEquals(FRAMES, d.frames.size());
+        int context = FaintMoverDiagnostics.CONTEXT, side = FaintMoverDiagnostics.FOLLOWING_SIDE;
+        assertEquals(d.frames.getFirst().x, d.x);
+        for (var f : d.frames) {
+            assertEquals(f.sampleX - context, f.x);
+            assertEquals(f.sampleY - context, f.y);
+            assertEquals(side * side, f.residual.length);
+            assertEquals(f.signal, f.residual[context * side + context], 0);
+            // Columns left of the image are not search pixels.
+            if (f.x < 0) assertTrue(Float.isNaN(f.residual[context * side]));
+        }
+        assertTrue(d.frames.getFirst().x < 0);
+        assertEquals(4L * FRAMES * side * side + 8L * FaintMoverSearch.CUTOUT * FaintMoverSearch.CUTOUT + 128L * FRAMES,
+                result.telemetry.diagnosticBytes);
+    }
+
+    /** The fixed rectangle keeps its former limits; anything larger follows the path. */
+    @Test public void fixedReviewRectangleKeepsItsFormerLimits() {
+        assertTrue(FaintMoverDiagnostics.fixedRectangleFits(256, 256, 128));
+        assertFalse(FaintMoverDiagnostics.fixedRectangleFits(257, 80, 16));
+        assertFalse(FaintMoverDiagnostics.fixedRectangleFits(256, 256, 129));
+        assertTrue(FaintMoverDiagnostics.fixedRectangleFits(71, 71, 1000));
+        assertFalse(FaintMoverDiagnostics.fixedRectangleFits(0, 71, 16));
     }
 
     /** Returns the actual half-score peak in the engine's central refinement area. */
