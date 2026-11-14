@@ -29,6 +29,7 @@ A fresh review of the engine (about 20,000 lines of main code and 7,700 of tests
 | [JT-02](#jt-02-centralize-shared-validation-and-setting-rules) | Centralize shared validation and setting rules | Medium | In-depth review first |
 | [JT-04](#jt-04-review-logging-across-the-three-repositories) | Review logging across SpacePixels, JTransient and JPlateSolve | Medium | Review first |
 | [JT-05](#jt-05-let-the-pipeline-method-read-as-the-algorithm) | Let the pipeline method read as the algorithm | Medium | Small |
+| [JT-07](#jt-07-one-front-end-for-frame-selection-and-one-veto-rule) | One front end for frame selection and one veto rule | High | Medium, in steps |
 
 **Working order.** Verify the dead-code subset of JT-01 first. Evaluate JT-02 in depth before choosing changes, and review JT-04 across all three repositories before choosing a logging approach. Keep each change independently reviewable. JT-05 remains a small orchestration cleanup; release-artifact checks continue through the existing [coordinated publishing procedure](../SpacePixels/PUBLISHING.md#maven-central-publishing).
 
@@ -97,6 +98,31 @@ The phase comments are numbered 0, 0.5, 4 and 5.
 - A small private helper is reasonable if it preserves stage-specific result types and leaves branch decisions visible. Do not introduce an untyped stage framework to shorten the method.
 - Preserve the ordering of progress, stage timing and observer delivery, including disabled/empty stages and early returns. PIPELINE.md distinguishes observer exceptions, which are isolated, from progress-listener exceptions, which fail the operation. Keep that distinction when centralizing callbacks and timing.
 - Compare scientific results and stage/observer sequences separately from elapsed-time values. Retain the current failure-context, per-worker frame identity and joined cancellation guarantees; extract orchestration without simultaneously changing diagnostic policy.
+
+### JT-07. One front end for frame selection and one veto rule
+
+**Problem (2026-11-14).** Three entry points run the same first steps: measure registration, fill the excluded areas, build the quality area, measure each frame's quality, select the frames. Each has its own copy in `JTransientEngine`, so the excluded areas had to be added three times.
+
+| Path | Method | What differs from the pipeline's front end | Separate code needed? |
+|---|---|---|---|
+| Detection, transient inspection | `extractSourcesFromFrames` | The reference: frames in memory, extraction and quality per frame | — |
+| Master stack (Star Mask Explorer) | `generateMasterStackWithDetailsInternal` | No source extraction; then the median. Builds its own rejected-frame list instead of the telemetry's | No |
+| Standalone quality control | `evaluateQualityInternal` | Reads frames through a loader in two passes, so only a few are in memory; no extraction | The loader, yes; the steps, no |
+
+Tests pin the three together (`FrameQualityResultTest`, `ExcludedAreaTest`), so they agree today.
+
+The calibrated tuner is a different measurement (crops, negative images, artificial stars, a grid of about 28,000 settings) and keeps its own code. It restates two production rules instead of calling them: the veto mask (`buildMask` and its dilation formula copy `MasterVetoMask.build` and `dilationRadius`) and the mask-overlap fraction (`overlap` copies `TransientVeto.computeMaskOverlapFraction`). Smaller repeats: `redetectFrameInternal` copies the pipeline's per-frame extraction, and `detectTransientsInternal` and `runPipelineInternal` each call the master reference and the veto.
+
+**Proposal, in steps; each leaves results byte-identical.**
+1. **One front end.** The loader form is already the general one: the in-memory overload of `evaluateFrameQuality` runs through it. Make it the single front end, with a frame source (frames in memory, or a loader) and a switch for source extraction. Frames in memory are filled in place and restored, as now; loaded frames are measured on a filled copy. Detection, the master stack and quality control become callers. The master stack is then the front end without extraction, followed by the median, with the telemetry's rejected frames.
+2. **One veto rule.** The tuner calls `MasterVetoMask.dilationRadius` and builds its masks from `MasterVetoMask.build`; the overlap fraction becomes one function used by `TransientVeto` and the tuner. The tuner keeps its bit sets and its per-detection overlap table, which its grid needs for speed.
+3. **Small repeats.** One "extract one frame" step for the pipeline's task and `redetectFrame`; one "reference and veto" step for inspection and the pipeline. Fits with [JT-05](#jt-05-let-the-pipeline-method-read-as-the-algorithm).
+
+**Keep.** Progress texts and percentages, stage identities in failures, the telemetry timings, input validation per entry point (see [JT-02](#jt-02-centralize-shared-validation-and-setting-rules)), worker limits, and the contract that loader-supplied pixels are read-only.
+
+4. **The tuner selects frames as detection does** (behaviour change). It runs the shared front end on its pool and builds its masters and measurements only from the frames quality control keeps, instead of leaving out blank frames only.
+
+**Decision (made 2026-11-14).** The maintainer agreed to all steps: "For the frames the auto-tune uses, lets follow the same rules as detection and only build it from frames quality control would keep. I think this is the correct behaviour, there is no reason to my understanding to have auto-tune behave differently." Steps 1 to 3 must leave results byte-identical; step 4 is shown on real data. Still open: the tuner's star size is a median of quantized values, which makes its choice jump between neighbouring settings; no decision yet.
 
 ## Removed from the previous plan (2026-10-23)
 
