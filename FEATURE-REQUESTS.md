@@ -215,7 +215,7 @@ Make the `TransientVeto` method package-private and call it from `FaintStreakSea
 
 ### RV-1.7 Diagnostics are copied under the evidence-pool lock
 
-**Run time and garbage collection.** `EvidencePool.capture` in [`FaintMoverSearch`](src/main/java/io/github/ppissias/jtransient/core/FaintMoverSearch.java) (lines 303-310) is synchronized and starts by copying the peak's full diagnostics: up to 128 frames of up to 256 x 256 floats, about 33 MB, plus two half maps. Only then does it insert the copy and evict down to the 64 MiB budget. Tile workers with passing peaks wait on that lock, and a peak ranked below the weakest entry of a full pool can be copied only to be evicted at once.
+**Run time and garbage collection.** `EvidencePool.capture` in [`FaintMoverSearch`](src/main/java/io/github/ppissias/jtransient/core/FaintMoverSearch.java) (lines 303-310) is synchronized and starts by copying the peak's full diagnostics: one rectangle of up to 128 x 256 x 256 floats, about 33 MB, or a 71 x 71 square per frame on a longer path, plus two half maps. Only then does it insert the copy and evict down to the 64 MiB budget. Tile workers with passing peaks wait on that lock, and a peak ranked below the weakest entry of a full pool can be copied only to be evicted at once.
 
 Check the rank or reserve the size inside the lock, copy outside it, then insert and evict inside it. Only review evidence is copied, so candidates change only if the extra time makes the search reach `faintMoverMaxSeconds`.
 
