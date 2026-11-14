@@ -25,6 +25,7 @@ import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.FrameDriftAnalyzer;
 import io.github.ppissias.jtransient.core.MasterMapGenerator;
 import io.github.ppissias.jtransient.core.MasterReferenceAnalyzer;
+import io.github.ppissias.jtransient.core.MasterVetoMask;
 import io.github.ppissias.jtransient.core.PixelEncoding;
 import io.github.ppissias.jtransient.core.SourceExtractor;
 
@@ -1025,14 +1026,13 @@ public final class CalibratedAutoTuner {
             progress(listener, 19, "Building trial star masks...");
             List<FrameSetting> frameSettings = frameSettings(psfCoreArea, options);
             List<MasterSetting> masterSettings = masterSettings(psfCoreArea, options);
-            int dilation = (int) Math.max(1, Math.round(calibration.jitter / 2.0)); // production veto-mask rule
             BitSet[][] masks = new BitSet[masterSettings.size()][crops.size()];
             double[] coverage = new double[masterSettings.size()];
             for (int m = 0; m < masterSettings.size(); m++) {
                 CancellationScope.check();
                 long masked = 0;
                 for (int c = 0; c < crops.size(); c++) {
-                    masks[m][c] = buildMask(masters.get(c), masterSettings.get(m), dilation, baseConfig, cropSky[c]);
+                    masks[m][c] = buildMask(masters.get(c), masterSettings.get(m), calibration.jitter, baseConfig, cropSky[c]);
                     masked += masks[m][c].cardinality();
                     int maskIndex = m, cropIndex = c;
                     preview.offer(() -> new AutoTuneSnapshot(MASK, "Trial star mask · region " + (cropIndex + 1)
@@ -1374,6 +1374,11 @@ public final class CalibratedAutoTuner {
         return owned;
     }
 
+    /** The tuner's overlap of an object with a mask of the given width, for the test that pins it to the pipeline's. */
+    static double overlapOf(DetectedObject object, int width, BitSet mask) {
+        return overlap(new Detection(object, width), mask);
+    }
+
     private static boolean isOwned(Detection d, BitSet owned, int cropSize) {
         int x = Math.min(cropSize - 1, Math.max(0, (int) Math.round(d.x)));
         int y = Math.min(cropSize - 1, Math.max(0, (int) Math.round(d.y)));
@@ -1583,6 +1588,10 @@ public final class CalibratedAutoTuner {
         return MasterReferenceAnalyzer.extractStars(master, sigma, minPixels, cfg, sky.rectangles);
     }
 
+    /**
+     * {@link MasterVetoMask#overlapFraction} on the tuner's own footprint and mask: the grid measures overlap for
+     * every detection against every trial mask, so both are kept as bit sets. A test keeps the two equal.
+     */
     private static double overlap(Detection d, BitSet mask) {
         if (d.pixels.length == 0) {
             return 0;
@@ -1595,27 +1604,19 @@ public final class CalibratedAutoTuner {
         return inside / (double) d.pixels.length;
     }
 
-    private static BitSet buildMask(short[][] master, MasterSetting ms, int dilation, DetectionConfig base, CropSky sky) {
+    /** The veto mask of a master cut-out for one master setting, built by the pipeline's own {@link MasterVetoMask}. */
+    private static BitSet buildMask(short[][] master, MasterSetting ms, double jitter, DetectionConfig base, CropSky sky) {
         DetectionConfig cfg = base.clone();
         cfg.masterSigmaMultiplier = ms.seed;
         cfg.growSigmaMultiplier = ms.grow;
         int h = master.length;
         int w = master[0].length;
-        BitSet mask = new BitSet(w * h);
         List<DetectedObject> stars = extractMasterStars(master, ms.seed, ms.minPixels, cfg, sky);
-        for (DetectedObject star : stars) {
-            CancellationScope.check();
-            if (star.rawPixels == null) continue;
-            for (Pixel p : star.rawPixels) {
-                CancellationScope.check();
-                for (int dy = -dilation; dy <= dilation; dy++) {
-                    for (int dx = -dilation; dx <= dilation; dx++) {
-                        if (dx * dx + dy * dy > dilation * dilation) continue;
-                        int x = p.x + dx;
-                        int y = p.y + dy;
-                        if (x >= 0 && y >= 0 && x < w && y < h) mask.set(y * w + x);
-                    }
-                }
+        boolean[][] veto = MasterVetoMask.build(stars, w, h, jitter);
+        BitSet mask = new BitSet(w * h);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                if (veto[y][x]) mask.set(y * w + x);
             }
         }
         return mask;

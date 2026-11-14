@@ -218,6 +218,34 @@ public class CalibratedAutoTunerTest {
         assertEquals(0, clear.excludedPixels);
     }
 
+    /**
+     * The tuner measures how much of a detection lies on a star mask as the pipeline's veto does: its bit-set overlap
+     * equals {@code MasterVetoMask.overlapFraction} for footprints inside, across and outside the mask.
+     */
+    @Test
+    public void theTunersMaskOverlapIsThePipelines() {
+        int width = 40, height = 30;
+        Random random = new Random(11);
+        boolean[][] mask = new boolean[height][width];
+        java.util.BitSet bits = new java.util.BitSet(width * height);
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                mask[y][x] = random.nextInt(3) == 0;
+                if (mask[y][x]) bits.set(y * width + x);
+            }
+        }
+        for (int trial = 0; trial < 50; trial++) {
+            io.github.ppissias.jtransient.model.DetectedObject object = new io.github.ppissias.jtransient.model.DetectedObject(0, 0, 0, 0);
+            object.rawPixels = new ArrayList<>();
+            int count = random.nextInt(12);
+            for (int k = 0; k < count; k++) {
+                object.rawPixels.add(new io.github.ppissias.jtransient.model.Pixel(random.nextInt(width), random.nextInt(height), 100));
+            }
+            assertEquals(io.github.ppissias.jtransient.core.MasterVetoMask.overlapFraction(object, mask),
+                    CalibratedAutoTuner.overlapOf(object, width, bits), 0.0);
+        }
+    }
+
     /** With excluded areas over more than half of every crop, calibration says so instead of measuring them. */
     @Test
     public void calibrationNamesExcludedAreasThatLeaveNoCrop() {

@@ -177,7 +177,7 @@ public final class SlowMoverAnalyzer {
             }
 
             // The upper overlap bound is the stationary-source veto; the lower bound is optional support.
-            double overlap = computeMaskOverlapFraction(object, medianMask);
+            double overlap = MasterVetoMask.overlapFraction(object, medianMask);
             telemetry.evaluatedAgainstMedianMask++;
             telemetry.candidateMedianMaskOverlaps.add(overlap);
             evaluatedOverlapSum += overlap;
@@ -254,18 +254,6 @@ public final class SlowMoverAnalyzer {
             }
         }
         return mask;
-    }
-
-    /** Returns the fraction of the maximum-stack candidate's raw pixels inside the median mask. */
-    private static double computeMaskOverlapFraction(DetectedObject object, boolean[][] mask) {
-        int overlapCount = 0;
-        for (Pixel pixel : object.rawPixels) {
-            CancellationScope.check();
-            if (mask[pixel.y][pixel.x]) {
-                overlapCount++;
-            }
-        }
-        return (double) overlapCount / object.rawPixels.size();
     }
 
     /** Empty telemetry buckets are reported as zero rather than NaN. */

@@ -586,15 +586,8 @@ public class JTransientEngine implements AutoCloseable {
         ensureOpen();
         // The inspection restored its frames; the areas it left out are filled again, in a copy.
         short[][] pixels = new ExcludedPixels(reference.excludedAreas()).paintedCopy(frame.pixelData);
-        SourceExtractor.ExtractionResult extracted = OperationContext.compute(StageId.FRAME_EXTRACTION, null, () -> SourceExtractor.extractSources(
-                pixels, config.detectionSigmaMultiplier, config.minDetectionPixels, config,
-                reference.backgroundArea(), reference.searchArea()));
-        for (DetectedObject object : extracted.objects) {
-            object.sourceFrameIndex = frame.sequenceIndex;
-            object.sourceFilename = frame.filename;
-            object.timestamp = frame.timestamp;
-            object.exposureDuration = frame.exposureDuration;
-        }
+        SourceExtractor.ExtractionResult extracted = extractFrame(frame, pixels, config, reference.backgroundArea(),
+                reference.searchArea());
         if (reference.sessionArea() != null) {
             extracted.objects.removeIf(object -> !SourceExtractor.isInside(object, reference.sessionArea()));
         }
@@ -603,6 +596,25 @@ public class JTransientEngine implements AutoCloseable {
         TrackLinker.TransientsFilterResult filtered = OperationContext.compute(StageId.TRANSIENT_VETO, null, () -> TrackLinker.filterTransients(
                 List.of(extracted.objects), reference.masterStars(), config, null, width, height, reference.starMask()));
         return new FrameTransients(frame.filename, filtered.allTransients.get(0), extracted);
+    }
+
+    /**
+     * The per-frame source extraction of detection and of a frame re-detection: the sources of {@code pixels} (the
+     * frame as detection sees it) with the per-frame settings, the sky measured in {@code backgroundArea}, each
+     * source stamped with its frame's identity and time.
+     */
+    private static SourceExtractor.ExtractionResult extractFrame(ImageFrame frame, short[][] pixels, DetectionConfig config,
+                                                                DataArea backgroundArea, DataArea searchArea) {
+        SourceExtractor.ExtractionResult extracted = OperationContext.compute(StageId.FRAME_EXTRACTION, null,
+                () -> SourceExtractor.extractSources(pixels, config.detectionSigmaMultiplier, config.minDetectionPixels,
+                        config, backgroundArea, searchArea));
+        for (DetectedObject object : extracted.objects) {
+            object.sourceFrameIndex = frame.sequenceIndex;
+            object.sourceFilename = frame.filename;
+            object.timestamp = frame.timestamp;
+            object.exposureDuration = frame.exposureDuration;
+        }
+        return extracted;
     }
 
     private TransientInspection detectTransientsInternal(List<ImageFrame> inputFrames, DetectionConfig config, TransientEngineProgressListener listener, short[][] providedMasterStack,
@@ -735,22 +747,8 @@ public class JTransientEngine implements AutoCloseable {
 
         // The shared second pass, with source extraction as this caller's work on each frame.
         List<MeasuredFrame> measured = measureFrames(session, inputFrames::get, config, ExcludedPixels.NONE, (frame, pixels) -> {
-            SourceExtractor.ExtractionResult extResult = OperationContext.compute(StageId.FRAME_EXTRACTION, null, () -> SourceExtractor.extractSources(
-                    pixels,
-                    config.detectionSigmaMultiplier,
-                    config.minDetectionPixels,
-                    config,
-                    quality.area,
-                    wholeFrame
-            ));
+            SourceExtractor.ExtractionResult extResult = extractFrame(frame, pixels, config, quality.area, wholeFrame);
             List<DetectedObject> objectsInFrame = extResult.objects;
-
-            for (DetectedObject obj : objectsInFrame) {
-                obj.sourceFrameIndex = frame.sequenceIndex;
-                obj.sourceFilename = frame.filename;
-                obj.timestamp = frame.timestamp;
-                obj.exposureDuration = frame.exposureDuration;
-            }
             if (wantsLiveUpdate(observer)) {
                 int shown = Math.min(32, objectsInFrame.size());
                 double[] xs = new double[shown];

@@ -65,6 +65,25 @@ public final class MasterVetoMask {
         return mask;
     }
 
+    /**
+     * Share of an object's footprint that lies on a mask indexed {@code [y][x]}, from 0 to 1; 0 for an object
+     * without footprint pixels. The veto and the searches that use a star mask all measure overlap here.
+     */
+    public static double overlapFraction(DetectedObject object, boolean[][] mask) {
+        if (object.rawPixels == null || object.rawPixels.isEmpty()) {
+            return 0.0;
+        }
+        int overlap = 0;
+        for (Pixel pixel : object.rawPixels) {
+            CancellationScope.check();
+            if (pixel.y >= 0 && pixel.y < mask.length && pixel.x >= 0 && pixel.x < mask[pixel.y].length
+                    && mask[pixel.y][pixel.x]) {
+                overlap++;
+            }
+        }
+        return (double) overlap / object.rawPixels.size();
+    }
+
     /** Share of the image covered by the mask, from 0 to 1. */
     public static double coverage(boolean[][] mask) {
         long masked = 0;

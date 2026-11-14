@@ -145,7 +145,7 @@ public final class FaintStreakSearch {
                         continue;
                     }
                     extracted[index]++;
-                    if (maskOverlap(object, starMask) > config.maxMaskOverlapFraction) {
+                    if (MasterVetoMask.overlapFraction(object, starMask) > config.maxMaskOverlapFraction) {
                         removedByMask[index]++;
                         continue;
                     }
@@ -328,20 +328,5 @@ public final class FaintStreakSearch {
                 pixel.value = (int) Math.round(sky + (pixel.value - sky) / gain);
             }
         }
-    }
-
-    /** Share of the object's footprint on the star mask. */
-    private static double maskOverlap(DetectedObject object, boolean[][] mask) {
-        if (object.rawPixels == null || object.rawPixels.isEmpty()) {
-            return 0.0;
-        }
-        int overlap = 0;
-        for (Pixel pixel : object.rawPixels) {
-            if (pixel.y >= 0 && pixel.y < mask.length && pixel.x >= 0 && pixel.x < mask[pixel.y].length
-                    && mask[pixel.y][pixel.x]) {
-                overlap++;
-            }
-        }
-        return (double) overlap / object.rawPixels.size();
     }
 }

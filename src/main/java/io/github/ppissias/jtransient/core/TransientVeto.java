@@ -14,7 +14,6 @@ import io.github.ppissias.jtransient.engine.TransientEngineProgressListener;
 import io.github.ppissias.jtransient.execution.CancellationScope;
 import io.github.ppissias.jtransient.execution.DiagnosticContext;
 import io.github.ppissias.jtransient.model.DetectedObject;
-import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.telemetry.TrackerTelemetry;
 
 import java.util.ArrayList;
@@ -99,7 +98,7 @@ final class TransientVeto {
 
             for (DetectedObject candidateObj : currentFrame) {
                 CancellationScope.check();
-                double overlapFraction = computeMaskOverlapFraction(candidateObj, masterVetoMask);
+                double overlapFraction = MasterVetoMask.overlapFraction(candidateObj, masterVetoMask);
                 if (overlapFraction > config.maxMaskOverlapFraction) {
                     purgedCount++;
                 } else {
@@ -124,7 +123,7 @@ final class TransientVeto {
         int purgedStreakCount = 0;
         for (DetectedObject streak : allStreaks) {
             CancellationScope.check();
-            double overlapFraction = computeMaskOverlapFraction(streak, masterVetoMask);
+            double overlapFraction = MasterVetoMask.overlapFraction(streak, masterVetoMask);
             if (overlapFraction > config.maxMaskOverlapFraction) {
                 purgedStreakCount++;
             } else {
@@ -139,25 +138,5 @@ final class TransientVeto {
         }
 
         return new Result(transients, validMovingStreaks, masterVetoMask);
-    }
-
-    /**
-     * Measures what fraction of an object's footprint overlaps a precomputed boolean mask.
-     */
-    private static double computeMaskOverlapFraction(DetectedObject obj, boolean[][] mask) {
-        if (obj.rawPixels == null || obj.rawPixels.isEmpty()) {
-            return 0.0;
-        }
-
-        int overlapCount = 0;
-        int sensorHeight = mask.length;
-        int sensorWidth = sensorHeight > 0 ? mask[0].length : 0;
-        for (Pixel p : obj.rawPixels) {
-            CancellationScope.check();
-            if (p.x >= 0 && p.x < sensorWidth && p.y >= 0 && p.y < sensorHeight && mask[p.y][p.x]) {
-                overlapCount++;
-            }
-        }
-        return (double) overlapCount / obj.rawPixels.size();
     }
 }
