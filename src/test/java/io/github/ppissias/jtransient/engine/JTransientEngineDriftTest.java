@@ -2,18 +2,16 @@ package io.github.ppissias.jtransient.engine;
 
 import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.config.DetectionConfig;
-import io.github.ppissias.jtransient.core.FrameDriftAnalyzer;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 import org.junit.Test;
 
-import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
 /**
- * Regression tests for the private drift-analysis pre-pass inside JTransientEngine.
+ * Regression tests for the registration pass of JTransientEngine's shared front end.
  * These tests lock down how registration padding is measured and reported.
  */
 public class JTransientEngineDriftTest {
@@ -98,19 +96,12 @@ public class JTransientEngineDriftTest {
         }
     }
 
+    /** The drift path from the registration pass that detection, the master stack and quality control share. */
     private static List<Pixel> analyze(JTransientEngine engine,
                                                        List<ImageFrame> frames,
                                                        DetectionConfig config) throws Exception {
-        Method method = JTransientEngine.class.getDeclaredMethod(
-                "analyzeDitherAndDrift",
-                List.class,
-                DetectionConfig.class,
-                TransientEngineProgressListener.class,
-                PipelineTelemetry.class
-        );
-        method.setAccessible(true);
-        return ((FrameDriftAnalyzer.DriftAnalysisResult) method.invoke(engine, frames, config, null, new PipelineTelemetry()))
-                .driftPoints;
+        return JTransientEngine.registerSession(frames.size(), frames::get, ExcludedPixels.NONE, new PipelineTelemetry(), null)
+                .drift().driftPoints;
     }
 
     private static short[][] createFrame(int width,

@@ -22,6 +22,9 @@ final class ExcludedPixels {
     /** The stored value of 0 ADU, the level registration fill has. */
     private static final short FILL = Short.MIN_VALUE;
 
+    /** No areas: every image stays as it is. */
+    static final ExcludedPixels NONE = new ExcludedPixels(List.of());
+
     private final List<ExcludedArea> areas;
     private final List<short[][]> images = new ArrayList<>();
     private final List<short[][]> saved = new ArrayList<>();

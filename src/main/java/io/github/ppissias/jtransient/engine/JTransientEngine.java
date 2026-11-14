@@ -226,19 +226,44 @@ public class JTransientEngine implements AutoCloseable {
         });
     }
 
-    /** Operation-owned scalar identity and mutable quality measurement, never an image-buffer owner. */
-    private record QualityFrame(InputRules.FrameFacts facts, FrameQualityAnalyzer.FrameMetrics metrics,
-                                FrameRegistration registration) { }
+    /**
+     * One frame measured by the front end: its scalar identity, its quality measurement (changed in place by the frame
+     * selection), its registration, and its extracted sources when the caller asked for them. Owns no image buffer.
+     */
+    private record MeasuredFrame(InputRules.FrameFacts facts, FrameQualityAnalyzer.FrameMetrics metrics,
+                                 FrameRegistration registration, SourceExtractor.ExtractionResult extraction) { }
 
-    /** Scans registration once per input, then measures quality on bounded workers and shares the pipeline decision. */
-    private FrameQualityResult evaluateQualityInternal(int frameCount, FrameLoader loader, DetectionConfig config,
-                                                       TransientEngineProgressListener listener,
-                                                       ExcludedPixels excludedPixels) throws Exception {
-        PipelineTelemetry telemetry = new PipelineTelemetry();
-        telemetry.totalFramesLoaded = frameCount;
+    /**
+     * The registration of a session's frames: their checked identities in sequence order, the drift analysis, the
+     * area where quality is measured (every registered frame has data there, less the excluded areas), and each
+     * frame's registration by sequence index.
+     */
+    record SessionRegistration(List<InputRules.FrameFacts> facts, FrameDriftAnalyzer.DriftAnalysisResult drift,
+                                       QualityArea quality, Map<Integer, FrameRegistration> registrations) { }
+
+    /** Told after each frame of a front-end pass, for the caller's own progress text; calls arrive in order. */
+    @FunctionalInterface
+    interface FrameStep {
+        void done(int completed, int total);
+    }
+
+    /** A caller's own work on a frame of the second pass, on the pixels as detection sees them. */
+    @FunctionalInterface
+    private interface FrameWork {
+        SourceExtractor.ExtractionResult apply(ImageFrame frame, short[][] pixels) throws Exception;
+    }
+
+    /**
+     * First pass of the front end that detection, the master stack and quality control share. Reads every frame
+     * once through {@code loader} (a frame in memory, or one read when asked), checks it, and measures its
+     * registration from its own borders, before any excluded area is filled. Then applies the session's input
+     * rules and builds the quality area without {@code excluded}. Keeps no pixels.
+     */
+    static SessionRegistration registerSession(int frameCount, FrameLoader loader, ExcludedPixels excluded,
+                                                       PipelineTelemetry telemetry, FrameStep step) throws Exception {
         List<InputRules.FrameFacts> facts = new ArrayList<>(frameCount);
         List<Pixel> driftPoints = new ArrayList<>();
-        List<Integer> excluded = new ArrayList<>();
+        List<Integer> failedRegistrations = new ArrayList<>();
         List<FrameCoverage> coverages = new ArrayList<>();
         int maxPadding = 0;
         for (int i = 0; i < frameCount; i++) {
@@ -253,27 +278,46 @@ public class JTransientEngine implements AutoCloseable {
                     new FrameIdentity(frame.sequenceIndex, frame.filename),
                     () -> FrameDriftAnalyzer.analyze(List.of(frame)));
             driftPoints.addAll(measured.driftPoints);
-            excluded.addAll(measured.failedRegistrationFrames);
+            failedRegistrations.addAll(measured.failedRegistrationFrames);
             coverages.addAll(measured.frameCoverages);
             maxPadding = Math.max(maxPadding, measured.maxPaddingPixels);
-            if (listener != null) OperationContext.notify(listener::onProgressUpdate, (i + 1) * 30 / frameCount,
-                    "Checking registration and coverage " + (i + 1) + " of " + frameCount);
+            if (step != null) step.done(i + 1, frameCount);
         }
         OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkFacts(facts));
         facts.sort(Comparator.comparingInt(InputRules.FrameFacts::sequenceIndex));
         driftPoints.sort(Comparator.comparingDouble(point -> point.value));
-        excluded.sort(Integer::compareTo);
+        failedRegistrations.sort(Integer::compareTo);
         coverages.sort(Comparator.comparingInt(FrameCoverage::getSequenceIndex));
-        var drift = new FrameDriftAnalyzer.DriftAnalysisResult(driftPoints, maxPadding, excluded, coverages);
+        var drift = new FrameDriftAnalyzer.DriftAnalysisResult(driftPoints, maxPadding, failedRegistrations, coverages);
         telemetry.driftExcludedFrames.addAll(drift.failedRegistrationFrames);
-        // As in detection: registration from the whole frames above, quality without the excluded areas below.
-        QualityArea quality = qualityArea(drift.frameCoverages, telemetry).excluding(excludedPixels.rectangles());
-        Map<Integer, FrameRegistration> registrations = registrationsBySequence(drift);
-        InputRules.FrameFacts first = facts.get(0);
-        workers.limitWork(frameCount, (long) first.width() * first.height() * (excludedPixels.isEmpty() ? 1 : 2));
+        if (DiagnosticContext.enabled() && !drift.failedRegistrationFrames.isEmpty()) {
+            DiagnosticContext.println("DEBUG: Dither Diagnostics left out blank or failed-registration frames "
+                    + "(less than half the pixels valid): " + drift.failedRegistrationFrames);
+        }
+        if (DiagnosticContext.enabled() && drift.maxPaddingPixels > 0) {
+            DiagnosticContext.println("DEBUG: Dither Diagnostics found registration padding up to "
+                    + drift.maxPaddingPixels + " px.");
+        }
+        QualityArea quality = qualityArea(drift.frameCoverages, telemetry).excluding(excluded.rectangles());
+        return new SessionRegistration(facts, drift, quality, registrationsBySequence(drift));
+    }
+
+    /**
+     * Second pass of the shared front end: on the operation's workers, reads each frame again, confirms it is the
+     * frame the first pass saw, measures its quality in the session's quality area and does the caller's
+     * {@code work} on it, if any. The measurements come back in sequence order.
+     *
+     * @param unfilled excluded areas the frames read here do not hold as fill yet: each frame is then measured on a
+     *                 filled copy and stays untouched. Empty when the caller filled its frames in place.
+     * @param work extra work on each frame, such as source extraction; null for none
+     */
+    private static List<MeasuredFrame> measureFrames(SessionRegistration session, FrameLoader loader,
+                                                     DetectionConfig config, ExcludedPixels unfilled, FrameWork work,
+                                                     FrameStep step) throws Exception {
+        int total = session.facts().size();
         AtomicInteger completed = new AtomicInteger();
-        List<Callable<QualityFrame>> tasks = new ArrayList<>();
-        for (InputRules.FrameFacts expected : facts) {
+        List<Callable<MeasuredFrame>> tasks = new ArrayList<>();
+        for (InputRules.FrameFacts expected : session.facts()) {
             tasks.add(() -> OperationContext.call(StageId.FRAME_QUALITY,
                     new FrameIdentity(expected.sequenceIndex(), expected.filename()), () -> {
                         CancellationScope.check();
@@ -281,36 +325,47 @@ public class JTransientEngine implements AutoCloseable {
                         InputRules.FrameFacts actual = InputRules.checkFrame(frame, expected.inputPosition());
                         if (!expected.equals(actual)) throw new IllegalArgumentException("Frame changed between quality passes: "
                                 + expected.filename());
-                        FrameQualityAnalyzer.FrameMetrics metrics = FrameQualityAnalyzer.evaluateFrame(
-                                excludedPixels.paintedCopy(frame.pixelData), config, quality.area);
+                        short[][] pixels = unfilled.paintedCopy(frame.pixelData);
+                        SourceExtractor.ExtractionResult extraction = work == null ? null : work.apply(frame, pixels);
+                        FrameQualityAnalyzer.FrameMetrics metrics = OperationContext.compute(StageId.FRAME_QUALITY, null,
+                                () -> FrameQualityAnalyzer.evaluateFrame(pixels, config, session.quality().area));
                         metrics.filename = frame.filename;
-                        synchronized (completed) {
+                        synchronized (completed) { // keeps the reported progress in order across threads
                             int count = completed.incrementAndGet();
-                            if (listener != null) OperationContext.notify(listener::onProgressUpdate,
-                                    30 + count * 60 / frameCount, "Measuring frame quality " + count + " of " + frameCount);
+                            if (step != null) step.done(count, total);
                         }
-                        return new QualityFrame(expected, metrics, registrations.get(expected.sequenceIndex()));
+                        return new MeasuredFrame(expected, metrics, session.registrations().get(expected.sequenceIndex()),
+                                extraction);
                     }));
         }
-        List<QualityFrame> measured = new ArrayList<>(WorkerPool.invokeAll(tasks));
+        List<MeasuredFrame> measured = new ArrayList<>(WorkerPool.invokeAll(tasks));
         measured.sort(Comparator.comparingInt(frame -> frame.facts().sequenceIndex()));
-        if (listener != null) OperationContext.notify(listener::onProgressUpdate, 95, "Applying session quality thresholds...");
-        selectAndRecordQuality(measured, telemetry, drift.frameCoverages, quality, config);
-        if (listener != null) OperationContext.notify(listener::onProgressUpdate, 100, "Quality control complete");
-        return FrameQualityResult.capture(telemetry, registrations);
+        return measured;
     }
 
-    /** Copies small scalar identities while retaining the operation-owned mutable metrics for shared rejection. */
-    private static List<QualityFrame> qualityEntries(List<PreparedFrame> prepared) {
-        List<QualityFrame> entries = new ArrayList<>(prepared.size());
-        for (int i = 0; i < prepared.size(); i++) {
-            PreparedFrame p = prepared.get(i);
-            ImageFrame frame = p.frame();
-            entries.add(new QualityFrame(new InputRules.FrameFacts(i, frame.sequenceIndex, frame.filename,
-                    frame.pixelData[0].length, frame.pixelData.length, frame.timestamp, frame.exposureDuration),
-                    p.metrics(), p.registration()));
-        }
-        return entries;
+    /**
+     * Quality control alone: the shared front end and frame selection, reading frames through the loader so that
+     * only a few are in memory, and measuring each on a filled copy so the caller's pixels stay read-only.
+     */
+    private FrameQualityResult evaluateQualityInternal(int frameCount, FrameLoader loader, DetectionConfig config,
+                                                       TransientEngineProgressListener listener,
+                                                       ExcludedPixels excludedPixels) throws Exception {
+        PipelineTelemetry telemetry = new PipelineTelemetry();
+        telemetry.totalFramesLoaded = frameCount;
+        SessionRegistration session = registerSession(frameCount, loader, excludedPixels, telemetry, (done, total) -> {
+            if (listener != null) OperationContext.notify(listener::onProgressUpdate, done * 30 / total,
+                    "Checking registration and coverage " + done + " of " + total);
+        });
+        InputRules.FrameFacts first = session.facts().get(0);
+        workers.limitWork(frameCount, (long) first.width() * first.height() * (excludedPixels.isEmpty() ? 1 : 2));
+        List<MeasuredFrame> measured = measureFrames(session, loader, config, excludedPixels, null, (done, total) -> {
+            if (listener != null) OperationContext.notify(listener::onProgressUpdate, 30 + done * 60 / total,
+                    "Measuring frame quality " + done + " of " + total);
+        });
+        if (listener != null) OperationContext.notify(listener::onProgressUpdate, 95, "Applying session quality thresholds...");
+        selectAndRecordQuality(measured, telemetry, session.drift().frameCoverages, session.quality(), config);
+        if (listener != null) OperationContext.notify(listener::onProgressUpdate, 100, "Quality control complete");
+        return FrameQualityResult.capture(telemetry, session.registrations());
     }
 
     /**
@@ -397,67 +452,35 @@ public class JTransientEngine implements AutoCloseable {
 
         PipelineTelemetry telemetry = new PipelineTelemetry();
         inputFrames.sort(Comparator.comparingInt(f -> f.sequenceIndex));
-        FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = analyzeDitherAndDrift(inputFrames, config, null, telemetry);
-        // As in the pipeline: registration from the whole frames, then the excluded areas become fill.
+        // The pipeline's front end without source extraction: registration from the whole frames, then the excluded
+        // areas become fill, quality is measured and the frames are selected.
+        SessionRegistration session = registerSession(inputFrames.size(), inputFrames::get, excluded, telemetry, null);
         for (ImageFrame frame : inputFrames) {
             excluded.paint(frame.pixelData);
         }
-        QualityArea quality = qualityArea(driftAnalysis.frameCoverages, telemetry).excluding(excluded.rectangles());
-        Map<Integer, FrameRegistration> registrations = registrationsBySequence(driftAnalysis);
-
-        List<Callable<PreparedFrame>> tasks = new ArrayList<>();
-
-        int totalFrames = inputFrames.size();
-        AtomicInteger framesCompleted = new AtomicInteger(0);
-
-        for (ImageFrame frame : inputFrames) {
-            tasks.add(() -> OperationContext.call(StageId.FRAME_QUALITY, new FrameIdentity(frame.sequenceIndex, frame.filename), () -> {
-                // We only need quality metrics to drop outliers. We skip SourceExtractor to save massive CPU time!
-                FrameQualityAnalyzer.FrameMetrics metrics = OperationContext.compute(StageId.FRAME_QUALITY, null, () -> FrameQualityAnalyzer.evaluateFrame(frame.pixelData, config, quality.area));
-                metrics.filename = frame.filename;
-
-                synchronized (framesCompleted) { // keeps the reported progress in order across threads
-                    int completed = framesCompleted.incrementAndGet();
+        List<MeasuredFrame> measured = measureFrames(session, inputFrames::get, config, ExcludedPixels.NONE, null,
+                (done, total) -> {
                     if (listener != null) {
-                        int progress = (int) ((completed / (double) totalFrames) * 50.0);
-                        OperationContext.notify(listener::onProgressUpdate, progress, "Evaluating frame " + completed + " of " + totalFrames);
+                        int progress = (int) ((done / (double) total) * 50.0);
+                        OperationContext.notify(listener::onProgressUpdate, progress, "Evaluating frame " + done + " of " + total);
                     }
-                }
-
-                return new PreparedFrame(frame, null, metrics, registrations.get(frame.sequenceIndex));
-            }));
-        }
-
-        List<PreparedFrame> completedResults = new ArrayList<>();
-        completedResults.addAll(WorkerPool.invokeAll(tasks));
-        completedResults.sort(Comparator.comparingInt(prepared -> prepared.frame().sequenceIndex));
+                });
 
         if (listener != null) {
             OperationContext.notify(listener::onProgressUpdate, 55, "Filtering outlier frames...");
         }
 
-        OperationContext.compute(StageId.FRAME_SELECTION, null,
-                () -> rejectUnusableFrames(qualityEntries(completedResults), telemetry.driftExcludedFrames, quality.coverageOutliers, config));
+        selectAndRecordQuality(measured, telemetry, session.drift().frameCoverages, session.quality(), config);
 
-        List<ImageFrame> cleanFrames = PreparedFrame.retained(completedResults).stream().map(PreparedFrame::frame).toList();
+        List<ImageFrame> cleanFrames = new ArrayList<>();
         List<Integer> keptFrames = new ArrayList<>();
-        List<PipelineTelemetry.FrameRejectionStat> rejectedFrames = new ArrayList<>();
-        for (int i = 0; i < completedResults.size(); i++) {
-            PreparedFrame prepared = completedResults.get(i);
-            FrameQualityAnalyzer.FrameMetrics metrics = prepared.metrics();
-            if (!metrics.isRejected) {
-                keptFrames.add(prepared.frame().sequenceIndex);
-            } else {
-                PipelineTelemetry.FrameRejectionStat rejected = new PipelineTelemetry.FrameRejectionStat();
-                rejected.frameIndex = prepared.frame().sequenceIndex;
-                rejected.filename = metrics.filename;
-                rejected.reason = metrics.rejectionReason;
-                rejected.medianEccentricity = metrics.medianEccentricity;
-                rejected.brightStarMedianEccentricity = metrics.brightStarMedianEccentricity;
-                rejected.brightStarShapeStarCount = metrics.brightStarShapeStarCount;
-                rejectedFrames.add(rejected);
+        for (MeasuredFrame frame : measured) {
+            if (!frame.metrics().isRejected) {
+                cleanFrames.add(inputFrames.get(frame.facts().inputPosition()));
+                keptFrames.add(frame.facts().sequenceIndex());
             }
         }
+        List<PipelineTelemetry.FrameRejectionStat> rejectedFrames = new ArrayList<>(telemetry.rejectedFrames);
 
         if (listener != null) {
             OperationContext.notify(listener::onProgressUpdate, 60, "Stacking " + cleanFrames.size() + " clean frames...");
@@ -690,85 +713,73 @@ public class JTransientEngine implements AutoCloseable {
         // --- NEW: DITHER & DRIFT DIAGNOSTICS ---
         // =================================================================
         long stageStartedNanos = System.nanoTime();
-        FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = analyzeDitherAndDrift(inputFrames, config, listener, telemetry);
+        if (listener != null) {
+            OperationContext.notify(listener::onProgressUpdate, 0, "Analyzing sequence dither and corner drift...");
+        }
+        // Ensure input frames are sorted chronologically before processing
+        inputFrames.sort(Comparator.comparingInt(f -> f.sequenceIndex));
+        SessionRegistration session = registerSession(inputFrames.size(), inputFrames::get, excluded, telemetry, null);
         // Excluded areas become fill only now, so the registration above still sees each frame's own borders.
         for (ImageFrame frame : inputFrames) {
             excluded.paint(frame.pixelData);
         }
-        List<Pixel> driftPoints = new ArrayList<>(driftAnalysis.driftPoints);
-        QualityArea quality = qualityArea(driftAnalysis.frameCoverages, telemetry).excluding(excluded.rectangles());
-        Map<Integer, FrameRegistration> registrations = registrationsBySequence(driftAnalysis);
+        List<Pixel> driftPoints = new ArrayList<>(session.drift().driftPoints);
+        QualityArea quality = session.quality();
+        Map<Integer, FrameRegistration> registrations = session.registrations();
         telemetry.recordStage(PipelineTelemetry.Stage.DRIFT_ANALYSIS, stageStartedNanos);
         stageStartedNanos = System.nanoTime();
 
-        List<Callable<PreparedFrame>> tasks = new ArrayList<>();
-
-        // Ensure input frames are sorted chronologically before processing
-        inputFrames.sort(Comparator.comparingInt(f -> f.sequenceIndex));
         // Objects are kept up to the image edge here; after quality control only those inside the area where every
         // kept frame has image data remain.
         DataArea wholeFrame = DataArea.fullFrame(inputFrames.get(0).pixelData[0].length, inputFrames.get(0).pixelData.length);
 
-        // --- SAFE CONCURRENT PROGRESS TRACKING ---
-        int totalFrames = inputFrames.size();
-        AtomicInteger framesCompleted = new AtomicInteger(0);
+        // The shared second pass, with source extraction as this caller's work on each frame.
+        List<MeasuredFrame> measured = measureFrames(session, inputFrames::get, config, ExcludedPixels.NONE, (frame, pixels) -> {
+            SourceExtractor.ExtractionResult extResult = OperationContext.compute(StageId.FRAME_EXTRACTION, null, () -> SourceExtractor.extractSources(
+                    pixels,
+                    config.detectionSigmaMultiplier,
+                    config.minDetectionPixels,
+                    config,
+                    quality.area,
+                    wholeFrame
+            ));
+            List<DetectedObject> objectsInFrame = extResult.objects;
 
-        for (ImageFrame frame : inputFrames) {
-            tasks.add(() -> OperationContext.call(StageId.FRAME_EXTRACTION, new FrameIdentity(frame.sequenceIndex, frame.filename), () -> {
-                // 1. Extract Sources (Passing config as the 4th argument)
-                SourceExtractor.ExtractionResult extResult = OperationContext.compute(StageId.FRAME_EXTRACTION, null, () -> SourceExtractor.extractSources(
-                        frame.pixelData,
-                        config.detectionSigmaMultiplier,
-                        config.minDetectionPixels,
-                        config,
-                        quality.area,
-                        wholeFrame
-                ));
-                List<DetectedObject> objectsInFrame = extResult.objects;
-
-                for (DetectedObject obj : objectsInFrame) {
-                    obj.sourceFrameIndex = frame.sequenceIndex;
-                    obj.sourceFilename = frame.filename;
-                    obj.timestamp = frame.timestamp;
-                    obj.exposureDuration = frame.exposureDuration;
+            for (DetectedObject obj : objectsInFrame) {
+                obj.sourceFrameIndex = frame.sequenceIndex;
+                obj.sourceFilename = frame.filename;
+                obj.timestamp = frame.timestamp;
+                obj.exposureDuration = frame.exposureDuration;
+            }
+            if (wantsLiveUpdate(observer)) {
+                int shown = Math.min(32, objectsInFrame.size());
+                double[] xs = new double[shown];
+                double[] ys = new double[shown];
+                int total = objectsInFrame.size();
+                for (int i = 0; i < shown; i++) {
+                    int index = (int) ((long) i * total / shown);
+                    DetectedObject obj = objectsInFrame.get(index);
+                    xs[i] = obj.x;
+                    ys[i] = obj.y;
                 }
-                if (wantsLiveUpdate(observer)) {
-                    int shown = Math.min(32, objectsInFrame.size());
-                    double[] xs = new double[shown];
-                    double[] ys = new double[shown];
-                    int total = objectsInFrame.size();
-                    for (int i = 0; i < shown; i++) {
-                        int index = (int) ((long) i * total / shown);
-                        DetectedObject obj = objectsInFrame.get(index);
-                        xs[i] = obj.x;
-                        ys[i] = obj.y;
-                    }
-                    notifyLive(observer, new LiveSnapshot("Source extraction", frame.sequenceIndex,
-                            "Source extraction · frame " + (frame.sequenceIndex + 1) + " · "
-                                    + objectsInFrame.size() + " sources · provisional", xs, ys));
-                }
+                notifyLive(observer, new LiveSnapshot("Source extraction", frame.sequenceIndex,
+                        "Source extraction · frame " + (frame.sequenceIndex + 1) + " · "
+                                + objectsInFrame.size() + " sources · provisional", xs, ys));
+            }
+            return extResult;
+        }, (done, total) -> {
+            // Mapping Phase 1 to 0-40% of the total bar
+            if (listener != null) {
+                int progress = (int) ((done / (double) total) * 40.0);
+                OperationContext.notify(listener::onProgressUpdate, progress, "Extracting features from frame " + done + " of " + total);
+            }
+        });
 
-                // 2. Quality Metrics (Passing config down)
-                FrameQualityAnalyzer.FrameMetrics metrics = OperationContext.compute(StageId.FRAME_QUALITY, null, () -> FrameQualityAnalyzer.evaluateFrame(frame.pixelData, config, quality.area));
-                metrics.filename = frame.filename;
-
-                // Safely update progress from multiple threads (Mapping Phase 1 to 0-40% of the total bar)
-                synchronized (framesCompleted) { // keeps the reported progress in order across threads
-                    int completed = framesCompleted.incrementAndGet();
-                    if (listener != null) {
-                        int progress = (int) ((completed / (double) totalFrames) * 40.0);
-                        OperationContext.notify(listener::onProgressUpdate, progress, "Extracting features from frame " + completed + " of " + totalFrames);
-                    }
-                }
-
-                return new PreparedFrame(frame, extResult, metrics, registrations.get(frame.sequenceIndex));
-            }));
-        }
-
-        // Execute parallel extraction
         List<PreparedFrame> completedResults = new ArrayList<>();
-        completedResults.addAll(WorkerPool.invokeAll(tasks));
-        completedResults.sort(Comparator.comparingInt(prepared -> prepared.frame().sequenceIndex));
+        for (MeasuredFrame frame : measured) {
+            completedResults.add(new PreparedFrame(inputFrames.get(frame.facts().inputPosition()), frame.extraction(),
+                    frame.metrics(), frame.registration()));
+        }
 
         // Unpack results & update Telemetry
         for (PreparedFrame result : completedResults) {
@@ -796,8 +807,8 @@ public class JTransientEngine implements AutoCloseable {
             OperationContext.notify(listener::onProgressUpdate, 42, "Filtering outlier frames...");
         }
 
-        DataArea selected = selectAndRecordQuality(qualityEntries(completedResults), telemetry,
-                driftAnalysis.frameCoverages, quality, config);
+        DataArea selected = selectAndRecordQuality(measured, telemetry,
+                session.drift().frameCoverages, quality, config);
         DataArea dataArea = selected == null ? null : selected.excluding(excluded.rectangles());
         List<PreparedFrame> retainedFrames = PreparedFrame.retained(completedResults);
         List<SourceExtractor.ExtractionResult> cleanFramesData = retainedFrames.stream()
@@ -822,7 +833,7 @@ public class JTransientEngine implements AutoCloseable {
     }
 
     /** Applies the same rejection priorities and copies the same scalar telemetry for detection and QC-only runs. */
-    private static DataArea selectAndRecordQuality(List<QualityFrame> measured, PipelineTelemetry telemetry,
+    private static DataArea selectAndRecordQuality(List<MeasuredFrame> measured, PipelineTelemetry telemetry,
                                                    List<FrameCoverage> coverages, QualityArea quality,
                                                    DetectionConfig config) {
         SessionEvaluator.SessionThresholds sessionThresholds = OperationContext.compute(StageId.FRAME_SELECTION, null,
@@ -838,7 +849,7 @@ public class JTransientEngine implements AutoCloseable {
         telemetry.qualityThresholds.maxAllowedBackgroundMedian = sessionThresholds.maxAllowedBackgroundMedian;
 
         for (int i = 0; i < measured.size(); i++) {
-            QualityFrame prepared = measured.get(i);
+            MeasuredFrame prepared = measured.get(i);
             FrameQualityAnalyzer.FrameMetrics metrics = prepared.metrics();
             PipelineTelemetry.FrameQualityStat qualityStat = new PipelineTelemetry.FrameQualityStat();
             qualityStat.frameIndex = prepared.facts().sequenceIndex();
@@ -893,13 +904,13 @@ public class JTransientEngine implements AutoCloseable {
      * @param coverageOutliers rejection reasons of the frames that alone shrink the common data area, by sequence index
      * @return the session thresholds used for the outlier rejection
      */
-    private static SessionEvaluator.SessionThresholds rejectUnusableFrames(List<QualityFrame> preparedFrames,
+    private static SessionEvaluator.SessionThresholds rejectUnusableFrames(List<MeasuredFrame> preparedFrames,
                                                                           Collection<Integer> driftExcludedFrames,
                                                                           Map<Integer, String> coverageOutliers,
                                                                           DetectionConfig config) {
-        List<FrameQualityAnalyzer.FrameMetrics> sessionMetrics = preparedFrames.stream().map(QualityFrame::metrics).toList();
+        List<FrameQualityAnalyzer.FrameMetrics> sessionMetrics = preparedFrames.stream().map(MeasuredFrame::metrics).toList();
         SessionEvaluator.SessionThresholds thresholds = SessionEvaluator.rejectOutlierFrames(sessionMetrics, config);
-        for (QualityFrame prepared : preparedFrames) {
+        for (MeasuredFrame prepared : preparedFrames) {
             FrameQualityAnalyzer.FrameMetrics metrics = prepared.metrics();
             int sequenceIndex = prepared.facts().sequenceIndex();
             if (driftExcludedFrames.contains(sequenceIndex)) {
@@ -916,7 +927,7 @@ public class JTransientEngine implements AutoCloseable {
     }
 
     /** The area where every registered frame has image data, and the frames rejected for shrinking it a lot. */
-    private static final class QualityArea {
+    static final class QualityArea {
         /** Where the sky and the quality metrics are measured; null when no frame passed the drift analysis. */
         final DataArea area;
         /** Rejection reasons by sequence index. */
@@ -968,7 +979,7 @@ public class JTransientEngine implements AutoCloseable {
      * @param keptFrames the frames kept by quality control
      * @return the area, or null when no frame was kept
      */
-    private static DataArea sessionDataArea(List<FrameCoverage> coverages, List<QualityFrame> keptFrames,
+    private static DataArea sessionDataArea(List<FrameCoverage> coverages, List<MeasuredFrame> keptFrames,
                                             PipelineTelemetry telemetry) {
         Map<Integer, FrameCoverage> bySequence = new HashMap<>();
         for (FrameCoverage coverage : coverages) {
@@ -976,7 +987,7 @@ public class JTransientEngine implements AutoCloseable {
         }
         Map<Integer, String> names = new HashMap<>();
         List<FrameCoverage> kept = new ArrayList<>();
-        for (QualityFrame frame : keptFrames) {
+        for (MeasuredFrame frame : keptFrames) {
             FrameCoverage coverage = bySequence.get(frame.facts().sequenceIndex());
             if (coverage != null) {
                 kept.add(coverage);
@@ -996,37 +1007,6 @@ public class JTransientEngine implements AutoCloseable {
             telemetry.dataAreaLimitingFrames.add(stat);
         }
         return area;
-    }
-
-    /**
-     * Analyzes sequence dither and corner drift by measuring the valid-image bounds per frame, and records where each
-     * frame holds image data. The configuration is not changed.
-     *
-     * @param inputFrames frames to inspect
-     * @param config pipeline configuration
-     * @param listener optional progress listener
-     * @param telemetry telemetry that records the frames left out of the drift analysis
-     * @return the drift analysis: translation vectors (dx, dy) per frame, failed registrations and frame coverages
-     */
-    private FrameDriftAnalyzer.DriftAnalysisResult analyzeDitherAndDrift(List<ImageFrame> inputFrames, DetectionConfig config,
-                                                              TransientEngineProgressListener listener,
-                                                              PipelineTelemetry telemetry) {
-        if (listener != null) {
-            OperationContext.notify(listener::onProgressUpdate, 0, "Analyzing sequence dither and corner drift...");
-        }
-
-        FrameDriftAnalyzer.DriftAnalysisResult driftAnalysis = OperationContext.compute(StageId.REGISTRATION, null, () -> FrameDriftAnalyzer.analyze(inputFrames));
-
-        telemetry.driftExcludedFrames.addAll(driftAnalysis.failedRegistrationFrames);
-        if (DiagnosticContext.enabled() && !driftAnalysis.failedRegistrationFrames.isEmpty()) {
-            DiagnosticContext.println("DEBUG: Dither Diagnostics left out blank or failed-registration frames "
-                    + "(less than half the pixels valid): " + driftAnalysis.failedRegistrationFrames);
-        }
-        if (DiagnosticContext.enabled() && driftAnalysis.maxPaddingPixels > 0) {
-            DiagnosticContext.println("DEBUG: Dither Diagnostics found registration padding up to "
-                    + driftAnalysis.maxPaddingPixels + " px.");
-        }
-        return driftAnalysis;
     }
 
     /**
