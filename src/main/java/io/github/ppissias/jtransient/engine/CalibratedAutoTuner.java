@@ -1752,7 +1752,10 @@ public final class CalibratedAutoTuner {
     }
 
     /**
-     * PSF Gaussian sigma from second moments of bright, isolated, unsaturated stars.
+     * PSF Gaussian sigma of bright, isolated, unsaturated stars. Each star gives the width of its area above half the
+     * peak, a whole number of pixels, so the per-star values take only a few stepped values; the session's star size
+     * is the {@link #middleHalfMean mean of their middle half}, which moves gradually with the sample where a median
+     * would jump from one step to the next.
      */
     private static double measurePsfSigma(List<short[][]> images, List<Integer> cropOfImage, CropSky[] cropSky,
                                           DetectionConfig base, Preview preview) {
@@ -1811,8 +1814,27 @@ public final class CalibratedAutoTuner {
         if (sigmas.isEmpty()) {
             return 1.5;
         }
-        Collections.sort(sigmas);
-        return sigmas.get(sigmas.size() / 2);
+        return middleHalfMean(sigmas);
+    }
+
+    /**
+     * The mean of the middle half of the values (between the quartiles), a robust centre that changes gradually when
+     * values take only a few distinct levels. Fewer than four values give their median.
+     */
+    static double middleHalfMean(List<Double> values) {
+        List<Double> sorted = new ArrayList<>(values);
+        Collections.sort(sorted);
+        int n = sorted.size();
+        if (n < 4) {
+            return sorted.get(n / 2);
+        }
+        int from = n / 4;
+        int to = n - n / 4;
+        double sum = 0;
+        for (int i = from; i < to; i++) {
+            sum += sorted.get(i);
+        }
+        return sum / (to - from);
     }
 
     /**

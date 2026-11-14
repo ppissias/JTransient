@@ -284,6 +284,30 @@ public class CalibratedAutoTunerTest {
         assertFalse(chosen.build().toBuilder().build().selectFrames());
     }
 
+    /**
+     * The star size is the mean of the middle half of the per-star values. Those values come in steps (whole pixel
+     * counts), so when the stars split almost evenly between two steps a median jumps a whole step with one star,
+     * while this mean moves a little; outliers at either end do not move it.
+     */
+    @Test
+    public void theStarSizeMovesGraduallyBetweenSteps() {
+        double low = 2.0 * Math.sqrt(16 / Math.PI), high = 2.0 * Math.sqrt(17 / Math.PI);
+        List<Double> values = new ArrayList<>();
+        for (int i = 0; i < 100; i++) values.add(low);
+        for (int i = 0; i < 100; i++) values.add(high);
+        double balanced = CalibratedAutoTuner.middleHalfMean(values);
+        assertEquals((low + high) / 2, balanced, 1e-12);
+        values.remove(Double.valueOf(low));
+        values.remove(Double.valueOf(low));
+        double fewerLow = CalibratedAutoTuner.middleHalfMean(values);
+        assertTrue(fewerLow > balanced);
+        assertTrue("two stars move it by a small part of the step", fewerLow - balanced < 0.05 * (high - low));
+        values.add(50.0);
+        values.add(0.01);
+        assertEquals(fewerLow, CalibratedAutoTuner.middleHalfMean(values), 1e-12);
+        assertEquals(3.0, CalibratedAutoTuner.middleHalfMean(List.of(1.0, 3.0, 9.0)), 0.0);
+    }
+
     /** With excluded areas over more than half of every crop, calibration says so instead of measuring them. */
     @Test
     public void calibrationNamesExcludedAreasThatLeaveNoCrop() {
