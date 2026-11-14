@@ -246,6 +246,44 @@ public class CalibratedAutoTunerTest {
         }
     }
 
+    /**
+     * The tuner measures on the frames a detection run keeps: a frame that quality control rejects (here a much
+     * brighter sky) is left out, and the choice is the one made without it.
+     */
+    @Test
+    public void framesThatQualityControlRejectsAreLeftOut() {
+        List<ImageFrame> frames = new ArrayList<>(createFrames(0));
+        // Copied from the second frame, whose star count keeps the session's counts spread; these synthetic frames
+        // are so alike that the star-count rule would otherwise reject a frame for one star less.
+        ImageFrame last = frames.get(1);
+        short[][] bright = new short[SIZE][SIZE];
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                int value = PixelEncoding.toShiftedPositiveInt(last.pixelData[y][x]) + 6000;
+                bright[y][x] = PixelEncoding.fromShiftedPositiveInt(Math.min(65535, value));
+            }
+        }
+        frames.add(new ImageFrame(FRAMES, "bright", bright, frames.get(FRAMES - 1).timestamp + 120_000L, last.exposureDuration));
+        CalibratedAutoTuner.Calibration withBright = CalibratedAutoTuner.calibrate(frames, new DetectionConfig(), null);
+        assertTrue(withBright.failureReason, withBright.success);
+        assertEquals(calibration.rejectedPoolFrames + 1, withBright.rejectedPoolFrames);
+        assertEquals(calibration.poolFrames, withBright.poolFrames);
+        int medium = AutoTuneProfile.MEDIUM.ordinal();
+        assertEquals(calibration.chosen[medium].sigma, withBright.chosen[medium].sigma, 1e-12);
+        assertEquals(calibration.chosen[medium].minPixels, withBright.chosen[medium].minPixels);
+        assertEquals(calibration.chosen[medium].recoveredFraction, withBright.chosen[medium].recoveredFraction, 1e-12);
+
+        // A caller that chose its pool from a whole session's quality control turns the tuner's own selection off.
+        var chosen = CalibratedAutoTuner.Options.builder();
+        chosen.selectFrames = false;
+        CalibratedAutoTuner.Calibration unselected = CalibratedAutoTuner.calibrate(frames, new DetectionConfig(),
+                chosen.build(), null);
+        assertEquals(0, unselected.rejectedPoolFrames);
+        assertEquals(frames.size(), unselected.poolFrames);
+        assertTrue(CalibratedAutoTuner.Options.defaults().selectFrames());
+        assertFalse(chosen.build().toBuilder().build().selectFrames());
+    }
+
     /** With excluded areas over more than half of every crop, calibration says so instead of measuring them. */
     @Test
     public void calibrationNamesExcludedAreasThatLeaveNoCrop() {

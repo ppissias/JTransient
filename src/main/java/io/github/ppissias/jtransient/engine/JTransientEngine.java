@@ -344,6 +344,29 @@ public class JTransientEngine implements AutoCloseable {
     }
 
     /**
+     * The frames of {@code frames} that a detection run of them keeps, in sequence order: the shared front end and
+     * frame selection, without source extraction. The calibrated tuner measures on these. The frames stay read-only;
+     * with excluded areas each is measured on a filled copy. Runs on the caller's workers and operation.
+     *
+     * @param telemetry receives the quality measurements and the rejected frames with their reasons
+     */
+    static List<ImageFrame> framesDetectionKeeps(List<ImageFrame> frames, DetectionConfig config,
+                                                 List<ExcludedArea> excludedAreas, PipelineTelemetry telemetry) throws Exception {
+        List<ImageFrame> ordered = new ArrayList<>(frames);
+        ordered.sort(Comparator.comparingInt(frame -> frame.sequenceIndex));
+        ExcludedPixels excluded = new ExcludedPixels(excludedAreas);
+        telemetry.totalFramesLoaded = ordered.size();
+        SessionRegistration session = registerSession(ordered.size(), ordered::get, excluded, telemetry, null);
+        List<MeasuredFrame> measured = measureFrames(session, ordered::get, config, excluded, null, null);
+        selectAndRecordQuality(measured, telemetry, session.drift().frameCoverages, session.quality(), config);
+        List<ImageFrame> kept = new ArrayList<>();
+        for (MeasuredFrame frame : measured) {
+            if (!frame.metrics().isRejected) kept.add(ordered.get(frame.facts().inputPosition()));
+        }
+        return kept;
+    }
+
+    /**
      * Quality control alone: the shared front end and frame selection, reading frames through the loader so that
      * only a few are in memory, and measuring each on a filled copy so the caller's pixels stay read-only.
      */

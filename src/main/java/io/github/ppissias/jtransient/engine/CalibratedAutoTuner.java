@@ -168,6 +168,7 @@ public final class CalibratedAutoTuner {
         private final int minCropBorderMargin;
         private final int cropPaddingClearance;
         private final List<ExcludedArea> excludedAreas;
+        private final boolean selectFrames;
 
         /** Copies and validates a builder before progress callbacks or scientific work can start. */
         private Options(Builder builder) {
@@ -191,6 +192,7 @@ public final class CalibratedAutoTuner {
             minCropBorderMargin = builder.minCropBorderMargin;
             cropPaddingClearance = builder.cropPaddingClearance;
             excludedAreas = builder.excludedAreas == null ? List.of() : List.copyOf(builder.excludedAreas);
+            selectFrames = builder.selectFrames;
             require(falsePositiveBudgetPerMpixFrame.length > 0, "falsePositiveBudgetPerMpixFrame must not be empty");
             for (double value : falsePositiveBudgetPerMpixFrame) {
                 require(Double.isFinite(value) && value >= 0, "falsePositiveBudgetPerMpixFrame contains an invalid value");
@@ -350,6 +352,11 @@ public final class CalibratedAutoTuner {
             return cropPaddingClearance;
         }
 
+        /** Whether the tuner applies detection's frame selection to its pool. See {@link Builder#selectFrames}. */
+        public boolean selectFrames() {
+            return selectFrames;
+        }
+
         /** The areas the run leaves out of detection, which the measurement leaves out too; empty for none. */
         public List<ExcludedArea> excludedAreas() {
             return excludedAreas;
@@ -408,6 +415,13 @@ public final class CalibratedAutoTuner {
              * inside the areas is dropped. Null or empty for none; copied by build().
              */
             public List<ExcludedArea> excludedAreas;
+            /**
+             * Whether the tuner leaves out the pool frames a detection run of the pool would reject (true, the
+             * default: right when the pool is the whole session). Set false when the pool was already chosen from
+             * the frames quality control keeps over the whole session: selecting again within a subset would judge
+             * the frames against the subset instead of the session.
+             */
+            public boolean selectFrames;
 
             /** Copies fixed default values and detaches their arrays into a caller-owned builder. */
             public Builder() {
@@ -431,6 +445,7 @@ public final class CalibratedAutoTuner {
                 minCropBorderMargin = CalibratedAutoTuner.MIN_CROP_BORDER_MARGIN;
                 cropPaddingClearance = CalibratedAutoTuner.CROP_PADDING_CLEARANCE;
                 excludedAreas = List.of();
+                selectFrames = true;
             }
 
             /** Copies an immutable policy without consulting process-wide defaults. */
@@ -455,6 +470,7 @@ public final class CalibratedAutoTuner {
                 minCropBorderMargin = options.minCropBorderMargin;
                 cropPaddingClearance = options.cropPaddingClearance;
                 excludedAreas = options.excludedAreas;
+                selectFrames = options.selectFrames;
             }
 
             /** Builds an immutable validated policy whose arrays no longer alias the builder. */
@@ -627,8 +643,11 @@ public final class CalibratedAutoTuner {
         public double singleFrameFloorPerMpixFrame;
         /** Measurement crops skipped because their background was blank or clipped. */
         public int skippedCrops;
-        /** Pool frames left out as blank or failed registrations. */
-        public int excludedBlankFrames;
+        /**
+         * Pool frames left out because a detection run would reject them: blank frames, failed registrations and the
+         * session's quality outliers.
+         */
+        public int rejectedPoolFrames;
         /** Measurement crops that hold part of an excluded area and measure without it. */
         public int cropsWithExcludedAreas;
         /** Measurement crops dropped because more than half of them lies inside excluded areas. */
@@ -860,22 +879,30 @@ public final class CalibratedAutoTuner {
         OperationContext.run(StageId.INPUT_VALIDATION, null, () -> InputRules.checkFrames(poolFrames));
         try {
             preview.phase(FRAME);
-            progress(listener, 0, "Checking registration and usable image area...");
-            List<ImageFrame> pool = new ArrayList<>();
+            progress(listener, 0, "Checking registration and frame quality...");
             for (ImageFrame f : poolFrames) {
                 CancellationScope.check();
-                if (FrameDriftAnalyzer.isBlankOrFailedRegistration(f.pixelData)) {
-                    calibration.excludedBlankFrames++;
-                } else {
-                    pool.add(f);
-                }
-                preview.image(FRAME, "Checking usable pixels · frame " + (f.sequenceIndex + 1), f.pixelData);
+                preview.image(FRAME, "Checking frame quality · frame " + (f.sequenceIndex + 1), f.pixelData);
             }
+            // The tuner measures on the frames detection will use: the pipeline's own front end and frame selection.
+            workers.limitWork(poolFrames.size(), (long) poolFrames.get(0).pixelData.length * poolFrames.get(0).pixelData[0].length
+                    * (options.excludedAreas.isEmpty() ? 1 : 2));
+            List<ImageFrame> pool;
+            if (options.selectFrames) {
+                pool = JTransientEngine.framesDetectionKeeps(poolFrames, baseConfig, options.excludedAreas,
+                        new io.github.ppissias.jtransient.telemetry.PipelineTelemetry());
+            } else {
+                // The caller chose the pool from the frames quality control keeps over its whole session.
+                pool = new ArrayList<>(poolFrames);
+                pool.sort(Comparator.comparingInt(f -> f.sequenceIndex));
+            }
+            calibration.rejectedPoolFrames = poolFrames.size() - pool.size();
             if (pool.size() < 5) {
-                calibration.failureReason = "At least 5 usable frames are needed for calibrated auto-tuning.";
+                calibration.failureReason = String.format(Locale.US,
+                        "At least 5 frames that quality control keeps are needed for calibrated auto-tuning; it keeps %d of %d.",
+                        pool.size(), poolFrames.size());
                 return calibration;
             }
-            pool.sort(Comparator.comparingInt(f -> f.sequenceIndex));
             int height = pool.get(0).pixelData.length;
             int width = pool.get(0).pixelData[0].length;
 
@@ -1201,8 +1228,8 @@ public final class CalibratedAutoTuner {
             report.append(String.format(Locale.US, "Excluded areas: %d crops measured without them, %d dropped (mostly inside them).%n",
                     calibration.cropsWithExcludedAreas, calibration.cropsDroppedForExcludedAreas));
         }
-        if (calibration.excludedBlankFrames > 0) {
-            report.append(String.format(Locale.US, "Left out %d blank or failed-registration frames.%n", calibration.excludedBlankFrames));
+        if (calibration.rejectedPoolFrames > 0) {
+            report.append(String.format(Locale.US, "Left out %d frames that quality control rejects, as detection does.%n", calibration.rejectedPoolFrames));
         }
         if (calibration.skippedCrops > 0) {
             report.append(String.format(Locale.US, "Skipped %d measurement crops with a blank or clipped background.%n", calibration.skippedCrops));
