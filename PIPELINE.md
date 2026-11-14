@@ -181,6 +181,7 @@ Non-finite consumed values are errors; finite out-of-domain or cross-field findi
 | `JTransientEngine.runPipeline(...)` | Full frame sequence | Generates a median master stack | Yes | Full detection run |
 | `JTransientEngine.runPipeline(..., providedMasterStack)` | Full frame sequence | Uses a provided median master stack | Yes | Full detection run without restacking |
 | `JTransientEngine.runPipeline(..., providedMasterStack, observer)` | Full frame sequence | Generates one, or uses the provided one (may be null) | Yes | Full detection run that hands each finished stage to an observer |
+| `SubStackAstrometry.measure(...)` | Cut-outs around one faint mover's path | A per-pixel median of the cut-outs | No | Centroids of a faint mover in independent sub-stacks, for MPC astrometry |
 
 ## `SourceExtractor.extractSources(...)`
 

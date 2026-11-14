@@ -12,6 +12,8 @@
 
 ## 1.0.8 (unreleased)
 
+- **Faint-mover astrometry in sub-stacks (new API).** `SubStackAstrometry.measure` measures a faint mover's position in independent sub-stacks of caller-supplied cut-outs: each frame used once, the per-pixel median subtracted, each group shifted to its mean time along the fitted motion, a windowed centroid, background and noise from a ring, and a signal-to-noise in 1.5 FWHM. A sub-stack is clear at a signal-to-noise of at least 5 with the centroid within 2 FWHM of the path. Detection is unchanged.
+
 - **Faint-mover review evidence for long paths (additive API).** `FaintMoverDiagnostics` was unavailable for a path whose rectangle exceeded 256 pixels per side and for sessions of more than 128 frames. A path that still fits those limits (`fixedRectangleFits`) keeps its one rectangle; a longer one now gets a `FOLLOWING_SIDE` (71 pixel) square per frame centred on its scoring-path sample: `followsPath` is true and each `Frame` has its own origin `x`, `y` (for a fixed rectangle, the shared origin). Pixels outside the image or the search tile are NaN. Evidence larger than the whole 64 MiB pool is no longer copied. Candidates, scores and selection are unchanged.
 
 - **Auto-Tune measures on the frames detection keeps (behaviour change).** The calibrated tuner applies the pipeline's frame selection to its frames and builds its reference stacks and measurements only from the frames a detection run would keep. Before, it left out blank frames only, so it could tune on frames that detection rejects. `CalibratedAutoTuner.Options.selectFrames` (default true) turns the selection off for frames already chosen from a larger session's kept frames. `Calibration.excludedBlankFrames` is now `rejectedPoolFrames`.
