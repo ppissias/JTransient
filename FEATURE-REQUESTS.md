@@ -16,6 +16,7 @@ These are proposals, not implementation authorisations. Retain current algorithm
 | [SM-F10](#sm-f10-faint-mover-paths-beside-a-star) | Proposed | Reject faint-mover paths that stay beside the star mask for most of the session; validate on movers that pass bright stars first. |
 | [XC-3](#xc-3-local-background-and-noise-for-frame-extraction) | Open; parked at maintainer request; new evidence (2026-11-08) | Resume with local sky correction alone, keeping baseline noise and thresholds fixed; preserve associations, photometry and boundary calibration. |
 | [VS-13](#vs-13-variable-star-recovery-and-false-candidate-investigation) | Investigation plan recorded; experiments pending | Audit known-variable recovery and suspicious candidates on saved reference runs before proposing individual photometry changes. |
+| [MP-1](#mp-1-moving-object-photometry) | Requested 2026-11-14; simplified scope | Standard aperture and sky-annulus measurements for moving-object light curves; application/period-analysis scope is SpacePixels F34. |
 | [RV-1](#rv-1-findings-from-the-pull-request-1-review) | Open; no fix agreed | Six code-review findings, led by hot pixels that can pass the follows-sky test on steadily drifting frames. Decide each item separately. |
 
 **Mover consolidation decision (2026-11-05).** The digital-tracking delivery (SM-F2 and SpacePixels F25) is complete. Close the current SM-F1/SM-F3 temporal, morphology, position and gate investigations and the bounded SM-F6 validation/review campaign. Retire SM-F4 residual weighting and SM-F5 acceleration as separate open proposals; both remain unimplemented, with no validated replacement selected. Retain the present scientific filters and defaults; this closure does not claim universal completeness, calibrated confidence or the absence of difficult sources. The existing archive and [code history](docs/research/slow-movers/CODE-HISTORY.md) remain available separately.
@@ -144,6 +145,23 @@ Retain the frozen profile, executable/source and dependency snapshots, native ba
 - First deliver a per-star audit with clearly explained successes, misses, artifacts and unresolved cases. Summarize recovery against the explicitly justified detectable subset, failures by pipeline stage, and any confirmed false-candidate mechanisms. Report uncertain eligibility separately.
 - Review evidence-based proposals with the maintainer before implementing algorithm or threshold changes. Each eventual engine change follows the ordinary cross-repository tests and real-data checks.
 - Catalogue limitations: [VSX submission guidance](https://vsx.aavso.org/index.php?view=about.notice) and [VSX FAQ](https://vsx.aavso.org/vsx/index.php?view=about.faq).
+
+## MP-1. Moving-object photometry
+
+**Request (2026-11-14), simplified at the maintainer's request.** Use standard aperture photometry for ordinary tracks and faint movers, supplying the measurements for SpacePixels' [F34 light curves](../SpacePixels/FEATURE-REQUESTS.md#f34-moving-object-light-curves-and-rotation-periods). Start with a practical choice of measuring-circle and sky-annulus sizes, reusing existing photometry helpers.
+
+The **aperture** is the circle containing the object's light. The **annulus** is a separate surrounding ring used to estimate the sky background.
+
+| Region | Proposed starting size | Purpose |
+|---|---|---|
+| Object aperture | Radius 1.5 x stellar FWHM; diameter 3 x FWHM | Collect the object's light. |
+| Sky annulus | Inner radius 3 x FWHM, outer radius 5 x FWHM | Estimate the local sky, leaving a gap outside the object aperture. |
+
+These reuse JTransient's current photometry defaults. The [AAVSO guide](https://www.aavso.org/sites/default/files/publications_files/ccd_photometry_guide/CCDPhotometryGuide.pdf) gives a usual aperture diameter of 3-4 x FWHM; the annulus sizes above are our proposed starting values. Use measured photometric stellar FWHM, not the extraction width, and one consistent sizing rule throughout the sequence. Check the choice on a representative track before settling the defaults.
+
+**Measurement.** Follow the object's position on each original linear aligned frame. Sum the aperture pixels, subtract the robust sky estimate times the usable aperture area, and divide by exposure duration. Ignore neighbouring stars and excluded/padding pixels when estimating sky; flag blended, saturated, edge-truncated or clearly trailed objects where a simple circle is unreliable. Retain faint/negative flux values and missing-data reasons. Reuse comparison-star correction when available, otherwise label the curve uncorrected. This must work without variable-star detection enabled.
+
+**Scope and checks.** Return frame/time, flux, a labelled basic error estimate, aperture sizes and quality flags; preserve existing detections and variable-star measurements. Check a constant and a varying artificial mover plus a representative real track. Advanced PSF fitting, trail modelling and a separate precision-photometry study are outside this initial request. Period analysis remains in F34. Following a fitted path for brightness does not create independent astrometry for [F33](../SpacePixels/FEATURE-REQUESTS.md#f33-mpc-observation-export-and-find_orb).
 
 ## RV-1. Findings from the pull request 1 review
 
