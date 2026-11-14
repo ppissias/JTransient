@@ -15,6 +15,9 @@
 - **Auto-Tune measures on the frames detection keeps (behaviour change).** The calibrated tuner applies the pipeline's frame selection to its frames and builds its reference stacks and measurements only from the frames a detection run would keep. Before, it left out blank frames only, so it could tune on frames that detection rejects. `CalibratedAutoTuner.Options.selectFrames` (default true) turns the selection off for frames already chosen from a larger session's kept frames. `Calibration.excludedBlankFrames` is now `rejectedPoolFrames`.
   - *Effect.* Of ten reference sessions, the three without rejected frames tune identically. On the others the Medium detection sigma is unchanged and neighbouring values move slightly: a 16-frame DECam session is tuned on 12 frames instead of 16 (grow sigma 3.75 to 4.25, a third measurement crop now fits), Apophis on 14 instead of 15 (minimum pixels 15 to 14).
 
+- **Steadier star size in Auto-Tune (behaviour change).** The tuner's star size was the median of per-star widths that come in steps (whole pixel counts), so a few stars more or less could move it a whole step (for example 4.51 to 4.65 px) and with it the minimum-pixel values and the test stars. It is now the mean of the middle half of those widths.
+  - *Effect.* On ten reference sessions the star size moves by at most 0.09 px. The Medium detection and grow sigma are unchanged on all ten; one minimum-pixel value moves (Apophis 14 to 15), and other profiles change slightly on six sessions.
+
 - **One front end and one veto rule (refactoring).** Detection, the master stack and standalone quality control share their first steps (`registerSession`, `measureFrames` and the frame selection), the star-mask overlap is `MasterVetoMask.overlapFraction` everywhere, and the tuner builds its masks with `MasterVetoMask.build`.
   - *Effect.* None: twelve sessions give byte-identical reports, and the tuner is identical for every candidate.
 
