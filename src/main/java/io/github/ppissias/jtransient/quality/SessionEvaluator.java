@@ -37,6 +37,13 @@ public class SessionEvaluator {
         public double maxAllowedBackgroundMedian = Double.NaN;
     }
 
+    /**
+     * The least drop in star count, as a share of the session's median count, that the star-count rule rejects.
+     * Frames of a very steady session have almost the same count, so their spread is close to zero and one star
+     * less would otherwise be an outlier; clouds take away far more than this.
+     */
+    public static final double MIN_STAR_COUNT_TOLERANCE = 0.05;
+
     // =================================================================
     // CORE EVALUATION LOGIC
     // =================================================================
@@ -117,6 +124,12 @@ public class SessionEvaluator {
         }
         if (thresholds.maxAllowedBackgroundDeviation < backgroundFloor) {
             thresholds.maxAllowedBackgroundDeviation = backgroundFloor;
+        }
+
+        // Don't let the star-count limit come closer to the median than the minimum tolerance.
+        double starCountFloor = starStats[0] * (1.0 - MIN_STAR_COUNT_TOLERANCE);
+        if (thresholds.minAllowedStarCount > starCountFloor) {
+            thresholds.minAllowedStarCount = starCountFloor;
         }
 
         // Don't let the eccentricity envelope shrink tighter than the configured minimum.

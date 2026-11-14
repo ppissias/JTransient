@@ -253,9 +253,7 @@ public class CalibratedAutoTunerTest {
     @Test
     public void framesThatQualityControlRejectsAreLeftOut() {
         List<ImageFrame> frames = new ArrayList<>(createFrames(0));
-        // Copied from the second frame, whose star count keeps the session's counts spread; these synthetic frames
-        // are so alike that the star-count rule would otherwise reject a frame for one star less.
-        ImageFrame last = frames.get(1);
+        ImageFrame last = frames.get(FRAMES - 1);
         short[][] bright = new short[SIZE][SIZE];
         for (int y = 0; y < SIZE; y++) {
             for (int x = 0; x < SIZE; x++) {

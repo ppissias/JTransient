@@ -46,7 +46,7 @@ public class SessionEvaluatorTest {
         assertFalse(sessionMetrics.get(4).isRejected);
 
         assertTrue(thresholds.available);
-        assertEquals(99.998, thresholds.minAllowedStarCount, 1.0e-6);
+        assertEquals(95.0, thresholds.minAllowedStarCount, 1.0e-6);
         assertEquals(3.5, thresholds.maxAllowedFwhm, 1.0e-6);
         assertEquals(1.22, thresholds.maxAllowedEccentricity, 1.0e-6);
         assertEquals(1.29, thresholds.maxAllowedBrightStarEccentricity, 1.0e-6);
@@ -80,6 +80,39 @@ public class SessionEvaluatorTest {
         assertFalse(sessionMetrics.get(2).isRejected);
         assertTrue(sessionMetrics.get(4).isRejected);
         assertEquals("Background deviation (Clouds/Light leak)", sessionMetrics.get(4).rejectionReason);
+    }
+
+    /**
+     * Frames of a very steady session have almost the same star count, so the spread is zero: one star less is kept,
+     * because the limit stays 5 % below the median, and a real drop is still rejected. A session whose counts vary
+     * more than that keeps its own, wider limit.
+     */
+    @Test
+    public void rejectOutlierFramesKeepsAMinimumStarCountTolerance() {
+        DetectionConfig config = new DetectionConfig();
+        config.minFramesForAnalysis = 3;
+        List<FrameQualityAnalyzer.FrameMetrics> steady = new ArrayList<>();
+        int[] counts = {383, 382, 382, 382, 383, 383, 383, 340};
+        for (int i = 0; i < counts.length; i++) {
+            FrameQualityAnalyzer.FrameMetrics metrics = createMetrics("frame-" + i, 3.0, 1.12, 1.18);
+            metrics.starCount = counts[i];
+            steady.add(metrics);
+        }
+        SessionEvaluator.SessionThresholds thresholds = SessionEvaluator.rejectOutlierFrames(steady, config);
+        assertEquals(383 * 0.95, thresholds.minAllowedStarCount, 1.0e-9);
+        for (int i = 0; i < 7; i++) assertFalse("frame " + i, steady.get(i).isRejected);
+        assertTrue(steady.get(7).isRejected);
+        assertEquals("Star Count dropped anomalously low", steady.get(7).rejectionReason);
+
+        List<FrameQualityAnalyzer.FrameMetrics> varied = new ArrayList<>();
+        int[] spread = {400, 360, 440, 380, 420, 400, 300};
+        for (int i = 0; i < spread.length; i++) {
+            FrameQualityAnalyzer.FrameMetrics metrics = createMetrics("frame-" + i, 3.0, 1.12, 1.18);
+            metrics.starCount = spread[i];
+            varied.add(metrics);
+        }
+        SessionEvaluator.SessionThresholds wide = SessionEvaluator.rejectOutlierFrames(varied, config);
+        assertTrue("the session's own spread sets the limit", wide.minAllowedStarCount < 400 * 0.95);
     }
 
     private static FrameQualityAnalyzer.FrameMetrics createMetrics(String filename,
