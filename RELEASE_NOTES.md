@@ -3,14 +3,16 @@
 <!-- root-toc:start -->
 ## Contents
 
-- [1.0.8 (unreleased)](#108-unreleased)
-- [1.0.6 (unreleased)](#106-unreleased)
-- [1.0.5 (unreleased)](#105-unreleased)
+- [1.1.0](#110)
+- [1.0.9](#109)
+- [1.0.8](#108)
+- [1.0.6](#106)
+- [1.0.5 (not published)](#105-not-published)
   - [Detection changes](#detection-changes)
   - [API changes](#api-changes)
 <!-- root-toc:end -->
 
-## 1.0.8 (unreleased)
+## 1.1.0
 
 - **Moving-object photometry (new API, MP-1).** `MovingObjectPhotometry.measure` measures a moving object's flux per second in an aperture of 1.5 FWHM with a sky annulus from 3 to 5 FWHM, keeping faint and negative fluxes and flagging edges, saturation and trails longer than the aperture radius (new flag `PhotometryFlags.TRAILED`); `measureOnReference` measures after subtracting the frames' median (`SubStackAstrometry.medianReference`, now public), so fixed stars the object passes cancel; `contaminated` flags measurements whose concentration index departs from the object's usual one, by the comparison stars' shape rule; `saturationThreshold` gives one frame's saturation threshold from its clipped pixels; `starFwhm` measures a frame's typical FWHM from stars at given positions; `ensembleOffsets` gives per-frame corrections from comparison stars. The aperture step is now one method shared with the variable-star photometry, whose results are unchanged (identical photometry files on a 36-frame cluster session).
 
@@ -38,6 +40,14 @@
 
 - **Faster faint-mover search (new setting).** `faintMoverSearchSpeed` makes the first pass, which tries every motion at every position, cheaper. At 1 (fast, the default) it adds 2 × 2 pixels when stars are at least 3.5 px wide (Gaussian FWHM) and consecutive frames while the fastest motion moves at most 0.65 star sizes across them; at 2 (faster) it does so from 2 px and across 1.3 star sizes; 0 (normal) uses every pixel of every frame. Refinement and every check still use each frame's full-resolution residuals, so a candidate's score means the same at every speed. The first pass also adds four frames per pass over its sums, in the same order as before, which makes even the normal speed faster with unchanged results. `FaintMoverSearchTelemetry.searchSpeed`, `coarseBin` and `coarseFrames` say what was used, and the text report shows them. `FaintMoverSearch.coarseSearchShape` gives callers the same rules for run-time estimates. `DetectionConfigRules.Domain.SEARCH_SPEED` reports values other than 0, 1 and 2.
   - *Effect.* The default speed (1) leaves the reference sessions with narrow stars and spaced frames unchanged (Integral, iTelescope, m31-b-reg, m5-reg, Flame, both Eagle sessions; their search ran up to about twice as fast). Apophis and m101-reg add some frames close in time: Apophis refines 2 more coarse peaks, both below the score, and m101-reg keeps its candidate unchanged. On two DECam sessions with 4–5 px stars the search ran 3.5 to 7 times faster and kept the same candidates and synthetic movers, apart from about one in 50–100 close to the score or stationary limit. The faster speed (2) ran about 9 and 13 times faster on a DECam session and on m101-reg (2.35 px stars); on m101-reg it kept every recovered synthetic mover but missed the real candidate, close to the score and half-session limits. Speed 0 gives the earlier results exactly.
+
+## 1.0.9
+
+- **Faster track linking (performance only).** `TimedPointLinker` finds the candidates for a track's third point through a spatial grid (`SpatialGrid`) with a bounded radius, instead of scanning every detection of the frame. Dense sequences link faster; the candidates, their order and the tie-breaking are unchanged, so the tracks are the same.
+
+- **Smaller dependency list for consumers (packaging).** The published POM excludes the annotation jars that Gson and nom-tam-fits bring in (Error Prone, SpotBugs, jsr305 and Jakarta annotations). None of them is needed at runtime.
+
+## 1.0.8
 
 - **Defaults match the SpacePixels profile (behaviour change).** `new DetectionConfig()` now gives the values SpacePixels ships and the reference regression uses, so the library, the application and its example profile start from the same settings. Seven defaults change: `detectionSigmaMultiplier` 5.0 → 3.5, `growSigmaMultiplier` 3.0 → 2.75, `masterSlowMoverSigmaMultiplier` 4.0 → 3.5, `masterSlowMoverGrowSigmaMultiplier` 3.5 → 2.75, `maxStarJitter` 1.5 → 1.0, `enableVariableStarDetection` false → true, and `enableFaintMoverSearch` false → true.
   - *Effect.* A configuration that sets these fields explicitly is unchanged. One built from the defaults now detects fainter sources and runs variable-star photometry and the experimental faint-mover search. That search adds run time, bounded by `faintMoverMaxSeconds` (10 minutes by default), and skips itself without capture times or with fewer than 8 frames. Set the two switches to `false` for the earlier, faster behaviour.
@@ -123,7 +133,7 @@
 
 - **Calibrated auto-tuner mask overlap capped at 0.90.** The candidate star mask overlap grid now tests `{0.5, 0.65, 0.75, 0.85, 0.90}` instead of testing up to `0.95`. At `0.95`, detections embedded up to 95% inside a star mask bypassed veto, producing false-positive single-frame anomalies from seeing fluctuations and star wings.
 
-## 1.0.6 (unreleased)
+## 1.0.6
 
 - **Kept inspection masks.** `redetectFrame` now applies the star mask captured by `inspectTransients`, including its original jitter footprint. It previously rebuilt the mask from master stars with the current configuration's jitter, so editing master settings could unexpectedly veto different sources in an existing inspection. Ordinary pipeline detection and newly built references are unchanged.
 
@@ -137,7 +147,9 @@
 - **One worker pool per engine (JA-12).** Each engine, and each tuner call, owns a library-internal `WorkerPool` that runs its batches, stack rows and photometry within a scratch-memory estimate; nested batches run inline and a failure or cancellation joins sibling work. Removed, because no caller used them: borrowed executors and shared sessions (`ExecutionSession`, `ExecutionPolicy`, the engine constructors taking them), `OperationOutcome` and `OperationContext.capture`, the `CancellationToken` overloads of `runPipeline`, `detectTransients`, `generateMasterStackWithDetails` and `CalibratedAutoTuner.tune`, the tuner's `executionPolicy` option and session overloads, the executor parameter of `VariableStarAnalyzer.analyze`, and the deprecated `CommonMotionRejector.apply`. Cancel through `CancellationScope`. Outside an engine or tuner operation, standalone batches run on the calling thread.
 - **Java and compatibility gates.** Java 21 toolchain/`--release 21` and bytecode checks for adopted config/execution boundaries run under `check`; the API consumer runs when the Central bundle is prepared. The coordinated SpacePixels matrix verifies source-built 1.0.5/1.0.6 artifacts with composites disabled and both Gradle/POM metadata. The 1.0.5 section below describes the predecessor unreleased source baseline, not a publicly available artifact; actual Central release availability remains unverified. No publication is performed by these checks.
 
-## 1.0.5 (unreleased)
+## 1.0.5 (not published)
+
+This version was not published; its changes were first released in 1.0.6.
 
 In preparation: changes since 1.0.4 are collected here and completed at release. Used by SpacePixels 2026.10-04.
 
