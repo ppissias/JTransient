@@ -14,6 +14,7 @@ These are proposals, not implementation authorisations. Retain current algorithm
 | [SM-F8](#sm-f8-frame-check-for-runs-of-leaky-frames) | Proposed; later addition | Leave out runs of frames whose star tails leak past the faint-mover mask, which the few-frame check cannot stop when they cover a third of the frames or more. Needs a second affected session. |
 | [SM-F9](#sm-f9-slow-mover-candidates-made-by-hot-pixels) | Proposed | Reject maximum-stack candidates that stay at one camera position: hot pixels that the drift draws into short dashes. |
 | [SM-F10](#sm-f10-faint-mover-paths-beside-a-star) | Proposed | Reject faint-mover paths that stay beside the star mask for most of the session; validate on movers that pass bright stars first. |
+| [SM-F11](#sm-f11-faster-faint-movers-trails-and-memory) | Proposed; design open | Search faster faint movers: score trailed movers as short lines up to 6 star widths, and fit the search into the available memory. Memory, not the trial-motion count, is the binding limit. |
 | [XC-3](#xc-3-local-background-and-noise-for-frame-extraction) | Open; parked at maintainer request; new evidence (2026-11-08) | Resume with local sky correction alone, keeping baseline noise and thresholds fixed; preserve associations, photometry and boundary calibration. |
 | [VS-13](#vs-13-variable-star-recovery-and-false-candidate-investigation) | Investigation plan recorded; experiments pending | Audit known-variable recovery and suspicious candidates on saved reference runs before proposing individual photometry changes. |
 | [RV-1](#rv-1-findings-from-the-pull-request-1-review) | Open; no fix agreed | Six code-review findings, led by hot pixels that can pass the follows-sky test on steadily drifting frames. Decide each item separately. |
@@ -88,6 +89,26 @@ The camera-fixed rejection does not see them. It works on frame detections, and 
 Measured on the 82 paths: the share of each path's frames within 1.5 FWHM of the star mask has a median of 97%, and 76% of the paths stay that close in 80% of their frames or more. Random straight paths with the same velocities do so in 7% of cases (median 0%). [SM-F8](#sm-f8-frame-check-for-runs-of-leaky-frames) already rejects a blanket wider mask, which lost 3 of 12 injected movers passing a bright star.
 
 **Proposal.** Reject a candidate whose path stays within about 1.5 FWHM of the star mask in at least about 80% of its frames. A real mover passing a star is near it only while it crosses; it is lost only when its whole motion over the session is shorter than about a star's masked footprint, where it cannot be told from the halo anyway. Before adoption, check the 12 injected movers passing bright stars and klangwolke-2's 10 known candidates (all must stay), and the false candidates on this session and on the SM-F8 session.
+
+## SM-F11. Faster faint movers: trails and memory
+
+**Proposed (2026-11-15); the design is open.** The faint-mover search scores point-like movers, and on long sessions it cannot reach fast motions. On the 2022-08-24 B1m DECam session (115 kept frames over 283 minutes, 120 s exposures, 0.262″/px, star size 4.14 px), a run at 1″/min (3.81 px/min) completed in 31 minutes with 47,652 coarse motions and 29 candidates; at 2″/min the run skipped the search for needing 190,604 motions, over `MAX_MOTIONS` (100,000). The limit for that session is about 1.45″/min. The six predicted asteroids to V 25 in that field all move slower than 1″/min; motions above about 1.4″/min are mostly near-Earth objects.
+
+**Two obstacles grow with speed.**
+
+- *Trailing.* A mover trails v × exposure in each frame. On B1m that is 1 star width at 0.55″/min, 1.8 at 1″/min, 3.7 at 2″/min and 6 at 3.3″/min. Estimated for a Gaussian star (not yet measured), a point score keeps about 68% of the signal at 2 star widths, 41% at 3.7 and 25% at 6; a matched line keeps about 75%, 64% and 50%. Beyond about 6 star widths the per-frame streak detection (elongation from about 3.3 star widths) and the faint streak search are the tools.
+- *Memory.* Each 512 px tile holds every frame's prepared residual for the tile plus a margin as wide as the fastest motion travels over half the session, and one tile may use a quarter of the heap. On B1m: 1.1 GiB per tile at 1″/min, 1.7 at 1.4″/min, 3.0 at 2″/min and 6.6 at 3.3″/min, which would need 4.4, 6.9, 11.9 and 26.5 GiB of heap. With an 11 GB heap the memory check stops the search near 2″/min even without the motion cap. The coarse shift tables, `[motions][frames]` ints twice over, add about 175 MB at 190,000 motions.
+
+**Agreed so far.** Trails longer than 6 star widths are not searched (maintainer, 2026-11-15). SpacePixels' settings already show the fastest motion's trail per frame, warn above 2 star widths, and warn before a run that would exceed `MAX_MOTIONS`, with the highest speed that fits; once a design exists, the settings should say where trail-aware scoring starts and the fastest motion the dataset allows.
+
+**Candidate approaches, to evaluate.**
+
+- *Trail-aware scoring.* For trails over about 1 star width, score the shifted stack with a line of the trail's length and direction (the residuals are already PSF-filtered), normalised by the measured noise of such line sums; use coarser motion steps along the motion than across it. A rough count for B1m gives about 67,000 motions at 2″/min instead of 213,000. The halfway checks, frame limit, stationary and camera checks would use the same line.
+- *Memory heuristics:* fewer frames (every second frame halves memory and work for about 0.38 mag of depth); a 3 x 3 binned coarse pass with full-resolution refinement prepared only around peaks (about 9 times less memory for the coarse pass; binned stars are about 1.4 px wide on B1m); margins that grow with each frame's time from the middle of the session (about 2.4 times less memory at 2″/min on B1m); every frame's residual prepared once for the whole image in 16 bits and shared by all tiles (1.8 GiB for B1m at any speed; changes results slightly through rounding and regional noise); and shifts computed per motion instead of stored tables.
+- *Shorter time windows* searched separately and linked: motions and margins fall with the square of the window, at about 0.75 mag of depth for four windows.
+- *Directions restricted* along the ecliptic, which would miss most near-Earth objects.
+
+**Validation.** Inject synthetic movers at 0.5-3.5″/min and several magnitudes into the B1m frames and measure recovery and score against speed for the current search and each candidate, before choosing; then the 18-dataset regression, where slow-mover results must stay unchanged.
 
 ## XC-3. Local background and noise for frame extraction
 
