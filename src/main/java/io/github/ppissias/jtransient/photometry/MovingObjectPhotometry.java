@@ -87,6 +87,73 @@ public final class MovingObjectPhotometry {
 
     private static final double SATURATION_FRACTION = new io.github.ppissias.jtransient.config.DetectionConfig().photometrySaturationFraction;
 
+    /** Fewest stars with a usable profile for {@link #starFwhm}. */
+    static final int MIN_FWHM_STARS = 3;
+
+    /**
+     * The stars' typical FWHM in pixels on one frame, from the second moments of the stars at the given positions
+     * (pixel x, y), for photometry before any detection has measured it: the median over stars that stand at least
+     * 10 sky-noise sigmas above the sky and peak below {@code saturationThreshold}. The measuring radius starts at 8
+     * pixels and then follows 2 FWHM (6 to 25 pixels); every pixel counts, negative ones too, so noise does not widen it. NaN when fewer than {@value #MIN_FWHM_STARS} stars qualify.
+     */
+    public static double starFwhm(short[][] pixels, double[][] positions, double saturationThreshold) {
+        double radius = 8;
+        double fwhm = Double.NaN;
+        for (int pass = 0; pass < 3; pass++) {
+            double[] widths = new double[positions.length];
+            int count = 0;
+            for (double[] p : positions) {
+                double width = momentFwhm(pixels, p[0], p[1], radius, saturationThreshold);
+                if (Double.isFinite(width)) widths[count++] = width;
+            }
+            if (count < MIN_FWHM_STARS) return fwhm;
+            fwhm = PhotometryMath.median(widths, count);
+            double wanted = Math.min(25, Math.max(6, 2 * fwhm));
+            if (Math.abs(wanted - radius) < 1) break;
+            radius = wanted;
+        }
+        return fwhm;
+    }
+
+    /** One star's moment FWHM within {@code radius}, with the sky from a ring outside it; NaN when unusable. */
+    private static double momentFwhm(short[][] pixels, double x, double y, double radius, double saturationThreshold) {
+        int r = (int) Math.ceil(radius), outer = r + 8;
+        int cx = (int) Math.round(x), cy = (int) Math.round(y);
+        if (cy - outer < 0 || cx - outer < 0 || cy + outer >= pixels.length || cx + outer >= pixels[0].length) return Double.NaN;
+        double[] ring = new double[(2 * outer + 1) * (2 * outer + 1)];
+        int n = 0;
+        double peak = 0;
+        for (int j = -outer; j <= outer; j++) {
+            for (int i = -outer; i <= outer; i++) {
+                short stored = pixels[cy + j][cx + i];
+                if (stored <= io.github.ppissias.jtransient.core.DataArea.FILL_THRESHOLD) return Double.NaN;
+                double value = io.github.ppissias.jtransient.core.PixelEncoding.toShiftedPositiveInt(stored);
+                double d = Math.hypot(i, j);
+                if (d >= r + 4 && d <= outer) ring[n++] = value;
+                if (d <= 3) peak = Math.max(peak, value);
+            }
+        }
+        double sky = PhotometryMath.median(ring, n);
+        double noise = PhotometryMath.robustSigma(ring, n);
+        if (!(peak < saturationThreshold) || !(peak - sky >= 10 * Math.max(noise, 1))) return Double.NaN;
+        double sum = 0, mx = 0, my = 0;
+        for (int j = -r; j <= r; j++) for (int i = -r; i <= r; i++) {
+            if (Math.hypot(i, j) > radius) continue;
+            double v = io.github.ppissias.jtransient.core.PixelEncoding.toShiftedPositiveInt(pixels[cy + j][cx + i]) - sky;
+            sum += v; mx += v * i; my += v * j;
+        }
+        if (sum <= 0) return Double.NaN;
+        mx /= sum;
+        my /= sum;
+        double second = 0;
+        for (int j = -r; j <= r; j++) for (int i = -r; i <= r; i++) {
+            if (Math.hypot(i, j) > radius) continue;
+            double v = io.github.ppissias.jtransient.core.PixelEncoding.toShiftedPositiveInt(pixels[cy + j][cx + i]) - sky;
+            second += v * ((i - mx) * (i - mx) + (j - my) * (j - my));
+        }
+        return second > 0 ? 2.3548 * Math.sqrt(second / (2 * sum)) : Double.NaN;
+    }
+
     /** Level added to a difference frame so its sky stays well above the fill level and below saturation. */
     static final int DIFFERENCE_PEDESTAL = 10_000;
 

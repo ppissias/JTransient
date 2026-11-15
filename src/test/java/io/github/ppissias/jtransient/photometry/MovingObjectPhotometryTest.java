@@ -166,6 +166,25 @@ public class MovingObjectPhotometryTest {
                 FWHM, 120_000, 0, MovingObjectPhotometry.saturationThreshold(pixels)).flags() & PhotometryFlags.SATURATED) != 0);
     }
 
+    /** The FWHM from star profiles: Gaussians of FWHM 3 and 7 pixels; saturated or faint stars do not count. */
+    @Test
+    public void measuresTheStarFwhm() {
+        for (double fwhm : new double[]{3, 7}) {
+            int size = 200;
+            double sigma = fwhm / 2.3548;
+            Random random = new Random(11);
+            double[][] stars = {{50, 50}, {150, 50}, {50, 150}, {150, 150}, {100, 100}};
+            short[][] pixels = new short[size][size];
+            for (int j = 0; j < size; j++) for (int i = 0; i < size; i++) {
+                double value = SKY + NOISE * random.nextGaussian();
+                for (double[] s : stars) value += 3000 * Math.exp(-((i - s[0]) * (i - s[0]) + (j - s[1]) * (j - s[1])) / (2 * sigma * sigma));
+                pixels[j][i] = PixelEncoding.fromShiftedPositiveInt((int) Math.round(value));
+            }
+            assertEquals("FWHM " + fwhm, fwhm, MovingObjectPhotometry.starFwhm(pixels, stars, 65_000), 0.1 * fwhm);
+            assertTrue("all saturated", Double.isNaN(MovingObjectPhotometry.starFwhm(pixels, stars, 2000)));
+        }
+    }
+
     /** Comparison stars dimmed together on one frame give that frame's offset; too few stars give none. */
     @Test
     public void ensembleOffsetsFollowTheField() {
