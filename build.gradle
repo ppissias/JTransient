@@ -80,13 +80,30 @@ tasks.register('verifyArchitecture') {
         output.eachLine { line ->
             def dependency = line =~ /^\s*io\.github\.ppissias\.jtransient\.(config|execution)(?:\.[\w$]+)*\s+->\s+io\.github\.ppissias\.jtransient\.([\w]+)/
             if (dependency.find() && dependency.group(2) != dependency.group(1)) violations.add(line.trim())
-            def facadeDependency = line =~ /^\s*io\.github\.ppissias\.jtransient\.(core|quality|photometry)(?:\.[\w$]+)*\s+->\s+io\.github\.ppissias\.jtransient\.engine\.JTransientEngine\s+/
+            def facadeDependency = line =~ /^\s*io\.github\.ppissias\.jtransient\.(core|quality|photometry|gpu|compute)(?:\.[\w$]+)*\s+->\s+io\.github\.ppissias\.jtransient\.engine\.JTransientEngine\s+/
             if (facadeDependency.find()) violations.add(line.trim())
+            def jocl = line =~ /^\s*io\.github\.ppissias\.jtransient\.(?!gpu\.)([\w.$]+)\s+->\s+org\.jocl\./
+            if (jocl.find()) violations.add(line.trim())
+            def coreToGpu = line =~ /^\s*io\.github\.ppissias\.jtransient\.core(?:\.[\w$]+)*\s+->\s+io\.github\.ppissias\.jtransient\.(gpu|compute)\./
+            if (coreToGpu.find()) violations.add(line.trim())
         }
         report.get().asFile.parentFile.mkdirs()
         report.get().asFile.text = output
         if (violations) throw new GradleException("Adopted architecture boundary violations: ${violations.join('; ')}")
     }
+}
+
+tasks.withType(Test).configureEach {
+    jvmArgs '--enable-native-access=ALL-UNNAMED'
+}
+
+tasks.register('openclTest', Test) {
+    group = 'verification'
+    description = 'OpenCL parity and safety tests; CPU OpenCL devices allowed.'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    filter { includeTestsMatching 'io.github.ppissias.jtransient.gpu.*' }
+    systemProperty 'jtransient.opencl.allowCpu', 'true'
 }
 
 // The standalone API consumer runs when the Central bundle is prepared (bundleCentralPortal), not on every check.
@@ -115,6 +132,7 @@ def excludeUnusedAnnotationJars = {
 
 dependencies {
     implementation('com.google.code.gson:gson:2.14.0', excludeUnusedAnnotationJars())
+    implementation 'org.jocl:jocl:2.0.6'
 
     testImplementation 'junit:junit:4.13.2'
 }

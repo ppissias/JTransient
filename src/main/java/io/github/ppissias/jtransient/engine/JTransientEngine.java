@@ -12,6 +12,8 @@ package io.github.ppissias.jtransient.engine;
 import io.github.ppissias.jtransient.model.DetectedObject;
 import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.model.Track;
+import io.github.ppissias.jtransient.compute.CoarseBackendFactory;
+import io.github.ppissias.jtransient.compute.ComputeOptions;
 import io.github.ppissias.jtransient.execution.DiagnosticContext;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
@@ -21,6 +23,7 @@ import io.github.ppissias.jtransient.execution.FrameIdentity;
 import io.github.ppissias.jtransient.execution.OperationContext;
 import io.github.ppissias.jtransient.execution.StageId;
 import io.github.ppissias.jtransient.execution.WorkerPool;
+import io.github.ppissias.jtransient.core.CoarseWorkloadEstimate;
 import io.github.ppissias.jtransient.core.CommonMotionRejector;
 import io.github.ppissias.jtransient.core.DataArea;
 import io.github.ppissias.jtransient.core.FrameCoverage;
@@ -88,6 +91,7 @@ public class JTransientEngine implements AutoCloseable {
     static final double MAX_SINGLE_FRAME_AREA_LOSS = 0.05;
 
     private final WorkerPool workers;
+    private final ComputeOptions computeOptions;
     private boolean running;
     private boolean closed;
 
@@ -117,16 +121,31 @@ public class JTransientEngine implements AutoCloseable {
     }
 
     /**
-     * Creates an engine with one worker thread per available processor; how many work at once also depends on the
-     * frame size and the free heap.
+     * Creates an engine with one worker thread per available processor and CPU-only compute options.
      */
     public JTransientEngine() {
-        this(Runtime.getRuntime().availableProcessors());
+        this(Runtime.getRuntime().availableProcessors(), ComputeOptions.cpuOnly());
+    }
+
+    /**
+     * Creates an engine with one worker thread per available processor and the supplied compute options for the
+     * faint-mover coarse pass.
+     *
+     * @param compute OpenCL/CPU compute options; null selects CPU-only defaults
+     */
+    public JTransientEngine(ComputeOptions compute) {
+        this(Runtime.getRuntime().availableProcessors(), compute);
     }
 
     /** Creates an engine with at most {@code maxWorkers} worker threads; tests use one for a deterministic order. */
     JTransientEngine(int maxWorkers) {
+        this(maxWorkers, ComputeOptions.cpuOnly());
+    }
+
+    /** Creates an engine with explicit worker cap and compute options. */
+    JTransientEngine(int maxWorkers, ComputeOptions compute) {
         this.workers = new WorkerPool(maxWorkers);
+        this.computeOptions = compute == null ? ComputeOptions.cpuOnly() : compute;
     }
 
 
@@ -1163,17 +1182,29 @@ public class JTransientEngine implements AutoCloseable {
         if (listener != null) {
             input.progress = (percentage, message) -> OperationContext.notify(listener::onProgressUpdate, 92 + percentage / 100, message);
         }
-        FaintMoverSearch.Plan plan = FaintMoverSearch.plan(input, config);
-        if (plan.skippedReason == null) {
-            int moverWorkers = workers.limitWork(plan.tileCount, Math.max(1L, plan.bytesPerTile / 16));
-            if (DiagnosticContext.enabled()) {
-                DiagnosticContext.printf("DEBUG: Faint-mover search -> %d tiles, %d workers%n", plan.tileCount,
-                        moverWorkers);
-            }
+        CoarseWorkloadEstimate workload = FaintMoverSearch.estimateWorkload(input, config);
+        int cpuWorkerBudget = 1;
+        if (workload.eligible()) {
+            int approxTiles = Math.max(1, ((workload.imageWidth() + 511) / 512) * ((workload.imageHeight() + 511) / 512));
+            long approxTileBytes = (long) Math.max(1, workload.coarsePlanePixels()) * 4L * Math.max(1, workload.frames());
+            cpuWorkerBudget = workers.limitWork(approxTiles, Math.max(1L, approxTileBytes / 16));
         }
+        CoarseBackendFactory.Selected selected = CoarseBackendFactory.select(computeOptions, config, workload,
+                cpuWorkerBudget);
+        input.compute = selected.coreSelection();
         try {
+            FaintMoverSearch.Plan plan = FaintMoverSearch.plan(input, config);
+            if (plan.skippedReason == null) {
+                int tileWorkCap = plan.accelerated ? Math.min(8, plan.tileCount) : plan.tileCount;
+                int moverWorkers = workers.limitWork(tileWorkCap, Math.max(1L, plan.bytesPerTile / 16));
+                if (DiagnosticContext.enabled()) {
+                    DiagnosticContext.printf("DEBUG: Faint-mover search -> %d tiles, %d workers (%s: %s)%n",
+                            plan.tileCount, moverWorkers, selected.selection().path(), selected.selection().reason());
+                }
+            }
             return OperationContext.call(StageId.FAINT_MOVER_SEARCH, null, () -> FaintMoverSearch.search(plan));
         } finally {
+            selected.backend().close();
             limitWorkToFrames(keptFrames);
         }
     }

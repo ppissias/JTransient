@@ -15,6 +15,7 @@ import io.github.ppissias.jtransient.engine.LiveSnapshot;
 import io.github.ppissias.jtransient.engine.PipelineStageObserver;
 import io.github.ppissias.jtransient.engine.TransientEngineProgressListener;
 import io.github.ppissias.jtransient.execution.CancellationScope;
+import io.github.ppissias.jtransient.execution.DiagnosticContext;
 import io.github.ppissias.jtransient.execution.OperationContext;
 import io.github.ppissias.jtransient.execution.WorkerPool;
 import io.github.ppissias.jtransient.model.DetectedObject;
@@ -66,16 +67,20 @@ public final class FaintMoverSearch {
      * most frames is searched, since one constant motion does not hold across nights.
      */
     static final double MAX_GAP_MINUTES = 120.0;
-    /** Most coarse motions; a wider speed range for the session is not searched. */
-    static final int MAX_MOTIONS = 100_000;
+    /** Most coarse motions on CPU; a wider speed range for the session is not searched. */
+    public static final int MAX_MOTIONS = 100_000;
+    /** Most coarse motions when the coarse pass runs on OpenCL. */
+    public static final int MAX_MOTIONS_GPU = 400_000;
+    /** Trail length per exposure, in star widths (FWHM), up to which movers are scored as points. */
+    public static final double POINT_TRAIL_FWHM = 2.0;
+    /** Maximum per-exposure trail length, in star widths (FWHM), intended for synthetic tracking. */
+    public static final double MAX_TRAIL_FWHM = 6.0;
     /** Largest share of the maximum heap one tile's work may need. */
     static final double MAX_TILE_HEAP_SHARE = 0.25;
     /** Side of a tile's searched area, in pixels. */
     static final int TILE = 512;
     /** Tiles searched between two looks at the clock and the progress. */
     static final int TILES_PER_BATCH = 32;
-    /** Rows of a tile added together for every motion, so the rows read stay in the processor's cache. */
-    private static final int STRIP_ROWS = 16;
     /** Residuals are clipped to this many robust sigmas. */
     static final double CLIP_SIGMA = 5.0;
     /** Side of the running mean that estimates a residual's local background, in pixels. */
@@ -186,6 +191,8 @@ public final class FaintMoverSearch {
         public TransientEngineProgressListener progress;
         /** Optional requested scalar work previews; called synchronously on joined workers, with no borrowed pixels. */
         public PipelineStageObserver observer;
+        /** Optional selected coarse-search backend and limits; null selects the default Java backend and CPU limits. */
+        public CoarseBackendSelection compute;
     }
 
     /** The search domain of one run, worked out before any pixel is read. */
@@ -196,6 +203,8 @@ public final class FaintMoverSearch {
         public final int tileCount;
         /** Memory one tile's work needs, in bytes. */
         public final long bytesPerTile;
+        /** True when an accelerated OpenCL coarse backend is initially active for this plan. */
+        public final boolean accelerated;
         /**
          * Additions of the coarse search: coarse motions x coarse frames x pixels of the data area / bin², zero when the
          * search cannot run. The search's run time grows about in proportion: about 7e-11 seconds per unit on a 16-core
@@ -205,6 +214,14 @@ public final class FaintMoverSearch {
         final Input input;
         final DetectionConfig config;
         final FaintMoverSearchTelemetry telemetry;
+        final int maxMotions;
+        final double timeLimitSeconds;
+        final CoarseSearchBackend initialBackend;
+        volatile CoarseSearchBackend activeBackend;
+        private final Object fallbackLock = new Object();
+        private JavaCoarseSearch fallbackBackend;
+        private final AtomicInteger fallbackTiles = new AtomicInteger();
+        private volatile String fallbackReason;
         final double fwhm;
         /** The searched frames, in kept order, and their indices in the input's lists. */
         final List<ImageFrame> frames;
@@ -235,13 +252,20 @@ public final class FaintMoverSearch {
         final long startedNanos;
 
         private Plan(String skippedReason, Input input, DetectionConfig config, FaintMoverSearchTelemetry telemetry,
-                     double fwhm, List<ImageFrame> frames, int[] frameIndex, double[] minutes, long referenceTimeMillis,
-                     int[] timeOrder, double[][] motions, double coarseStep, double maxSpeed, int margin, float[] kernel,
-                     int coarseBin, int[][] coarseGroups, List<int[]> tiles, long startedNanos) {
+                     CoarseBackendSelection compute, double fwhm, List<ImageFrame> frames, int[] frameIndex,
+                     double[] minutes, long referenceTimeMillis, int[] timeOrder, double[][] motions,
+                     double coarseStep, double maxSpeed, int margin, float[] kernel, int coarseBin,
+                     int[][] coarseGroups, List<int[]> tiles, long startedNanos) {
             this.skippedReason = skippedReason;
             this.input = input;
             this.config = config;
             this.telemetry = telemetry;
+            CoarseBackendSelection effective = compute != null ? compute : defaultSelection(config);
+            this.maxMotions = effective.maxMotions();
+            this.timeLimitSeconds = effective.timeLimitSeconds();
+            this.initialBackend = effective.backend() != null ? effective.backend() : new JavaCoarseSearch();
+            this.activeBackend = this.initialBackend;
+            this.accelerated = effective.accelerated();
             this.fwhm = fwhm;
             this.frames = frames;
             this.frameIndex = frameIndex;
@@ -286,7 +310,60 @@ public final class FaintMoverSearch {
                     ? (double) motions.length * coarseGroups.length * pixels / (coarseBin * coarseBin) : 0.0;
             telemetry.coarseBin = coarseBin;
             telemetry.coarseFrames = coarseGroups.length;
+            telemetry.maxMotionsApplied = this.maxMotions;
+            telemetry.timeLimitSecondsApplied = this.timeLimitSeconds;
+            telemetry.coarsePath = effective.path();
+            telemetry.coarseDevice = effective.device();
+            telemetry.coarseDriver = effective.driver();
+            telemetry.openclVersion = effective.openclVersion();
+            telemetry.coarseReason = effective.reason();
+            telemetry.gpuSelfTest = effective.selfTest();
+            telemetry.gpuBenchmarkSpeedup = effective.benchmarkSpeedup();
         }
+
+        /** Switches cleanly to a run-local {@link JavaCoarseSearch} once after a GPU backend failure. */
+        JavaCoarseSearch fallBackToJava(CoarseBackendException failure) {
+            JavaCoarseSearch java;
+            boolean firstFallback;
+            synchronized (fallbackLock) {
+                firstFallback = (fallbackBackend == null);
+                if (firstFallback) {
+                    java = initialBackend instanceof JavaCoarseSearch existing ? existing : new JavaCoarseSearch();
+                    java.beginRun(coarseShiftX, coarseShiftY);
+                    fallbackBackend = java;
+                    fallbackReason = failure.kind == CoarseBackendException.Kind.OUT_OF_MEMORY
+                            ? "Not enough GPU memory"
+                            : "GPU stopped responding; finished on CPU";
+                    activeBackend = java;
+                } else {
+                    java = fallbackBackend;
+                }
+            }
+            fallbackTiles.incrementAndGet();
+            if (firstFallback && DiagnosticContext.enabled()) {
+                DiagnosticContext.printf("DEBUG: Faint-mover coarse backend fell back to Java (%s): %s%n",
+                        failure.kind, failure.getMessage());
+            }
+            return java;
+        }
+
+        /** Releases run-scoped resources on whichever coarse backends started a run. */
+        void endRun() {
+            initialBackend.endRun();
+            JavaCoarseSearch fallback;
+            synchronized (fallbackLock) {
+                fallback = fallbackBackend;
+            }
+            if (fallback != null && fallback != initialBackend) {
+                fallback.endRun();
+            }
+        }
+    }
+
+    /** Builds the default CPU backend selection from the run configuration. */
+    private static CoarseBackendSelection defaultSelection(DetectionConfig config) {
+        return new CoarseBackendSelection(new JavaCoarseSearch(), false, MAX_MOTIONS, config.faintMoverMaxSeconds,
+                "Java", "", "", "", "Default CPU backend", Double.NaN, "not run");
     }
 
     /** The candidates of one run, strongest first, with what the search did. */
@@ -390,17 +467,31 @@ public final class FaintMoverSearch {
         /** Whether the time limit stopped the tile; its peaks are then left out. */
         boolean timedOut;
         int followingCamera;
+        long prepNanos;
+        long coarseNanos;
+        long refineNanos;
+        boolean completedWithInitialBackend;
     }
 
-    /**
-     * Works out the search domain: the frames' times, the speeds, the motion grid and the tiles.
-     *
-     * @param input the frames and the run's products; only read
-     * @param config the run's configuration; only read
-     * @return the plan, with a reason when the search cannot run
-     */
-    public static Plan plan(Input input, DetectionConfig config) {
-        long started = System.nanoTime();
+    /** Shared session geometry extracted before motion-grid construction or backend sizing. */
+    private record SessionGeometry(
+            FaintMoverSearchTelemetry telemetry,
+            double fwhm,
+            List<ImageFrame> frames,
+            int[] frameIndex,
+            double[] minutes,
+            long reference,
+            int[] timeOrder,
+            double minSpeed,
+            double maxSpeed,
+            double coarse,
+            double reach,
+            double maxAbs,
+            String skippedReason) {
+    }
+
+    /** Computes session timing, FWHM and speed bounds shared between {@link #estimateWorkload} and {@link #plan}. */
+    private static SessionGeometry analyzeSession(Input input, DetectionConfig config, long started) {
         FaintMoverSearchTelemetry telemetry = new FaintMoverSearchTelemetry();
         telemetry.searchSpeed = Math.max(SPEED_NORMAL, Math.min(SPEED_FASTER, config.faintMoverSearchSpeed));
         List<ImageFrame> kept = input.frames;
@@ -411,13 +502,15 @@ public final class FaintMoverSearch {
         telemetry.fwhmPixels = fwhm;
         telemetry.fwhmFromStars = width != null && width.frames > 0;
         if (kept.size() < MIN_FRAMES || input.masterStack == null) {
-            return skipped(input, config, telemetry, "fewer than " + MIN_FRAMES + " kept frames", started);
+            return new SessionGeometry(telemetry, fwhm, List.of(), new int[0], new double[0], 0L, new int[0],
+                    0, 0, 1, 0, 0, "fewer than " + MIN_FRAMES + " kept frames");
         }
         double[] midMillis = new double[kept.size()];
         for (int k = 0; k < kept.size(); k++) {
             ImageFrame frame = kept.get(k);
             if (frame.timestamp <= 0) {
-                return skipped(input, config, telemetry, "kept frames without a capture time", started);
+                return new SessionGeometry(telemetry, fwhm, List.of(), new int[0], new double[0], 0L, new int[0],
+                        0, 0, 1, 0, 0, "kept frames without a capture time");
             }
             midMillis[k] = frame.timestamp + Math.max(0L, frame.exposureDuration) / 2.0;
         }
@@ -426,8 +519,9 @@ public final class FaintMoverSearch {
         telemetry.frames = n;
         telemetry.framesOutsideSession = kept.size() - n;
         if (n < MIN_FRAMES) {
-            return skipped(input, config, telemetry, String.format(java.util.Locale.US,
-                    "fewer than %d kept frames without a gap of over %.0f minutes", MIN_FRAMES, MAX_GAP_MINUTES), started);
+            return new SessionGeometry(telemetry, fwhm, List.of(), new int[0], new double[0], 0L, new int[0],
+                    0, 0, 1, 0, 0, String.format(java.util.Locale.US,
+                    "fewer than %d kept frames without a gap of over %.0f minutes", MIN_FRAMES, MAX_GAP_MINUTES));
         }
         List<ImageFrame> frames = new ArrayList<>(n);
         double meanMillis = 0;
@@ -450,7 +544,8 @@ public final class FaintMoverSearch {
         double span = last - first;
         telemetry.sessionMinutes = span;
         if (!(span > 0)) {
-            return skipped(input, config, telemetry, "the kept frames have one capture time", started);
+            return new SessionGeometry(telemetry, fwhm, frames, frameIndex, minutes, reference, new int[0],
+                    0, 0, 1, 0, 0, "the kept frames have one capture time");
         }
         double minSpeed = config.faintMoverMinDisplacementFwhm * fwhm / span;
         double maxSpeed = config.faintMoverMaxSpeedPixelsPerMinute;
@@ -459,24 +554,17 @@ public final class FaintMoverSearch {
         telemetry.maxSpeedPixelsPerMinute = maxSpeed;
         telemetry.coarseStepPixelsPerMinute = coarse;
         telemetry.fineStepPixelsPerMinute = coarse / FINE_STEPS;
+        double exposureMinutes = medianExposureMinutes(frames);
+        telemetry.exposureMinutes = exposureMinutes;
+        if (exposureMinutes > 0 && Double.isFinite(exposureMinutes)) {
+            telemetry.pointLikeMaxSpeedPixelsPerMinute = POINT_TRAIL_FWHM * fwhm / exposureMinutes;
+            telemetry.trailFwhmAtMaxSpeed = maxSpeed * exposureMinutes / fwhm;
+        }
         if (!(maxSpeed > minSpeed)) {
-            return skipped(input, config, telemetry, String.format(java.util.Locale.US,
-                    "the slowest motion (%.3f px/min) is not below the fastest", minSpeed), started);
+            return new SessionGeometry(telemetry, fwhm, frames, frameIndex, minutes, reference, new int[0],
+                    minSpeed, maxSpeed, coarse, 0, maxAbs, String.format(java.util.Locale.US,
+                    "the slowest motion (%.3f px/min) is not below the fastest", minSpeed));
         }
-        double reach = maxSpeed / coarse;
-        if (Math.PI * reach * reach > 2.0 * MAX_MOTIONS) {
-            return skipped(input, config, telemetry, String.format(java.util.Locale.US,
-                    "the speed range needs over %d trial motions for this session; lower the fastest motion",
-                    MAX_MOTIONS), started);
-        }
-        double[][] motions = motionGrid(minSpeed, maxSpeed, coarse);
-        telemetry.coarseMotions = motions.length;
-        if (motions.length > MAX_MOTIONS) {
-            return skipped(input, config, telemetry, String.format(java.util.Locale.US,
-                    "the speed range needs over %d trial motions for this session; lower the fastest motion",
-                    MAX_MOTIONS), started);
-        }
-
         Integer[] order = new Integer[n];
         for (int k = 0; k < n; k++) {
             order[k] = k;
@@ -486,13 +574,115 @@ public final class FaintMoverSearch {
         for (int k = 0; k < n; k++) {
             timeOrder[k] = order[k];
         }
+        double reach = maxSpeed / coarse;
+        return new SessionGeometry(telemetry, fwhm, frames, frameIndex, minutes, reference, timeOrder,
+                minSpeed, maxSpeed, coarse, reach, maxAbs, null);
+    }
 
+    /** Median positive exposure duration in minutes, or {@code Double.NaN} when none is present. */
+    private static double medianExposureMinutes(List<ImageFrame> frames) {
+        long[] durations = new long[frames.size()];
+        int count = 0;
+        for (ImageFrame frame : frames) {
+            if (frame.exposureDuration > 0L) {
+                durations[count++] = frame.exposureDuration;
+            }
+        }
+        if (count == 0) {
+            return Double.NaN;
+        }
+        Arrays.sort(durations, 0, count);
+        long medianMillis = (count & 1) == 1
+                ? durations[count / 2]
+                : Math.round(0.5 * (durations[count / 2 - 1] + durations[count / 2]));
+        return medianMillis / 60_000.0;
+    }
+
+    /**
+     * Estimates search eligibility and coarse-tile dimensions before choosing a compute backend, so GPU selection can
+     * verify memory limits prior to admitting {@link #MAX_MOTIONS_GPU}.
+     *
+     * @param input search inputs (frames, metrics, master stack); only read
+     * @param config run configuration; only read
+     * @return pre-plan workload estimate
+     */
+    public static CoarseWorkloadEstimate estimateWorkload(Input input, DetectionConfig config) {
+        SessionGeometry g = analyzeSession(input, config, System.nanoTime());
+        if (g.skippedReason() != null) {
+            return new CoarseWorkloadEstimate(false, 0, 0, 0, 0, 1, 0, 0, 0.0, -1);
+        }
+        double circleBound = Math.PI * g.reach() * g.reach();
+        if (circleBound > 2.0 * MAX_MOTIONS_GPU) {
+            return new CoarseWorkloadEstimate(false, g.frames().size(), input.masterStack[0].length,
+                    input.masterStack.length, 0, 1, 0, 0, circleBound, -1);
+        }
+        int speed = g.telemetry().searchSpeed;
+        int coarseBin = g.fwhm() >= COARSE_BIN_MIN_FWHM[speed] ? COARSE_BIN : 1;
+        int[][] coarseGroups = speed == SPEED_NORMAL ? singleFrames(g.frames().size())
+                : coarseGroups(g.minutes(), g.timeOrder(), g.maxSpeed(), COARSE_GROUP_MAX_FWHM[speed] * g.fwhm());
+        float[] kernel = FaintStreakSearch.kernel(g.fwhm() / 2.3548);
+        int maxShift = (int) Math.ceil((g.maxSpeed() + g.coarse()) * g.maxAbs());
+        int margin = maxShift + Math.max(kernel.length / 2 + 2, CUTOUT / 2 + REFINE_RADIUS + 1);
+        long tileBytes = tileBytes(margin, g.frames().size(), coarseBin, coarseGroups.length);
+        if (tileBytes > MAX_TILE_HEAP_SHARE * Runtime.getRuntime().maxMemory()) {
+            return new CoarseWorkloadEstimate(false, g.frames().size(), input.masterStack[0].length,
+                    input.masterStack.length, coarseGroups.length, coarseBin, margin, 0, circleBound, -1);
+        }
+        int w = Math.min(TILE, input.masterStack[0].length);
+        int h = Math.min(TILE, input.masterStack.length);
+        int coarsePlanePixels;
+        if (coarseBin == 1 && coarseGroups.length == g.frames().size()) {
+            coarsePlanePixels = (w + 2 * margin) * (h + 2 * margin);
+        } else {
+            int coarseMargin = margin / coarseBin;
+            int offset = margin - coarseMargin * coarseBin;
+            int stride = (w + 2 * margin - offset) / coarseBin;
+            int rows = (h + 2 * margin - offset) / coarseBin;
+            coarsePlanePixels = stride * rows;
+        }
+        double[][] motions = motionGrid(g.minSpeed(), g.maxSpeed(), g.coarse());
+        int actual = motions.length <= MAX_MOTIONS_GPU ? motions.length : -1;
+        return new CoarseWorkloadEstimate(actual > 0, g.frames().size(), input.masterStack[0].length,
+                input.masterStack.length, coarseGroups.length, coarseBin, margin, coarsePlanePixels,
+                motions.length, actual);
+    }
+
+    /**
+     * Works out the search domain: the frames' times, the speeds, the motion grid and the tiles.
+     *
+     * @param input the frames and the run's products; only read
+     * @param config the run's configuration; only read
+     * @return the plan, with a reason when the search cannot run
+     */
+    public static Plan plan(Input input, DetectionConfig config) {
+        long started = System.nanoTime();
+        SessionGeometry g = analyzeSession(input, config, started);
+        FaintMoverSearchTelemetry telemetry = g.telemetry();
+        if (g.skippedReason() != null) {
+            return skipped(input, config, telemetry, g.skippedReason(), started);
+        }
+        CoarseBackendSelection compute = input.compute != null ? input.compute : defaultSelection(config);
+        int maxMotions = compute.maxMotions();
+        if (Math.PI * g.reach() * g.reach() > 2.0 * maxMotions) {
+            return skipped(input, config, telemetry, String.format(java.util.Locale.US,
+                    "the speed range needs over %d trial motions for this session; lower the fastest motion",
+                    maxMotions), started);
+        }
+        double[][] motions = motionGrid(g.minSpeed(), g.maxSpeed(), g.coarse());
+        telemetry.coarseMotions = motions.length;
+        if (motions.length > maxMotions) {
+            return skipped(input, config, telemetry, String.format(java.util.Locale.US,
+                    "the speed range needs over %d trial motions for this session; lower the fastest motion",
+                    maxMotions), started);
+        }
+
+        int n = g.frames().size();
         int speed = telemetry.searchSpeed;
-        int coarseBin = fwhm >= COARSE_BIN_MIN_FWHM[speed] ? COARSE_BIN : 1;
+        int coarseBin = g.fwhm() >= COARSE_BIN_MIN_FWHM[speed] ? COARSE_BIN : 1;
         int[][] coarseGroups = speed == SPEED_NORMAL ? singleFrames(n)
-                : coarseGroups(minutes, timeOrder, maxSpeed, COARSE_GROUP_MAX_FWHM[speed] * fwhm);
-        float[] kernel = FaintStreakSearch.kernel(fwhm / 2.3548);
-        int maxShift = (int) Math.ceil((maxSpeed + coarse) * maxAbs);
+                : coarseGroups(g.minutes(), g.timeOrder(), g.maxSpeed(), COARSE_GROUP_MAX_FWHM[speed] * g.fwhm());
+        float[] kernel = FaintStreakSearch.kernel(g.fwhm() / 2.3548);
+        int maxShift = (int) Math.ceil((g.maxSpeed() + g.coarse()) * g.maxAbs());
         int margin = maxShift + Math.max(kernel.length / 2 + 2, CUTOUT / 2 + REFINE_RADIUS + 1);
         long tileBytes = tileBytes(margin, n, coarseBin, coarseGroups.length);
         if (tileBytes > MAX_TILE_HEAP_SHARE * Runtime.getRuntime().maxMemory()) {
@@ -513,8 +703,9 @@ public final class FaintMoverSearch {
             }
         }
         telemetry.tiles = tiles.size();
-        return new Plan(null, input, config, telemetry, fwhm, frames, frameIndex, minutes, reference, timeOrder,
-                motions, coarse, maxSpeed, margin, kernel, coarseBin, coarseGroups, tiles, started);
+        return new Plan(null, input, config, telemetry, compute, g.fwhm(), g.frames(), g.frameIndex(), g.minutes(),
+                g.reference(), g.timeOrder(), motions, g.coarse(), g.maxSpeed(), margin, kernel, coarseBin,
+                coarseGroups, tiles, started);
     }
 
     /**
@@ -635,41 +826,70 @@ public final class FaintMoverSearch {
                     "Faint-mover search skipped: " + plan.skippedReason);
             return new Result(List.of(), telemetry);
         }
-        long deadline = plan.startedNanos + (long) (plan.config.faintMoverMaxSeconds * 1e9);
+        long deadline = plan.startedNanos + (long) (plan.timeLimitSeconds * 1e9);
         List<Peak> peaks = new ArrayList<>();
         EvidencePool evidence = new EvidencePool();
         SearchProgress progress = new SearchProgress(plan, deadline);
+        try {
+            plan.initialBackend.beginRun(plan.coarseShiftX, plan.coarseShiftY);
+        } catch (CoarseBackendException e) {
+            plan.fallBackToJava(e);
+        }
         int searched = 0;
-        for (int from = 0; from < plan.tiles.size(); from += TILES_PER_BATCH) {
-            CancellationScope.check();
-            if (System.nanoTime() > deadline) {
-                telemetry.truncated = true;
-                break;
-            }
-            List<Callable<TileResult>> tasks = new ArrayList<>();
-            for (int[] tile : plan.tiles.subList(from, Math.min(plan.tiles.size(), from + TILES_PER_BATCH))) {
-                TileProgress tileProgress = new TileProgress(progress, from + tasks.size(), tile);
-                tasks.add(() -> searchTile(plan, tile[0], tile[1], tile[2], tile[3], deadline, evidence, tileProgress));
-            }
-            int finished = 0;
-            for (TileResult tile : WorkerPool.invokeAll(tasks)) {
-                if (tile.timedOut) {
+        long totalPrepNanos = 0L;
+        long totalCoarseNanos = 0L;
+        long totalRefineNanos = 0L;
+        int completedWithInitial = 0;
+        try {
+            for (int from = 0; from < plan.tiles.size(); from += TILES_PER_BATCH) {
+                CancellationScope.check();
+                if (System.nanoTime() > deadline) {
                     telemetry.truncated = true;
-                    continue;
+                    break;
                 }
-                finished++;
-                peaks.addAll(tile.peaks);
-                telemetry.searchedPixels += tile.searchedPixels;
-                telemetry.refinedPeaks += tile.refinedPeaks;
-                telemetry.belowScore += tile.belowScore;
-                telemetry.rejectedSplitHalf += tile.rejectedSplitHalf;
-                telemetry.rejectedFewFrames += tile.rejectedFewFrames;
-                telemetry.rejectedStationary += tile.rejectedStationary;
-                telemetry.followingCamera += tile.followingCamera;
+                List<Callable<TileResult>> tasks = new ArrayList<>();
+                for (int[] tile : plan.tiles.subList(from, Math.min(plan.tiles.size(), from + TILES_PER_BATCH))) {
+                    TileProgress tileProgress = new TileProgress(progress, from + tasks.size(), tile);
+                    tasks.add(() -> searchTile(plan, tile[0], tile[1], tile[2], tile[3], deadline, evidence, tileProgress));
+                }
+                int finished = 0;
+                for (TileResult tile : WorkerPool.invokeAll(tasks)) {
+                    totalPrepNanos += tile.prepNanos;
+                    totalCoarseNanos += tile.coarseNanos;
+                    totalRefineNanos += tile.refineNanos;
+                    if (tile.timedOut) {
+                        telemetry.truncated = true;
+                        continue;
+                    }
+                    finished++;
+                    if (tile.completedWithInitialBackend) {
+                        completedWithInitial++;
+                    }
+                    peaks.addAll(tile.peaks);
+                    telemetry.searchedPixels += tile.searchedPixels;
+                    telemetry.refinedPeaks += tile.refinedPeaks;
+                    telemetry.belowScore += tile.belowScore;
+                    telemetry.rejectedSplitHalf += tile.rejectedSplitHalf;
+                    telemetry.rejectedFewFrames += tile.rejectedFewFrames;
+                    telemetry.rejectedStationary += tile.rejectedStationary;
+                    telemetry.followingCamera += tile.followingCamera;
+                }
+                searched += finished;
+                if (telemetry.truncated) {
+                    break;
+                }
             }
-            searched += finished;
-            if (telemetry.truncated) {
-                break;
+        } finally {
+            plan.endRun();
+        }
+        telemetry.prepMs = totalPrepNanos / 1_000_000L;
+        telemetry.coarseMs = totalCoarseNanos / 1_000_000L;
+        telemetry.refineMs = totalRefineNanos / 1_000_000L;
+        telemetry.cpuFallbackTiles = plan.fallbackTiles.get();
+        if (telemetry.cpuFallbackTiles > 0) {
+            telemetry.coarseReason = plan.fallbackReason;
+            if (completedWithInitial == 0 && "OpenCL".equals(telemetry.coarsePath)) {
+                telemetry.coarsePath = "Java";
             }
         }
         telemetry.tilesSearched = searched;
@@ -748,14 +968,40 @@ public final class FaintMoverSearch {
 
         /** Counts a completed tile after its existing search checks, without changing scientific tile telemetry. */
         private void finish() { owner.finishedTiles.incrementAndGet(); update(1_000_000, "tile finished", -1); }
+
+        /** Creates the coarse-backend progress, cancellation and deadline adapter for this tile. */
+        private CoarseControl coarseControl(long deadline, String phaseLabel) {
+            return new CoarseControl() {
+                @Override
+                public boolean pastDeadline() {
+                    return System.nanoTime() > deadline;
+                }
+
+                @Override
+                public void checkCancelled() {
+                    CancellationScope.check();
+                }
+
+                @Override
+                public void progress(long done, long total, int sampleMotionIndex) {
+                    long safeTotal = Math.max(1L, total);
+                    long clampedDone = Math.max(0L, Math.min(done, safeTotal));
+                    int units = 100_000 + (int) (800_000L * clampedDone / safeTotal);
+                    int validMotion = sampleMotionIndex >= 0 && sampleMotionIndex < owner.plan.motions.length
+                            ? sampleMotionIndex : -1;
+                    update(units, phaseLabel, validMotion);
+                }
+            };
+        }
     }
 
     private static Plan skipped(Input input, DetectionConfig config, FaintMoverSearchTelemetry telemetry,
                                 String reason, long started) {
         telemetry.skippedReason = reason;
         telemetry.elapsedMs = (System.nanoTime() - started) / 1_000_000L;
-        return new Plan(reason, input, config, telemetry, telemetry.fwhmPixels, List.of(), new int[0], new double[0],
-                0L, new int[0], new double[0][], 1.0, 0.0, 0, new float[]{1f}, 1, new int[0][], List.of(), started);
+        return new Plan(reason, input, config, telemetry, input.compute, telemetry.fwhmPixels, List.of(), new int[0],
+                new double[0], 0L, new int[0], new double[0][], 1.0, 0.0, 0, new float[]{1f}, 1, new int[0][],
+                List.of(), started);
     }
 
     /** The coarse motions, {vx, vy} in pixels per minute, on a square grid with the speeds in the range. */
@@ -823,12 +1069,12 @@ public final class FaintMoverSearch {
 
     /** Searches a tile using temporary preprocessed residuals, without retaining those buffers in peaks. */
     private static TileResult searchTile(Plan plan, int tx, int ty, int w, int h, long deadline, EvidencePool evidence, TileProgress progress) {
+        long tStart = System.nanoTime();
         progress.update(0, "preparing residuals", -1);
         TileResult result = new TileResult();
         int m = plan.margin;
         int width = w + 2 * m;
         PreparedTile prepared = prepareTile(plan, tx, ty, w, h, progress);
-        progress.update(100_000, "coarse trial motions", 0);
         float[][] residuals = prepared.residuals;
         boolean[] bad = prepared.bad;
         BitSet[] streakMasks = prepared.streakMasks;
@@ -845,12 +1091,14 @@ public final class FaintMoverSearch {
             }
         }
         if (good < MIN_GOOD_PIXELS) {
+            result.prepNanos = System.nanoTime() - tStart;
             progress.finish();
             return result;
         }
         result.searchedPixels = good;
         double noise = stackNoise(plan, residuals, width, w, h, innerBad);
         if (!(noise > 0)) {
+            result.prepNanos = System.nanoTime() - tStart;
             progress.finish();
             return result;
         }
@@ -858,9 +1106,13 @@ public final class FaintMoverSearch {
         CoarseTile coarse = coarseTile(plan, residuals, innerBad, w, h);
         double coarseNoise = coarse.residuals() == residuals ? noise : coarseNoise(plan, coarse);
         if (!(coarseNoise > 0)) {
+            result.prepNanos = System.nanoTime() - tStart;
             progress.finish();
             return result;
         }
+        long tCoarseStart = System.nanoTime();
+        result.prepNanos = tCoarseStart - tStart;
+
         float[][] coarseFrames = coarse.residuals();
         int cw = coarse.width();
         int ch = coarse.height();
@@ -869,29 +1121,29 @@ public final class FaintMoverSearch {
         float[] best = new float[cw * ch];
         Arrays.fill(best, Float.NEGATIVE_INFINITY);
         int[] bestMotion = new int[cw * ch];
-        float[] acc = new float[STRIP_ROWS * cw];
-        for (int s0 = 0; s0 < ch; s0 += STRIP_ROWS) {
-            int rows = Math.min(STRIP_ROWS, ch - s0);
-            if (System.nanoTime() > deadline) {
-                result.timedOut = true;
-                return result;
-            }
-            for (int mi = 0; mi < motions.length; mi++) {
-                CancellationScope.check();
-                if ((mi & 63) == 0) progress.update(100_000 + (int) (800_000L * ((long) (s0 / STRIP_ROWS) * motions.length + mi)
-                        / (((ch + STRIP_ROWS - 1L) / STRIP_ROWS) * motions.length)), "coarse trial motions", mi);
-                Arrays.fill(acc, 0, rows * cw, 0f);
-                addCoarseFrames(coarseFrames, plan.coarseShiftX[mi], plan.coarseShiftY[mi], coarse.stride(),
-                        coarse.margin(), s0, rows, cw, acc);
-                int base = s0 * cw;
-                for (int i = 0; i < rows * cw; i++) {
-                    float value = acc[i] * scale;
-                    if (value > best[base + i]) {
-                        best[base + i] = value;
-                        bestMotion[base + i] = mi;
-                    }
-                }
-            }
+        CoarseTileJob job = new CoarseTileJob(coarseFrames, coarse.stride(), coarse.margin(), cw, ch, scale,
+                best, bestMotion);
+        CoarseSearchBackend backend = plan.activeBackend;
+        String phaseLabel = backend instanceof JavaCoarseSearch
+                ? "coarse trial motions"
+                : "first pass on GPU (" + plan.telemetry.coarseDevice + ")";
+        progress.update(100_000, phaseLabel, 0);
+        boolean finished;
+        try {
+            finished = backend.search(job, progress.coarseControl(deadline, phaseLabel));
+            result.completedWithInitialBackend = finished && (backend == plan.initialBackend);
+        } catch (CoarseBackendException e) {
+            JavaCoarseSearch fallback = plan.fallBackToJava(e);
+            Arrays.fill(best, Float.NEGATIVE_INFINITY);
+            Arrays.fill(bestMotion, 0);
+            finished = fallback.search(job, progress.coarseControl(deadline, "coarse trial motions"));
+            result.completedWithInitialBackend = false;
+        }
+        long tRefineStart = System.nanoTime();
+        result.coarseNanos = tRefineStart - tCoarseStart;
+        if (!finished) {
+            result.timedOut = true;
+            return result;
         }
         boolean[] coarseBad = coarse.bad();
         for (int i = 0; i < best.length; i++) {
@@ -929,6 +1181,7 @@ public final class FaintMoverSearch {
                 }
             }
         }
+        result.refineNanos = System.nanoTime() - tRefineStart;
         progress.finish();
         return result;
     }
@@ -996,48 +1249,6 @@ public final class FaintMoverSearch {
             }
         }
         return new CoarseTile(coarse, stride, coarseMargin, cw, ch, bad);
-    }
-
-    /**
-     * Adds the coarse frames, shifted along one motion, into {@code acc} for a strip of coarse rows, four frames per
-     * pass over {@code acc}. Each sum is formed frame by frame in order, exactly as when adding them one at a time.
-     */
-    private static void addCoarseFrames(float[][] frames, int[] sx, int[] sy, int stride, int margin, int s0, int rows,
-                                        int w, float[] acc) {
-        int n = frames.length;
-        int k = 0;
-        for (; k + 4 <= n; k += 4) {
-            float[] r0 = frames[k];
-            float[] r1 = frames[k + 1];
-            float[] r2 = frames[k + 2];
-            float[] r3 = frames[k + 3];
-            for (int row = 0; row < rows; row++) {
-                int line = (s0 + row + margin) * stride + margin;
-                int a0 = line + sy[k] * stride + sx[k];
-                int a1 = line + sy[k + 1] * stride + sx[k + 1];
-                int a2 = line + sy[k + 2] * stride + sx[k + 2];
-                int a3 = line + sy[k + 3] * stride + sx[k + 3];
-                int dst = row * w;
-                for (int x = 0; x < w; x++) {
-                    float sum = acc[dst + x];
-                    sum += r0[a0 + x];
-                    sum += r1[a1 + x];
-                    sum += r2[a2 + x];
-                    sum += r3[a3 + x];
-                    acc[dst + x] = sum;
-                }
-            }
-        }
-        for (; k < n; k++) {
-            float[] r = frames[k];
-            for (int row = 0; row < rows; row++) {
-                int src = (s0 + row + margin + sy[k]) * stride + margin + sx[k];
-                int dst = row * w;
-                for (int x = 0; x < w; x++) {
-                    acc[dst + x] += r[src + x];
-                }
-            }
-        }
     }
 
     /** The robust spread of the coarse frames' stacks along the same reference motion as {@link #stackNoise}. */

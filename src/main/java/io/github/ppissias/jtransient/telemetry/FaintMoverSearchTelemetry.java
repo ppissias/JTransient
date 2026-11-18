@@ -85,4 +85,36 @@ public class FaintMoverSearchTelemetry {
     public long diagnosticBytes;
     /** Wall-clock time of the search, in milliseconds. */
     public long elapsedMs;
+    /** Sum of per-tile preparation durations across workers, in milliseconds. */
+    public long prepMs;
+    /** Sum of per-tile coarse-search durations across workers, in milliseconds. */
+    public long coarseMs;
+    /** Sum of per-tile refinement and check durations across workers, in milliseconds. */
+    public long refineMs;
+    /** Median exposure duration of the searched frames, in minutes; NaN when unavailable. */
+    public double exposureMinutes = Double.NaN;
+    /** Speed above which a single exposure trails beyond {@code POINT_TRAIL_FWHM} star widths, in px/min; NaN when unavailable. */
+    public double pointLikeMaxSpeedPixelsPerMinute = Double.NaN;
+    /** Per-exposure trail length at {@link #maxSpeedPixelsPerMinute}, in FWHM; NaN when unavailable. */
+    public double trailFwhmAtMaxSpeed = Double.NaN;
+    /** Coarse-search backend path used: "Java" or "OpenCL". */
+    public String coarsePath = "Java";
+    /** Selected OpenCL device name, or empty when Java ran. */
+    public String coarseDevice = "";
+    /** Selected OpenCL driver version, or empty when Java ran. */
+    public String coarseDriver = "";
+    /** Selected OpenCL version string, or empty when Java ran. */
+    public String openclVersion = "";
+    /** Explanation for why the selected coarse-search path ran or fell back. */
+    public String coarseReason = "Default CPU backend";
+    /** GPU self-test outcome: "passed", "failed", or "not run". */
+    public String gpuSelfTest = "not run";
+    /** Measured GPU-over-CPU speedup from the benchmark, or NaN when not measured. */
+    public double gpuBenchmarkSpeedup = Double.NaN;
+    /** Tiles whose coarse pass fell back from GPU to Java during this run. */
+    public int cpuFallbackTiles;
+    /** Trial-motion cap applied to this run's plan. */
+    public int maxMotionsApplied;
+    /** Time limit applied to this run, in seconds. */
+    public double timeLimitSecondsApplied;
 }

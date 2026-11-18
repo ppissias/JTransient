@@ -138,6 +138,7 @@ All fields are public and mutable. A few implementation details matter when you 
   - [enableFaintMoverFrameLimit (default true)](#enablefaintmoverframelimit-default-true)
   - [faintMoverSearchSpeed (default 1)](#faintmoversearchspeed-default-1)
   - [faintMoverMaxSeconds (default 600.0)](#faintmovermaxseconds-default-6000)
+  - [faintMoverMaxSecondsGpu (default 1800.0)](#faintmovermaxsecondsgpu-default-18000)
 - [10. Auto-Tuners](#10-auto-tuners)
 - [11. Practical Starting Point](#11-practical-starting-point)
 
@@ -867,7 +868,7 @@ Digital tracking of point-like movers too faint for the single frames: the kept 
 
 ### `enableFaintMoverSearch` (default `true`)
 
-Runs the search after residual analysis. It needs capture times on the kept frames and at least 8 kept frames in one session; frames separated from the others by a gap of over two hours are left out. Its run time grows with the number of trial motions, frames and pixels: about 70-90 s for 28 frames of 60 megapixels over 75 minutes and 300 s for 106 frames of 5 megapixels over four hours on a 16-core desktop. With wide stars or frames close in time, the first pass adds pixels or frames together and the search is several times faster; see `faintMoverSearchSpeed`.
+Runs the search after residual analysis. It needs capture times on the kept frames and at least 8 kept frames in one session; frames separated from the others by a gap of over two hours are left out. Its CPU run time grows with the number of trial motions, frames and pixels: about 70-90 s for 28 frames of 60 megapixels over 75 minutes and 225-300 s for ~106-111 frames of ~4-5 megapixels over four hours on a multi-core laptop/desktop. When instantiated with `ComputeOptions` (`AUTO` or `GPU`), it automatically uses an OpenCL GPU if available and verified bit-identical and faster than CPU (`AUTO` requires >2× benchmark speedup and falls back transparently to CPU otherwise). For example, on an NVIDIA GeForce RTX 5060 Laptop GPU, the coarse pass runs roughly 25×–75× faster, cutting long ~111-frame sequences from ~226 s to ~16 s (~14× stage speedup) and medium sessions by ~3×–4× (high-MP low-motion sessions remain limited mainly by CPU tile preparation around ~72–77 s). With wide stars or frames close in time, the first pass also adds pixels or frames together; see `faintMoverSearchSpeed`.
 
 ### `faintMoverMinDisplacementFwhm` (default `2.0`)
 
@@ -875,7 +876,7 @@ Slowest motion searched, as the distance moved over the session in star widths (
 
 ### `faintMoverMaxSpeedPixelsPerMinute` (default `1.0`)
 
-Fastest motion searched, in pixels per minute. The number of trial motions grows with its square, and the search is not run when it would need more than 100,000 or one tile's work more than a quarter of the heap.
+Fastest motion searched, in pixels per minute. The number of trial motions grows with its square, and the search is not run when it would need more than 100,000 on CPU (or 400,000 when using a verified OpenCL GPU backend) or one tile's work more than a quarter of the heap.
 
 ### `faintMoverMinScore` (default `8.0`)
 
@@ -899,7 +900,11 @@ The telemetry records the speed (`searchSpeed`) and what it did (`coarseBin`, `c
 
 ### `faintMoverMaxSeconds` (default `600.0`)
 
-Time limit, in seconds from the start of the search. When it is reached, the remaining tiles are not searched and the telemetry says so (`truncated`, `tilesSearched` of `tiles`).
+Time limit, in seconds from the start of the search when running on CPU. When it is reached, the remaining tiles are not searched and the telemetry says so (`truncated`, `tilesSearched` of `tiles`).
+
+### `faintMoverMaxSecondsGpu` (default `1800.0`)
+
+Time limit, in seconds from the start of the search when the coarse pass runs on an OpenCL graphics card. Allows larger motion grids on faster hardware before stopping cleanly at completed tile boundaries.
 
 ## 10. Auto-Tuners
 

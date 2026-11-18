@@ -29,7 +29,8 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 ## What The Library Exposes
 
 - `CalibratedAutoTuner.tune(...)`: derives a `DetectionConfig` for a session by measuring false positives and sensitivity on its own frames, within the false-positive budget of a profile (low, medium, high, maximum)
-- `JTransientEngine.runPipeline(...)`: full extraction, quality filtering, master-stack masking, slow-mover candidate detection, track linking, and optional variable-star detection
+- `JTransientEngine.runPipeline(...)`: full extraction, quality filtering, master-stack masking, slow-mover candidate detection, track linking, faint-mover digital tracking, and optional variable-star detection
+- `new JTransientEngine(ComputeOptions)`: optional OpenCL GPU acceleration for the faint-mover coarse search (`Auto` mode verifies bit-identical parity and >2× speedup before enabling the GPU, falling back cleanly to CPU otherwise; on an NVIDIA GeForce RTX 5060 Laptop GPU this delivers roughly 25×–75× coarse-pass and 3×–14× stage speedups on compute-heavy sequences)
 - `JTransientEngine.detectTransients(...)`: same early pipeline, but stops after the stationary-star veto and returns per-frame transients
 - `JTransientEngine.generateMasterStack(...)`: precomputes a reusable median master stack
 - `SourceExtractor.extractSources(...)`: standalone single-frame object extraction
@@ -63,7 +64,9 @@ For development, document every new Java class, record, enum and interface at ty
 
 The project name is `JTransient`, and its version is declared in `build.gradle`. SpacePixels declares the library version it requires in its own dependency declarations; its development composite build uses the sibling checkout directly.
 
-`check` checks adopted config/execution/science bytecode boundaries; `mavenCentralBundle` also compiles and runs a current-version `apiConsumer` (run `apiConsumer` directly after an API change). SpacePixels declares its required library versions directly in its dependency declarations and checks its packaged API with `apiConsumerTest`. See the [SpacePixels publishing guide](https://github.com/ppissias/SpacePixels/blob/master/PUBLISHING.md#maven-central-publishing).
+`check` checks adopted config/execution/science/compute bytecode boundaries (`verifyArchitecture`); `openclTest` exercises the optional OpenCL faint-mover coarse backend against Java on available hardware; `mavenCentralBundle` also compiles and runs a current-version `apiConsumer` (run `apiConsumer` directly after an API change). SpacePixels declares its required library versions directly in its dependency declarations and checks its packaged API with `apiConsumerTest`. See the [SpacePixels publishing guide](https://github.com/ppissias/SpacePixels/blob/master/PUBLISHING.md#maven-central-publishing).
+
+When running with OpenCL GPU acceleration on Java 21+ (or the Windows launcher), pass `--enable-native-access=ALL-UNNAMED` so JOCL native bindings load cleanly; headless `new JTransientEngine(ComputeOptions)` defaults to deterministic CPU execution when omitted (`new JTransientEngine()`).
 
 To prepare a Maven Central release bundle locally:
 

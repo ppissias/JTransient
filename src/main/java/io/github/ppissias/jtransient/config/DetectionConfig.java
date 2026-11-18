@@ -657,6 +657,9 @@ public class DetectionConfig implements Cloneable {
     /** * Time limit for the search, in seconds; the search then stops and reports the part it searched. */
     public double faintMoverMaxSeconds = 600.0;
 
+    /** * Time limit for the search when the coarse pass runs on OpenCL, in seconds; the search then stops and reports the part it searched. */
+    public double faintMoverMaxSecondsGpu = 1800.0;
+
     /**
      * Creates a configuration initialized with the library defaults.
      */
