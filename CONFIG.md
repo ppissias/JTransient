@@ -121,9 +121,9 @@ All fields are public and mutable. A few implementation details matter when you 
   - [variableMinFrames (default 20)](#variableminframes-default-20)
   - [variableMinSpanMinutes (default 30.0)](#variableminspanminutes-default-300)
   - [variableNoiseModelNeighbors (default 50)](#variablenoisemodelneighbors-default-50)
-  - [variableScoreSigma (default 5.0)](#variablescoresigma-default-50)
+  - [variableScoreSigma (default 7.0)](#variablescoresigma-default-70)
   - [variableMinAmplitudeMag / variableLimitedMinAmplitudeMag (defaults 0.05 / 0.1)](#variableminamplitudemag--variablelimitedminamplitudemag-defaults-005--01)
-  - [variableAmplitudeNoiseFactor (default 4.0)](#variableamplitudenoisefactor-default-40)
+  - [variableAmplitudeNoiseFactor (default 5.0)](#variableamplitudenoisefactor-default-50)
   - [variableMinPersistenceFrames (default 5)](#variableminpersistenceframes-default-5)
   - [variableMinSplitHalfCorrelation (default 0.5)](#variableminsplithalfcorrelation-default-05)
   - [variableMaxApertureAmplitudeDifference (default 0.3)](#variablemaxapertureamplitudedifference-default-03)
@@ -138,7 +138,6 @@ All fields are public and mutable. A few implementation details matter when you 
   - [enableFaintMoverFrameLimit (default true)](#enablefaintmoverframelimit-default-true)
   - [faintMoverSearchSpeed (default 1)](#faintmoversearchspeed-default-1)
   - [faintMoverMaxSeconds (default 600.0)](#faintmovermaxseconds-default-6000)
-  - [faintMoverMaxSecondsGpu (default 1800.0)](#faintmovermaxsecondsgpu-default-18000)
 - [10. Auto-Tuners](#10-auto-tuners)
 - [11. Practical Starting Point](#11-practical-starting-point)
 
@@ -743,7 +742,7 @@ Validation warns when a positive cap is below the fewest stars from which check 
 
 ### `photometryMinSnr` (default `10.0`)
 
-Stars whose median per-frame signal-to-noise ratio (main aperture, sky noise only) is below this are still measured and exported, but kept out of the ensemble and the variability scoring. `0` disables the cut.
+Stars whose median per-frame signal-to-noise ratio (main aperture, correlated sky noise included when measured) is below this are still measured and exported, but kept out of the ensemble and the variability scoring. `0` disables the cut.
 
 ### `photometryMaxElongation` (default `1.5`)
 
@@ -819,17 +818,17 @@ DATA gate: minimum time span of a candidate's usable measurements. Ignored witho
 
 Stars nearest in magnitude used for the expected scatter and the robust z-scores.
 
-### `variableScoreSigma` (default `5.0`)
+### `variableScoreSigma` (default `7.0`)
 
-Both the excess-scatter z-score and the Stetson J z-score must reach this for a star to become a candidate.
+Both the excess-scatter z-score and the Stetson J z-score must reach this for a star to become a candidate (and when at least 5 constant neighbours of similar brightness exist locally, its scatter must also be at least 2× their median scatter).
 
 ### `variableMinAmplitudeMag` / `variableLimitedMinAmplitudeMag` (defaults `0.05` / `0.1`)
 
 AMPLITUDE gate: minimum robust amplitude (95th minus 5th percentile) for `READY` and `LIMITED` sessions.
 
-### `variableAmplitudeNoiseFactor` (default `4.0`)
+### `variableAmplitudeNoiseFactor` (default `5.0`)
 
-AMPLITUDE gate: the amplitude must also exceed this multiple of the expected scatter.
+AMPLITUDE gate: the amplitude must also exceed this multiple of the larger of the global expected scatter and the local constant-star scatter.
 
 ### `variableMinPersistenceFrames` (default `5`)
 
@@ -900,11 +899,7 @@ The telemetry records the speed (`searchSpeed`) and what it did (`coarseBin`, `c
 
 ### `faintMoverMaxSeconds` (default `600.0`)
 
-Time limit, in seconds from the start of the search when running on CPU. When it is reached, the remaining tiles are not searched and the telemetry says so (`truncated`, `tilesSearched` of `tiles`).
-
-### `faintMoverMaxSecondsGpu` (default `1800.0`)
-
-Time limit, in seconds from the start of the search when the coarse pass runs on an OpenCL graphics card. Allows larger motion grids on faster hardware before stopping cleanly at completed tile boundaries.
+Shared time limit, in seconds from the start of the search, applying to both CPU and OpenCL GPU coarse paths. When it is reached, the remaining tiles are not searched and the telemetry says so (`truncated`, `tilesSearched` of `tiles`).
 
 ## 10. Auto-Tuners
 

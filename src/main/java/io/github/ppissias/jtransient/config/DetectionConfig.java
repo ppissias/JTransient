@@ -575,7 +575,7 @@ public class DetectionConfig implements Cloneable {
     public int variableNoiseModelNeighbors = 50;
 
     /** * Robust z-score that both the scatter score and the Stetson J score must reach for a star to become a candidate. */
-    public double variableScoreSigma = 5.0;
+    public double variableScoreSigma = 7.0;
 
     /** * Smallest robust amplitude (5th to 95th percentile), in mag, for a high-confidence result. */
     public double variableMinAmplitudeMag = 0.05;
@@ -583,8 +583,8 @@ public class DetectionConfig implements Cloneable {
     /** * Smallest robust amplitude, in mag, when the readiness verdict is Limited. */
     public double variableLimitedMinAmplitudeMag = 0.1;
 
-    /** * The robust amplitude must also exceed this multiple of the expected noise at the star's magnitude. */
-    public double variableAmplitudeNoiseFactor = 4.0;
+    /** * The robust amplitude must also exceed this multiple of the expected noise (global or local) at the star's magnitude. */
+    public double variableAmplitudeNoiseFactor = 5.0;
 
     /** * Minimum run of consecutive measurements deviating on the same side by more than 1.5 x expected noise. */
     public int variableMinPersistenceFrames = 5;
@@ -654,11 +654,8 @@ public class DetectionConfig implements Cloneable {
      */
     public int faintMoverSearchSpeed = 1;
 
-    /** * Time limit for the search, in seconds; the search then stops and reports the part it searched. */
+    /** * Shared time limit for the faint-mover search on both CPU and GPU, in seconds; the search then stops and reports the part it searched. */
     public double faintMoverMaxSeconds = 600.0;
-
-    /** * Time limit for the search when the coarse pass runs on OpenCL, in seconds; the search then stops and reports the part it searched. */
-    public double faintMoverMaxSecondsGpu = 1800.0;
 
     /**
      * Creates a configuration initialized with the library defaults.

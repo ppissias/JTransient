@@ -556,6 +556,7 @@ public final class VariableStarAnalyzer {
                     new double[]{ApertureMeasurer.CI_INNER_FWHM_FACTOR, 1.0, config.photometryApertureFwhmFactor, 2.0},
                     new int[]{ApertureMeasurer.R_CI_INNER, ApertureMeasurer.R_SMALL, ApertureMeasurer.R_MAIN, ApertureMeasurer.R_LARGE},
                     measurements, frameActive, telemetry);
+            excludeLowChosenApertureSnr(curves, usable, frameActive, config, telemetry);
             PeakRemovalCheck.run(curves, usable, measurements, selected, frames,
                     PeakRemovalCheck.pointings(frames, input.frameRegistrations), config.variableMinAmplitudeMag, readiness, telemetry);
             VariabilityScorer.score(curves, usable, small.residual, large.residual, sky, series,
@@ -842,6 +843,40 @@ public final class VariableStarAnalyzer {
             }
         }
         return reasons;
+    }
+
+    /**
+     * Excludes stars whose median per-frame SNR in their chosen measuring aperture (including the frame's
+     * correlated sky-noise factor in {@link StarLightCurve#magError}) falls below {@link DetectionConfig#photometryMinSnr}.
+     * Runs after {@link #chooseApertures} so faint stars measured in smaller apertures (e.g. 0.7 or 1.0 FWHM) are
+     * judged on the actual aperture that scores them rather than the wider main aperture, without starving the ensemble.
+     */
+    static void excludeLowChosenApertureSnr(List<StarLightCurve> curves, boolean[][] usable, boolean[] frameActive,
+                                            DetectionConfig config, PipelineTelemetry.PhotometryTelemetry telemetry) {
+        if (!(config.photometryMinSnr > 0)) {
+            return;
+        }
+        int nFrames = frameActive.length;
+        double[] snr = new double[nFrames];
+        for (int i = 0; i < curves.size(); i++) {
+            CancellationScope.check();
+            StarLightCurve curve = curves.get(i);
+            if (curve.notScoredReason != null) {
+                continue;
+            }
+            for (int j = 0; j < nFrames; j++) {
+                double err = curve.magError[j];
+                boolean counted = frameActive[j] && Double.isFinite(curve.deltaMag[j]) && err > 0;
+                snr[j] = counted ? 1.0857 / err : Double.NaN;
+            }
+            double medianSnr = PhotometryMath.median(snr);
+            if (!(medianSnr >= config.photometryMinSnr)) {
+                curve.notScoredReason = String.format("Median SNR %.1f below the minimum %.1f (measuring aperture)",
+                        medianSnr, config.photometryMinSnr);
+                Arrays.fill(usable[i], false);
+                telemetry.starsExcludedLowSnr++;
+            }
+        }
     }
 
     private static ApertureMeasurer.FrameMeasurement[] measureFrames(Input input,

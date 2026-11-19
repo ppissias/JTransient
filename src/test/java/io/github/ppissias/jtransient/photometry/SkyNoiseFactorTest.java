@@ -18,6 +18,8 @@ import java.util.List;
 import java.util.Random;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -99,6 +101,36 @@ public class SkyNoiseFactorTest {
         assertEquals(1.8 * 1.2, telemetry.skyNoiseFactorMedian, 1e-12);
         assertEquals(1.5 * 1.2, telemetry.skyNoiseFactorMin, 1e-12);
         assertEquals(2.0 * 1.2, telemetry.skyNoiseFactorMax, 1e-12);
+    }
+
+    @Test
+    public void chosenApertureSnrExclusionAccountsForSkyNoiseFactor() {
+        int frames = 3;
+        StarLightCurve noisy = new StarLightCurve(0, 10, 10, 1000, frames);
+        StarLightCurve clean = new StarLightCurve(1, 50, 50, 5000, frames);
+        for (int j = 0; j < frames; j++) {
+            noisy.deltaMag[j] = 0.01;
+            clean.deltaMag[j] = 0.01;
+            // After skyNoiseFactor=2.0 in the chosen measuring aperture:
+            // noisy has reportedMagError=0.12 (SNR ~9.0 < 10.0) -> excluded;
+            // clean has reportedMagError=0.06 (SNR ~18.1 >= 10.0) -> kept.
+            noisy.magError[j] = 0.12;
+            clean.magError[j] = 0.06;
+        }
+        boolean[][] usable = {{true, true, true}, {true, true, true}};
+        boolean[] active = {true, true, true};
+        DetectionConfig config = new DetectionConfig();
+        config.photometryMinSnr = 10.0;
+        PipelineTelemetry.PhotometryTelemetry telemetry = new PipelineTelemetry.PhotometryTelemetry();
+
+        VariableStarAnalyzer.excludeLowChosenApertureSnr(List.of(noisy, clean), usable, active, config, telemetry);
+
+        assertNotNull(noisy.notScoredReason);
+        assertTrue(noisy.notScoredReason, noisy.notScoredReason.matches("Median SNR 9[.,]0 below the minimum 10[.,]0 \\(measuring aperture\\)"));
+        assertTrue(!usable[0][0] && !usable[0][1] && !usable[0][2]);
+        assertNull(clean.notScoredReason);
+        assertTrue(usable[1][0] && usable[1][1] && usable[1][2]);
+        assertEquals(1, telemetry.starsExcludedLowSnr);
     }
 
     private static ApertureMeasurer.FrameMeasurement measure(double[][] image, PhotometryStarSelector.Star star) {

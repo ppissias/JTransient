@@ -160,7 +160,7 @@ public final class OpenClBackendSupport {
                 reason = choice.note() + "; " + reason;
             }
             return new CoarseBackendSelection(gpu, true, FaintMoverSearch.MAX_MOTIONS_GPU,
-                    config.faintMoverMaxSecondsGpu, "OpenCL", device.name(), device.driverVersion(),
+                    config.faintMoverMaxSeconds, "OpenCL", device.name(), device.driverVersion(),
                     device.openclVersion(), reason, speedup, "passed");
         } else {
             if (cached.isPresent() && cached.get().selfTestPassed() && Double.isFinite(cached.get().speedup())) {
@@ -168,7 +168,7 @@ public final class OpenClBackendSupport {
             }
             String reason = choice.note() != null ? choice.note() : "Always GPU (setting)";
             return new CoarseBackendSelection(gpu, true, FaintMoverSearch.MAX_MOTIONS_GPU,
-                    config.faintMoverMaxSecondsGpu, "OpenCL", device.name(), device.driverVersion(),
+                    config.faintMoverMaxSeconds, "OpenCL", device.name(), device.driverVersion(),
                     device.openclVersion(), reason, speedup, "passed");
         }
     }

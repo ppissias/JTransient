@@ -109,8 +109,9 @@ final class ApertureMeasurer {
         }
 
         /**
-         * Error reported with a light curve: the sky-noise error of aperture {@code r} times its sky-noise factor
-         * on this frame (none when the factor is unknown). Check B and the SNR cut use {@link #magError} itself.
+         * Error reported with a light curve and used by the post-aperture SNR cut: the sky-noise error of aperture
+         * {@code r} times its sky-noise factor on this frame (none when the factor is unknown). Check B and the
+         * pre-ensemble main-aperture SNR cut use {@link #magError} itself.
          */
         double reportedMagError(int r, int star) {
             double factor = skyNoiseFactor[r];

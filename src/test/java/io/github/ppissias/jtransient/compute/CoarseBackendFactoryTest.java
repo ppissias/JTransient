@@ -62,7 +62,6 @@ public class CoarseBackendFactoryTest {
     @Test
     public void gpuSelectionAppliesRaisedLimitsAndJavaFallbackReasonsPropagate() {
         DetectionConfig config = new DetectionConfig();
-        config.faintMoverMaxSecondsGpu = 1800.0;
         CoarseSearchBackend fakeGpu = new CoarseSearchBackend() {
             @Override public String description() { return "OpenCL: Fake GPU"; }
             @Override public void beginRun(int[][] x, int[][] y) { }
@@ -74,12 +73,12 @@ public class CoarseBackendFactoryTest {
         CoarseBackendFactory.Selected gpu = CoarseBackendFactory.selectInternal(
                 new ComputeOptions(ComputeMode.AUTO, "", null), config, eligibleWorkload(), 4,
                 (auto, id, cache, cfg, wl, workers) -> new CoarseBackendSelection(
-                        fakeGpu, true, FaintMoverSearch.MAX_MOTIONS_GPU, cfg.faintMoverMaxSecondsGpu,
+                        fakeGpu, true, FaintMoverSearch.MAX_MOTIONS_GPU, cfg.faintMoverMaxSeconds,
                         "OpenCL", "Fake GPU", "1.0", "OpenCL 1.2", "Auto: 12.0× faster in benchmark",
                         12.0, "passed"));
         assertEquals("OpenCL", gpu.selection().path());
         assertEquals(FaintMoverSearch.MAX_MOTIONS_GPU, gpu.limits().maxMotions());
-        assertEquals(1800.0, gpu.limits().timeLimitSeconds(), 0.0);
+        assertEquals(config.faintMoverMaxSeconds, gpu.limits().timeLimitSeconds(), 0.0);
         assertTrue(gpu.selection().selfTestPassed());
 
         CoarseBackendFactory.Selected tooSlow = CoarseBackendFactory.selectInternal(

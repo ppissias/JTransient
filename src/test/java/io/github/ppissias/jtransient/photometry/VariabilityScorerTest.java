@@ -118,6 +118,71 @@ public class VariabilityScorerTest {
         assertEquals(0.03, target.localSharedFraction, 0.001);
     }
 
+    @Test
+    public void locallyNoisyCornerStarIsKeptConstantWhileClearLocalVariablePasses() {
+        int frames = 40;
+        java.util.List<StarLightCurve> stars = new java.util.ArrayList<>();
+        // Target 0: modest 0.055 mag wave in a locally noisy corner (above global 0.01 floor, but < 2x local 0.025 floor).
+        StarLightCurve noisyCorner = new StarLightCurve(0, 100, 100, 10000, frames);
+        noisyCorner.deltaMag = wave(0.055, 1);
+        stars.add(noisyCorner);
+        // Target 1: clear 0.25 mag variable in the exact same noisy corner (> 2x local 0.025 floor).
+        StarLightCurve clearVariable = new StarLightCurve(1, 120, 100, 10000, frames);
+        clearVariable.deltaMag = wave(0.25, 2);
+        stars.add(clearVariable);
+
+        java.util.Random random = new java.util.Random(4242L);
+        // 12 locally noisy constant stars around (100, 100) with ~0.025 mag uncorrelated scatter.
+        for (int k = 0; k < 12; k++) {
+            StarLightCurve cornerConst = new StarLightCurve(stars.size(), 80 + (k % 4) * 20, 80 + (k / 4) * 20, 10000, frames);
+            for (int j = 0; j < frames; j++) {
+                cornerConst.deltaMag[j] = (j % 2 == 0 ? 1 : -1) * 0.025 * (0.85 + 0.3 * random.nextDouble());
+            }
+            stars.add(cornerConst);
+        }
+        // 120 quiet field stars far from the corner (> 500 px away) setting the global expectedScatter ~ 0.01.
+        for (int k = 0; k < 120; k++) {
+            StarLightCurve quiet = new StarLightCurve(stars.size(), 2000 + (k % 12) * 15, 2000 + (k / 12) * 15, 10000, frames);
+            for (int j = 0; j < frames; j++) {
+                quiet.deltaMag[j] = 0.01 * random.nextGaussian();
+            }
+            stars.add(quiet);
+        }
+
+        int n = stars.size();
+        boolean[][] usable = new boolean[n][frames];
+        double[][] small = new double[n][frames];
+        double[][] large = new double[n][frames];
+        double[][] sky = new double[n][frames];
+        for (int i = 0; i < n; i++) {
+            stars.get(i).meanMag = -9.0 + 0.001 * i;
+            java.util.Arrays.fill(usable[i], true);
+            java.util.Arrays.fill(sky[i], 1000);
+            small[i] = stars.get(i).deltaMag.clone();
+            large[i] = stars.get(i).deltaMag.clone();
+        }
+        VariabilityScorer.FrameSeries series = new VariabilityScorer.FrameSeries();
+        series.zeroPoint = new double[frames];
+        series.fwhm = new double[frames];
+        java.util.Arrays.fill(series.fwhm, 2);
+        series.offsetX = new double[frames];
+        series.offsetY = new double[frames];
+        series.julianDate = new double[frames];
+        for (int j = 0; j < frames; j++) {
+            series.julianDate[j] = 2459000 + j / 720.0;
+        }
+        series.used = new boolean[frames];
+        java.util.Arrays.fill(series.used, true);
+        VariabilityScorer.score(stars, usable, small, large, sky, series, false,
+                new io.github.ppissias.jtransient.config.DetectionConfig(),
+                new io.github.ppissias.jtransient.telemetry.PipelineTelemetry.PhotometryTelemetry());
+
+        assertTrue("corner star passed global score thresholds", noisyCorner.scatterZ >= 7.0 && noisyCorner.stetsonJZ >= 7.0);
+        assertEquals("corner star barely above local neighbours stays CONSTANT", VariabilityTier.CONSTANT, noisyCorner.tier);
+        assertEquals("clear variable in same corner stays HIGH_CONFIDENCE: " + clearVariable.failedGates,
+                VariabilityTier.HIGH_CONFIDENCE, clearVariable.tier);
+    }
+
     private static double[] wave(double amplitude, int cycles) {
         double[] curve = new double[40];
         for (int j = 0; j < curve.length; j++) {

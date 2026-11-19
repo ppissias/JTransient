@@ -65,6 +65,13 @@ final class VariabilityScorer {
     static final double APERTURE_SIGNIFICANCE = 2.0;
     /** In a sparse field the local comparison stars may come from up to this multiple of the local radius. */
     private static final double LOCAL_MAX_RADIUS_FACTOR = 3.0;
+    /** Local noise-floor neighbourhood around a candidate: constant stars of similar brightness within this radius. */
+    private static final double LOCAL_NOISE_RADIUS_PIXELS = 500.0;
+    private static final double LOCAL_NOISE_MAG_WINDOW = 0.75;
+    private static final int LOCAL_NOISE_MAX_STARS = 20;
+    private static final int LOCAL_NOISE_MIN_STARS = 5;
+    /** Minimum ratio of candidate scatter to local constant-star scatter when a local noise floor is available. */
+    private static final double MIN_LOCAL_SCATTER_RATIO = 2.0;
 
     /**
      * Least-squares slope of {@code y} on {@code x} over the positions where both are finite: how much of x's
@@ -226,6 +233,25 @@ final class VariabilityScorer {
             star.tier = candidate ? VariabilityTier.REJECTED : VariabilityTier.CONSTANT;
         }
 
+        // 3b. Local noise floor: stars in noisier corners/regions must also stand out clearly above
+        //     nearby constant stars of similar brightness, not only above the global frame average.
+        double[] effectiveSigma = new double[nStars];
+        for (int i = 0; i < nStars; i++) {
+            StarLightCurve star = stars.get(i);
+            if (curves[i] == null || star.tier == VariabilityTier.CONSTANT) {
+                continue;
+            }
+            double localScatter = localNoiseFloor(i, star, curves, stars, config);
+            if (Double.isFinite(localScatter) && localScatter > 0
+                    && star.scatter < MIN_LOCAL_SCATTER_RATIO * localScatter) {
+                star.tier = VariabilityTier.CONSTANT;
+                continue;
+            }
+            effectiveSigma[i] = Double.isFinite(localScatter)
+                    ? Math.max(star.expectedScatter, localScatter)
+                    : star.expectedScatter;
+        }
+
         // 4. Systematic responses of every scored star, used to judge whether a correlated systematic
         //    could produce a candidate's change at all.
         SystematicsContext systematics = new SystematicsContext(stars, curves, localSky, series);
@@ -236,7 +262,7 @@ final class VariabilityScorer {
             if (curves[i] == null || star.tier == VariabilityTier.CONSTANT) {
                 continue;
             }
-            runGates(i, star, curves, stars, smallResidual[i], largeResidual[i], localSky[i], series, systematics, limited, config);
+            runGates(i, star, effectiveSigma[i], curves, stars, smallResidual[i], largeResidual[i], localSky[i], series, systematics, limited, config);
             int failures = star.failedGates.size();
             star.tier = failures == 0 ? VariabilityTier.HIGH_CONFIDENCE
                     : failures == 1 ? VariabilityTier.POSSIBLE
@@ -281,8 +307,52 @@ final class VariabilityScorer {
         telemetry.noiseModel.sort((a, b) -> Double.compare(a.mag, b.mag));
     }
 
+    /**
+     * Median scatter of the nearest constant stars of similar brightness around {@code star}, or NaN when fewer
+     * than {@link #LOCAL_NOISE_MIN_STARS} exist within the local noise radius. Captures elevated local scatter
+     * in sensor corners, vignetted edges, or bright nebula gradients.
+     */
+    private static double localNoiseFloor(int index, StarLightCurve star, double[][] curves,
+                                          List<StarLightCurve> stars, DetectionConfig config) {
+        if (!Double.isFinite(star.meanMag) || !Double.isFinite(star.x) || !Double.isFinite(star.y)) {
+            return Double.NaN;
+        }
+        double radius = Math.max(LOCAL_NOISE_RADIUS_PIXELS, LOCAL_MAX_RADIUS_FACTOR * config.variableLocalRadiusPixels);
+        double radiusSq = radius * radius;
+        List<double[]> nearby = new ArrayList<>();
+        for (int k = 0; k < stars.size(); k++) {
+            if (k == index || curves[k] == null) {
+                continue;
+            }
+            StarLightCurve other = stars.get(k);
+            if (other.tier != VariabilityTier.CONSTANT || !Double.isFinite(other.scatter) || !Double.isFinite(other.meanMag)) {
+                continue;
+            }
+            if (Math.abs(other.meanMag - star.meanMag) > LOCAL_NOISE_MAG_WINDOW) {
+                continue;
+            }
+            double dx = other.x - star.x;
+            double dy = other.y - star.y;
+            double d2 = dx * dx + dy * dy;
+            if (d2 <= radiusSq) {
+                nearby.add(new double[]{d2, other.scatter});
+            }
+        }
+        if (nearby.size() < LOCAL_NOISE_MIN_STARS) {
+            return Double.NaN;
+        }
+        nearby.sort((a, b) -> Double.compare(a[0], b[0]));
+        int count = Math.min(LOCAL_NOISE_MAX_STARS, nearby.size());
+        double[] scatters = new double[count];
+        for (int k = 0; k < count; k++) {
+            scatters[k] = nearby.get(k)[1];
+        }
+        return PhotometryMath.median(scatters);
+    }
+
     private static void runGates(int index,
                                  StarLightCurve star,
+                                 double effectiveSigma,
                                  double[][] curves,
                                  List<StarLightCurve> stars,
                                  double[] small,
@@ -294,6 +364,7 @@ final class VariabilityScorer {
                                  DetectionConfig config) {
         double[] r = curves[index];
         double sigma = star.expectedScatter;
+        double noiseSigma = Double.isFinite(effectiveSigma) && effectiveSigma > 0 ? effectiveSigma : sigma;
 
         // DATA
         boolean hasTime = Double.isFinite(star.timeSpanMinutes);
@@ -304,12 +375,12 @@ final class VariabilityScorer {
 
         // AMPLITUDE
         double minAmplitude = limited ? config.variableLimitedMinAmplitudeMag : config.variableMinAmplitudeMag;
-        if (!(star.amplitude >= minAmplitude && star.amplitude >= config.variableAmplitudeNoiseFactor * sigma)) {
+        if (!(star.amplitude >= minAmplitude && star.amplitude >= config.variableAmplitudeNoiseFactor * noiseSigma)) {
             star.failedGates.add(GATE_AMPLITUDE);
         }
 
         // PERSISTENCE
-        star.longestDeviatingRun = longestDeviatingRun(r, PERSISTENCE_SIGMA * sigma);
+        star.longestDeviatingRun = longestDeviatingRun(r, PERSISTENCE_SIGMA * noiseSigma);
         if (star.longestDeviatingRun < config.variableMinPersistenceFrames) {
             star.failedGates.add(GATE_PERSISTENCE);
         }

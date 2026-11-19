@@ -41,7 +41,7 @@ public class FaintMoverBackendFallbackTest {
         gpuInput.frames = frames;
         gpuInput.masterStack = baselineInput.masterStack;
         gpuInput.compute = new CoarseBackendSelection(failingBackend, true, FaintMoverSearch.MAX_MOTIONS_GPU,
-                config.faintMoverMaxSecondsGpu, "OpenCL", "Fake GPU", "1.0", "OpenCL 1.2",
+                config.faintMoverMaxSeconds, "OpenCL", "Fake GPU", "1.0", "OpenCL 1.2",
                 "Auto: 10.0× faster in benchmark", 10.0, "passed");
         FaintMoverSearch.Result recovered = FaintMoverSearch.search(FaintMoverSearch.plan(gpuInput, config));
 
