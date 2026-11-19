@@ -16,17 +16,33 @@ public class PhotometrySensitivityTest {
     private static final int FRAMES = 80;
     private static final int REFERENCES = 120;
 
-    /** Coherent changes above the default amplitude floor survive independent comparison-star noise. */
+    /** Coherent changes above the default amplitude and excess-scatter floors survive independent comparison-star noise. */
     @Test
     public void defaultsRecoverCoherentVariabilityWithoutPromotingQuietReferences() {
         for (int seed = 1; seed <= 5; seed++) {
-            Fixture fixture = fixture(0.03, 40, 2, seed);
+            Fixture fixture = fixture(0.05, 40, 2, seed);
             score(fixture, false, new DetectionConfig());
             assertEquals(fixture.target().failedGates.toString(), VariabilityTier.HIGH_CONFIDENCE, fixture.target().tier);
-            assertTrue(fixture.target().scatterZ >= 5);
-            assertTrue(fixture.target().stetsonJZ >= 5);
+            assertTrue(fixture.target().scatterZ >= 7);
+            assertTrue(fixture.target().stetsonJZ >= 7);
+            assertTrue(fixture.target().excessScatter >= 3.0);
             assertNoQuietCandidates(fixture);
         }
+    }
+
+    /** Marginal signals below the default 3x excess-scatter floor stay CONSTANT unless the threshold is lowered. */
+    @Test
+    public void scatterBelowMinimumExcessScatterIsRejectedByDefaultAndRecoverableWhenLowered() {
+        Fixture defaultRun = fixture(0.03, 40, 2, 1);
+        score(defaultRun, false, new DetectionConfig());
+        assertTrue("sanity: excess scatter is around 2.3x", defaultRun.target().excessScatter > 2.0 && defaultRun.target().excessScatter < 3.0);
+        assertEquals(VariabilityTier.CONSTANT, defaultRun.target().tier);
+
+        DetectionConfig relaxed = new DetectionConfig();
+        relaxed.variableMinExcessScatter = 2.0;
+        Fixture relaxedRun = fixture(0.03, 40, 2, 1);
+        score(relaxedRun, false, relaxed);
+        assertEquals(VariabilityTier.HIGH_CONFIDENCE, relaxedRun.target().tier);
     }
 
     /** White-noise target and reference curves do not create candidate detections in the fixed control. */
@@ -51,8 +67,8 @@ public class PhotometrySensitivityTest {
     /** LIMITED data require the higher amplitude floor even when the same curve passes on READY data. */
     @Test
     public void limitedReadinessRaisesTheCandidateAmplitudeRequirement() {
-        Fixture ready = fixture(0.03, 40, 2, 1);
-        Fixture limited = fixture(0.03, 40, 2, 1);
+        Fixture ready = fixture(0.043, 40, 2, 1);
+        Fixture limited = fixture(0.043, 40, 2, 1);
         score(ready, false, new DetectionConfig());
         score(limited, true, new DetectionConfig());
         assertEquals(VariabilityTier.HIGH_CONFIDENCE, ready.target().tier);
@@ -101,14 +117,14 @@ public class PhotometrySensitivityTest {
      */
     @Test
     public void linearityCountsClippedMeasurementsOnActiveFramesOnly() {
-        Fixture excluded = fixture(0.03, 40, 2, 1);
+        Fixture excluded = fixture(0.05, 40, 2, 1);
         clipTarget(excluded, 10, false);
         score(excluded, false, new DetectionConfig());
         assertEquals(List.of(), excluded.target().failedGates);
         assertEquals(VariabilityTier.HIGH_CONFIDENCE, excluded.target().tier);
         assertTrue("the historical flag stays", (excluded.target().flags[10] & PhotometryFlags.NONLINEAR) != 0);
 
-        Fixture active = fixture(0.03, 40, 2, 1);
+        Fixture active = fixture(0.05, 40, 2, 1);
         clipTarget(active, 10, true);
         score(active, false, new DetectionConfig());
         assertEquals(List.of("LINEARITY"), active.target().failedGates);
@@ -171,7 +187,7 @@ public class PhotometrySensitivityTest {
     @Test
     public void oppositeApertureCurvesFailTheApertureGate() {
         for (int seed = 1; seed <= 5; seed++) {
-            Fixture fixture = fixture(0.03, 40, 2, seed);
+            Fixture fixture = fixture(0.05, 40, 2, seed);
             for (int j = 0; j < FRAMES; j++) fixture.large[0][j] = -fixture.target().deltaMag[j];
             score(fixture, false, new DetectionConfig());
             assertEquals(List.of("APERTURE"), fixture.target().failedGates);

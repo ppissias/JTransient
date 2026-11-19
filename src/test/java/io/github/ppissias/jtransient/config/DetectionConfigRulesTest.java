@@ -17,7 +17,7 @@ public class DetectionConfigRulesTest {
     public void metadataCoversEveryFieldAndPreservesItsTypeAndDefault() throws Exception {
         Set<String> fields = Arrays.stream(DetectionConfig.class.getFields())
                 .filter(field -> !Modifier.isStatic(field.getModifiers())).map(java.lang.reflect.Field::getName).collect(Collectors.toSet());
-        assertEquals(115, fields.size());
+        assertEquals(116, fields.size());
         assertEquals(fields, metadata().keySet());
         for (var metadata : metadata().values()) {
             var field = DetectionConfig.class.getField(metadata.id());

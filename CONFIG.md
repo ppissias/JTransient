@@ -122,6 +122,7 @@ All fields are public and mutable. A few implementation details matter when you 
   - [variableMinSpanMinutes (default 30.0)](#variableminspanminutes-default-300)
   - [variableNoiseModelNeighbors (default 50)](#variablenoisemodelneighbors-default-50)
   - [variableScoreSigma (default 7.0)](#variablescoresigma-default-70)
+  - [variableMinExcessScatter (default 3.0)](#variableminexcessscatter-default-30)
   - [variableMinAmplitudeMag / variableLimitedMinAmplitudeMag (defaults 0.05 / 0.1)](#variableminamplitudemag--variablelimitedminamplitudemag-defaults-005--01)
   - [variableAmplitudeNoiseFactor (default 5.0)](#variableamplitudenoisefactor-default-50)
   - [variableMinPersistenceFrames (default 5)](#variableminpersistenceframes-default-5)
@@ -820,7 +821,11 @@ Stars nearest in magnitude used for the expected scatter and the robust z-scores
 
 ### `variableScoreSigma` (default `7.0`)
 
-Both the excess-scatter z-score and the Stetson J z-score must reach this for a star to become a candidate (and when at least 5 constant neighbours of similar brightness exist locally, its scatter must also be at least 2× their median scatter).
+Both the excess-scatter z-score and the Stetson J z-score must reach this for a star to become a candidate.
+
+### `variableMinExcessScatter` (default `3.0`)
+
+Minimum ratio of a candidate's scatter to the larger of the global expected scatter (same-brightness peers across the frame) and the local constant-star scatter (nearby peers of similar brightness when at least 5 exist). Stars below this multiple remain constant even if their robust z-score is high. Set to `0` to disable.
 
 ### `variableMinAmplitudeMag` / `variableLimitedMinAmplitudeMag` (defaults `0.05` / `0.1`)
 

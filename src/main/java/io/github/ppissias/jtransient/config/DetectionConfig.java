@@ -577,6 +577,9 @@ public class DetectionConfig implements Cloneable {
     /** * Robust z-score that both the scatter score and the Stetson J score must reach for a star to become a candidate. */
     public double variableScoreSigma = 7.0;
 
+    /** * Minimum ratio of a candidate's scatter to the expected scatter of constant stars of similar brightness (global and local). Set to 0 to disable. */
+    public double variableMinExcessScatter = 3.0;
+
     /** * Smallest robust amplitude (5th to 95th percentile), in mag, for a high-confidence result. */
     public double variableMinAmplitudeMag = 0.05;
 

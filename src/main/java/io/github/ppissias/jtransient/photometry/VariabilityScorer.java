@@ -70,8 +70,6 @@ final class VariabilityScorer {
     private static final double LOCAL_NOISE_MAG_WINDOW = 0.75;
     private static final int LOCAL_NOISE_MAX_STARS = 20;
     private static final int LOCAL_NOISE_MIN_STARS = 5;
-    /** Minimum ratio of candidate scatter to local constant-star scatter when a local noise floor is available. */
-    private static final double MIN_LOCAL_SCATTER_RATIO = 2.0;
 
     /**
      * Least-squares slope of {@code y} on {@code x} over the positions where both are finite: how much of x's
@@ -233,8 +231,8 @@ final class VariabilityScorer {
             star.tier = candidate ? VariabilityTier.REJECTED : VariabilityTier.CONSTANT;
         }
 
-        // 3b. Local noise floor: stars in noisier corners/regions must also stand out clearly above
-        //     nearby constant stars of similar brightness, not only above the global frame average.
+        // 3b. Excess-scatter and local noise floor: candidates must stand out clearly above both
+        //     same-brightness peers across the frame and nearby constant stars in noisier corners/regions.
         double[] effectiveSigma = new double[nStars];
         for (int i = 0; i < nStars; i++) {
             StarLightCurve star = stars.get(i);
@@ -242,14 +240,14 @@ final class VariabilityScorer {
                 continue;
             }
             double localScatter = localNoiseFloor(i, star, curves, stars, config);
-            if (Double.isFinite(localScatter) && localScatter > 0
-                    && star.scatter < MIN_LOCAL_SCATTER_RATIO * localScatter) {
+            effectiveSigma[i] = Double.isFinite(localScatter) && localScatter > 0
+                    ? Math.max(star.expectedScatter, localScatter)
+                    : star.expectedScatter;
+            if (config.variableMinExcessScatter > 0
+                    && star.scatter < config.variableMinExcessScatter * effectiveSigma[i]) {
                 star.tier = VariabilityTier.CONSTANT;
                 continue;
             }
-            effectiveSigma[i] = Double.isFinite(localScatter)
-                    ? Math.max(star.expectedScatter, localScatter)
-                    : star.expectedScatter;
         }
 
         // 4. Systematic responses of every scored star, used to judge whether a correlated systematic
