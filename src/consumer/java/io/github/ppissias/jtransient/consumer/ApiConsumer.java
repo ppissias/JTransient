@@ -83,7 +83,7 @@ public final class ApiConsumer {
                     config, null).tooFewFrames, "Too-few-frames result missing");
             require(engine.generateMasterStack(new ArrayList<>(frames), config, null) != null, "Sequential reuse failed");
         }
-        System.out.println("Current public API consumer passed on Java 21.");
+        System.out.println("Current public API consumer passed on Java " + System.getProperty("java.version") + " (bytecode target 21).");
     }
 
     /** Compiles the additive review contract and checks owned cutout geometry for enabled-search consumers. */

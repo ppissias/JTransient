@@ -54,7 +54,7 @@ It is the core detection engine powering [SpacePixels](https://github.com/ppissi
 
 ## Build
 
-This repository is a Gradle Java library project targeting **Java 21**. Install JDK 21 and make sure `java` is available on `PATH`, or that `JAVA_HOME` points to it. The build selects a Java 21 toolchain and compiles all source sets with `--release 21`; Java 25 is not the baseline.
+This repository is a Gradle Java library project targeting **Java 21** bytecode. Install JDK 21 or newer and make sure `java` is available on `PATH`, or that `JAVA_HOME` points to it. The build uses the active JDK (`>= 21`) and compiles all source sets with `--release 21` so Java 21+ JREs can execute the resulting artifacts.
 
 For development, document every new Java class, record, enum and interface at type level, including nested types and tests. Give each new method and explicit constructor a concise Javadoc description, including private helpers; explain important ownership/mutation, units and compatibility contracts. Keep these descriptions current when behavior changes and include them in the feature commit. The development rules are in [DEVELOPER.md](DEVELOPER.md); machine-specific paths are in the git-ignored `LOCAL-ENVIRONMENT.txt`.
 

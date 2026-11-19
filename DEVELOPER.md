@@ -91,7 +91,7 @@ Engine-specific additions:
 
 ## Build and test
 
-Use Java 21 and the Gradle wrapper.
+Use JDK 21 or newer (compiling with `--release 21`) and the Gradle wrapper.
 
 ```powershell
 .\gradlew.bat compileJava

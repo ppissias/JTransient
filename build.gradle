@@ -30,10 +30,11 @@ base {
     archivesName = centralArtifactId
 }
 
+if (JavaVersion.current() < JavaVersion.VERSION_21) {
+    throw new GradleException('JTransient requires JDK 21 or newer to build (bytecode targets Java 21 via --release 21).')
+}
+
 java {
-    toolchain {
-        languageVersion = JavaLanguageVersion.of(21)
-    }
     withSourcesJar()
     withJavadocJar()
 }
@@ -52,11 +53,10 @@ sourceSets {
 
 tasks.register('apiConsumer', JavaExec) {
     group = 'verification'
-    description = 'Compiles and runs a current-version standalone API consumer on Java 21.'
+    description = 'Compiles and runs a current-version standalone API consumer targeting Java 21 bytecode.'
     dependsOn tasks.named('consumerClasses')
     classpath = sourceSets.consumer.runtimeClasspath
     mainClass = 'io.github.ppissias.jtransient.consumer.ApiConsumer'
-    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
 }
 
 tasks.register('verifyArchitecture') {
@@ -68,9 +68,8 @@ tasks.register('verifyArchitecture') {
     def report = layout.buildDirectory.file('reports/architecture/dependencies.txt')
     outputs.file(report)
     doLast {
-        def launcher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }.get()
         def suffix = System.getProperty('os.name').toLowerCase(Locale.ROOT).contains('windows') ? '.exe' : ''
-        def jdeps = launcher.metadata.installationPath.file("bin/jdeps${suffix}").asFile.absolutePath
+        def jdeps = new File(System.getProperty('java.home'), "bin/jdeps${suffix}").absolutePath
         def output = providers.exec {
             commandLine([jdeps, '--ignore-missing-deps', '--multi-release', '21', '-verbose:class', '-filter:none',
                          '--class-path', configurations.runtimeClasspath.asPath] +
