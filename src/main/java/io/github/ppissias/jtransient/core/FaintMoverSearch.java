@@ -498,7 +498,7 @@ public final class FaintMoverSearch {
         telemetry.frames = kept.size();
         FaintStreakSearch.Width width = input.frameMetrics != null
                 ? FaintStreakSearch.width(input.frameMetrics, config) : null;
-        double fwhm = width != null && width.frames > 0 ? width.sigma * 2.3548 : FALLBACK_FWHM;
+        double fwhm = width != null && width.frames > 0 ? width.fwhm() : FALLBACK_FWHM;
         telemetry.fwhmPixels = fwhm;
         telemetry.fwhmFromStars = width != null && width.frames > 0;
         if (kept.size() < MIN_FRAMES || input.masterStack == null) {

@@ -92,6 +92,37 @@ public class PipelineTelemetry {
     public FrameQualityThresholds qualityThresholds = new FrameQualityThresholds();
 
     /**
+     * The registration check of quality control: how far the stars move between frames after registration, over the
+     * whole frame and in zones ({@code zones} by {@code zones}, row-major from the top left), in star widths (FWHM).
+     * Creep is a slow change over the session; frames whose stars jump against their neighbours are rejected.
+     */
+    public static class RegistrationCheckTelemetry {
+        /** Whether the check measured the session; otherwise {@link #reason} says why. */
+        public boolean available;
+        public String reason;
+        /** Star width used as the unit, in pixels. */
+        public double fwhmPixels = Double.NaN;
+        /** Kept frames with a measured offset, reference stars, and frames rejected for a jump. */
+        public int framesMeasured;
+        public int referenceStars;
+        public int framesRejected;
+        /** The largest jump among the kept frames, in FWHM. */
+        public double largestKeptJumpFwhm = Double.NaN;
+        /** Creep of the whole frame, in FWHM, and the limit above which it and the zones are flagged. */
+        public double overallCreepFwhm = Double.NaN;
+        public double creepLimitFwhm = Double.NaN;
+        /** Zones along each side, the frame size they divide, and each zone's creep (NaN with too few stars). */
+        public int zones;
+        public int width;
+        public int height;
+        public double[] zoneCreepFwhm = new double[0];
+        /** Reference stars in each zone, row-major. */
+        public int[] zoneStars = new int[0];
+    }
+    /** The quality-control registration check; not available until quality control has run. */
+    public RegistrationCheckTelemetry registrationCheck = new RegistrationCheckTelemetry();
+
+    /**
      * Per-frame quality summary captured after frame-quality analysis and session rejection.
      */
     public static class FrameQualityStat {
@@ -575,6 +606,27 @@ public class PipelineTelemetry {
                     formatMetric(qualityThresholds.backgroundMedianBaseline),
                     formatMetric(qualityThresholds.maxAllowedBackgroundDeviation)
             ));
+        }
+
+        if (registrationCheck.available) {
+            RegistrationCheckTelemetry r = registrationCheck;
+            sb.append("--- QUALITY CONTROL: REGISTRATION CHECK ---\n");
+            sb.append(String.format(java.util.Locale.US,
+                    "  %d frames, %d reference stars, FWHM %.2f px | rejected for a jump: %d | largest kept jump %.2f FWHM\n",
+                    r.framesMeasured, r.referenceStars, r.fwhmPixels, r.framesRejected, r.largestKeptJumpFwhm));
+            sb.append(String.format(java.util.Locale.US, "  Creep (FWHM, * above %.2f): whole frame %.2f%s; zones from the top left:\n",
+                    r.creepLimitFwhm, r.overallCreepFwhm, r.overallCreepFwhm > r.creepLimitFwhm ? "*" : ""));
+            for (int row = 0; row < r.zones; row++) {
+                StringBuilder line = new StringBuilder("   ");
+                for (int column = 0; column < r.zones; column++) {
+                    double c = r.zoneCreepFwhm[row * r.zones + column];
+                    line.append(Double.isNaN(c) ? "    -  " : String.format(java.util.Locale.US, " %5.2f%s", c, c > r.creepLimitFwhm ? "*" : " "));
+                }
+                sb.append(line).append('\n');
+            }
+            sb.append('\n');
+        } else if (registrationCheck.reason != null) {
+            sb.append("--- QUALITY CONTROL: REGISTRATION CHECK ---\n  Not measured: ").append(registrationCheck.reason).append("\n\n");
         }
 
         if (!frameQualityStats.isEmpty()) {

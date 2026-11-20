@@ -56,6 +56,12 @@ public class FrameQualityAnalyzer {
         public String rejectionReason = "OK";
         /** Frame label copied from the source image. */
         public String filename;
+        /**
+         * Positions {x0, y0, x1, y1, ...} of the frame's bright round stars (those of the bright-star shape metric
+         * whose elongation passes the FWHM gate), brightest first and at most
+         * {@link RegistrationCheck#MAX_STARS_PER_FRAME}, for the {@link RegistrationCheck}.
+         */
+        public float[] registrationStars = new float[0];
     }
 
     // =================================================================
@@ -118,6 +124,7 @@ public class FrameQualityAnalyzer {
                 config.qualitySigmaMultiplier + config.qualityBrightStarPeakSigmaOffset
         );
 
+        List<DetectedObject> registrationStars = new ArrayList<>();
         for (DetectedObject obj : objects) {
             CancellationScope.check();
             // Only measure true point sources (ignore obvious noise and massive satellite streaks)
@@ -127,6 +134,9 @@ public class FrameQualityAnalyzer {
                 if (obj.peakSigma >= brightStarPeakSigmaThreshold) {
                     brightStarShapeStarCount++;
                     brightStarEccValues.add(obj.elongation);
+                    if (obj.elongation < config.qualityMaxElongationForFwhm) {
+                        registrationStars.add(obj);
+                    }
                 }
 
                 // Parameterized check: Ignore heavily distorted/trailed stars when judging pure optical focus
@@ -137,6 +147,13 @@ public class FrameQualityAnalyzer {
             }
         }
 
+        registrationStars.sort((a, b) -> Double.compare(b.peakSigma, a.peakSigma));
+        int kept = Math.min(registrationStars.size(), RegistrationCheck.MAX_STARS_PER_FRAME);
+        metrics.registrationStars = new float[2 * kept];
+        for (int i = 0; i < kept; i++) {
+            metrics.registrationStars[2 * i] = (float) registrationStars.get(i).x;
+            metrics.registrationStars[2 * i + 1] = (float) registrationStars.get(i).y;
+        }
         metrics.usableShapeStarCount = usableShapeStarCount;
         metrics.brightStarShapeStarCount = brightStarShapeStarCount;
         metrics.fwhmStarCount = fwhmStarCount;

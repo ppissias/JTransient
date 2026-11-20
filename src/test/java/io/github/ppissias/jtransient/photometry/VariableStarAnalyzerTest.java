@@ -234,6 +234,29 @@ public class VariableStarAnalyzerTest {
         assertFalse(crossed.tier == VariabilityTier.HIGH_CONFIDENCE);
     }
 
+    /** The same 2-pixel jump of one frame, with quality control's registration check on: the frame is rejected. */
+    @Test
+    public void aFrameWhoseStarsJumpIsRejectedByQualityControl() throws Exception {
+        Session session = createSession(DoubleUnaryOperator.identity());
+        int shifted = 5;
+        ImageFrame original = session.frames.get(shifted);
+        short[][] pixels = new short[SIZE][SIZE];
+        for (int y = 0; y < SIZE; y++) {
+            for (int x = 0; x < SIZE; x++) {
+                pixels[y][x] = original.pixelData[y][Math.max(0, x - 2)];
+            }
+        }
+        session.frames.set(shifted, new ImageFrame(original.sequenceIndex, original.filename, pixels,
+                original.timestamp, original.exposureDuration));
+
+        PipelineResult result = engine.runPipeline(session.frames, testConfig(), null, null);
+        PipelineTelemetry.FrameRejectionStat rejected = result.telemetry.rejectedFrames.stream()
+                .filter(r -> r.filename.equals(original.filename)).findFirst().orElse(null);
+        assertNotNull("the shifted frame is rejected", rejected);
+        assertTrue(rejected.reason, rejected.reason.startsWith("Registration jump"));
+        assertEquals(1, result.telemetry.registrationCheck.framesRejected);
+    }
+
     /**
      * A frame with a residual 2-pixel shift is measured at the corrected positions; the crossing check must
      * use the same correction, or every star in the frame looks like a moving object sitting on itself.
@@ -252,7 +275,11 @@ public class VariableStarAnalyzerTest {
         session.frames.set(shifted, new ImageFrame(original.sequenceIndex, original.filename, pixels,
                 original.timestamp, original.exposureDuration));
 
-        PipelineResult result = engine.runPipeline(session.frames, testConfig(), null, null);
+        // A 2-pixel jump of one frame is what quality control's registration check rejects; this test is about
+        // photometry measuring such a frame, so the check is off.
+        DetectionConfig config = testConfig();
+        config.enableRegistrationCheck = false;
+        PipelineResult result = engine.runPipeline(session.frames, config, null, null);
         PipelineTelemetry.PhotometryFrameStat frame = null;
         PipelineTelemetry.PhotometryFrameStat reference = null;
         for (PipelineTelemetry.PhotometryFrameStat f : result.variableStarAnalysis.frames) {

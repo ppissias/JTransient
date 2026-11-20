@@ -69,6 +69,8 @@ public final class ApiConsumer {
         try (JTransientEngine engine = new JTransientEngine()) {
             var quality = engine.evaluateFrameQuality(frames, config, null);
             require(quality.frames().size() == frames.size(), "QC must describe every input");
+            require(quality.registrationCheck() != null && quality.registrationCheck().flaggedAreas() != null,
+                    "QC must report its registration check");
             require(quality.equals(engine.evaluateFrameQuality(frames.size(), frames::get, config, null)),
                     "File-backed and in-memory QC must agree");
             PipelineResult result = engine.runPipeline(frames, config, null);

@@ -170,14 +170,22 @@ public final class FaintStreakSearch {
         return new Result(candidates, telemetry);
     }
 
-    /** The smoothing sigma and how many kept frames' star sizes set it (none: the fallback). */
-    static final class Width {
-        final double sigma;
-        final int frames;
+    /**
+     * The session's star width as a Gaussian sigma, in pixels, and how many kept frames' star sizes set it (none: the
+     * fallback). The faint-streak and faint-mover searches and the registration check use it.
+     */
+    public static final class Width {
+        public final double sigma;
+        public final int frames;
 
         Width(double sigma, int frames) {
             this.sigma = sigma;
             this.frames = frames;
+        }
+
+        /** The Gaussian FWHM of {@link #sigma}, in pixels. */
+        public double fwhm() {
+            return sigma * 2.3548;
         }
     }
 
@@ -186,7 +194,7 @@ public final class FaintStreakSearch {
      * below {@code errorFallbackValue}, from at least {@link #MIN_FWHM_STARS} stars), converted from the extraction's
      * second-moment FWHM, about sqrt(2) above a Gaussian FWHM. Without a measurement, {@link #FALLBACK_SIGMA}.
      */
-    static Width width(List<FrameQualityAnalyzer.FrameMetrics> metrics, DetectionConfig config) {
+    public static Width width(List<FrameQualityAnalyzer.FrameMetrics> metrics, DetectionConfig config) {
         List<Double> sizes = new ArrayList<>();
         if (metrics != null) {
             for (FrameQualityAnalyzer.FrameMetrics frame : metrics) {

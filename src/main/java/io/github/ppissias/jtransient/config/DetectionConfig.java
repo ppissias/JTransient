@@ -259,6 +259,26 @@ public class DetectionConfig implements Cloneable {
      */
     public double minFwhmEnvelope = 0.5;
 
+    // --- Registration check ---
+
+    /** * Checks that the frames are registered on the stars: bright stars are matched to their median position over
+     * the best frames, over the whole frame and in 4 x 4 zones. A frame whose stars jump against its neighbouring
+     * frames in time is rejected; a slow change over the session (creep), such as a lens distortion the registration
+     * does not follow, is reported with the zones it affects.
+     */
+    public boolean enableRegistrationCheck = true;
+
+    /** * A frame whose star positions, over the whole frame or in one zone, differ by more than this many star
+     * widths (FWHM) from its neighbouring frames in time is rejected: its registration failed.
+     */
+    public double qualityMaxRegistrationJumpFwhm = 0.5;
+
+    /** * The whole frame or a zone is flagged when its star positions change by more than this many star widths
+     * (FWHM) over the session. Stars that move between frames leave light past the star masks, which the detection
+     * stages can take for moving objects.
+     */
+    public double qualityMaxRegistrationCreepFwhm = 0.3;
+
     // =================================================================
     // 4. TRACKING AND STATIONARY-MASK PARAMETERS
     // =================================================================

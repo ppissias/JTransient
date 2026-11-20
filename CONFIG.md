@@ -57,6 +57,9 @@ All fields are public and mutable. A few implementation details matter when you 
   - [minEccentricityEnvelope (default 0.10)](#mineccentricityenvelope-default-010)
   - [minBrightStarEccentricityEnvelope (default 0.10)](#minbrightstareccentricityenvelope-default-010)
   - [minFwhmEnvelope (default 0.5)](#minfwhmenvelope-default-05)
+  - [enableRegistrationCheck (default true)](#enableregistrationcheck-default-true)
+  - [qualityMaxRegistrationJumpFwhm (default 0.5)](#qualitymaxregistrationjumpfwhm-default-05)
+  - [qualityMaxRegistrationCreepFwhm (default 0.3)](#qualitymaxregistrationcreepfwhm-default-03)
 - [4. Tracking And Stationary-Star Vetoing](#4-tracking-and-stationary-star-vetoing)
   - [maxStarJitter (default 1.0)](#maxstarjitter-default-10)
   - [maxMaskOverlapFraction (default 0.75)](#maxmaskoverlapfraction-default-075)
@@ -448,6 +451,18 @@ Absolute floor on the bright-star eccentricity rejection envelope.
 Absolute floor on the FWHM rejection envelope.
 
 - stops tiny focus fluctuations from causing false rejection
+
+### `enableRegistrationCheck` (default `true`)
+
+Checks that the frames are registered on the stars ([ALGORITHM.md, section 5](ALGORITHM.md#5-session-level-frame-rejection)): bright stars are matched to their median position over the best frames, over the whole frame and in 4 × 4 zones. Frames whose stars jump against their neighbours in time are rejected; a slow change over the session is reported in `registrationCheck` with the zones it affects.
+
+### `qualityMaxRegistrationJumpFwhm` (default `0.5`)
+
+A frame whose star positions, over the whole frame or in one zone, differ by more than this many star widths (FWHM) from its neighbouring frames in time is rejected: its registration failed. On eleven reference sessions the largest jump of a kept frame is 0.21 FWHM.
+
+### `qualityMaxRegistrationCreepFwhm` (default `0.3`)
+
+The whole frame or a zone is flagged when its star positions change by more than this many star widths over the session. Stars that move between frames leave light past the star masks, which the detection stages can take for moving objects. Flagging rejects nothing; SpacePixels offers the flagged zones as excluded areas.
 
 ## 4. Tracking And Stationary-Star Vetoing
 

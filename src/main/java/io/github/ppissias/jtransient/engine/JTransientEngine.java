@@ -44,6 +44,7 @@ import io.github.ppissias.jtransient.core.TrackLinker;
 import io.github.ppissias.jtransient.photometry.VariableStarAnalysis;
 import io.github.ppissias.jtransient.photometry.VariableStarAnalyzer;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
+import io.github.ppissias.jtransient.quality.RegistrationCheck;
 import io.github.ppissias.jtransient.quality.SessionEvaluator;
 import io.github.ppissias.jtransient.telemetry.PipelineTelemetry;
 
@@ -887,6 +888,14 @@ public class JTransientEngine implements AutoCloseable {
         telemetry.qualityThresholds.maxAllowedBackgroundDeviation = sessionThresholds.maxAllowedBackgroundDeviation;
         telemetry.qualityThresholds.minAllowedBackgroundMedian = sessionThresholds.minAllowedBackgroundMedian;
         telemetry.qualityThresholds.maxAllowedBackgroundMedian = sessionThresholds.maxAllowedBackgroundMedian;
+        // After the other rules, so that their rejected frames stay out of the reference and the neighbours.
+        if (!measured.isEmpty()) {
+            InputRules.FrameFacts first = measured.get(0).facts();
+            RegistrationCheck.Result registration = OperationContext.compute(StageId.FRAME_SELECTION, null,
+                    () -> RegistrationCheck.evaluate(measured.stream().map(MeasuredFrame::metrics).toList(),
+                            first.width(), first.height(), config));
+            recordRegistrationCheck(registration, telemetry.registrationCheck);
+        }
 
         for (int i = 0; i < measured.size(); i++) {
             MeasuredFrame prepared = measured.get(i);
@@ -923,6 +932,31 @@ public class JTransientEngine implements AutoCloseable {
         }
 
         return sessionDataArea(coverages, measured.stream().filter(frame -> !frame.metrics().isRejected).toList(), telemetry);
+    }
+
+    /** Copies the registration check's result into its telemetry record. */
+    private static void recordRegistrationCheck(RegistrationCheck.Result result,
+                                                PipelineTelemetry.RegistrationCheckTelemetry target) {
+        target.available = result.available;
+        target.reason = result.reason;
+        target.fwhmPixels = result.fwhmPixels;
+        target.framesMeasured = result.framesMeasured;
+        target.referenceStars = result.referenceStars;
+        target.framesRejected = result.framesRejected;
+        target.largestKeptJumpFwhm = result.largestKeptJumpFwhm;
+        target.overallCreepFwhm = result.overallCreepFwhm;
+        target.creepLimitFwhm = result.creepLimitFwhm;
+        target.zones = RegistrationCheck.ZONES;
+        target.width = result.width;
+        target.height = result.height;
+        target.zoneCreepFwhm = new double[RegistrationCheck.ZONES * RegistrationCheck.ZONES];
+        target.zoneStars = new int[RegistrationCheck.ZONES * RegistrationCheck.ZONES];
+        for (int row = 0; row < RegistrationCheck.ZONES; row++) {
+            for (int column = 0; column < RegistrationCheck.ZONES; column++) {
+                target.zoneCreepFwhm[row * RegistrationCheck.ZONES + column] = result.zoneCreepFwhm[row][column];
+                target.zoneStars[row * RegistrationCheck.ZONES + column] = result.zoneStars[row][column];
+            }
+        }
     }
 
     private static Map<Integer, FrameRegistration> registrationsBySequence(FrameDriftAnalyzer.DriftAnalysisResult drift) {

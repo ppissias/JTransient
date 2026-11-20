@@ -500,7 +500,8 @@ public final class DetectionConfigRules {
         add(metadata, Stage.QUALITY, Domain.FINITE, "qualityBrightStarPeakSigmaOffset");
         add(metadata, Stage.QUALITY, Domain.STRICT_ELONGATION, "qualityMaxElongationForFwhm");
         add(metadata, Stage.QUALITY, Domain.NON_NEGATIVE, "minBackgroundDeviationADU minEccentricityEnvelope minBrightStarEccentricityEnvelope minFwhmEnvelope starCountSigmaDeviation fwhmSigmaDeviation eccentricitySigmaDeviation brightStarEccentricitySigmaDeviation backgroundSigmaDeviation");
-        add(metadata, Stage.QUALITY, Domain.BOOLEAN, "enableBrightStarEccentricityFilter");
+        add(metadata, Stage.QUALITY, Domain.BOOLEAN, "enableBrightStarEccentricityFilter enableRegistrationCheck");
+        add(metadata, Stage.QUALITY, Domain.POSITIVE, "qualityMaxRegistrationJumpFwhm qualityMaxRegistrationCreepFwhm");
         add(metadata, Stage.REFERENCE, Domain.NON_NEGATIVE, "maxStarJitter");
         add(metadata, Stage.REFERENCE, Domain.FRACTION, "maxMaskOverlapFraction");
         add(metadata, Stage.TRACKING, Domain.NON_NEGATIVE, "maxJumpPixels predictionTolerance timeBasedVelocityTolerance streakTimeConsistencyTolerance rhythmStationaryThreshold rhythmAllowedVariance commonMotionShiftTolerance");
