@@ -29,6 +29,7 @@ A fresh review of the engine (about 20,000 lines of main code and 7,700 of tests
 | [JT-02](#jt-02-centralize-shared-validation-and-setting-rules) | Centralize shared validation and setting rules | Medium | In-depth review first |
 | [JT-04](#jt-04-review-logging-across-the-three-repositories) | Review logging across SpacePixels, JTransient and JPlateSolve | Medium | Review first |
 | [JT-05](#jt-05-let-the-pipeline-method-read-as-the-algorithm) | Let the pipeline method read as the algorithm | Medium | Small |
+| [JT-08](#jt-08-use-the-cpus-on-large-sensors-then-the-gpu-for-faint-mover-tiles) | Use the CPUs on large sensors, then the GPU for faint-mover tiles | High (planned next) | Steps 1-3 small to medium; step 4 medium |
 
 **Working order.** Verify the dead-code subset of JT-01 first. Evaluate JT-02 in depth before choosing changes, and review JT-04 across all three repositories before choosing a logging approach. Keep each change independently reviewable. JT-05 remains a small orchestration cleanup; release-artifact checks continue through the existing [coordinated publishing procedure](../SpacePixels/PUBLISHING.md#maven-central-publishing).
 
@@ -97,6 +98,30 @@ The phase comments are numbered 0, 0.5, 4 and 5.
 - A small private helper is reasonable if it preserves stage-specific result types and leaves branch decisions visible. Do not introduce an untyped stage framework to shorten the method.
 - Preserve the ordering of progress, stage timing and observer delivery, including disabled/empty stages and early returns. PIPELINE.md distinguishes observer exceptions, which are isolated, from progress-listener exceptions, which fail the operation. Keep that distinction when centralizing callbacks and timing.
 - Compare scientific results and stage/observer sequences separately from elapsed-time values. Retain the current failure-context, per-worker frame identity and joined cancellation guarantees; extract orchestration without simultaneously changing diagnostic policy.
+
+### JT-08. Use the CPUs on large sensors, then the GPU for faint-mover tiles
+
+**Planned (2026-11-20; the maintainer wants it soon).** Profiled with Java Flight Recorder on the shipped default profile, one session at a time, on a 32-thread machine with a laptop RTX 5060:
+
+| Session | Total | Largest stages |
+|---|---|---|
+| Klangwolke-2 (61 MP, 28 kept frames) | 240 s | photometry 103 s, faint-mover search 44 s, faint-streak search 39 s, extraction 22 s, median master 13 s |
+| Austral Kiwi (26 MP, 98 kept frames) | 573 s | faint-mover search 273 s, photometry 164 s, faint-streak search 66 s |
+| B1m (8 MP) | 32 s | faint-mover search 13 s |
+| Klangwolke-2 with Auto-Tune medium | 567 s | Auto-Tune about 210 s; the later stages slower (photometry 192 s) with the heap fuller |
+
+**Findings.**
+1. **Large sensors use 1.5 to 3 of 32 cores in almost every stage**; B1m uses 11 to 23 cores in the same stages. `WorkerPool.limitWork` reserves 16 bytes of scratch per frame pixel per worker (from at most a quarter of the heap and half the free heap), about 1 GB for a 61 MP frame, and stages inherit the limit of `limitWorkToFrames` even when their tasks allocate little: aperture measurement on frames already in memory ran on 1.6 cores. Only the faint-mover tiles are really that heavy (about 300 MB per tile on Austral Kiwi).
+2. **Cancellation checks inside per-star and per-detection loops** (`CancellationScope.check()`: interrupt test, `ThreadLocal` lookup, a chain of token lambdas) take 45 % of Auto-Tune's CPU, 20-30 % of aperture measurement and 15-30 % of extraction and frame quality. `CalibratedAutoTuner` has 76 of them.
+3. **The saturation scan** (`PhotometryStarSelector.pileUpLevel`) is one thread over every pixel of every kept frame: about 17 s on Klangwolke-2, 49 s on Austral Kiwi. The median master sorts each pixel's values instead of selecting the middle one. Garbage-collection pauses add 18-42 s per run.
+
+**Steps, each measured on these sessions with byte-identical results:**
+1. Worker limits per stage from what each task actually allocates (photometry measurement, saturation scan, faint-streak smoothing, extraction).
+2. Cancellation checks per row or batch instead of per item, with the token read once per task.
+3. The saturation scan in parallel or folded into a pass that already reads the frames; a selected median for the master stack.
+4. Then the one GPU candidate with a clear payoff: **faint-mover tile preparation on the GPU** (`readResiduals`, `normalise` and `filter` are 60-68 % of the search's CPU at about two workers, while its coarse pass already runs on OpenCL). Tiles would live in device memory beside the coarse kernel, removing both the CPU cost and the heap limit. It reuses the existing `gpu` package (JOCL, device selection, program cache, self-test, benchmark, CPU fallback) and must match the CPU's masks, normalisation and filter.
+
+**Not proposed now.** GPU ports of aperture photometry (its cost is the two workers and the cancellation checks; the sky median per star fits a GPU poorly), faint-streak smoothing (fast where cores are allowed; frames would cross the bus both ways and extraction stays on the CPU), source extraction (branchy component labelling) and Auto-Tune (already 18 cores; next gains are the cancellation checks and a spatial index for its all-pairs recurrence test). Estimated overall gain of steps 1-3 on the large sessions: about 2-4x, to be measured.
 
 ## Removed from the previous plan (2026-10-23)
 

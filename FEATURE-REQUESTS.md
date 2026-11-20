@@ -9,7 +9,7 @@ These are proposals, not implementation authorisations. Retain current algorithm
 | ID | Status | Remaining scope and trigger |
 |---|---|---|
 | [QC-1](#qc-1-star-count-rejection-envelope) | Proposed | Consider a count-envelope floor if corrected common-area counts reject useful frames too readily. |
-| [PT-5](#pt-5-registration-quality-and-shared-jitter-tolerances) | Proposed assessment | Measure residual stellar registration quality before deciding whether shared jitter tolerances need to change. |
+| [PT-5](#pt-5-registration-quality-and-shared-jitter-tolerances) | Proposed assessment; registration now measured (2026-11-20) | Use the registration check's measurements to decide whether shared jitter tolerances need to change. |
 | [PT-10](#pt-10-minimum-fill-for-timed-point-tracks) | Proposed | Require timed point tracks to cover a minimum share of the frames they span; measure faint real movers first. |
 | [SM-F8](#sm-f8-frame-check-for-runs-of-leaky-frames) | Proposed; later addition | Leave out runs of frames whose star tails leak past the faint-mover mask, which the few-frame check cannot stop when they cover a third of the frames or more. Needs a second affected session. |
 | [SM-F9](#sm-f9-slow-mover-candidates-made-by-hot-pixels) | Proposed | Reject maximum-stack candidates that stay at one camera position: hot pixels that the drift draws into short dashes. |
@@ -30,6 +30,8 @@ Revisit with stable, cloudy and sparse sessions showing useful frames lost by th
 ## PT-5. Registration quality and shared jitter tolerances
 
 **Proposed assessment.** The maintainer prefers assessing registration quality before splitting `maxStarJitter` into more settings. No tolerance or migration change is agreed.
+
+**Registration now measured (2026-11-20).** Quality control's [registration check](ALGORITHM.md#5-session-level-frame-rejection) measures residual stellar alignment per frame and in 4 x 4 zones, in star widths, and rejects frames whose stars jump. On eleven reference sessions it measured at most 0.20 FWHM of creep in any zone except a 50 mm wide field (0.38-0.51 FWHM at its edges). What remains of this item is the jitter-tolerance question, now with those measurements to hand.
 
 Measure residual stellar alignment across the field, including translation, rotation, sparse/crowded fields and uncertain matches. Determine whether photometry measurements can supply one shared, authoritative assessment, its cost, and its place relative to extraction and frame rejection. The fill-edge camera transform is not a measure of remaining stellar misalignment.
 
@@ -87,6 +89,8 @@ The camera-fixed rejection does not see them. It works on frame detections, and 
 **Proposed (2026-11-08).** A 32-frame, three-hour session on a 1.4 MP sensor gave 131 faint-mover candidates, about 90 per MPix; no other archive session gave more than 9 per MPix. Run again with the few-frame check, 82 remained. Of those, 95% lie within 5 px of the star mask (73% on it), and 56% share one direction and almost the same rate, about 20 px over the session. The cut-outs show the path sliding past a bright star whose halo, or a tail in the later frames with elongated stars, reaches past the mask while the sky brightness changes strongly over the session. The stationary check does not catch them, because the star is masked in the zero-motion stack (stationary score about 0).
 
 Measured on the 82 paths: the share of each path's frames within 1.5 FWHM of the star mask has a median of 97%, and 76% of the paths stay that close in 80% of their frames or more. Random straight paths with the same velocities do so in 7% of cases (median 0%). [SM-F8](#sm-f8-frame-check-for-runs-of-leaky-frames) already rejects a blanket wider mask, which lost 3 of 12 injected movers passing a bright star.
+
+**Further evidence (2026-11-20).** On Austral Kiwi (LMC field with nebulosity) all 21 candidates drew their signal on one time profile (high early and late in the night, near zero in between); 11 ran along a bright star's mask edge, whose light just past the mask changed over the night, 6 crossed faint unmasked stars, 2 lay at the data-area edge. Measuring star cores also above the local background (gradient tiles had raised the mask threshold 2-4x) reduced them to 4. On a 50 mm wide field the remaining right-edge candidates move with the registration creep that the new registration check flags.
 
 **Proposal.** Reject a candidate whose path stays within about 1.5 FWHM of the star mask in at least about 80% of its frames. A real mover passing a star is near it only while it crosses; it is lost only when its whole motion over the session is shorter than about a star's masked footprint, where it cannot be told from the halo anyway. Before adoption, check the 12 injected movers passing bright stars and klangwolke-2's 10 known candidates (all must stay), and the false candidates on this session and on the SM-F8 session.
 
