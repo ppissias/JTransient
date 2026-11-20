@@ -530,6 +530,27 @@ public class FaintMoverSearchTest {
                         new int[]{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, 0.5, 3.25)));
     }
 
+    /**
+     * Refinement may not end below the slowest motion searched: a mover just slower than the minimum displacement is
+     * reported, if at all, at a motion that still reaches it, never at its own slower motion.
+     */
+    @Test
+    public void refinementNeverEndsBelowTheMinimumDisplacement() throws Exception {
+        // 0.4 px/min is 4 star sizes over the 30-minute session; the minimum is 5 (0.5 px/min). The nearest coarse
+        // motion, 0.6 px/min, lies four fine steps from the mover's own motion.
+        double[] mover = {100, 120, 0.4, 0, 2.5 * NOISE};
+        DetectionConfig config = new DetectionConfig();
+        config.faintMoverMinDisplacementFwhm = 5.0;
+        FaintMoverSearch.Result result = run(input(frames(21, mover)), config);
+
+        assertEquals(0.5, result.telemetry.minSpeedPixelsPerMinute, 1e-3);
+        assertFalse("the mover is still close enough to the slowest motion to be found", result.candidates.isEmpty());
+        for (FaintMoverCandidate c : result.candidates) {
+            assertTrue("refined speed " + Math.hypot(c.vx, c.vy),
+                    Math.hypot(c.vx, c.vy) >= result.telemetry.minSpeedPixelsPerMinute - 1e-9);
+        }
+    }
+
     @Test
     public void theMotionGridCoversTheSpeedRange() {
         double step = 0.08;

@@ -1600,12 +1600,15 @@ public final class FaintMoverSearch {
         int topY = y;
         int[] sx = new int[n];
         int[] sy = new int[n];
+        // Up to one coarse step past the fastest motion, but never below the slowest: the minimum displacement holds.
         double limit = plan.maxSpeed + plan.coarseStep;
+        double floor = plan.telemetry.minSpeedPixelsPerMinute - 1e-9;
         for (int i = -FINE_STEPS; i <= FINE_STEPS; i++) {
             for (int j = -FINE_STEPS; j <= FINE_STEPS; j++) {
                 double vx = coarse[0] + i * plan.fineStep;
                 double vy = coarse[1] + j * plan.fineStep;
-                if (Math.hypot(vx, vy) > limit) {
+                double speed = Math.hypot(vx, vy);
+                if (speed > limit || speed < floor) {
                     continue;
                 }
                 shifts(plan, vx, vy, sx, sy);

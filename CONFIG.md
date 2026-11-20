@@ -876,7 +876,7 @@ Runs the search after residual analysis. It needs capture times on the kept fram
 
 ### `faintMoverMinDisplacementFwhm` (default `2.0`)
 
-Slowest motion searched, as the distance moved over the session in star widths (FWHM). A slower object stays inside its own median-stack footprint and is subtracted with the static field. SpacePixels displays the corresponding arcsec/min rate when WCS/timing are available, labels pre-run seeing estimates, and requires at least 2 FWHM/session in its controls. The engine field retains its relative-displacement meaning.
+Slowest motion searched, as the distance moved over the session in star widths (FWHM); refinement never reports a slower one. A slower object stays inside its own median-stack footprint and is subtracted with the static field. SpacePixels displays the corresponding arcsec/min rate when WCS/timing are available, labels pre-run seeing estimates, and requires at least 2 FWHM/session in its controls. The engine field retains its relative-displacement meaning.
 
 ### `faintMoverMaxSpeedPixelsPerMinute` (default `1.0`)
 
