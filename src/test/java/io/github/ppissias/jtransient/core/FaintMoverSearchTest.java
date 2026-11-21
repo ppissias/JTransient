@@ -551,38 +551,6 @@ public class FaintMoverSearchTest {
         }
     }
 
-    /**
-     * A gradient across the tile widens the spread about its single sky level; a faint star on it is still a star core,
-     * measured above its local background, and the sky is not.
-     */
-    @Test
-    public void aFaintStarOnAGradientIsAStarCore() {
-        int size = 200;
-        Random random = new Random(5);
-        short[][] master = new short[size][size];
-        double starX = 40;
-        double starY = 100;
-        double sigma = 1.5;
-        for (int y = 0; y < size; y++) {
-            for (int x = 0; x < size; x++) {
-                // 4000 counts across the tile, noise 5, a star of peak 120 (far below 8 spreads of the ramp).
-                double value = 1000 + 20.0 * x + 5 * random.nextGaussian();
-                value += 120 * Math.exp(-((x - starX) * (x - starX) + (y - starY) * (y - starY)) / (2 * sigma * sigma));
-                master[y][x] = PixelEncoding.fromShiftedPositiveInt((int) Math.round(value));
-            }
-        }
-        boolean[] cores = FaintMoverSearch.starCores(master, 0, 0, size, size, new boolean[size * size]);
-
-        assertTrue("the star's centre", cores[(int) starY * size + (int) starX]);
-        for (int y = 0; y < size; y++) {
-            for (int x = 0; x < size; x++) {
-                if (cores[y * size + x]) {
-                    assertTrue("sky at " + x + "," + y, Math.hypot(x - starX, y - starY) <= 3);
-                }
-            }
-        }
-    }
-
     @Test
     public void theMotionGridCoversTheSpeedRange() {
         double step = 0.08;

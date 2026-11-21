@@ -92,6 +92,8 @@ Measured on the 82 paths: the share of each path's frames within 1.5 FWHM of the
 
 **Further evidence (2026-11-20).** On Austral Kiwi (LMC field with nebulosity) all 21 candidates drew their signal on one time profile (high early and late in the night, near zero in between); 11 ran along a bright star's mask edge, whose light just past the mask changed over the night, 6 crossed faint unmasked stars, 2 lay at the data-area edge. Measuring star cores also above the local background (gradient tiles had raised the mask threshold 2-4x) reduced them to 4. On a 50 mm wide field the remaining right-edge candidates move with the registration creep that the new registration check flags.
 
+The local-background star mask also suppressed the catalogue-matched asteroid 11579 Tsujitsuka in Klangwolke-2. The search uses the tile sky to identify star cores again to preserve that detection.
+
 **Proposal.** Reject a candidate whose path stays within about 1.5 FWHM of the star mask in at least about 80% of its frames. A real mover passing a star is near it only while it crosses; it is lost only when its whole motion over the session is shorter than about a star's masked footprint, where it cannot be told from the halo anyway. Before adoption, check the 12 injected movers passing bright stars and klangwolke-2's 10 known candidates (all must stay), and the false candidates on this session and on the SM-F8 session.
 
 ## SM-F11. Faster faint movers: trails and memory

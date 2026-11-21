@@ -87,7 +87,7 @@ public final class FaintMoverSearch {
     static final int BACKGROUND_BOX = 41;
     /** A residual is clipped to this many sigmas about its centre before the local background is taken. */
     static final double BACKGROUND_CLIP_SIGMA = 3.0;
-    /** Median-stack pixels this many sky sigmas above the tile's sky, or above their local background, are star cores. */
+    /** Median-stack pixels this many sky sigmas above the tile's sky are star cores. */
     static final double STAR_CORE_SIGMA = 8.0;
     /** Star cores and fill are grown by these many pixels. */
     static final int STAR_CORE_GROW = 3;
@@ -1360,101 +1360,41 @@ public final class FaintMoverSearch {
             }
         }
 
-        boolean[] core = starCores(master, x0, y0, width, height, fill);
+        // Star cores of the median stack, above the tile's sky.
+        float[] sample = new float[Math.min(SAMPLE_SIZE, width * height)];
+        int stride = Math.max(1, width * height / sample.length);
+        int count = 0;
+        for (int i = 0; i < width * height && count < sample.length; i += stride) {
+            if (!fill[i]) {
+                int y = y0 + i / width;
+                int x = x0 + i % width;
+                sample[count++] = master[y][x];
+            }
+        }
+        boolean[] core = new boolean[width * height];
+        if (count > 0) {
+            double[] centreSpread = centreAndSpread(sample, count);
+            double limit = centreSpread[0] + STAR_CORE_SIGMA * Math.max(centreSpread[1], 1.0);
+            for (int yy = 0; yy < height; yy++) {
+                int y = y0 + yy;
+                if (y < 0 || y >= imageHeight) {
+                    continue;
+                }
+                for (int xx = 0; xx < width; xx++) {
+                    int x = x0 + xx;
+                    int i = yy * width + xx;
+                    if (!fill[i] && master[y][x] > limit) {
+                        core[i] = true;
+                    }
+                }
+            }
+        }
         boolean[] bad = grow(fill, width, height, FILL_GROW);
         boolean[] cores = grow(core, width, height, STAR_CORE_GROW);
         for (int i = 0; i < bad.length; i++) {
             bad[i] |= cores[i];
         }
         return bad;
-    }
-
-    /**
-     * Star cores of the median stack over the area, before growing: pixels more than {@link #STAR_CORE_SIGMA} robust
-     * spreads above the area's sky, and also pixels that far above their local background, a clipped running mean over
-     * {@link #BACKGROUND_BOX} pixels (two passes, each clipping to {@link #BACKGROUND_CLIP_SIGMA} spreads about the
-     * previous level), where that square lies wholly inside the area and outside {@code fill}. A gradient or nebula
-     * across the area widens the spread about its single sky level and raises the first threshold, so faint stars there
-     * stay unmasked and their changing wings make false paths; the second rule keeps the threshold at the local sky. The
-     * first rule keeps bright extended light, such as a nebula core, that the running mean partly follows.
-     * {@code fill} marks the pixels to leave out; rows outside the image are left out.
-     */
-    static boolean[] starCores(short[][] master, int x0, int y0, int width, int height, boolean[] fill) {
-        int n = width * height;
-        float[] stack = new float[n];
-        for (int yy = 0; yy < height; yy++) {
-            int y = y0 + yy;
-            if (y < 0 || y >= master.length) {
-                continue;
-            }
-            for (int xx = 0; xx < width; xx++) {
-                int i = yy * width + xx;
-                if (!fill[i]) {
-                    stack[i] = master[y][x0 + xx];
-                }
-            }
-        }
-        boolean[] core = new boolean[n];
-        float[] sample = new float[Math.min(SAMPLE_SIZE, n)];
-        int count = spacedSample(stack, fill, null, sample);
-        if (count == 0) {
-            return core;
-        }
-        double[] tile = centreAndSpread(sample, count);
-        double limit = tile[0] + STAR_CORE_SIGMA * Math.max(tile[1], 1.0);
-        for (int i = 0; i < n; i++) {
-            if (!fill[i] && stack[i] > limit) {
-                core[i] = true;
-            }
-        }
-
-        // The same rule above the local background.
-        float[] background = new float[n];
-        float[] values = new float[n];
-        float[] weights = new float[n];
-        double spread = Math.max(tile[1], 1.0);
-        for (int pass = 0; pass < 2; pass++) {
-            for (int i = 0; i < n; i++) {
-                if (fill[i]) {
-                    values[i] = 0f;
-                    weights[i] = 0f;
-                } else {
-                    double centre = pass == 0 ? tile[0] : background[i];
-                    values[i] = (float) Math.max(centre - BACKGROUND_CLIP_SIGMA * spread,
-                            Math.min(centre + BACKGROUND_CLIP_SIGMA * spread, stack[i]));
-                    weights[i] = 1f;
-                }
-            }
-            boxMean(values, weights, width, height, BACKGROUND_BOX / 2);
-            for (int i = 0; i < n; i++) {
-                background[i] = weights[i] > 0 ? values[i] / weights[i] : (float) tile[0];
-            }
-            spread = Math.max(centreAndSpread(sample, spacedSample(stack, fill, background, sample))[1], 1.0);
-        }
-        // Only where the running mean saw its whole square: a one-sided mean lies off a gradient.
-        int side = 2 * (BACKGROUND_BOX / 2) + 1;
-        float whole = side * side - 0.5f;
-        for (int i = 0; i < n; i++) {
-            if (!fill[i] && weights[i] >= whole && stack[i] - background[i] > STAR_CORE_SIGMA * spread) {
-                core[i] = true;
-            }
-        }
-        return core;
-    }
-
-    /**
-     * Fills {@code sample} with evenly spaced values of {@code stack} outside {@code fill}, minus {@code background}
-     * when given; returns how many were taken.
-     */
-    private static int spacedSample(float[] stack, boolean[] fill, float[] background, float[] sample) {
-        int stride = Math.max(1, stack.length / sample.length);
-        int count = 0;
-        for (int i = 0; i < stack.length && count < sample.length; i += stride) {
-            if (!fill[i]) {
-                sample[count++] = background == null ? stack[i] : stack[i] - background[i];
-            }
-        }
-        return count;
     }
 
     /**
