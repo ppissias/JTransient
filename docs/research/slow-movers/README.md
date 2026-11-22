@@ -1,6 +1,6 @@
 # Slow-mover investigation archive
 
-This collection preserves eleven dated SM-F1/SM-F2/SM-F3/SM-F6/SM-F7 investigations conducted on 3-5 November 2026. It contains historical protocols, conclusions, numerical tables, validation records and selected scientific figures. Large case tables are losslessly compressed with gzip.
+This collection preserves the November 3–5 SM-F1/SM-F2/SM-F3/SM-F6/SM-F7 investigations and the November 8–22 SM-F10 star-mask investigation. It contains historical protocols, conclusions, numerical tables, validation records and selected scientific figures. Large case tables are losslessly compressed with gzip.
 
 [ALGORITHM.md](../../../ALGORITHM.md) remains the current algorithm reference. [FEATURE-REQUESTS.md](../../../FEATURE-REQUESTS.md) owns pending decisions and acceptance work. Historical reports describe their own experimental baseline and publication state; a statement such as “not implemented” in an early snapshot is not the current implementation status.
 
@@ -19,10 +19,11 @@ This collection preserves eleven dated SM-F1/SM-F2/SM-F3/SM-F6/SM-F7 investigati
 | 2026-11-05 | [SM-F6 matched-domain validation](09-digital-validation/README.md) | All 462 searches finish on six observations, including full-speed M81. Three disjoint image-third searches and 12 controlled encounters add conditional evidence. Deeper predictions give compatible known-object paths for all 11 original K2 candidates. No filter/default change earns adoption. |
 | 2026-11-05 | [SM-F7 complementary proposals](10-complementary-proposals/README.md) | Four fields, 644 result rows and 240 available moving histories compare the unchanged verifier. Temporal-bin proposals add six targeted close companions; five survive full upstream checks beyond ordinary tracks and digital tracking. Frame-point routes mostly reach resource boundaries. Gates/defaults and production integration remain unchanged. |
 | 2026-11-05 | [Native Klangwolke-2 full-field application](11-klangwolke-native/README.md) | No injections: all 247 tiles complete. D finds the existing 11 candidates, T4 seven of those, and their union the same 11 with byte-identical candidate/review data. No additional native detection; current gates/defaults and integration remain unchanged. |
+| 2026-11-08–22 | [Faint-mover paths beside stars](12-faint-mover-star-mask/README.md) | The local-background mask reduces candidates from 33 to 15 on Andromeda and from 21 to 4 on Austral Kiwi. JTransient 1.1.2 restores the 1.1.1 mask and accepts the loss of Klangwolke-2 FM10. |
 
 ## Conclusions to carry forward
 
-**Current status:** the investigation round is closed with present filters and defaults retained. Only the deferred [SM-F7 extension item](../../../FEATURE-REQUESTS.md#sm-f7-slow-and-faint-mover-extensions) remains for a concrete missed-source or resource need; no further campaign is scheduled. The dated study snapshots retain their historical proposals and publication state.
+The November 3–5 round closed with its filters and defaults retained. The later SM-F10 follow-up closed by restoring the local-background mask. The dated study snapshots retain their historical proposals and publication state.
 
 - Keep the current scientific filters/defaults. Increased selected-history recovery can accompany substantial control load, and some relaxations also lose sources through changed preprocessing or noise normalization.
 - Treat missing evidence, input/model eligibility, candidate ceilings and scientific rejection separately. The camera controls in the latest grid do not cleanly test steady camera drift in the intended motion domain.
@@ -33,11 +34,11 @@ This collection preserves eleven dated SM-F1/SM-F2/SM-F3/SM-F6/SM-F7 investigati
 
 [CODE-HISTORY.md](CODE-HISTORY.md) distinguishes delivered engine/application changes from research-only alternatives and lists their commits and validation evidence. Digital tracking is integrated off by default. Maximum-stack row caching, copied centroid/time-fit evidence, cautious track comparisons, bounded faint-mover review, search progress and clearer known-object reports are delivered. Wider defaults, automatic temporal rejection and the two complementary SM-F7 methods are not introduced by this archive or the latest gate studies.
 
-The publication containing this archive changes documentation/evidence only. Original observation pixels, saved settings and reports remain unchanged.
+The study directories retain historical evidence. [The star-mask follow-up](12-faint-mover-star-mask/README.md) documents the 1.1.2 algorithm decision separately from earlier deliveries.
 
 ## Reading and reusing the evidence
 
-Read [DATA-NOTES.md](DATA-NOTES.md) before joining tables or comparing scores. Case numbers are local to an investigation; repeated source histories and shared fields are correlated. Each study directory has an inventory and `provenance.json` with original/archived artifact SHA-256 values, portable-path transformations and available production-source snapshot hashes. [archive-manifest.json](archive-manifest.json) checks the committed archive bytes; line endings are fixed to LF for text files.
+Read [DATA-NOTES.md](DATA-NOTES.md) before joining tables or comparing scores. Case numbers are local to an investigation, and repeated source histories and shared fields are correlated. The November 3–5 directories have inventories and `provenance.json` files. The [SM-F10 study](12-faint-mover-star-mask/README.md) links its paired runs, path data, replay measurements and figures. [archive-manifest.json](archive-manifest.json) records SHA-256 hashes for the archive, with LF line endings for text files.
 
 [VALIDATION.json](VALIDATION.json) records the original nine-study publication checks. The SM-F7 extensions have separate [matched-verifier scientific validation](10-complementary-proposals/validation.json), [publication checks](10-complementary-proposals/publication-validation.json) and [native K2 validation](11-klangwolke-native/validation.json): numerical comparisons, source/result integrity, local links, code-history references, figure metadata and privacy.
 

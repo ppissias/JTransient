@@ -1,6 +1,6 @@
 {
   "formatVersion": 1,
-  "collection": "Slow-mover investigations, 2026-11-03 through 2026-11-05",
+  "collection": "Slow-mover investigations, 2026-11-03 through 2026-11-22",
   "files": {
     ".gitattributes": "12e8eb7dca9f32cd00f0b2bb57910c81cddcf0552bd3a65bfecdf3b9b41bc15f",
     "01-three-method-prototypes/evaluation.json": "81eb34a5c99c3e0dfe2e81790708172103f8f158571ed9025ee77ed2e1fbcbf7",
@@ -244,9 +244,18 @@
     "11-klangwolke-native/trace-summary.json.gz": "3fbad29a46fdd9f079eb32f291d02236a93a268045de60eeb5448b81ad300106",
     "11-klangwolke-native/upstream-findings.json.gz": "3ff541777c8e462491567fec0a59f87da0bffb77830fe36895dd73cfbe666a47",
     "11-klangwolke-native/validation.json": "f0b4d08ac140db24c2899beeefcc7627958d1b8713cf15d2e92fc11ffe67438e",
-    "CODE-HISTORY.md": "0a8109c185d9aea2365964dff9dff95c3958c3be650ccb96635e6700bd61bef4",
+    "12-faint-mover-star-mask/01-path-and-star-masks.png": "a8d18335231aa1ef1e668a29f1e88630898c98f5c442d31dca686e520313c55e",
+    "12-faint-mover-star-mask/02-score-by-exposure.png": "cd8c25441c482ef07ef4097bccbadb0209ce05225d0d020b660c210e941a57b2",
+    "12-faint-mover-star-mask/03-registered-frames-and-stacks.png": "3acb8873d2b1d245d0c69ade0c6309d92bf3755ec791cf2f21e7f7dcada8ff43",
+    "12-faint-mover-star-mask/04-current-star-mask.png": "d6009c2eefc1122bbf026492c5b87670cd30afdd53fc153c9edb399d5e6ec594",
+    "12-faint-mover-star-mask/05-current-mask-residuals.png": "f74248246d269fc562658f6a197de636c8e102d22d12ab568bf72bdec5e890e8",
+    "12-faint-mover-star-mask/field-paths.json.gz": "1c7f3103eb36c1d82f75bb1cb4ab65ef55c546e1674d3f57f53a05fd7f774f71",
+    "12-faint-mover-star-mask/paired-full-runs.json": "d772bf8f3fd06adf386bc481e0088988138ed215818088682a7ae96987263c4e",
+    "12-faint-mover-star-mask/README.md": "e177a80f185c597ad83d1f9df9ec7411823d3133da80313e0667ff7333836738",
+    "12-faint-mover-star-mask/tsujitsuka-measurements.json": "e9c6d6b30492c03487e831e13613c3a02530aa2e721850a97550cf3748f210b2",
+    "CODE-HISTORY.md": "decb757d7775ce61dbcf01028c84f006817290690905af5daea6e0644b16cc8d",
     "DATA-NOTES.md": "4aa6e3e2a56292ac700ec3ebbad8e048b5499ded4d3e3204766f412066758b06",
-    "README.md": "443b953155645a000d04e14178a905d94a1d1a97b86e73e9026088b044c9c60c",
+    "README.md": "8d18bf1b2a6072901ecabe7dd0d84362456db0cb4a293a14226ea24d94a73cc5",
     "VALIDATION.json": "1404f8ca699b32766f11765f6e13f99385f1de8e81a8ce90e65e7a38b348c63a"
   }
 }

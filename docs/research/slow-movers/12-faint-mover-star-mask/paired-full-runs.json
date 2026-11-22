@@ -1,0 +1,455 @@
+{
+  "description": "Reported candidate sets in paired November 21 full-session runs.",
+  "pairs": [
+    {
+      "dataset": "klangwolke-2",
+      "tileOnly": 10,
+      "localBackground": 9,
+      "matched": 9,
+      "tileOnlyPaths": [
+        {
+          "id": "FM10",
+          "x": 5281.93,
+          "y": 3404.856,
+          "score": 8.0822,
+          "catalogue": [
+            "11579 Tsujitsuka (1994 JN)"
+          ]
+        }
+      ],
+      "localBackgroundPaths": [],
+      "sameRejectedFrames": true,
+      "sameProfile": true,
+      "sameNonFaintMoverFindings": true,
+      "sameVariableMarkers": true,
+      "tiles": 247,
+      "tileOnlySearchSeconds": 95.135,
+      "localBackgroundSearchSeconds": 65.204,
+      "tileOnlyCatalogueMatches": [
+        "11579 Tsujitsuka (1994 JN)",
+        "180044 (2003 AJ88)",
+        "222169 (2000 AR152)",
+        "25729 (2000 AV187)",
+        "26239 (1998 QP33)",
+        "43283 Robinbock (2000 EC143)",
+        "68067 (2000 YM72)",
+        "74326 (1998 UU37)",
+        "77716 (2001 OF50)",
+        "98339 (2000 SG296)"
+      ],
+      "localBackgroundCatalogueMatches": [
+        "180044 (2003 AJ88)",
+        "222169 (2000 AR152)",
+        "25729 (2000 AV187)",
+        "26239 (1998 QP33)",
+        "43283 Robinbock (2000 EC143)",
+        "68067 (2000 YM72)",
+        "74326 (1998 UU37)",
+        "77716 (2001 OF50)",
+        "98339 (2000 SG296)"
+      ]
+    },
+    {
+      "dataset": "Flame-track-fm-hot-possible-fm",
+      "tileOnly": 2,
+      "localBackground": 2,
+      "matched": 2,
+      "tileOnlyPaths": [],
+      "localBackgroundPaths": [],
+      "sameRejectedFrames": true,
+      "sameProfile": true,
+      "sameNonFaintMoverFindings": true,
+      "sameVariableMarkers": true,
+      "tiles": 12,
+      "tileOnlySearchSeconds": 0.915,
+      "localBackgroundSearchSeconds": 0.99,
+      "tileOnlyCatalogueMatches": [],
+      "localBackgroundCatalogueMatches": []
+    },
+    {
+      "dataset": "B1m",
+      "tileOnly": 30,
+      "localBackground": 30,
+      "matched": 30,
+      "tileOnlyPaths": [],
+      "localBackgroundPaths": [],
+      "sameRejectedFrames": true,
+      "sameProfile": true,
+      "sameNonFaintMoverFindings": true,
+      "sameVariableMarkers": true,
+      "tiles": 32,
+      "tileOnlySearchSeconds": 255.233,
+      "localBackgroundSearchSeconds": 228.721,
+      "tileOnlyCatalogueMatches": [],
+      "localBackgroundCatalogueMatches": []
+    },
+    {
+      "dataset": "m101-reg",
+      "tileOnly": 1,
+      "localBackground": 1,
+      "matched": 1,
+      "tileOnlyPaths": [],
+      "localBackgroundPaths": [],
+      "sameRejectedFrames": true,
+      "sameProfile": true,
+      "sameNonFaintMoverFindings": true,
+      "sameVariableMarkers": true,
+      "tiles": 20,
+      "tileOnlySearchSeconds": 15.143,
+      "localBackgroundSearchSeconds": 15.716,
+      "tileOnlyCatalogueMatches": [],
+      "localBackgroundCatalogueMatches": []
+    },
+    {
+      "dataset": "austral-kiwi-tarantula-lmc",
+      "tileOnly": 21,
+      "localBackground": 4,
+      "matched": 4,
+      "tileOnlyPaths": [
+        {
+          "id": "FM1",
+          "x": 4984.055,
+          "y": 1686.008,
+          "score": 10.7786,
+          "catalogue": []
+        },
+        {
+          "id": "FM2",
+          "x": 4267.765,
+          "y": 1904.188,
+          "score": 9.7874,
+          "catalogue": []
+        },
+        {
+          "id": "FM3",
+          "x": 4451.66,
+          "y": 3491.01,
+          "score": 9.7181,
+          "catalogue": []
+        },
+        {
+          "id": "FM5",
+          "x": 2079.832,
+          "y": 3484.17,
+          "score": 9.5017,
+          "catalogue": []
+        },
+        {
+          "id": "FM6",
+          "x": 4198.166,
+          "y": 2548.132,
+          "score": 9.1816,
+          "catalogue": []
+        },
+        {
+          "id": "FM7",
+          "x": 3413.417,
+          "y": 2969.232,
+          "score": 9.0123,
+          "catalogue": []
+        },
+        {
+          "id": "FM8",
+          "x": 4307.314,
+          "y": 1626.849,
+          "score": 8.6878,
+          "catalogue": []
+        },
+        {
+          "id": "FM9",
+          "x": 3549.908,
+          "y": 3106.904,
+          "score": 8.6065,
+          "catalogue": []
+        },
+        {
+          "id": "FM11",
+          "x": 3973.189,
+          "y": 3629.246,
+          "score": 8.4913,
+          "catalogue": []
+        },
+        {
+          "id": "FM12",
+          "x": 4153.6,
+          "y": 2075.786,
+          "score": 8.4512,
+          "catalogue": []
+        },
+        {
+          "id": "FM13",
+          "x": 4271.796,
+          "y": 1919.853,
+          "score": 8.3966,
+          "catalogue": []
+        },
+        {
+          "id": "FM14",
+          "x": 2397.946,
+          "y": 3841.987,
+          "score": 8.3963,
+          "catalogue": []
+        },
+        {
+          "id": "FM15",
+          "x": 2162.315,
+          "y": 3595.021,
+          "score": 8.2798,
+          "catalogue": []
+        },
+        {
+          "id": "FM16",
+          "x": 1862.187,
+          "y": 3597.322,
+          "score": 8.2546,
+          "catalogue": []
+        },
+        {
+          "id": "FM17",
+          "x": 2719.871,
+          "y": 2673.332,
+          "score": 8.2038,
+          "catalogue": []
+        },
+        {
+          "id": "FM19",
+          "x": 3322.805,
+          "y": 1886.318,
+          "score": 8.1553,
+          "catalogue": []
+        },
+        {
+          "id": "FM20",
+          "x": 2373.379,
+          "y": 3780.034,
+          "score": 8.0732,
+          "catalogue": []
+        }
+      ],
+      "localBackgroundPaths": [],
+      "sameRejectedFrames": true,
+      "sameProfile": true,
+      "sameNonFaintMoverFindings": true,
+      "sameVariableMarkers": true,
+      "tiles": 104,
+      "tileOnlySearchSeconds": 652.729,
+      "localBackgroundSearchSeconds": 224.387,
+      "tileOnlyCatalogueMatches": [],
+      "localBackgroundCatalogueMatches": []
+    },
+    {
+      "dataset": "andromeda-wide-gradient-chaos",
+      "tileOnly": 33,
+      "localBackground": 15,
+      "matched": 10,
+      "tileOnlyPaths": [
+        {
+          "id": "FM1",
+          "x": 80.9879,
+          "y": 447.1157,
+          "score": 15.1434,
+          "matches": []
+        },
+        {
+          "id": "FM2",
+          "x": 627.0815,
+          "y": 683.809,
+          "score": 11.5674,
+          "matches": []
+        },
+        {
+          "id": "FM3",
+          "x": 46.8626,
+          "y": 2203.0164,
+          "score": 11.378,
+          "matches": []
+        },
+        {
+          "id": "FM4",
+          "x": 404.0682,
+          "y": 2033.15,
+          "score": 11.1786,
+          "matches": []
+        },
+        {
+          "id": "FM5",
+          "x": 418.9222,
+          "y": 1746.6204,
+          "score": 11.1748,
+          "matches": []
+        },
+        {
+          "id": "FM6",
+          "x": 522.916,
+          "y": 1555.6895,
+          "score": 11.0814,
+          "matches": []
+        },
+        {
+          "id": "FM7",
+          "x": 257.0598,
+          "y": 427.1137,
+          "score": 10.743,
+          "matches": []
+        },
+        {
+          "id": "FM8",
+          "x": 513.3882,
+          "y": 1570.7882,
+          "score": 10.3839,
+          "matches": []
+        },
+        {
+          "id": "FM9",
+          "x": 641.188,
+          "y": 973.8562,
+          "score": 10.0749,
+          "matches": []
+        },
+        {
+          "id": "FM12",
+          "x": 487.9685,
+          "y": 1820.1704,
+          "score": 9.5904,
+          "matches": []
+        },
+        {
+          "id": "FM13",
+          "x": 41.7803,
+          "y": 2061.5686,
+          "score": 9.4422,
+          "matches": []
+        },
+        {
+          "id": "FM14",
+          "x": 534.0767,
+          "y": 828.3618,
+          "score": 9.4184,
+          "matches": []
+        },
+        {
+          "id": "FM18",
+          "x": 800.7192,
+          "y": 1790.0153,
+          "score": 9.0192,
+          "matches": []
+        },
+        {
+          "id": "FM19",
+          "x": 224.865,
+          "y": 1814.9209,
+          "score": 8.8005,
+          "matches": []
+        },
+        {
+          "id": "FM21",
+          "x": 59.3073,
+          "y": 1769.2292,
+          "score": 8.7113,
+          "matches": []
+        },
+        {
+          "id": "FM22",
+          "x": 452.2425,
+          "y": 2284.4462,
+          "score": 8.7088,
+          "matches": []
+        },
+        {
+          "id": "FM23",
+          "x": 312.8388,
+          "y": 2497.6317,
+          "score": 8.6282,
+          "matches": []
+        },
+        {
+          "id": "FM24",
+          "x": 296.1097,
+          "y": 2454.2189,
+          "score": 8.5163,
+          "matches": []
+        },
+        {
+          "id": "FM27",
+          "x": 55.3521,
+          "y": 2438.8903,
+          "score": 8.3935,
+          "matches": []
+        },
+        {
+          "id": "FM28",
+          "x": 183.5151,
+          "y": 186.0728,
+          "score": 8.3575,
+          "matches": []
+        },
+        {
+          "id": "FM29",
+          "x": 686.3823,
+          "y": 1794.6788,
+          "score": 8.3519,
+          "matches": []
+        },
+        {
+          "id": "FM31",
+          "x": 169.0641,
+          "y": 315.4185,
+          "score": 8.286,
+          "matches": []
+        },
+        {
+          "id": "FM32",
+          "x": 267.1569,
+          "y": 1742.6178,
+          "score": 8.1653,
+          "matches": []
+        }
+      ],
+      "localBackgroundPaths": [
+        {
+          "id": "FM1",
+          "x": 569.912,
+          "y": 861.0114,
+          "score": 10.172,
+          "matches": []
+        },
+        {
+          "id": "FM3",
+          "x": 102.4078,
+          "y": 438.1759,
+          "score": 9.773,
+          "matches": []
+        },
+        {
+          "id": "FM5",
+          "x": 95.3153,
+          "y": 1817.1324,
+          "score": 9.2813,
+          "matches": []
+        },
+        {
+          "id": "FM9",
+          "x": 392.6582,
+          "y": 2047.8829,
+          "score": 8.5158,
+          "matches": []
+        },
+        {
+          "id": "FM14",
+          "x": 164.6734,
+          "y": 168.6841,
+          "score": 8.2262,
+          "matches": []
+        }
+      ],
+      "sameInputFrames": true,
+      "sameRejectedFrames": true,
+      "sameProfile": true,
+      "sameNonFaintMoverFindings": true,
+      "sameVariableMarkers": true,
+      "tiles": 65,
+      "tileOnlySearchSeconds": 139.702,
+      "localBackgroundSearchSeconds": 132.66
+    }
+  ]
+}
