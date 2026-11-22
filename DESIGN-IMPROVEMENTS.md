@@ -29,7 +29,7 @@ A fresh review of the engine (about 20,000 lines of main code and 7,700 of tests
 | [JT-02](#jt-02-centralize-shared-validation-and-setting-rules) | Centralize shared validation and setting rules | Medium | In-depth review first |
 | [JT-04](#jt-04-review-logging-across-the-three-repositories) | Review logging across SpacePixels, JTransient and JPlateSolve | Medium | Review first |
 | [JT-05](#jt-05-let-the-pipeline-method-read-as-the-algorithm) | Let the pipeline method read as the algorithm | Medium | Small |
-| [JT-08](#jt-08-use-the-cpus-on-large-sensors-then-the-gpu-for-faint-mover-tiles) | Use the CPUs on large sensors, then the GPU for faint-mover tiles | High (planned next) | Steps 1-3 small to medium; step 4 medium |
+| [JT-08](#jt-08-use-the-cpus-on-large-sensors-then-the-gpu-for-faint-mover-tiles) | Use the CPUs on large sensors, then the GPU for faint-mover tiles | High (planned next) | Exact CPU memory and parallelism changes first; OpenCL tile preparation only if they fall short |
 
 **Working order.** Verify the dead-code subset of JT-01 first. Evaluate JT-02 in depth before choosing changes, and review JT-04 across all three repositories before choosing a logging approach. Keep each change independently reviewable. JT-05 remains a small orchestration cleanup; release-artifact checks continue through the existing [coordinated publishing procedure](../SpacePixels/PUBLISHING.md#maven-central-publishing).
 
@@ -101,7 +101,31 @@ The phase comments are numbered 0, 0.5, 4 and 5.
 
 ### JT-08. Use the CPUs on large sensors, then the GPU for faint-mover tiles
 
-**Planned (2026-11-20; the maintainer wants it soon).** Profiled with Java Flight Recorder on the shipped default profile, one session at a time, on a 32-thread machine with a laptop RTX 5060:
+**Planned (2026-11-20; profiled again and plan revised 2026-11-22).** Large sensors leave most of a 32-thread machine idle, and memory pressure (worker budgets, garbage collection, paging) costs more time than the computation itself. Fix memory use and CPU parallelism first. Move faint-mover tile preparation to OpenCL only if the CPU work falls short.
+
+#### Rules for every step
+
+- **One baseline.** Measure every change against the same baseline: the saved reference profiles of Klangwolke-2, B1m and Austral Kiwi, data-only export, one session at a time with nothing else running, and a heap that does not page (about 8 GiB on a 15 GB machine). Take the median of three runs. Record engine and stage wall time, garbage-collection pauses, peak heap and page faults. The November 22 figures below include paging and are not this baseline.
+- **CPU changes are exact.** Steps 1 and 2 must leave `report-data.json` byte-identical on the reference sessions and keep cancellation behaviour.
+- **GPU results need not be bit-identical (maintainer, 2026-11-22).** An OpenCL path may differ from the CPU in floating-point detail, provided it is tested on real scientific data, loses no candidate, and the differences are measured and recorded: candidates gained and lost per session, score differences of matched candidates, and mask differences. The **Auto** mode's parity self-test, which now requires an exact match, then needs a tolerance-based check for those stages.
+
+#### Proposed order of work
+
+1. **Right-size worker budgets and remove overhead (exact).**
+   - **Per-stage worker budgets.** Every stage after the faint-mover search inherits `limitWorkToFrames`: 16 bytes per frame pixel per worker, within a quarter of the heap and half the free heap. Aperture measurement shares the frames and needs little scratch, yet runs under that full-frame limit; on November 20 the large sensors used 1.5–3 of 32 cores. Budget each stage by its own working set, and reuse the clipped-sky scratch arrays within each photometry worker.
+   - **Cancellation checks.** There are 409 `CancellationScope.check()` calls, several in per-star and per-detection loops. They took about 45% of Auto-Tune's CPU samples and 20–30% of aperture measurement. Check once per row or batch.
+   - **Explicit collection.** Skip the `System.gc` in `WorkerPool.workerCount` when even an empty heap would not allow another worker. One such collection took 31 s on Klangwolke-2.
+   - **Smaller exact reuses.** Count the 41 × 41 valid pixels once per faint-mover tile, since its star-and-fill mask is fixed across exposures. Reuse the background statistics from strict source extraction in the frame-quality check. Give the saturation scan its early exit (see the measurements). Build the median master with a selected median instead of a per-pixel sort; the median reference and star map took 74 s on Klangwolke-2 and Kiwi.
+2. **Parallel CPU preparation inside a faint-mover tile (exact).** B1m's saved search domain needs 1.32 GiB of scratch per tile, so the quarter-heap cap allows one tile worker. Preparation took 363 s of its 434 s faint-mover stage. Normalise and filter separate exposures of one resident tile on several workers. The fill mask must be complete first, each worker needs its own scratch, and the pool runs nested calls inline, so this work needs its own explicit budget. Reduce per-tile scratch where it stays exact. If it scales, eight workers would bring preparation to about a minute. Measure peak heap and paging.
+3. **OpenCL tile preparation, only if step 2 leaves preparation dominant.** Prototype on B1m: residual assembly, normalisation and the Gaussian pass next to the existing coarse kernel, keeping the frames and reference on the device across tiles when they fit. Reuse the device selection, memory planning and CPU fallback. The Java noise estimates, refinement and diagnostic cutouts also use the residuals, so compare full-plane readback (about 1.03 GiB for a full B1m tile) with returning only the samples and regions the CPU needs. Measure uploads, kernels, readbacks and peak host and device memory against the step 2 CPU result, and the result differences under the GPU rule above. Preserve tile-local normalisation, mask growth, noise estimates and candidate evidence at tile boundaries.
+4. **Later, each measured separately.**
+   - OpenCL faint-streak smoothing, once the memory work is measured. Smoothing and convolution were 84–90% of the faint-streak samples, with 61–76 s of garbage collection inside the stage.
+   - An earlier photometry readiness verdict for sessions like Kiwi, which spent 308 s in photometry and then returned `NOT_READY` after the shape-linearity check rejected 97 of 98 frames. It must reproduce the full check's verdict, frame diagnostics and flags.
+   - **Not proposed.** GPU ports of aperture photometry (its cost is the worker budget and the cancellation checks; a sky median per star fits a GPU poorly), source extraction (branchy component labelling) and Auto-Tune (its next gains are the cancellation checks and a spatial index for its all-pairs recurrence test).
+
+#### Measurements
+
+**November 20**, shipped default profile, one session at a time, 32-thread machine with a laptop RTX 5060, Java Flight Recorder:
 
 | Session | Total | Largest stages |
 |---|---|---|
@@ -110,18 +134,23 @@ The phase comments are numbered 0, 0.5, 4 and 5.
 | B1m (8 MP) | 32 s | faint-mover search 13 s |
 | Klangwolke-2 with Auto-Tune medium | 567 s | Auto-Tune about 210 s; the later stages slower (photometry 192 s) with the heap fuller |
 
-**Findings.**
-1. **Large sensors use 1.5 to 3 of 32 cores in almost every stage**; B1m uses 11 to 23 cores in the same stages. `WorkerPool.limitWork` reserves 16 bytes of scratch per frame pixel per worker (from at most a quarter of the heap and half the free heap), about 1 GB for a 61 MP frame, and stages inherit the limit of `limitWorkToFrames` even when their tasks allocate little: aperture measurement on frames already in memory ran on 1.6 cores. Only the faint-mover tiles are really that heavy (about 300 MB per tile on Austral Kiwi).
-2. **Cancellation checks inside per-star and per-detection loops** (`CancellationScope.check()`: interrupt test, `ThreadLocal` lookup, a chain of token lambdas) take 45 % of Auto-Tune's CPU, 20-30 % of aperture measurement and 15-30 % of extraction and frame quality. `CalibratedAutoTuner` has 76 of them.
-3. **The saturation scan** (`PhotometryStarSelector.pileUpLevel`) is one thread over every pixel of every kept frame: about 17 s on Klangwolke-2, 49 s on Austral Kiwi. The median master sorts each pixel's values instead of selecting the middle one. Garbage-collection pauses add 18-42 s per run.
+Large sensors used 1.5–3 of 32 cores in every stage, while B1m used 11–23 in the same stages.
 
-**Steps, each measured on these sessions with byte-identical results:**
-1. Worker limits per stage from what each task actually allocates (photometry measurement, saturation scan, faint-streak smoothing, extraction).
-2. Cancellation checks per row or batch instead of per item, with the token read once per task.
-3. The saturation scan in parallel or folded into a pass that already reads the frames; a selected median for the master stack.
-4. Then the one GPU candidate with a clear payoff: **faint-mover tile preparation on the GPU** (`readResiduals`, `normalise` and `filter` are 60-68 % of the search's CPU at about two workers, while its coarse pass already runs on OpenCL). Tiles would live in device memory beside the coarse kernel, removing both the CPU cost and the heap limit. It reuses the existing `gpu` package (JOCL, device selection, program cache, self-test, benchmark, CPU fallback) and must match the CPU's masks, normalisation and filter.
+**November 22**, JTransient 1.1.2 with the saved reference profiles (larger search domains than the default; B1m has a 583 px motion margin), data-only export, faint-mover search, faint-streak search and variable-star photometry on. The heap cap was 10 GiB for Klangwolke-2 and B1m and 11 GiB for Kiwi. OpenCL completed all 247, 32 and 104 faint-mover tiles with no CPU fallback. These runs paged: garbage-collection pauses totalled 102, 21 and 344 s, about 265 s of them inside Kiwi's faint-mover stage. Klangwolke-2 grew from 240 s to 931 s partly from the profile and partly from paging.
 
-**Not proposed now.** GPU ports of aperture photometry (its cost is the two workers and the cancellation checks; the sky median per star fits a GPU poorly), faint-streak smoothing (fast where cores are allowed; frames would cross the bus both ways and extraction stays on the CPU), source extraction (branchy component labelling) and Auto-Tune (already 18 cores; next gains are the cancellation checks and a spatial index for its all-pairs recurrence test). Estimated overall gain of steps 1-3 on the large sessions: about 2-4x, to be measured.
+| Stage (s) | Klangwolke-2 (28 frames) | B1m (98 frames) | Austral Kiwi (98 frames) |
+|---|---:|---:|---:|
+| Engine total | 931.0 | 466.8 | 1,778.8 |
+| Faint movers | 135.0 | 434.2 | 1,035.2 |
+| Photometry | 404.7 | 5.8 | 308.4 |
+| Faint streaks | 178.5 | 17.6 | 169.1 |
+| Source extraction | 114.5 | 2.0 | 88.9 |
+| Median reference and star map | 74.1 | 1.2 | 74.6 |
+| Other engine work | 24.2 | 5.9 | 102.6 |
+
+- **Faint-mover preparation** was 86–94% of the summed per-tile preparation, coarse and refinement timers; workers overlap, so these sums measure accumulated work. In Klangwolke-2 and Kiwi about 80% of the faint-mover samples were the pixel read and median subtraction in `FaintMoverSearch.readResiduals`; in B1m, `normalise` and `filter` took about 76%.
+- **Photometry.** Klangwolke-2 spent 284 s measuring apertures. The clipped-sky calculation allocates two working arrays on each call that reaches clipping.
+- **Saturation scan.** `PhotometryStarSelector.pileUpLevel` needs only the maximum and whether five pixels fall within its tolerance, so keeping the five brightest values, ties included, gives the same decision, and a frame can stop once the maximum reaches 65535 and the fifth value 65469. A scratch version matched the production method on all 259 raw frames of the three fields. The median call fell from 21.6–22.5 ms to 0.009–0.046 ms on Klangwolke-2, 3.1–3.4 to 2.2–2.4 ms on B1m and 10.0–12.1 to 7.0–8.7 ms on Kiwi. That is about a second per session at most: worth doing, not a priority.
 
 ## Removed from the previous plan (2026-10-23)
 
