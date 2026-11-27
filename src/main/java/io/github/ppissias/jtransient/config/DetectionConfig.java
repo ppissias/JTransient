@@ -291,6 +291,13 @@ public class DetectionConfig implements Cloneable {
      */
     public double maxStarJitter = 1.0;
 
+    /** * Star width (Gaussian FWHM) in pixels, for the faint-streak and faint-mover searches and the registration
+     * check; 0 measures it on the kept frames. The calibrated Auto-Tune sets it to the width it measures. Both
+     * measure the core of bright, isolated, round stars from the area above half their peak
+     * ({@link io.github.ppissias.jtransient.quality.StarWidth}). The searches use it between 1.18 and 7.06 px.
+     */
+    public double starFwhmPixels = 0.0;
+
     /** * Instead of a strict 1-pixel touch destroying a transient, allow it to overlap the master star mask
      * up to this fraction (e.g., 0.25 = 25%). This rescues high-energy transients or moving objects
      * that happen to graze the protective halo of a background star.
@@ -653,8 +660,18 @@ public class DetectionConfig implements Cloneable {
      */
     public double faintMoverMinDisplacementFwhm = 2.0;
 
-    /** * Fastest motion searched, in pixels per minute. */
+    /** * Fastest motion searched, in pixels per minute, when {@link #faintMoverAutoMaxSpeed} is off or the frames have
+     * no exposure times. With the automatic speed on, a lower bound for the time limit's reduction.
+     */
     public double faintMoverMaxSpeedPixelsPerMinute = 1.0;
+
+    /** * Chooses the fastest motion during the run: 2 star widths per exposure, the fastest a mover stays point-like
+     * at, lowered to 90 % of the first pass's motion limit on the compute path in use (CPU or GPU), until one search
+     * tile fits in a quarter of the heap, and until the search should finish within {@link #faintMoverMaxSeconds},
+     * from a timed sample of the first pass on one tile. The time limit never lowers it below
+     * {@link #faintMoverMaxSpeedPixelsPerMinute}. The telemetry records the speed and what limited it.
+     */
+    public boolean faintMoverAutoMaxSpeed = true;
 
     /** * Score a candidate's stack must reach: the PSF-filtered stack along its motion over the noise of such
      * stacks. Empirical, not a calibrated significance.

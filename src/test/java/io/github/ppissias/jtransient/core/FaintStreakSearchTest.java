@@ -11,6 +11,7 @@ package io.github.ppissias.jtransient.core;
 
 import io.github.ppissias.jtransient.config.DetectionConfig;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
+import io.github.ppissias.jtransient.quality.StarWidth;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.Random;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -26,28 +28,48 @@ import static org.junit.Assert.assertTrue;
  */
 public class FaintStreakSearchTest {
 
+    /** The kept frames' core widths give the median; frames without a genuine measurement do not count. */
     @Test
     public void widthUsesOnlyGenuineStarSizes() {
         DetectionConfig config = new DetectionConfig();
         List<FrameQualityAnalyzer.FrameMetrics> metrics = new ArrayList<>();
-        metrics.add(frame(3.33, 40));
-        metrics.add(frame(config.errorFallbackValue, 0));
-        metrics.add(frame(3.33, 40));
+        metrics.add(frame(2.4, 40));
+        metrics.add(frame(Double.NaN, 0));
+        metrics.add(frame(2.6, 30));
         metrics.add(frame(Double.NaN, 40));
-        metrics.add(frame(9.0, 3));
+        metrics.add(frame(9.0, StarWidth.MIN_FRAME_STARS - 1));
         FaintStreakSearch.Width width = FaintStreakSearch.width(metrics, config);
         assertEquals(2, width.frames);
-        assertEquals(3.33 / Math.sqrt(2) / 2.3548, width.sigma, 1e-3);
+        assertEquals(70, width.stars);
+        assertEquals(StarWidth.Source.MEASURED, width.source);
+        assertEquals(2.5 / 2.3548, width.sigma, 1e-12);
+        assertEquals(2.5, width.fwhm(), 1e-12);
     }
 
+    /** Without any measurement the width is the default, and it says so. */
     @Test
     public void widthFallsBackWithoutAnyMeasurement() {
         DetectionConfig config = new DetectionConfig();
-        List<FrameQualityAnalyzer.FrameMetrics> metrics = List.of(frame(config.errorFallbackValue, 0),
-                frame(config.errorFallbackValue, 0));
+        List<FrameQualityAnalyzer.FrameMetrics> metrics = List.of(frame(Double.NaN, 0), frame(Double.NaN, 0));
         FaintStreakSearch.Width width = FaintStreakSearch.width(metrics, config);
         assertEquals(0, width.frames);
+        assertEquals(StarWidth.Source.ASSUMED, width.source);
+        assertFalse(width.known());
         assertEquals(FaintStreakSearch.FALLBACK_SIGMA, width.sigma, 0.0);
+        assertEquals(StarWidth.Source.ASSUMED, FaintStreakSearch.width(null, config).source);
+    }
+
+    /** A width in the settings, which the calibrated Auto-Tune sets, replaces the frames' measurement. */
+    @Test
+    public void widthFromTheSettingsReplacesTheMeasurement() {
+        DetectionConfig config = new DetectionConfig();
+        config.starFwhmPixels = 3.2;
+        FaintStreakSearch.Width width = FaintStreakSearch.width(List.of(frame(2.4, 40)), config);
+        assertEquals(StarWidth.Source.SETTING, width.source);
+        assertTrue(width.known());
+        assertEquals(0, width.frames);
+        assertEquals(3.2, width.fwhm(), 1e-12);
+        assertEquals(StarWidth.Source.SETTING, FaintStreakSearch.width(null, config).source);
     }
 
     @Test
@@ -55,6 +77,8 @@ public class FaintStreakSearchTest {
         DetectionConfig config = new DetectionConfig();
         assertEquals(FaintStreakSearch.MAX_SIGMA, FaintStreakSearch.width(List.of(frame(40.0, 50)), config).sigma, 0.0);
         assertEquals(FaintStreakSearch.MIN_SIGMA, FaintStreakSearch.width(List.of(frame(0.5, 50)), config).sigma, 0.0);
+        config.starFwhmPixels = 40.0;
+        assertEquals(FaintStreakSearch.MAX_SIGMA, FaintStreakSearch.width(List.of(), config).sigma, 0.0);
     }
 
     @Test
@@ -101,10 +125,11 @@ public class FaintStreakSearchTest {
         assertTrue(area == area.inset(0));
     }
 
+    /** A frame whose stars' core width (Gaussian FWHM) was measured on {@code stars} stars. */
     private static FrameQualityAnalyzer.FrameMetrics frame(double fwhm, int stars) {
         FrameQualityAnalyzer.FrameMetrics metrics = new FrameQualityAnalyzer.FrameMetrics();
-        metrics.medianFWHM = fwhm;
-        metrics.fwhmStarCount = stars;
+        metrics.starWidthFwhm = fwhm;
+        metrics.starWidthStars = stars;
         return metrics;
     }
 

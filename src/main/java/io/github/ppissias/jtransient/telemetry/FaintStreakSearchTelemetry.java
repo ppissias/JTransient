@@ -20,9 +20,9 @@ package io.github.ppissias.jtransient.telemetry;
 public class FaintStreakSearchTelemetry {
     /** Sigma of the Gaussian the frames were smoothed with, in pixels. */
     public double smoothingSigma;
-    /** Whether the width came from the measured star size; false when no kept frame had a measurement. */
+    /** Whether the width was measured or set; false when it is the default because no star could be measured. */
     public boolean widthFromStars;
-    /** Kept frames whose star-size measurement set the width. */
+    /** Kept frames whose star-width measurement set the width; 0 when it comes from the settings. */
     public int widthFrames;
     /** Streak-shaped objects extracted from the smoothed frames. */
     public int extractedStreaks;

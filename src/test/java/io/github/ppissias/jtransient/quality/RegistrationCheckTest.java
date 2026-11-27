@@ -43,6 +43,8 @@ public class RegistrationCheckTest {
             FrameQualityAnalyzer.FrameMetrics m = new FrameQualityAnalyzer.FrameMetrics();
             // The extraction's second-moment FWHM reads about sqrt(2) above the Gaussian FWHM the check uses.
             m.medianFWHM = (FWHM + 0.01 * k) * Math.sqrt(2);
+            m.starWidthFwhm = FWHM + 0.01 * k;
+            m.starWidthStars = 400;
             m.fwhmStarCount = 400;
             m.filename = "f" + k;
             float[] stars = new float[2 * 400];

@@ -60,6 +60,7 @@ All fields are public and mutable. A few implementation details matter when you 
   - [enableRegistrationCheck (default true)](#enableregistrationcheck-default-true)
   - [qualityMaxRegistrationJumpFwhm (default 0.5)](#qualitymaxregistrationjumpfwhm-default-05)
   - [qualityMaxRegistrationCreepFwhm (default 0.3)](#qualitymaxregistrationcreepfwhm-default-03)
+  - [starFwhmPixels (default 0.0)](#starfwhmpixels-default-00)
 - [4. Tracking And Stationary-Star Vetoing](#4-tracking-and-stationary-star-vetoing)
   - [maxStarJitter (default 1.0)](#maxstarjitter-default-10)
   - [maxMaskOverlapFraction (default 0.75)](#maxmaskoverlapfraction-default-075)
@@ -138,6 +139,7 @@ All fields are public and mutable. A few implementation details matter when you 
   - [enableFaintMoverSearch (default true)](#enablefaintmoversearch-default-true)
   - [faintMoverMinDisplacementFwhm (default 2.0)](#faintmovermindisplacementfwhm-default-20)
   - [faintMoverMaxSpeedPixelsPerMinute (default 1.0)](#faintmovermaxspeedpixelsperminute-default-10)
+  - [faintMoverAutoMaxSpeed (default true)](#faintmoverautomaxspeed-default-true)
   - [faintMoverMinScore (default 8.0)](#faintmoverminscore-default-80)
   - [enableFaintMoverFrameLimit (default true)](#enablefaintmoverframelimit-default-true)
   - [faintMoverSearchSpeed (default 1)](#faintmoversearchspeed-default-1)
@@ -463,6 +465,12 @@ A frame whose star positions, over the whole frame or in one zone, differ by mor
 ### `qualityMaxRegistrationCreepFwhm` (default `0.3`)
 
 The whole frame or a zone is flagged when its star positions change by more than this many star widths over the session. Stars that move between frames leave light past the star masks, which the detection stages can take for moving objects. Flagging rejects nothing; SpacePixels offers the flagged zones as excluded areas.
+
+### `starFwhmPixels` (default `0.0`)
+
+The stars' width, a Gaussian FWHM in pixels, for the faint-streak and faint-mover searches and the registration check. `0` measures it: quality control measures each frame's width (`FrameMetrics.starWidthFwhm`) on its bright, isolated, round stars, as the core width from the area above half their peak ([star width](ALGORITHM.md#star-width)), and the session's width is the median of the kept frames. The calibrated Auto-Tune measures the same width on its sample regions and sets this field to it. A positive value is used as given, bounded to 1.18–7.06 px. The telemetry records the width and where it came from (`PipelineTelemetry.starWidth`).
+
+On 23 reference sessions the width measured on the kept frames was 13 % below to 7 % above an elliptical Gaussian fit to bright isolated stars (median 3 % below), and within 8 % of Auto-Tune's (median the same). The earlier width, the extraction's second-moment FWHM divided by √2, read 8 to 32 % below the fit (median 20 %).
 
 ## 4. Tracking And Stationary-Star Vetoing
 
@@ -895,7 +903,18 @@ Slowest motion searched, as the distance moved over the session in star widths (
 
 ### `faintMoverMaxSpeedPixelsPerMinute` (default `1.0`)
 
-Fastest motion searched, in pixels per minute. The number of trial motions grows with its square, and the search is not run when it would need more than 100,000 on CPU (or 400,000 when using a verified OpenCL GPU backend) or one tile's work more than a quarter of the heap.
+Fastest motion searched, in pixels per minute, when `faintMoverAutoMaxSpeed` is off or the frames have no exposure times. The number of trial motions grows with its square, and the search is not run when it would need more than 100,000 on CPU (or 400,000 when using a verified OpenCL GPU backend) or one tile's work more than a quarter of the heap. With the automatic speed on, the time limit never lowers the speed below this value.
+
+### `faintMoverAutoMaxSpeed` (default `true`)
+
+Chooses the fastest motion during the run, from what only the run knows:
+
+1. 2 star widths per exposure (`POINT_TRAIL_FWHM`), the fastest a mover stays point-like at, from the session's star width (`starFwhmPixels` or the kept frames' measurement) and the median exposure of the searched frames;
+2. lowered to 90 % of the first pass's motion limit on the compute path in use: 100,000 on the CPU, 400,000 on a GPU that passed its self-test;
+3. lowered until one tile's work fits in a quarter of the heap, so the search is never skipped for memory;
+4. lowered until the search should finish within `faintMoverMaxSeconds`: one tile is prepared and its first pass timed on this computer, on a sample of the motions (2 % on a GPU, 1 % on the CPU, at least 256). On a GPU a second sample of twice that separates each motion's cost from the tile's fixed cost. On the CPU the same sample then runs on as many workers at once as the search can have, because the first pass is limited by the memory bandwidth: it measures how many tiles' worth of work the computer does at once. On a 97-frame session searched on a laptop CPU the search then took about 6 % longer than estimated. The search time at a slower motion follows from the tile's size with its margin, the motions, the coarse frames and the workers the heap allows, with 20 % added for refinement and memory management. The estimate must stay within 80 % of the time left. This step never lowers the speed below `faintMoverMaxSpeedPixelsPerMinute`.
+
+The speed is rounded down to 0.001 px/min. The telemetry records it (`maxSpeedPixelsPerMinute`), what set it (`maxSpeedLimit`: `POINT_LIKE`, `MOTION_LIMIT`, `MEMORY`, `TIME_LIMIT`, or `NO_EXPOSURE_TIMES` when the configured value was used), the speed before the time limit lowered it, the estimated search time and the time the sample took (`sampleMs`, included in the search time).
 
 ### `faintMoverMinScore` (default `8.0`)
 
@@ -927,7 +946,7 @@ The tuners return settings for a subsequent pipeline run; neither changes the ba
 
 | Tuner | Fields supplied by the result |
 |---|---|
-| Calibrated | `detectionSigmaMultiplier`, `growSigmaMultiplier`, `minDetectionPixels`, `masterSigmaMultiplier`, `masterGrowSigmaMultiplier`, `masterMinDetectionPixels`, `maxMaskOverlapFraction`, `maxStarJitter` |
+| Calibrated | `detectionSigmaMultiplier`, `growSigmaMultiplier`, `minDetectionPixels`, `masterSigmaMultiplier`, `masterGrowSigmaMultiplier`, `masterMinDetectionPixels`, `maxMaskOverlapFraction`, `maxStarJitter`, `starFwhmPixels` (0 when it measured no star) |
 | Legacy | The three per-frame fields, `maxMaskOverlapFraction` and `maxStarJitter`; master settings are preserved |
 
 Fields outside the tuned set retain their base values. Auto-Tune does not set the slow-mover thresholds, photometry controls or faint-mover search. Sampling-side quality/background/streak settings can affect recommendations. Profile budgets and search grids are algorithm parameters, not additional `DetectionConfig` fields.

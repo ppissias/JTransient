@@ -30,8 +30,10 @@ public class FaintMoverSearchTelemetry {
     public double sessionMinutes;
     /** Star size the stacks were filtered with (Gaussian FWHM), in pixels. */
     public double fwhmPixels;
-    /** Whether the star size came from the frames' measurements; false when a fixed size was used. */
+    /** Whether the star size was measured on the kept frames or set; false when a default size was used. */
     public boolean fwhmFromStars;
+    /** Where the star size came from: {@code SETTING}, {@code MEASURED} or {@code ASSUMED}. */
+    public String fwhmSource = "";
     /** Slowest and fastest motion searched, in pixels per minute. */
     public double minSpeedPixelsPerMinute;
     public double maxSpeedPixelsPerMinute;
@@ -117,4 +119,19 @@ public class FaintMoverSearchTelemetry {
     public int maxMotionsApplied;
     /** Time limit applied to this run, in seconds. */
     public double timeLimitSecondsApplied;
+    /** Whether the fastest motion was chosen during the run ({@code faintMoverAutoMaxSpeed}). */
+    public boolean autoMaxSpeed;
+    /**
+     * What set the fastest motion: {@code SETTING} (the configured value, automatic speed off),
+     * {@code NO_EXPOSURE_TIMES} (the configured value, because the frames have no exposure times),
+     * {@code POINT_LIKE} (2 star widths per exposure), {@code MOTION_LIMIT} (90 % of {@link #maxMotionsApplied}),
+     * {@code MEMORY} (one tile within a quarter of the heap) or {@code TIME_LIMIT} (the estimated search time).
+     */
+    public String maxSpeedLimit = "SETTING";
+    /** The fastest motion before the time limit lowered it, in px/min; NaN when the time limit did not. */
+    public double speedBeforeTimeLimitPixelsPerMinute = Double.NaN;
+    /** The search time estimated from the timed sample at the searched fastest motion, in seconds; NaN without one. */
+    public double estimatedSeconds = Double.NaN;
+    /** Time spent on the timed sample, in milliseconds; included in {@link #elapsedMs}. */
+    public long sampleMs;
 }

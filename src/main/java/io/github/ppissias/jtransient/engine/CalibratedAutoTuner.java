@@ -28,6 +28,7 @@ import io.github.ppissias.jtransient.core.MasterReferenceAnalyzer;
 import io.github.ppissias.jtransient.core.MasterVetoMask;
 import io.github.ppissias.jtransient.core.PixelEncoding;
 import io.github.ppissias.jtransient.core.SourceExtractor;
+import io.github.ppissias.jtransient.quality.StarWidth;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -127,6 +128,8 @@ public final class CalibratedAutoTuner {
     private static final double TARGET_MEASURED_MPIX_FRAMES = 30.0;
     /** ...but on at most this many frames. */
     private static final int MAX_MEASUREMENT_FRAMES = 40;
+    /** Stars measured for the star size, over all measurement images. */
+    private static final int MAX_PSF_STARS = 400;
     private static final double JITTER_PERCENTILE = 0.90;
     private static final double JITTER_SAFETY_MULTIPLIER = 2.0;
     private static final double MIN_JITTER = 1.0;
@@ -632,8 +635,10 @@ public final class CalibratedAutoTuner {
         public int measurementFrames;
         public int crops;
         public int cropSize;
-        /** Measured star FWHM in pixels. */
+        /** Measured star FWHM in pixels ({@link StarWidth}); 3.53 px when no star could be measured. */
         public double fwhm;
+        /** Stars {@link #fwhm} was measured on; 0 when it is the fallback. */
+        public int fwhmStars;
         /** Measured residual jitter (veto-mask dilation input) in pixels. */
         public double jitter;
         public double elapsedSeconds;
@@ -723,6 +728,9 @@ public final class CalibratedAutoTuner {
         tuned.masterMinDetectionPixels = best.masterMinPixels;
         tuned.maxMaskOverlapFraction = best.maskOverlap;
         tuned.maxStarJitter = calibration.jitter;
+        // The measured star width, for the faint searches and the registration check; without a measurement the run
+        // measures its kept frames.
+        tuned.starFwhmPixels = calibration.fwhmStars > 0 ? calibration.fwhm : 0.0;
         return tuned;
     }
 
@@ -889,7 +897,11 @@ public final class CalibratedAutoTuner {
                     * (options.excludedAreas.isEmpty() ? 1 : 2));
             List<ImageFrame> pool;
             if (options.selectFrames) {
-                pool = JTransientEngine.framesDetectionKeeps(poolFrames, baseConfig, options.excludedAreas,
+                // The tuner measures the star width itself, so a width saved from another session must not judge
+                // these frames' registration: quality control measures it on the pool.
+                DetectionConfig selection = baseConfig.clone();
+                selection.starFwhmPixels = 0.0;
+                pool = JTransientEngine.framesDetectionKeeps(poolFrames, selection, options.excludedAreas,
                         new io.github.ppissias.jtransient.telemetry.PipelineTelemetry());
             } else {
                 // The caller chose the pool from the frames quality control keeps over its whole session.
@@ -1004,8 +1016,10 @@ public final class CalibratedAutoTuner {
                     measurementCropIndex.add(c);
                 }
             }
-            double psfSigma = measurePsfSigma(measurementCrops, measurementCropIndex, cropSky, baseConfig, preview);
+            int[] psfStars = new int[1];
+            double psfSigma = measurePsfSigma(measurementCrops, measurementCropIndex, cropSky, baseConfig, preview, psfStars);
             calibration.fwhm = 2.355 * psfSigma;
+            calibration.fwhmStars = psfStars[0];
             calibration.jitter = measureJitter(measurementCrops, measurementCropIndex, masters, cropSky, baseConfig, preview);
             double psfCoreArea = Math.PI * (calibration.fwhm / 2.0) * (calibration.fwhm / 2.0);
 
@@ -1755,13 +1769,14 @@ public final class CalibratedAutoTuner {
      * PSF Gaussian sigma of bright, isolated, unsaturated stars. Each star gives the width of its area above half the
      * peak, a whole number of pixels, so the per-star values take only a few stepped values; the session's star size
      * is the {@link #middleHalfMean mean of their middle half}, which moves gradually with the sample where a median
-     * would jump from one step to the next.
+     * would jump from one step to the next. The stars and their widths are {@link StarWidth}'s, as quality control
+     * measures every frame; {@code starCount[0]} receives the number of stars measured.
      */
     private static double measurePsfSigma(List<short[][]> images, List<Integer> cropOfImage, CropSky[] cropSky,
-                                          DetectionConfig base, Preview preview) {
+                                          DetectionConfig base, Preview preview, int[] starCount) {
         DetectionConfig probe = base.clone();
         probe.growSigmaMultiplier = 3.0;
-        List<Double> sigmas = new ArrayList<>();
+        List<Double> fwhms = new ArrayList<>();
         for (int i = 0; i < images.size(); i++) {
             CancellationScope.check();
             short[][] image = images.get(i);
@@ -1773,46 +1788,15 @@ public final class CalibratedAutoTuner {
             preview.offer(() -> new AutoTuneSnapshot(STARS, "Measuring star size · detected stars in this sample",
                     image, null, objects.stream().limit(200).map(star -> new AutoTuneSnapshot.Marker(
                             star.x, star.y, AutoTuneSnapshot.Mark.DETECTION)).toList(), List.of()));
-            for (DetectedObject obj : objects) {
-                CancellationScope.check();
-                if (obj.isStreak || obj.elongation > 1.3 || obj.peakSigma < 20 || obj.peakSigma > 150) continue;
-                double window = Math.max(4.0, 2.0 * obj.fwhm);
-                boolean isolated = true;
-                for (DetectedObject other : objects) {
-                    if (other != obj && Math.hypot(other.x - obj.x, other.y - obj.y) < 2 * window) {
-                        isolated = false;
-                        break;
-                    }
-                }
-                if (!isolated) continue;
-                int r = (int) Math.ceil(window);
-                int x0 = (int) Math.round(obj.x);
-                int y0 = (int) Math.round(obj.y);
-                if (x0 - r < 0 || y0 - r < 0 || x0 + r >= w || y0 + r >= h) continue;
-                // FWHM from the area above half the peak: the core width, which is what a faint source shows
-                // above the detection threshold. (Second moments include the PSF wings and overstate it.)
-                double peak = 0;
-                for (int y = y0 - r; y <= y0 + r; y++) {
-                    for (int x = x0 - r; x <= x0 + r; x++) {
-                        if (Math.hypot(x - obj.x, y - obj.y) > window) continue;
-                        peak = Math.max(peak, PixelEncoding.toShiftedPositiveInt(image[y][x]) - background);
-                    }
-                }
-                if (peak <= 0) continue;
-                int aboveHalf = 0;
-                for (int y = y0 - r; y <= y0 + r; y++) {
-                    for (int x = x0 - r; x <= x0 + r; x++) {
-                        if (Math.hypot(x - obj.x, y - obj.y) > window) continue;
-                        if (PixelEncoding.toShiftedPositiveInt(image[y][x]) - background >= 0.5 * peak) aboveHalf++;
-                    }
-                }
-                double fwhm = 2.0 * Math.sqrt(aboveHalf / Math.PI);
-                if (fwhm > 0.5) sigmas.add(fwhm / 2.355);
-                if (sigmas.size() >= 400) break;
-            }
+            StarWidth.measure(image, objects, background, fwhms, MAX_PSF_STARS);
         }
-        if (sigmas.isEmpty()) {
+        starCount[0] = fwhms.size();
+        if (fwhms.isEmpty()) {
             return 1.5;
+        }
+        List<Double> sigmas = new ArrayList<>(fwhms.size());
+        for (double fwhm : fwhms) {
+            sigmas.add(fwhm / 2.355);
         }
         return middleHalfMean(sigmas);
     }
@@ -1822,19 +1806,7 @@ public final class CalibratedAutoTuner {
      * values take only a few distinct levels. Fewer than four values give their median.
      */
     static double middleHalfMean(List<Double> values) {
-        List<Double> sorted = new ArrayList<>(values);
-        Collections.sort(sorted);
-        int n = sorted.size();
-        if (n < 4) {
-            return sorted.get(n / 2);
-        }
-        int from = n / 4;
-        int to = n - n / 4;
-        double sum = 0;
-        for (int i = from; i < to; i++) {
-            sum += sorted.get(i);
-        }
-        return sum / (to - from);
+        return StarWidth.middleHalfMean(values);
     }
 
     /**

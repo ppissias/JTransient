@@ -123,6 +123,23 @@ public class PipelineTelemetry {
     public RegistrationCheckTelemetry registrationCheck = new RegistrationCheckTelemetry();
 
     /**
+     * The session's star width (Gaussian FWHM) for the faint searches and the registration check, worked out after
+     * quality control from the frames it keeps.
+     */
+    public static class StarWidthTelemetry {
+        /** The width, in pixels; NaN until quality control has run. */
+        public double fwhmPixels = Double.NaN;
+        /** {@code SETTING} (the settings' {@code starFwhmPixels}, set by the calibrated Auto-Tune), {@code MEASURED}
+         * (the median of the kept frames) or {@code ASSUMED} (no star could be measured); empty before quality control. */
+        public String source = "";
+        /** Kept frames and stars measured; 0 unless {@link #source} is {@code MEASURED}. */
+        public int frames;
+        public int stars;
+    }
+    /** The session's star width; set by quality control. */
+    public StarWidthTelemetry starWidth = new StarWidthTelemetry();
+
+    /**
      * Per-frame quality summary captured after frame-quality analysis and session rejection.
      */
     public static class FrameQualityStat {
@@ -608,6 +625,16 @@ public class PipelineTelemetry {
             ));
         }
 
+        if (!starWidth.source.isEmpty()) {
+            sb.append(String.format(java.util.Locale.US, "--- STAR WIDTH ---\n  %.2f px (%s)\n\n", starWidth.fwhmPixels,
+                    switch (starWidth.source) {
+                        case "SETTING" -> "from the settings";
+                        case "MEASURED" -> String.format(java.util.Locale.US, "measured on %d stars in %d kept frames",
+                                starWidth.stars, starWidth.frames);
+                        default -> "assumed; no star could be measured";
+                    }));
+        }
+
         if (registrationCheck.available) {
             RegistrationCheckTelemetry r = registrationCheck;
             sb.append("--- QUALITY CONTROL: REGISTRATION CHECK ---\n");
@@ -681,7 +708,26 @@ public class PipelineTelemetry {
         sb.append(String.format(java.util.Locale.US,
                 "  Frames: %d over %.1f min%s | Star size: %.2f px (%s)\n", f.frames, f.sessionMinutes,
                 f.framesOutsideSession > 0 ? " (" + f.framesOutsideSession + " left out: another session)" : "",
-                f.fwhmPixels, f.fwhmFromStars ? "measured" : "fixed; no star size measured"));
+                f.fwhmPixels, switch (f.fwhmSource) {
+                    case "SETTING" -> "from the settings";
+                    case "MEASURED" -> "measured";
+                    default -> "assumed; no star size measured";
+                }));
+        if (f.autoMaxSpeed) {
+            sb.append(String.format(java.util.Locale.US, "  Fastest motion: automatic, %.3f px/min (%s)%s\n",
+                    f.maxSpeedPixelsPerMinute, switch (f.maxSpeedLimit) {
+                        case "POINT_LIKE" -> "2 star widths per exposure";
+                        case "MOTION_LIMIT" -> "lowered to 90 % of the " + f.maxMotionsApplied + "-motion limit";
+                        case "MEMORY" -> "lowered so that one tile fits in a quarter of the memory";
+                        case "TIME_LIMIT" -> String.format(java.util.Locale.US,
+                                "lowered from %.3f px/min to finish within the time limit",
+                                f.speedBeforeTimeLimitPixelsPerMinute);
+                        case "NO_EXPOSURE_TIMES" -> "the configured value; the frames have no exposure times";
+                        default -> "the configured value";
+                    }, Double.isFinite(f.estimatedSeconds)
+                            ? String.format(java.util.Locale.US, " | estimated %.0f s, sample %.1f s",
+                            f.estimatedSeconds, f.sampleMs / 1000.0) : ""));
+        }
         sb.append(String.format(java.util.Locale.US,
                 "  Speeds: %.3f-%.3f px/min | Grid: %d motions, step %.3f px/min, refined to %.4f\n",
                 f.minSpeedPixelsPerMinute, f.maxSpeedPixelsPerMinute, f.coarseMotions, f.coarseStepPixelsPerMinute,

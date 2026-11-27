@@ -23,6 +23,8 @@ public class FaintMoverBackendFallbackTest {
         baselineInput.masterStack = MasterMapGenerator.createMedianMasterStack(frames);
         DetectionConfig config = new DetectionConfig();
         config.faintMoverMaxSpeedPixelsPerMinute = 0.6;
+        // A fixed speed: the automatic speed's timed sample would add backend calls before the search.
+        config.faintMoverAutoMaxSpeed = false;
         FaintMoverSearch.Result baseline = FaintMoverSearch.search(FaintMoverSearch.plan(baselineInput, config));
 
         AtomicInteger calls = new AtomicInteger();

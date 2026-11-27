@@ -16,6 +16,7 @@ import io.github.ppissias.jtransient.execution.WorkerPool;
 import io.github.ppissias.jtransient.model.DetectedObject;
 import io.github.ppissias.jtransient.model.Pixel;
 import io.github.ppissias.jtransient.quality.FrameQualityAnalyzer;
+import io.github.ppissias.jtransient.quality.StarWidth;
 import io.github.ppissias.jtransient.telemetry.FaintStreakSearchTelemetry;
 
 import java.util.ArrayList;
@@ -42,14 +43,12 @@ import java.util.concurrent.ExecutionException;
  * its extraction. The caller limits the workers.</p>
  */
 public final class FaintStreakSearch {
-    /** Smoothing sigma when no kept frame has a star-size measurement, in pixels. */
+    /** Smoothing sigma when neither the settings nor any kept frame give a star width, in pixels. */
     public static final double FALLBACK_SIGMA = 1.0;
     /** Smallest smoothing sigma, in pixels. */
     public static final double MIN_SIGMA = 0.5;
     /** Largest smoothing sigma, in pixels. */
     public static final double MAX_SIGMA = 3.0;
-    /** A frame's star size counts only when measured on at least this many stars. */
-    static final int MIN_FWHM_STARS = 5;
     /** Smoothed-frame noise below which values are stretched about the sky before rounding, in ADU. */
     static final double MIN_SMOOTHED_NOISE_ADU = 4.0;
     /**
@@ -103,7 +102,7 @@ public final class FaintStreakSearch {
         DetectionConfig smoothedConfig = config.clone();
         smoothedConfig.bgClippingIterations = Math.max(config.bgClippingIterations, BACKGROUND_CLIPPING_ITERATIONS);
         telemetry.smoothingSigma = width.sigma;
-        telemetry.widthFromStars = width.frames > 0;
+        telemetry.widthFromStars = width.known();
         telemetry.widthFrames = width.frames;
         if (keptFrames.isEmpty()) {
             return new Result(Collections.emptyList(), telemetry);
@@ -176,42 +175,64 @@ public final class FaintStreakSearch {
      */
     public static final class Width {
         public final double sigma;
+        /** Kept frames whose widths were measured; 0 when the width comes from the settings or is assumed. */
         public final int frames;
+        /** Stars measured over those frames. */
+        public final int stars;
+        /** Where the width comes from. */
+        public final StarWidth.Source source;
 
-        Width(double sigma, int frames) {
+        Width(double sigma, int frames, int stars, StarWidth.Source source) {
             this.sigma = sigma;
             this.frames = frames;
+            this.stars = stars;
+            this.source = source;
         }
 
         /** The Gaussian FWHM of {@link #sigma}, in pixels. */
         public double fwhm() {
             return sigma * 2.3548;
         }
+
+        /** Whether the width is measured or set rather than assumed. */
+        public boolean known() {
+            return source != StarWidth.Source.ASSUMED;
+        }
     }
 
     /**
-     * The smoothing sigma from the kept frames' star sizes: the median of the genuine measurements (finite, positive,
-     * below {@code errorFallbackValue}, from at least {@link #MIN_FWHM_STARS} stars), converted from the extraction's
-     * second-moment FWHM, about sqrt(2) above a Gaussian FWHM. Without a measurement, {@link #FALLBACK_SIGMA}.
+     * The session's star width, as a smoothing sigma, for the faint searches and the registration check: the settings'
+     * {@code starFwhmPixels} when positive (the calibrated Auto-Tune sets it); otherwise the median of the kept frames'
+     * {@link FrameQualityAnalyzer.FrameMetrics#starWidthFwhm} over those measured on at least
+     * {@link StarWidth#MIN_FRAME_STARS} stars; without any, {@link #FALLBACK_SIGMA}. The sigma is bounded by
+     * {@link #MIN_SIGMA} and {@link #MAX_SIGMA}.
      */
     public static Width width(List<FrameQualityAnalyzer.FrameMetrics> metrics, DetectionConfig config) {
+        if (config.starFwhmPixels > 0 && Double.isFinite(config.starFwhmPixels)) {
+            return new Width(bounded(config.starFwhmPixels / 2.3548), 0, 0, StarWidth.Source.SETTING);
+        }
         List<Double> sizes = new ArrayList<>();
+        int stars = 0;
         if (metrics != null) {
             for (FrameQualityAnalyzer.FrameMetrics frame : metrics) {
-                if (frame != null && Double.isFinite(frame.medianFWHM) && frame.medianFWHM > 0
-                        && frame.medianFWHM < config.errorFallbackValue && frame.fwhmStarCount >= MIN_FWHM_STARS) {
-                    sizes.add(frame.medianFWHM);
+                if (frame != null && Double.isFinite(frame.starWidthFwhm) && frame.starWidthFwhm > 0
+                        && frame.starWidthStars >= StarWidth.MIN_FRAME_STARS) {
+                    sizes.add(frame.starWidthFwhm);
+                    stars += frame.starWidthStars;
                 }
             }
         }
         if (sizes.isEmpty()) {
-            return new Width(FALLBACK_SIGMA, 0);
+            return new Width(FALLBACK_SIGMA, 0, 0, StarWidth.Source.ASSUMED);
         }
         Collections.sort(sizes);
         int n = sizes.size();
         double median = n % 2 == 1 ? sizes.get(n / 2) : 0.5 * (sizes.get(n / 2 - 1) + sizes.get(n / 2));
-        double sigma = median / Math.sqrt(2.0) / (2.0 * Math.sqrt(2.0 * Math.log(2.0)));
-        return new Width(Math.max(MIN_SIGMA, Math.min(MAX_SIGMA, sigma)), n);
+        return new Width(bounded(median / 2.3548), n, stars, StarWidth.Source.MEASURED);
+    }
+
+    private static double bounded(double sigma) {
+        return Math.max(MIN_SIGMA, Math.min(MAX_SIGMA, sigma));
     }
 
     /** A normalised one-dimensional Gaussian of radius ceil(3 sigma). */

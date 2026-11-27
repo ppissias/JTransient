@@ -244,7 +244,7 @@ CalibratedAutoTuner.Calibration CalibratedAutoTuner.calibrate(
 
 `tune(...)` measures all profile choices and returns the requested optimized config plus `success`, `summary`, `telemetryReport`, `noisePerMpixFrame` (the chosen setting's measured noise detections per megapixel per frame) and the complete `calibration`. On early failure it returns a fallback/base configuration; inspect `success` before treating the result as tuned.
 
-`calibrate(...)` returns the measured candidates, FWHM, jitter, measured area and the per-profile `chosen`, `withinBudget` and `budgetVerifiable` arrays. Reuse it without repeating the measurement:
+`calibrate(...)` returns the measured candidates, FWHM (with `fwhmStars`, the stars measured), jitter, measured area and the per-profile `chosen`, `withinBudget` and `budgetVerifiable` arrays. Reuse it without repeating the measurement:
 
 ```java
 DetectionConfig CalibratedAutoTuner.configFor(
@@ -253,7 +253,7 @@ DetectionConfig CalibratedAutoTuner.configFor(
         AutoTuneProfile profile)
 ```
 
-The result is a base-config clone with the selected values applied. The [calibrated algorithm](ALGORITHM.md#calibrated-auto-tuning) defines measurements, grids and profile budgets.
+The result is a base-config clone with the selected values applied, including the measured jitter (`maxStarJitter`) and star width (`starFwhmPixels`, 0 when no star was measured). The [calibrated algorithm](ALGORITHM.md#calibrated-auto-tuning) defines measurements, grids and profile budgets.
 
 ## `JTransientEngine.generateMasterStack(...)`
 

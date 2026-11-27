@@ -188,9 +188,9 @@ public final class RegistrationCheck {
             result.reason = "fewer than " + REFERENCE_FRAMES + " kept frames with " + MIN_FRAME_STARS + " bright stars";
             return result;
         }
-        // The star width of the faint searches: a Gaussian FWHM from the kept frames' measured star sizes.
+        // The star width of the faint searches: the settings' width, or the kept frames' measured core width.
         FaintStreakSearch.Width starWidth = FaintStreakSearch.width(kept, config);
-        if (starWidth.frames == 0) {
+        if (!starWidth.known()) {
             result.reason = "no star size measured";
             return result;
         }

@@ -95,6 +95,8 @@ public class FaintMoverSearchTest {
         for (int k = 0; k < FRAMES; k++) {
             FrameQualityAnalyzer.FrameMetrics m = new FrameQualityAnalyzer.FrameMetrics();
             m.medianFWHM = fwhm * Math.sqrt(2);
+            m.starWidthFwhm = fwhm;
+            m.starWidthStars = 50;
             m.fwhmStarCount = 50;
             metrics.add(m);
         }

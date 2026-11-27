@@ -62,6 +62,14 @@ public class FrameQualityAnalyzer {
          * {@link RegistrationCheck#MAX_STARS_PER_FRAME}, for the {@link RegistrationCheck}.
          */
         public float[] registrationStars = new float[0];
+        /**
+         * The frame's star width (Gaussian FWHM) in pixels, as {@link StarWidth} measures it on the frame's bright,
+         * isolated, round stars, or NaN when fewer than {@link StarWidth#MIN_FRAME_STARS} could be measured. Unlike
+         * {@link #medianFWHM}, it is the stars' core, not their second moments.
+         */
+        public double starWidthFwhm = Double.NaN;
+        /** Stars {@link #starWidthFwhm} was measured on. */
+        public int starWidthStars;
     }
 
     // =================================================================
@@ -157,6 +165,12 @@ public class FrameQualityAnalyzer {
         metrics.usableShapeStarCount = usableShapeStarCount;
         metrics.brightStarShapeStarCount = brightStarShapeStarCount;
         metrics.fwhmStarCount = fwhmStarCount;
+        // The core width of the frame's bright isolated stars, as the calibrated Auto-Tune measures it; the sky level
+        // is quality control's, which moves the half-peak level by a small fraction of these stars' peaks.
+        List<Double> widths = new ArrayList<>();
+        StarWidth.measure(imageData, objects, bg.median, widths, Integer.MAX_VALUE);
+        metrics.starWidthStars = widths.size();
+        metrics.starWidthFwhm = StarWidth.frameWidth(widths);
 
         // 4. Calculate Medians (THE BUG FIX: Eccentricity is now populated!)
         metrics.medianFWHM = calculateMedian(fwhmValues, config.errorFallbackValue);

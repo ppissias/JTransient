@@ -502,6 +502,8 @@ public final class DetectionConfigRules {
         add(metadata, Stage.QUALITY, Domain.NON_NEGATIVE, "minBackgroundDeviationADU minEccentricityEnvelope minBrightStarEccentricityEnvelope minFwhmEnvelope starCountSigmaDeviation fwhmSigmaDeviation eccentricitySigmaDeviation brightStarEccentricitySigmaDeviation backgroundSigmaDeviation");
         add(metadata, Stage.QUALITY, Domain.BOOLEAN, "enableBrightStarEccentricityFilter enableRegistrationCheck");
         add(metadata, Stage.QUALITY, Domain.POSITIVE, "qualityMaxRegistrationJumpFwhm qualityMaxRegistrationCreepFwhm");
+        // 0 measures the width on the kept frames; quality control (the registration check) is its first reader.
+        add(metadata, Stage.QUALITY, Domain.NON_NEGATIVE, "starFwhmPixels");
         add(metadata, Stage.REFERENCE, Domain.NON_NEGATIVE, "maxStarJitter");
         add(metadata, Stage.REFERENCE, Domain.FRACTION, "maxMaskOverlapFraction");
         add(metadata, Stage.TRACKING, Domain.NON_NEGATIVE, "maxJumpPixels predictionTolerance timeBasedVelocityTolerance streakTimeConsistencyTolerance rhythmStationaryThreshold rhythmAllowedVariance commonMotionShiftTolerance");
@@ -524,7 +526,7 @@ public final class DetectionConfigRules {
         add(metadata, Stage.PHOTOMETRY, Domain.NON_NEGATIVE, "photometryMaxRegistrationSpreadPixels linearityMaxConcentrationDrift linearityMinRangeMag linearityMaxFrameSlope linearityMinZeroPointRangeMag variableMinSpanMinutes variableScoreSigma variableMinExcessScatter variableMinAmplitudeMag variableLimitedMinAmplitudeMag variableAmplitudeNoiseFactor variableMaxApertureAmplitudeDifference variableSystematicsResponseFactor variableLocalRadiusPixels");
         add(metadata, Stage.PHOTOMETRY, Domain.ENCODING_LEVELS, "linearityMinDistinctLevels");
         add(metadata, Stage.PHOTOMETRY, Domain.CORRELATION, "variableMinSplitHalfCorrelation");
-        add(metadata, Stage.FAINT_MOVERS, Domain.BOOLEAN, "enableFaintMoverSearch enableFaintMoverFrameLimit");
+        add(metadata, Stage.FAINT_MOVERS, Domain.BOOLEAN, "enableFaintMoverSearch enableFaintMoverFrameLimit faintMoverAutoMaxSpeed");
         add(metadata, Stage.FAINT_MOVERS, Domain.POSITIVE, "faintMoverMinDisplacementFwhm faintMoverMaxSpeedPixelsPerMinute faintMoverMinScore faintMoverMaxSeconds");
         add(metadata, Stage.FAINT_MOVERS, Domain.SEARCH_SPEED, "faintMoverSearchSpeed");
         if (!metadata.keySet().equals(FIELDS.keySet())) {

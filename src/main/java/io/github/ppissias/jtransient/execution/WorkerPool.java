@@ -89,6 +89,19 @@ public final class WorkerPool implements AutoCloseable {
         return binding.workers;
     }
 
+    /** The most workers this pool runs. */
+    public int maxWorkers() {
+        return maxWorkers;
+    }
+
+    /**
+     * The worker limit {@link #limitWork} would set for this work with {@code usedHeap} bytes of the heap in use,
+     * without setting it or collecting garbage.
+     */
+    public int estimateWorkers(int workCount, long pixelsPerWork, long usedHeap) {
+        return workerCount(maxWorkers, workCount, pixelsPerWork, Runtime.getRuntime().maxMemory(), Math.max(0, usedHeap));
+    }
+
     /**
      * The worker limit for these CPU and work figures and the heap now in use. The heap in use includes objects nothing
      * refers to any more until the next garbage collection, so when memory would allow fewer workers than the CPUs and

@@ -77,6 +77,26 @@ public final class FaintMoverSearch {
     public static final double MAX_TRAIL_FWHM = 6.0;
     /** Largest share of the maximum heap one tile's work may need. */
     static final double MAX_TILE_HEAP_SHARE = 0.25;
+    /** Share of the first pass's motion limit the automatic fastest motion may use. */
+    static final double AUTO_MOTION_SHARE = 0.9;
+    /** Share of the time left in the limit that the automatic fastest motion's estimated search may take. */
+    static final double AUTO_TIME_SHARE = 0.8;
+    /** Most workers that share one GPU; the engine gives an accelerated search no more. */
+    public static final int MAX_GPU_WORKERS = 8;
+    /** Motions in the (smaller) timed sample of the first pass, as a share of all motions on a GPU and on the CPU, and at least. */
+    static final double SAMPLE_SHARE = 0.02;
+    static final double CPU_SAMPLE_SHARE = 0.01;
+    static final int SAMPLE_MIN_MOTIONS = 256;
+    /** Motions run once before the timed samples, so that the timing starts warm. */
+    static final int SAMPLE_WARMUP_MOTIONS = 64;
+    /** Tiles tried for the timed sample, nearest the image centre first, before the time estimate is given up. */
+    static final int SAMPLE_TILES = 3;
+    /**
+     * How much longer an average tile takes than the timed sample: refinement, which the sample does not time, and the
+     * garbage collections between large tiles, which the first tile does not wait for (measured 1.2 on a 98-frame
+     * session with 2 GB tiles).
+     */
+    static final double TILE_OVERHEAD = 1.2;
     /** Side of a tile's searched area, in pixels. */
     static final int TILE = 512;
     /** Tiles searched between two looks at the clock and the progress. */
@@ -193,7 +213,46 @@ public final class FaintMoverSearch {
         public PipelineStageObserver observer;
         /** Optional selected coarse-search backend and limits; null selects the default Java backend and CPU limits. */
         public CoarseBackendSelection compute;
+        /**
+         * The caller's workers, for the automatic fastest motion's time estimate: how many it gives tiles of a size,
+         * and a way to time the first pass on all of them at once. Null counts one worker.
+         */
+        public Workers workers;
     }
+
+    /** The workers a caller gives the search's tiles. */
+    public interface Workers {
+        /**
+         * @param tiles the tiles to search, already capped at {@link #MAX_GPU_WORKERS} for an accelerated search
+         * @param bytesPerTile memory one tile's work needs ({@link Plan#bytesPerTile})
+         * @return the workers, at least one
+         */
+        int workers(int tiles, long bytesPerTile);
+
+        /** The most tasks the caller runs at once. */
+        int maxWorkers();
+
+        /**
+         * Runs the tasks on the caller's workers, at most {@link #maxWorkers()} at once, with the run's cancellation,
+         * and returns their results in task order.
+         */
+        <T> List<T> invokeAll(List<Callable<T>> tasks) throws ExecutionException;
+    }
+
+    /**
+     * The fastest motion a run searches and what set it ({@link FaintMoverSearchTelemetry#maxSpeedLimit}).
+     *
+     * @param automatic whether the time limit may still lower it
+     */
+    record SpeedChoice(double speed, String limit, boolean automatic) { }
+
+    /**
+     * One tile's timed preparation and first pass, for the time estimate: the times alone, and on the CPU how many
+     * tiles' worth of work the computer does when every worker runs at once ({@code parallelism}; 1 without workers,
+     * NaN on a GPU).
+     */
+    private record TimeSample(double prepSeconds, double fixedCoarseSeconds, double perMotionSeconds, int width,
+                              int height, int margin, int coarseFrames, double parallelism) { }
 
     /** The search domain of one run, worked out before any pixel is read. */
     public static final class Plan {
@@ -412,7 +471,11 @@ public final class FaintMoverSearch {
     private record PeakLocation(int tx, int ty, int width, int height, int x, int y, double noise) { }
 
     /** Temporary preprocessed search pixels; only small review rectangles may outlive this tile. */
-    private record PreparedTile(float[][] residuals, boolean[] bad, BitSet[] streakMasks) { }
+    /**
+     * Temporary preprocessed search pixels; only small review rectangles may outlive this tile. {@code outside} marks the
+     * pixels outside the image or the data area, or registration fill (grown); {@code bad} adds the star cores.
+     */
+    private record PreparedTile(float[][] residuals, boolean[] bad, boolean[] outside, BitSet[] streakMasks) { }
 
     /** Owns at most 64 MiB of copied review evidence, shared by this search's workers, strongest peaks first. */
     private static final class EvidencePool {
@@ -490,17 +553,20 @@ public final class FaintMoverSearch {
             String skippedReason) {
     }
 
-    /** Computes session timing, FWHM and speed bounds shared between {@link #estimateWorkload} and {@link #plan}. */
-    private static SessionGeometry analyzeSession(Input input, DetectionConfig config, long started) {
+    /**
+     * Computes session timing, FWHM and speed bounds shared between {@link #estimateWorkload} and {@link #plan}, for a
+     * fastest motion of {@code maxSpeed} pixels per minute.
+     */
+    private static SessionGeometry analyzeSession(Input input, DetectionConfig config, long started, double maxSpeed) {
         FaintMoverSearchTelemetry telemetry = new FaintMoverSearchTelemetry();
         telemetry.searchSpeed = Math.max(SPEED_NORMAL, Math.min(SPEED_FASTER, config.faintMoverSearchSpeed));
         List<ImageFrame> kept = input.frames;
         telemetry.frames = kept.size();
-        FaintStreakSearch.Width width = input.frameMetrics != null
-                ? FaintStreakSearch.width(input.frameMetrics, config) : null;
-        double fwhm = width != null && width.frames > 0 ? width.fwhm() : FALLBACK_FWHM;
+        FaintStreakSearch.Width width = FaintStreakSearch.width(input.frameMetrics, config);
+        double fwhm = width.known() ? width.fwhm() : FALLBACK_FWHM;
         telemetry.fwhmPixels = fwhm;
-        telemetry.fwhmFromStars = width != null && width.frames > 0;
+        telemetry.fwhmFromStars = width.known();
+        telemetry.fwhmSource = width.source.name();
         if (kept.size() < MIN_FRAMES || input.masterStack == null) {
             return new SessionGeometry(telemetry, fwhm, List.of(), new int[0], new double[0], 0L, new int[0],
                     0, 0, 1, 0, 0, "fewer than " + MIN_FRAMES + " kept frames");
@@ -548,7 +614,6 @@ public final class FaintMoverSearch {
                     0, 0, 1, 0, 0, "the kept frames have one capture time");
         }
         double minSpeed = config.faintMoverMinDisplacementFwhm * fwhm / span;
-        double maxSpeed = config.faintMoverMaxSpeedPixelsPerMinute;
         double coarse = fwhm / maxAbs;
         telemetry.minSpeedPixelsPerMinute = minSpeed;
         telemetry.maxSpeedPixelsPerMinute = maxSpeed;
@@ -607,7 +672,9 @@ public final class FaintMoverSearch {
      * @return pre-plan workload estimate
      */
     public static CoarseWorkloadEstimate estimateWorkload(Input input, DetectionConfig config) {
-        SessionGeometry g = analyzeSession(input, config, System.nanoTime());
+        long started = System.nanoTime();
+        SessionGeometry g = analyzeSession(input, config, started,
+                chooseSpeed(input, config, started, MAX_MOTIONS_GPU).speed());
         if (g.skippedReason() != null) {
             return new CoarseWorkloadEstimate(false, 0, 0, 0, 0, 1, 0, 0, 0.0, -1);
         }
@@ -620,9 +687,7 @@ public final class FaintMoverSearch {
         int coarseBin = g.fwhm() >= COARSE_BIN_MIN_FWHM[speed] ? COARSE_BIN : 1;
         int[][] coarseGroups = speed == SPEED_NORMAL ? singleFrames(g.frames().size())
                 : coarseGroups(g.minutes(), g.timeOrder(), g.maxSpeed(), COARSE_GROUP_MAX_FWHM[speed] * g.fwhm());
-        float[] kernel = FaintStreakSearch.kernel(g.fwhm() / 2.3548);
-        int maxShift = (int) Math.ceil((g.maxSpeed() + g.coarse()) * g.maxAbs());
-        int margin = maxShift + Math.max(kernel.length / 2 + 2, CUTOUT / 2 + REFINE_RADIUS + 1);
+        int margin = margin(g, g.maxSpeed());
         long tileBytes = tileBytes(margin, g.frames().size(), coarseBin, coarseGroups.length);
         if (tileBytes > MAX_TILE_HEAP_SHARE * Runtime.getRuntime().maxMemory()) {
             return new CoarseWorkloadEstimate(false, g.frames().size(), input.masterStack[0].length,
@@ -656,12 +721,25 @@ public final class FaintMoverSearch {
      */
     public static Plan plan(Input input, DetectionConfig config) {
         long started = System.nanoTime();
-        SessionGeometry g = analyzeSession(input, config, started);
+        CoarseBackendSelection compute = input.compute != null ? input.compute : defaultSelection(config);
+        SpeedChoice choice = chooseSpeed(input, config, started, compute.maxMotions());
+        Plan plan = plan(input, config, compute, choice, started);
+        if (plan.skippedReason != null || !choice.automatic()) {
+            return plan;
+        }
+        return withinTimeLimit(plan, input, config, compute, choice, started);
+    }
+
+    /** The plan for one fastest motion. */
+    private static Plan plan(Input input, DetectionConfig config, CoarseBackendSelection compute, SpeedChoice choice,
+                             long started) {
+        SessionGeometry g = analyzeSession(input, config, started, choice.speed());
         FaintMoverSearchTelemetry telemetry = g.telemetry();
+        telemetry.autoMaxSpeed = config.faintMoverAutoMaxSpeed;
+        telemetry.maxSpeedLimit = choice.limit();
         if (g.skippedReason() != null) {
             return skipped(input, config, telemetry, g.skippedReason(), started);
         }
-        CoarseBackendSelection compute = input.compute != null ? input.compute : defaultSelection(config);
         int maxMotions = compute.maxMotions();
         if (Math.PI * g.reach() * g.reach() > 2.0 * maxMotions) {
             return skipped(input, config, telemetry, String.format(java.util.Locale.US,
@@ -670,6 +748,11 @@ public final class FaintMoverSearch {
         }
         double[][] motions = motionGrid(g.minSpeed(), g.maxSpeed(), g.coarse());
         telemetry.coarseMotions = motions.length;
+        if (motions.length == 0) {
+            return skipped(input, config, telemetry, String.format(java.util.Locale.US,
+                    "no trial motion lies between the slowest (%.3f px/min) and the fastest (%.3f px/min); "
+                            + "raise the fastest motion", g.minSpeed(), g.maxSpeed()), started);
+        }
         if (motions.length > maxMotions) {
             return skipped(input, config, telemetry, String.format(java.util.Locale.US,
                     "the speed range needs over %d trial motions for this session; lower the fastest motion",
@@ -682,8 +765,7 @@ public final class FaintMoverSearch {
         int[][] coarseGroups = speed == SPEED_NORMAL ? singleFrames(n)
                 : coarseGroups(g.minutes(), g.timeOrder(), g.maxSpeed(), COARSE_GROUP_MAX_FWHM[speed] * g.fwhm());
         float[] kernel = FaintStreakSearch.kernel(g.fwhm() / 2.3548);
-        int maxShift = (int) Math.ceil((g.maxSpeed() + g.coarse()) * g.maxAbs());
-        int margin = maxShift + Math.max(kernel.length / 2 + 2, CUTOUT / 2 + REFINE_RADIUS + 1);
+        int margin = margin(g, g.maxSpeed());
         long tileBytes = tileBytes(margin, n, coarseBin, coarseGroups.length);
         if (tileBytes > MAX_TILE_HEAP_SHARE * Runtime.getRuntime().maxMemory()) {
             return skipped(input, config, telemetry, String.format(java.util.Locale.US,
@@ -810,6 +892,343 @@ public final class FaintMoverSearch {
         long coarseSide = side / coarseBin + 1;
         long coarse = coarseBin == 1 && coarseFrames == frames ? 0L : coarseSide * coarseSide * 4L * coarseFrames;
         return side * side * (4L * frames + 12L) + coarse + (long) TILE * TILE * 20L;
+    }
+
+    /** A tile's margin for a fastest motion: the farthest coarse shift, plus the filter and the refinement's cutout. */
+    private static int margin(SessionGeometry g, double maxSpeed) {
+        float[] kernel = FaintStreakSearch.kernel(g.fwhm() / 2.3548);
+        int maxShift = (int) Math.ceil((maxSpeed + g.coarse()) * g.maxAbs());
+        return maxShift + Math.max(kernel.length / 2 + 2, CUTOUT / 2 + REFINE_RADIUS + 1);
+    }
+
+    /** Coarse frames for a fastest motion. */
+    private static int coarseFrameCount(SessionGeometry g, double maxSpeed) {
+        int speed = g.telemetry().searchSpeed;
+        int n = g.frames().size();
+        return speed == SPEED_NORMAL ? n
+                : coarseGroups(g.minutes(), g.timeOrder(), maxSpeed, COARSE_GROUP_MAX_FWHM[speed] * g.fwhm()).length;
+    }
+
+    /** Memory one tile's work needs for a fastest motion. */
+    private static long tileBytesAt(SessionGeometry g, double maxSpeed) {
+        int coarseBin = g.fwhm() >= COARSE_BIN_MIN_FWHM[g.telemetry().searchSpeed] ? COARSE_BIN : 1;
+        return tileBytes(margin(g, maxSpeed), g.frames().size(), coarseBin, coarseFrameCount(g, maxSpeed));
+    }
+
+    /** The number of motions {@link #motionGrid} gives, without building them. */
+    static int motionCount(double minSpeed, double maxSpeed, double step) {
+        int reach = (int) Math.floor(maxSpeed / step + 1e-9);
+        int count = 0;
+        for (int i = -reach; i <= reach; i++) {
+            for (int j = -reach; j <= reach; j++) {
+                double speed = Math.hypot(i * step, j * step);
+                if (speed >= minSpeed - 1e-9 && speed <= maxSpeed + 1e-9) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
+    /**
+     * The largest speed in {@code [low, high]} that {@code fits}, for a condition that holds below some speed and not
+     * above it; {@code low} when even it does not fit.
+     */
+    private static double largestFitting(double low, double high, java.util.function.DoublePredicate fits) {
+        if (fits.test(high)) {
+            return high;
+        }
+        double lo = low;
+        double hi = high;
+        for (int i = 0; i < 40 && hi - lo > 1e-4 * Math.max(1e-6, hi); i++) {
+            double mid = 0.5 * (lo + hi);
+            if (fits.test(mid)) {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        return lo;
+    }
+
+    /**
+     * The fastest motion a run searches. Off, or for frames without exposure times, the configured
+     * {@code faintMoverMaxSpeedPixelsPerMinute}. On, {@link #POINT_TRAIL_FWHM} star widths per median exposure,
+     * lowered to {@link #AUTO_MOTION_SHARE} of {@code maxMotions} and until one tile's work fits in
+     * {@link #MAX_TILE_HEAP_SHARE} of the heap, rounded down to 0.001 px/min. {@link #plan} may lower it further for
+     * the time limit.
+     *
+     * @param maxMotions the first pass's motion limit on the compute path in use
+     */
+    static SpeedChoice chooseSpeed(Input input, DetectionConfig config, long started, int maxMotions) {
+        return chooseSpeed(input, config, started, maxMotions, Runtime.getRuntime().maxMemory());
+    }
+
+    /** {@link #chooseSpeed(Input, DetectionConfig, long, int)} for a heap of {@code maxHeap} bytes. */
+    static SpeedChoice chooseSpeed(Input input, DetectionConfig config, long started, int maxMotions, long maxHeap) {
+        double setting = config.faintMoverMaxSpeedPixelsPerMinute;
+        if (!config.faintMoverAutoMaxSpeed) {
+            return new SpeedChoice(setting, "SETTING", false);
+        }
+        SessionGeometry first = analyzeSession(input, config, started, setting);
+        double exposure = first.telemetry().exposureMinutes;
+        if (first.frames().isEmpty()) {
+            return new SpeedChoice(setting, "SETTING", false);
+        }
+        if (!(exposure > 0) || !Double.isFinite(exposure)) {
+            return new SpeedChoice(setting, "NO_EXPOSURE_TIMES", false);
+        }
+        double point = POINT_TRAIL_FWHM * first.fwhm() / exposure;
+        SessionGeometry g = analyzeSession(input, config, started, point);
+        if (g.skippedReason() != null) {
+            return new SpeedChoice(point, "POINT_LIKE", false);
+        }
+        double speed = point;
+        String limit = "POINT_LIKE";
+        int motionCap = (int) Math.floor(AUTO_MOTION_SHARE * maxMotions);
+        if (motionCount(g.minSpeed(), speed, g.coarse()) > motionCap) {
+            speed = largestFitting(g.minSpeed(), speed, s -> motionCount(g.minSpeed(), s, g.coarse()) <= motionCap);
+            limit = "MOTION_LIMIT";
+        }
+        double heapShare = MAX_TILE_HEAP_SHARE * maxHeap;
+        if (tileBytesAt(g, speed) > heapShare) {
+            speed = largestFitting(g.minSpeed(), speed, s -> tileBytesAt(g, s) <= heapShare);
+            limit = "MEMORY";
+        }
+        return new SpeedChoice(Math.floor(speed * 1000.0) / 1000.0, limit, true);
+    }
+
+    /**
+     * Lowers an automatic fastest motion until the search should finish within its time limit. One tile is prepared
+     * and its first pass timed ({@link #timeSample}); a slower motion's search time follows from the tile's size, the
+     * motions, the coarse frames and the workers the heap allows ({@link #estimateSeconds}). The time limit never lowers
+     * the speed below {@code faintMoverMaxSpeedPixelsPerMinute}. Without a usable sample the plan is kept.
+     */
+    private static Plan withinTimeLimit(Plan plan, Input input, DetectionConfig config, CoarseBackendSelection compute,
+                                        SpeedChoice choice, long started) {
+        long sampleStart = System.nanoTime();
+        if (input.progress != null) OperationContext.notify(input.progress::onProgressUpdate, 0,
+                "Faint-mover search: timing a sample to choose the fastest motion");
+        SessionGeometry g = analyzeSession(input, config, started, choice.speed());
+        double floor = Math.min(choice.speed(), Math.max(config.faintMoverMaxSpeedPixelsPerMinute, g.minSpeed()));
+        // The sample runs on as many workers at once as the search can have: those the heap allows at the slowest
+        // speed the time limit may choose.
+        int sampleWorkers = input.workers == null ? 1 : Math.max(1, input.workers.workers(
+                plan.accelerated ? Math.min(MAX_GPU_WORKERS, plan.tileCount) : plan.tileCount,
+                tileBytes(margin(g, floor), g.frames().size(), plan.coarseBin, coarseFrameCount(g, floor))));
+        TimeSample sample = timeSample(plan, input.workers, sampleWorkers);
+        long sampleMs = (System.nanoTime() - sampleStart) / 1_000_000L;
+        plan.telemetry.sampleMs = sampleMs;
+        if (sample == null) {
+            return plan;
+        }
+        double spent = (System.nanoTime() - started) / 1e9;
+        double target = AUTO_TIME_SHARE * (plan.timeLimitSeconds - spent);
+        double estimate = estimateSeconds(sample, g, plan, input, choice.speed());
+        if (estimate <= target) {
+            plan.telemetry.estimatedSeconds = spent + estimate;
+            return plan;
+        }
+        double speed = largestFitting(floor, choice.speed(), s -> estimateSeconds(sample, g, plan, input, s) <= target);
+        speed = Math.max(floor, Math.floor(speed * 1000.0) / 1000.0);
+        if (speed >= choice.speed()) {
+            plan.telemetry.estimatedSeconds = spent + estimate;
+            return plan;
+        }
+        if (DiagnosticContext.enabled()) {
+            DiagnosticContext.printf("DEBUG: Faint-mover time limit -> %.3f px/min estimated %.0f s, over %.0f s; "
+                            + "lowered to %.3f px/min, estimated %.0f s%n", choice.speed(), estimate, target, speed,
+                    estimateSeconds(sample, g, plan, input, speed));
+        }
+        Plan limited = plan(input, config, compute, new SpeedChoice(speed, "TIME_LIMIT", false), started);
+        limited.telemetry.speedBeforeTimeLimitPixelsPerMinute = choice.speed();
+        limited.telemetry.estimatedSeconds = spent + estimateSeconds(sample, g, plan, input, speed);
+        limited.telemetry.sampleMs = sampleMs;
+        return limited;
+    }
+
+    /**
+     * The search's estimated run time at a fastest motion, from the sample taken at the plan's: preparation scales
+     * with the tile's area including its margin, the first pass also with the motions and the coarse frames, each by
+     * {@link #TILE_OVERHEAD}. On the CPU the workers search tiles at once, and beyond the sample's parallelism each
+     * tile takes longer in proportion, since they share the memory bandwidth; on a GPU the first passes share the
+     * device, so they add up.
+     */
+    private static double estimateSeconds(TimeSample sample, SessionGeometry g, Plan plan, Input input, double speed) {
+        int margin = margin(g, speed);
+        double area = (double) (sample.width() + 2L * margin) * (sample.height() + 2L * margin)
+                / ((double) (sample.width() + 2L * sample.margin()) * (sample.height() + 2L * sample.margin()));
+        int coarseFrames = coarseFrameCount(g, speed);
+        double frames = (double) coarseFrames / sample.coarseFrames();
+        int motions = motionCount(g.minSpeed(), speed, g.coarse());
+        double prep = TILE_OVERHEAD * sample.prepSeconds() * area;
+        double coarse = TILE_OVERHEAD * (sample.fixedCoarseSeconds() + sample.perMotionSeconds() * motions) * area * frames;
+        int tiles = plan.tileCount;
+        int coarseBin = plan.coarseBin;
+        long bytes = tileBytes(margin, g.frames().size(), coarseBin, coarseFrames);
+        int cap = plan.accelerated ? Math.min(MAX_GPU_WORKERS, tiles) : tiles;
+        int workers = input.workers == null ? 1 : Math.max(1, input.workers.workers(cap, bytes));
+        double rounds = Math.ceil((double) tiles / workers);
+        if (plan.accelerated) {
+            return Math.max(tiles * coarse, rounds * (prep + coarse));
+        }
+        double parallelism = Double.isFinite(sample.parallelism()) ? Math.max(1.0, sample.parallelism()) : 1.0;
+        return rounds * (prep + coarse) * Math.max(1.0, workers / parallelism);
+    }
+
+    /**
+     * Prepares one tile and times its first pass after a warm-up, on evenly spread samples of the motions. On a GPU,
+     * two samples, the second twice the first, separate the cost of each motion from the tile's fixed cost, such as
+     * copying its frames to the device. On the CPU, one sample alone, and then a smaller one on every worker at once:
+     * the first pass is limited by the memory bandwidth, so the computer does only so many tiles' worth of work at once
+     * ({@code parallelism}), measured rather than assumed. Tries the tiles nearest the image centre; null when none
+     * can be timed.
+     */
+    private static TimeSample timeSample(Plan plan, Workers workers, int sampleWorkers) {
+        int imageWidth = plan.input.masterStack[0].length;
+        int imageHeight = plan.input.masterStack.length;
+        List<int[]> candidates = new ArrayList<>(plan.tiles);
+        candidates.sort(Comparator.comparingInt((int[] t) -> t[2] == TILE && t[3] == TILE ? 0 : 1)
+                .thenComparingDouble(t -> Math.hypot(t[0] + t[2] / 2.0 - imageWidth / 2.0,
+                        t[1] + t[3] / 2.0 - imageHeight / 2.0)));
+        int total = plan.motions.length;
+        if (total < 2) {
+            return null;
+        }
+        double share = plan.accelerated ? SAMPLE_SHARE : CPU_SAMPLE_SHARE;
+        int smaller = Math.max(1, Math.min(total / 2, Math.max(SAMPLE_MIN_MOTIONS, (int) (share * total))));
+        for (int[] tile : candidates.subList(0, Math.min(SAMPLE_TILES, candidates.size()))) {
+            CancellationScope.check();
+            int w = tile[2];
+            int h = tile[3];
+            int m = plan.margin;
+            int width = w + 2 * m;
+            long start = System.nanoTime();
+            PreparedTile prepared = prepareTile(plan, tile[0], tile[1], w, h, null);
+            boolean[] innerBad = new boolean[w * h];
+            int good = 0;
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    boolean b = prepared.bad[(y + m) * width + x + m];
+                    innerBad[y * w + x] = b;
+                    if (!b) {
+                        good++;
+                    }
+                }
+            }
+            if (good < MIN_GOOD_PIXELS) {
+                continue;
+            }
+            double noise = stackNoise(plan, prepared.residuals, prepared.outside, width, w, h, innerBad);
+            if (!(noise > 0)) {
+                continue;
+            }
+            CoarseTile coarse = coarseTile(plan, prepared.residuals, innerBad, w, h);
+            double coarseNoise = coarse.residuals() == prepared.residuals ? noise : coarseNoise(plan, coarse, prepared.outside, width);
+            if (!(coarseNoise > 0)) {
+                continue;
+            }
+            double prepSeconds = (System.nanoTime() - start) / 1e9;
+            float scale = (float) (1.0 / (coarse.residuals().length * coarseNoise));
+            timeFirstPass(plan, coarse, scale, Math.min(total, SAMPLE_WARMUP_MOTIONS), 1, null);
+            double once = timeFirstPass(plan, coarse, scale, smaller, 1, null);
+            if (!Double.isFinite(once)) {
+                return null;
+            }
+            if (plan.accelerated) {
+                double twice = timeFirstPass(plan, coarse, scale, 2 * smaller, 1, null);
+                if (!Double.isFinite(twice)) {
+                    return null;
+                }
+                double perMotion = (twice - once) / smaller;
+                if (!(perMotion > 0)) {
+                    perMotion = twice / (2.0 * smaller);
+                }
+                double fixed = Math.max(0.0, once - perMotion * smaller);
+                if (DiagnosticContext.enabled()) {
+                    DiagnosticContext.printf("DEBUG: Faint-mover time sample -> tile %dx%d margin %d, preparation %.2f s, "
+                                    + "first pass %.3f ms per motion plus %.3f s per tile (GPU)%n",
+                            w, h, m, prepSeconds, 1000 * perMotion, fixed);
+                }
+                return new TimeSample(prepSeconds, fixed, perMotion, w, h, m, plan.coarseGroups.length, Double.NaN);
+            }
+            double perMotion = once / smaller;
+            double parallelism = 1.0;
+            int threads = workers == null ? 1 : Math.min(Math.min(workers.maxWorkers(), plan.tileCount), sampleWorkers);
+            if (threads > 1) {
+                // Each worker runs as many motions as the sample alone, so that the workers overlap for seconds, not
+                // only while they start.
+                double atOnce = timeFirstPass(plan, coarse, scale, smaller, threads, workers);
+                if (Double.isFinite(atOnce) && atOnce > 0) {
+                    parallelism = Math.max(1.0, Math.min(threads, threads * once / atOnce));
+                }
+            }
+            if (DiagnosticContext.enabled()) {
+                DiagnosticContext.printf("DEBUG: Faint-mover time sample -> tile %dx%d margin %d, preparation %.2f s, "
+                                + "first pass %.3f ms per motion alone (%d motions), parallelism %.2f on %d workers%n",
+                        w, h, m, prepSeconds, 1000 * perMotion, smaller, parallelism, threads);
+            }
+            return new TimeSample(prepSeconds, 0.0, perMotion, w, h, m, plan.coarseGroups.length, parallelism);
+        }
+        return null;
+    }
+
+    /**
+     * Seconds the plan's first pass takes on a prepared coarse tile for {@code count} evenly spread motions, on
+     * {@code threads} workers at once, each with its own results; NaN on failure.
+     */
+    private static double timeFirstPass(Plan plan, CoarseTile coarse, float scale, int count, int threads, Workers workers) {
+        int total = plan.motions.length;
+        int[][] shiftX = new int[count][];
+        int[][] shiftY = new int[count][];
+        for (int i = 0; i < count; i++) {
+            int motion = (int) ((long) i * total / count);
+            shiftX[i] = plan.coarseShiftX[motion];
+            shiftY[i] = plan.coarseShiftY[motion];
+        }
+        long deadline = plan.startedNanos + (long) (plan.timeLimitSeconds * 1e9);
+        CoarseControl control = new CoarseControl() {
+            @Override
+            public boolean pastDeadline() {
+                return System.nanoTime() > deadline;
+            }
+
+            @Override
+            public void checkCancelled() {
+                CancellationScope.check();
+            }
+
+            @Override
+            public void progress(long done, long all, int sampleMotionIndex) {
+            }
+        };
+        CoarseSearchBackend backend = plan.initialBackend;
+        List<Callable<Boolean>> tasks = new ArrayList<>(threads);
+        for (int t = 0; t < threads; t++) {
+            float[] best = new float[coarse.width() * coarse.height()];
+            Arrays.fill(best, Float.NEGATIVE_INFINITY);
+            int[] bestMotion = new int[best.length];
+            CoarseTileJob job = new CoarseTileJob(coarse.residuals(), coarse.stride(), coarse.margin(), coarse.width(),
+                    coarse.height(), scale, best, bestMotion);
+            tasks.add(() -> backend.search(job, control));
+        }
+        try {
+            backend.beginRun(shiftX, shiftY);
+            long start = System.nanoTime();
+            List<Boolean> finished = threads == 1 || workers == null ? List.of(tasks.get(0).call()) : workers.invokeAll(tasks);
+            double seconds = (System.nanoTime() - start) / 1e9;
+            return finished.stream().allMatch(Boolean::booleanValue) ? seconds : Double.NaN;
+        } catch (CoarseBackendException | ExecutionException failure) {
+            return Double.NaN;
+        } catch (java.util.concurrent.CancellationException cancelled) {
+            throw cancelled;
+        } catch (RuntimeException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            return Double.NaN;
+        } finally {
+            backend.endRun();
+        }
     }
 
     /**
@@ -1037,7 +1456,10 @@ public final class FaintMoverSearch {
     // One tile
     // ------------------------------------------------------------------------------------------------------------
 
-    /** Prepares the original tile residuals; the caller releases these full-tile buffers after searching. */
+    /**
+     * Prepares the original tile residuals; the caller releases these full-tile buffers after searching. A null
+     * progress reports nothing.
+     */
     private static PreparedTile prepareTile(Plan plan, int tx, int ty, int w, int h, TileProgress progress) {
         Input input = plan.input;
         int n = plan.frames.size();
@@ -1046,13 +1468,14 @@ public final class FaintMoverSearch {
         int height = h + 2 * m;
         int pixels = width * height;
         float[][] residuals = new float[n][];
-        boolean[] bad = readResiduals(plan, tx - m, ty - m, width, height, residuals);
+        boolean[] outside = new boolean[pixels];
+        boolean[] bad = readResiduals(plan, tx - m, ty - m, width, height, residuals, outside);
         float[] scratch = new float[pixels];
         float[] weights = new float[pixels];
         BitSet[] streakMasks = new BitSet[n];
         for (int k = 0; k < n; k++) {
             CancellationScope.check();
-            progress.update(10_000 + 90_000 * k / n, "preparing residuals", -1);
+            if (progress != null) progress.update(10_000 + 90_000 * k / n, "preparing residuals", -1);
             normalise(residuals[k], bad, width, height, scratch, weights);
             int index = plan.frameIndex[k];
             if (input.streaks != null && index < input.streaks.size() && input.streaks.get(index) != null
@@ -1064,7 +1487,7 @@ public final class FaintMoverSearch {
             }
             filter(residuals[k], width, height, plan.kernel, scratch);
         }
-        return new PreparedTile(residuals, bad, streakMasks);
+        return new PreparedTile(residuals, bad, outside, streakMasks);
     }
 
     /** Searches a tile using temporary preprocessed residuals, without retaining those buffers in peaks. */
@@ -1096,7 +1519,7 @@ public final class FaintMoverSearch {
             return result;
         }
         result.searchedPixels = good;
-        double noise = stackNoise(plan, residuals, width, w, h, innerBad);
+        double noise = stackNoise(plan, residuals, prepared.outside, width, w, h, innerBad);
         if (!(noise > 0)) {
             result.prepNanos = System.nanoTime() - tStart;
             progress.finish();
@@ -1104,7 +1527,7 @@ public final class FaintMoverSearch {
         }
         // Coarse search on the coarse frames: the best score and its motion at every coarse position.
         CoarseTile coarse = coarseTile(plan, residuals, innerBad, w, h);
-        double coarseNoise = coarse.residuals() == residuals ? noise : coarseNoise(plan, coarse);
+        double coarseNoise = coarse.residuals() == residuals ? noise : coarseNoise(plan, coarse, prepared.outside, width);
         if (!(coarseNoise > 0)) {
             result.prepNanos = System.nanoTime() - tStart;
             progress.finish();
@@ -1251,8 +1674,12 @@ public final class FaintMoverSearch {
         return new CoarseTile(coarse, stride, coarseMargin, cw, ch, bad);
     }
 
-    /** The robust spread of the coarse frames' stacks along the same reference motion as {@link #stackNoise}. */
-    private static double coarseNoise(Plan plan, CoarseTile coarse) {
+    /**
+     * The robust spread of the coarse frames' stacks along the same reference motion as {@link #stackNoise}, with the
+     * same scaling for coarse frames whose pixel is outside the data (judged at the first full-resolution pixel of each
+     * coarse pixel, in {@code outside} of the tile with its margin, {@code width} wide).
+     */
+    private static double coarseNoise(Plan plan, CoarseTile coarse, boolean[] outside, int width) {
         int reference = referenceMotion(plan);
         int[] sx = plan.coarseShiftX[reference];
         int[] sy = plan.coarseShiftY[reference];
@@ -1262,6 +1689,9 @@ public final class FaintMoverSearch {
         int ch = coarse.height();
         int cm = coarse.margin();
         int stride = coarse.stride();
+        int bin = plan.coarseBin;
+        int offset = plan.margin - cm * bin;
+        int height = outside.length / width;
         float[] sample = new float[Math.min(SAMPLE_SIZE, cw * ch)];
         int step = Math.max(1, cw * ch / sample.length);
         int count = 0;
@@ -1272,10 +1702,20 @@ public final class FaintMoverSearch {
             int x = i % cw;
             int y = i / cw;
             float sum = 0f;
+            int valid = 0;
             for (int k = 0; k < g; k++) {
-                sum += frames[k][(y + cm + sy[k]) * stride + x + cm + sx[k]];
+                int px = x + cm + sx[k];
+                int py = y + cm + sy[k];
+                int fx = offset + px * bin;
+                int fy = offset + py * bin;
+                if (fx >= 0 && fy >= 0 && fx < width && fy < height && !outside[fy * width + fx]) {
+                    valid++;
+                }
+                sum += frames[k][py * stride + px];
             }
-            sample[count++] = sum / g;
+            if (2 * valid >= g) {
+                sample[count++] = (float) (sum / Math.sqrt((double) valid * g));
+            }
         }
         return count > 0 ? centreAndSpread(sample, count)[1] : 0.0;
     }
@@ -1308,7 +1748,8 @@ public final class FaintMoverSearch {
      * returns the pixels to leave out: outside the image or the data area, registration fill in any frame, and star
      * cores of the median stack, each grown.
      */
-    private static boolean[] readResiduals(Plan plan, int x0, int y0, int width, int height, float[][] residuals) {
+    private static boolean[] readResiduals(Plan plan, int x0, int y0, int width, int height, float[][] residuals,
+                                           boolean[] outside) {
         Input input = plan.input;
         short[][] master = input.masterStack;
         int imageHeight = master.length;
@@ -1362,6 +1803,7 @@ public final class FaintMoverSearch {
 
         boolean[] core = starCores(master, x0, y0, width, height, fill);
         boolean[] bad = grow(fill, width, height, FILL_GROW);
+        System.arraycopy(bad, 0, outside, 0, bad.length);
         boolean[] cores = grow(core, width, height, STAR_CORE_GROW);
         for (int i = 0; i < bad.length; i++) {
             bad[i] |= cores[i];
@@ -1616,8 +2058,18 @@ public final class FaintMoverSearch {
         return reference;
     }
 
-    /** Robust spread of the stack along a motion halfway through the speed range, over the unmasked positions. */
-    private static double stackNoise(Plan plan, float[][] residuals, int width, int w, int h, boolean[] innerBad) {
+    /**
+     * Robust spread of the stack along a motion halfway through the speed range, over the unmasked positions. A pixel
+     * outside the image or the data area ({@code outside}) holds 0, so along a path that leaves the data the stack of the
+     * {@code n} frames is the sum of its {@code v} frames inside over {@code n}, and spreads less than a stack inside.
+     * Each sample is that sum over {@code sqrt(v n)}, which spreads as a stack inside the data does (for a path inside,
+     * the sum over {@code n}, as before); paths with fewer than half the frames inside are left out. Without this, a
+     * tile at the image edge, where the reference path leaves the data at most positions, measured too low a noise and
+     * over-scored the peaks of paths that stay inside. Star cores also hold 0 but are not scaled: candidate paths cross
+     * them as often as the sampled ones.
+     */
+    static double stackNoise(Plan plan, float[][] residuals, boolean[] outside, int width, int w, int h,
+                                     boolean[] innerBad) {
         double[] reference = plan.motions[referenceMotion(plan)];
         int n = residuals.length;
         int m = plan.margin;
@@ -1637,10 +2089,17 @@ public final class FaintMoverSearch {
             int x = i % w;
             int y = i / w;
             float sum = 0f;
+            int valid = 0;
             for (int k = 0; k < n; k++) {
-                sum += residuals[k][(y + m + sy[k]) * width + x + m + sx[k]];
+                int index = (y + m + sy[k]) * width + x + m + sx[k];
+                if (!outside[index]) {
+                    valid++;
+                }
+                sum += residuals[k][index];
             }
-            sample[count++] = sum / n;
+            if (2 * valid >= n) {
+                sample[count++] = (float) (sum / Math.sqrt((double) valid * n));
+            }
         }
         return count > 0 ? centreAndSpread(sample, count)[1] : 0.0;
     }

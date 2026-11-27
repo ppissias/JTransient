@@ -931,6 +931,12 @@ public class JTransientEngine implements AutoCloseable {
             }
         }
 
+        FaintStreakSearch.Width starWidth = FaintStreakSearch.width(measured.stream().map(MeasuredFrame::metrics)
+                .filter(metrics -> !metrics.isRejected).toList(), config);
+        telemetry.starWidth.fwhmPixels = starWidth.fwhm();
+        telemetry.starWidth.source = starWidth.source.name();
+        telemetry.starWidth.frames = starWidth.frames;
+        telemetry.starWidth.stars = starWidth.stars;
         return sessionDataArea(coverages, measured.stream().filter(frame -> !frame.metrics().isRejected).toList(), telemetry);
     }
 
@@ -1226,10 +1232,45 @@ public class JTransientEngine implements AutoCloseable {
         CoarseBackendFactory.Selected selected = CoarseBackendFactory.select(computeOptions, config, workload,
                 cpuWorkerBudget);
         input.compute = selected.coreSelection();
+        // The automatic fastest motion's time estimate needs the workers the search will get: what limitWork below
+        // gives for a tile size, with the heap in use measured once, after one garbage collection when memory limits;
+        // and the workers themselves, to time the first pass on all of them at once. limitWork is set again for the
+        // search after the plan.
+        input.workers = new FaintMoverSearch.Workers() {
+            private long usedHeap = -1;
+            private boolean collected;
+
+            @Override
+            public int maxWorkers() {
+                return workers.maxWorkers();
+            }
+
+            @Override
+            public <T> List<T> invokeAll(List<java.util.concurrent.Callable<T>> tasks) throws java.util.concurrent.ExecutionException {
+                workers.limitWork(tasks.size(), 1L);
+                return WorkerPool.invokeAll(tasks);
+            }
+
+            @Override
+            public int workers(int tiles, long bytesPerTile) {
+                Runtime runtime = Runtime.getRuntime();
+                if (usedHeap < 0) {
+                    usedHeap = runtime.totalMemory() - runtime.freeMemory();
+                }
+                int estimate = workers.estimateWorkers(tiles, Math.max(1L, bytesPerTile / 16), usedHeap);
+                if (estimate < Math.min(tiles, workers.maxWorkers()) && !collected) {
+                    collected = true;
+                    System.gc();
+                    usedHeap = runtime.totalMemory() - runtime.freeMemory();
+                    estimate = workers.estimateWorkers(tiles, Math.max(1L, bytesPerTile / 16), usedHeap);
+                }
+                return estimate;
+            }
+        };
         try {
             FaintMoverSearch.Plan plan = FaintMoverSearch.plan(input, config);
             if (plan.skippedReason == null) {
-                int tileWorkCap = plan.accelerated ? Math.min(8, plan.tileCount) : plan.tileCount;
+                int tileWorkCap = plan.accelerated ? Math.min(FaintMoverSearch.MAX_GPU_WORKERS, plan.tileCount) : plan.tileCount;
                 int moverWorkers = workers.limitWork(tileWorkCap, Math.max(1L, plan.bytesPerTile / 16));
                 if (DiagnosticContext.enabled()) {
                     DiagnosticContext.printf("DEBUG: Faint-mover search -> %d tiles, %d workers (%s: %s)%n",

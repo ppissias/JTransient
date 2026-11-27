@@ -3,6 +3,7 @@
 <!-- root-toc:start -->
 ## Contents
 
+- [1.1.2](#112)
 - [1.1.1](#111)
 - [1.1.0](#110)
 - [1.0.9](#109)
@@ -12,6 +13,19 @@
   - [Detection changes](#detection-changes)
   - [API changes](#api-changes)
 <!-- root-toc:end -->
+
+## 1.1.2
+
+- **One star width, measured as the calibrated Auto-Tune measures it (behaviour change, new API).** The faint-streak and faint-mover searches and the registration check used the median of the kept frames' `medianFWHM` divided by √2. On 23 reference sessions that read 8 to 32 % below an elliptical Gaussian fit to bright isolated stars (median 20 %). `quality.StarWidth` now measures the core of bright, isolated, round stars from the area above half their peak, the tuner's method, which moved there unchanged. Quality control measures every frame (`FrameMetrics.starWidthFwhm`, `starWidthStars`) on the stars of its own extraction, which uses the tuner's thresholds, and the session's width is the median of the kept frames. The new setting `starFwhmPixels` (default 0, measure) replaces the measurement; the calibrated tuner sets it to the width it measured (`Calibration.fwhmStars` counts the stars), and its own frame selection always measures. `PipelineTelemetry.starWidth` records the width and its `source` (`SETTING`, `MEASURED`, `ASSUMED`), and `FaintMoverSearchTelemetry.fwhmSource` the same for the search. `FaintStreakSearch.Width` adds `stars`, `source` and `known()`.
+  - *Effect.* The measured width was 13 % below to 7 % above the Gaussian fit (median 3 % below) and within 8 % of the tuner's (median equal), about 25 % wider than before. Rejected frames and registration-check verdicts were identical on all 23 sessions; the registration measurements in star widths fell accordingly. The faint-streak search, smoothing with the wider width, changed single-frame streaks by one on three sessions and gave Klangwolke-2 one more streak track.
+
+- **Automatic fastest motion in the engine (new setting, behaviour change).** `faintMoverAutoMaxSpeed` (default true) chooses the fastest motion during the run, so applications, batch runs and API callers behave the same: 2 star widths per median exposure (`POINT_TRAIL_FWHM`), lowered to 90 % of the first pass's motion limit on the compute path in use, until one tile's work fits in a quarter of the heap, and until the search should finish within 80 % of the time left in `faintMoverMaxSeconds`. For the time, one tile is prepared and its first pass timed on a sample of the motions on this computer, on a GPU twice to separate the per-tile cost, on the CPU also on as many workers at once as the search can have, since the first pass is limited by the memory bandwidth. The time step never goes below `faintMoverMaxSpeedPixelsPerMinute`, which is also used without exposure times or with the setting off. `FaintMoverSearchTelemetry` records `autoMaxSpeed`, `maxSpeedLimit` (`SETTING`, `NO_EXPOSURE_TIMES`, `POINT_LIKE`, `MOTION_LIMIT`, `MEMORY`, `TIME_LIMIT`), `speedBeforeTimeLimitPixelsPerMinute`, `estimatedSeconds` and `sampleMs`. `FaintMoverSearch.Input.workers` lets the engine supply the worker estimate and run the sample; `MAX_GPU_WORKERS` (8) is the engine's GPU worker cap. Callers who set the fastest motion themselves turn the setting off.
+  - *Effect.* On 23 reference sessions with an NVIDIA GeForce RTX 5060 Laptop GPU and a 10 GB heap, the searches ran to 2.3–43 px/min (1.0 before) and all completed: B1m 3 → 21 candidates in 208 s (23 s before), 19 of them moving at 22–32″/h in similar directions with no catalogue match; Klangwolke-2, Helix and Lagoon kept every catalogue match; m101-reg (time limit, 4.57 px/min) took 316 s against an estimate of 481 s. On a laptop CPU, m81-reg was lowered from 5.1 to 2.7 px/min and the search finished 19 of 20 tiles in the time that the estimate gave for all of them; before, a search to 4 px/min stopped after 4 of 20 tiles.
+
+- **Edge tiles no longer over-score their peaks (fix).** A tile's noise is the spread of its stacks along one reference motion. Pixels outside the image or the data area hold 0, so where that path leaves the data, as at most positions of a tile at the image edge, the sampled stacks had fewer frames and the noise read low. Each sample is now scaled to a stack inside the data and paths with fewer than half the frames inside are left out; star cores, which candidate paths cross as often, are not scaled.
+  - *Effect.* With the automatic speed, three sessions whose last tile row or column is thin reported 8 (m81-reg), 22 (m101-reg) and 54 (Africano) false candidates along those edges; the fix removed all of them. Away from the edges nothing changed: Klangwolke-2 kept its 10 catalogue matches. B1m lost 12 near-threshold candidates (8.2–9.3) next to its excluded edge strips. At 1.0 px/min, m101-reg's one candidate, 37 px from the top edge (8.8), falls below the score.
+
+- **A speed range with no trial motion is skipped (fix).** When no grid motion lay between the slowest and the fastest motion, the search failed with an index error. It now skips itself and says so.
 
 ## 1.1.1
 
