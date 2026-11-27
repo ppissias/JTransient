@@ -14,6 +14,7 @@ These are proposals, not implementation authorisations. Retain current algorithm
 | [SM-F8](#sm-f8-frame-check-for-runs-of-leaky-frames) | Proposed; later addition | Leave out runs of frames whose star tails leak past the faint-mover mask, which the few-frame check cannot stop when they cover a third of the frames or more. Needs a second affected session. |
 | [SM-F9](#sm-f9-slow-mover-candidates-made-by-hot-pixels) | Proposed | Reject maximum-stack candidates that stay at one camera position: hot pixels that the drift draws into short dashes. |
 | [SM-F11](#sm-f11-faster-faint-movers-trails-and-memory) | Proposed; OpenCL groundwork done, trailed M9 design updated | Search faster faint movers: score trailed movers (`2–6` FWHM via `TrailedStackBackend`), pair with tight per-frame margins or a shared `coarseBin` full-image cube to remove the tile-halo memory wall. |
+| [SM-F12](#sm-f12-score-threshold-for-the-number-of-motions-searched) | Proposed (2026-11-27); needs investigation | Find out what the extra near-threshold candidates of a wide search are (chance peaks among many motions, or star light past the mask) before scaling `faintMoverMinScore` with the number of motions. |
 | [XC-3](#xc-3-local-background-and-noise-for-frame-extraction) | Open; parked at maintainer request; new evidence (2026-11-08) | Resume with local sky correction alone, keeping baseline noise and thresholds fixed; preserve associations, photometry and boundary calibration. |
 | [VS-13](#vs-13-variable-star-recovery-and-false-candidate-investigation) | Investigation plan recorded; experiments pending | Audit known-variable recovery and suspicious candidates on saved reference runs before proposing individual photometry changes. |
 | [RV-1](#rv-1-findings-from-the-pull-request-1-review) | Open; no fix agreed | Six code-review findings, led by hot pixels that can pass the follows-sky test on steadily drifting frames. Decide each item separately. |
@@ -113,6 +114,12 @@ The camera-fixed rejection does not see them. It works on frame detections, and 
 - *Directions restricted* along the ecliptic, which would miss most near-Earth objects.
 
 **Validation.** Inject synthetic movers at 0.5-3.5″/min and several magnitudes into the B1m frames and measure recovery and score against speed for the current search and each candidate, before choosing; then the 18-dataset regression, where slow-mover results must stay unchanged.
+
+## SM-F12. Score threshold for the number of motions searched
+
+**Proposed (2026-11-27); needs investigation, no rule agreed.** `faintMoverMinScore` (8.0) is the same however many motions the search tries, while the chance that noise alone reaches it somewhere grows with the number of motions and positions. On Africano (12 searched frames of 30 s over 155 minutes, 1.81 px stars by the detection's width), the GPU search at 6.67 px/min tried 318,060 motions in 59 s and kept 66 candidates, against none at 1.0 px/min. Their scores were 8.01-8.99 (median 8.27), and 31 of them lie in one band (y 1,500-1,700, x below 500). On the same day B1m went from 3 to 33 candidates at 4.14 px/min, about 20 of them moving alike at 22-32″/h with scores up to 47 and no catalogue match, which look like real faint main-belt asteroids, so a wider search is worth keeping.
+
+**Investigate first.** The maintainer's experience is that the biggest source of false slow movers is light from nearby stars that the mask does not cover fully ([SM-F8](#sm-f8-frame-check-for-runs-of-leaky-frames) is one such case). Check whether Africano's band follows stars or star tails, a gradient, or nothing, and how many such candidates injected-noise frames give at the same motion count. Then choose between a threshold that rises with the number of trials (for example the score at which the expected number of chance peaks stays constant), a stronger star mask, or both. Validate on B1m's coherent candidates, Klangwolke-2's catalogue matches and injected movers.
 
 ## XC-3. Local background and noise for frame extraction
 

@@ -3,6 +3,7 @@
 <!-- root-toc:start -->
 ## Contents
 
+- [1.1.1](#111)
 - [1.1.0](#110)
 - [1.0.9](#109)
 - [1.0.8](#108)
@@ -11,6 +12,27 @@
   - [Detection changes](#detection-changes)
   - [API changes](#api-changes)
 <!-- root-toc:end -->
+
+## 1.1.1
+
+- **GPU first pass for the faint-mover search (new API).** The first pass of the faint-mover search, which tries every motion at every position, can run on an OpenCL GPU (JOCL 2.0.6). `new JTransientEngine(ComputeOptions)` chooses the policy with `ComputeMode`: `AUTO` uses a GPU only when its self-test matches the CPU result exactly and its benchmark is at least twice as fast; `GPU` skips the speed condition; `CPU`, the default of `new JTransientEngine()`, never loads OpenCL. `ComputeOptions` also names a preferred device and a folder that caches the benchmark. `GpuDiagnostics` lists the devices, resolves a policy and tests a device for a settings page. A tile that fails on the GPU is searched again on the CPU. With a GPU the search may try up to 400,000 motions (`FaintMoverSearch.MAX_MOTIONS_GPU`; 100,000 on the CPU). Refinement and every check still run on the CPU, so candidates are scored the same way. `FaintMoverSearchTelemetry` records the path, device, driver, OpenCL version, self-test, benchmark speed-up, CPU fallback tiles, motion cap and time limit applied, and the time of each phase. Java 21 and later warn about native access unless the JVM is started with `--enable-native-access=ALL-UNNAMED`.
+  - *Effect.* On a 115-frame DECam session an NVIDIA GeForce RTX 5060 Laptop GPU took the search from 36 min 23 s to 2 min 35 s (14.1×) with the same 30 candidates. CPU runs are unchanged.
+
+- **One time limit for the faint-mover search (behaviour change).** `faintMoverMaxSeconds` (600 s) applies to the CPU and the GPU alike.
+
+- **Registration check (new API, behaviour change).** Quality control now measures whether the registration follows the stars, from the bright round stars it already extracts (`FrameMetrics.registrationStars`). Each star's reference position is its median over the five kept frames with the smallest stars; each kept frame gets an offset, and a residual offset in each of 4 × 4 zones, in star widths. A frame whose offset or a zone differs from its neighbours in time by more than `qualityMaxRegistrationJumpFwhm` (0.5) is rejected ("Registration jump"). A change over the session above `qualityMaxRegistrationCreepFwhm` (0.3) flags the frame or the zone without rejecting it; `flaggedAreas()` gives the zones to exclude. `enableRegistrationCheck` (default true) switches it. Results are in `PipelineTelemetry.registrationCheck`, the text report and the new `FrameQualityResult.registrationCheck` component (API change), the same for detection, standalone quality control, the master stack and the tuner.
+  - *Effect.* Eleven reference sessions: no frame rejected (largest kept jump 0.21 star widths) and report data identical apart from the new key. A 50 mm wide field of Andromeda flags three zones at its right and bottom edges (0.38–0.51 star widths), which hold 19 of its 30 false faint-mover candidates; the other ten sessions measure 0.20 or less.
+
+- **Faint-mover star cores above the local background (behaviour change).** The faint-mover mask took star cores as median-stack pixels more than 8 spreads above the tile's single sky level. A gradient or nebula widens that spread, so faint stars there stayed unmasked, and their wings, which change with seeing during the night, made false paths. A pixel is now also a star core when it is 8 spreads above its local background (a clipped 41-pixel running mean of the median stack).
+  - *Effect.* Austral Kiwi (LMC with nebulosity) 21 → 4 candidates, a wide field of Andromeda with a vignetting gradient 51 → 30, Flame 2 → 2 (asteroid 49264 kept), m101 1 → 1, Klangwolke-2 10 → 9 (all five catalogue matches kept; an uncatalogued candidate at 8.1 drops), B1m 30 → 30. Star cores grew by 0.01–0.5 % of the area. A faint asteroid passing close to a star can lose part of its signal.
+
+- **Faint-mover refinement keeps the minimum displacement (fix).** Refinement checked only the fastest motion, so a peak found at the slowest coarse motion could be refined to a motion below `faintMoverMinDisplacementFwhm`. It now skips those motions, as the coarse grid does.
+  - *Effect.* Identical candidates on six sessions at the default minimum of 2 star widths. At 4, a B1m candidate at 3.4 is held at the minimum instead.
+
+- **Stricter variable-star screening (behaviour change).** A candidate's scatter must now be at least `variableMinExcessScatter` (new, 3.0) times the larger of the expected scatter of constant stars of its brightness across the frame and that of up to 20 nearby constant stars, and the amplitude and persistence gates use the same larger value. `variableScoreSigma` rises from 5 to 7 and `variableAmplitudeNoiseFactor` from 4 to 5. The correlated-sky `photometryMinSnr` cut is applied to each star's own measuring aperture after the apertures are chosen, without removing comparison stars the ensemble needs.
+  - *Effect.* Fewer noisy candidates in frame corners and at edges; constant stars with a high robust score but ordinary scatter stay constant.
+
+- **Build with any JDK 21 or newer (build).** The build targets `--release 21` and no longer needs a JDK of exactly version 21.
 
 ## 1.1.0
 
